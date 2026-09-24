@@ -112,28 +112,33 @@ export function Title(props: {
   const stars = starCount(progress);
   const touch = useUi(s => s.touch);
   const { compact, narrow } = useViewport();
+  // Phones (landscape = compact, portrait = narrow): the controls strip folds into a small toggle next to
+  // the credits (the touch buttons are labelled and the first-run tips teach them), blurbs hide and the
+  // buttons shrink, so the whole title fits on one screen.
+  const small = compact || narrow;
+  const [showControls, setShowControls] = useState(false);
   const img = compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
-  const titlePx = compact ? 36 : narrow ? 46 : 72;
+  const titlePx = compact ? 32 : narrow ? 40 : 72;
   const playBtn = (
-    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
+    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
       {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
     </button>
   );
   const bestBtn = props.bestGhost && (
     <button onClick={props.onRaceBest} disabled={!props.ready} title="race the ghost of your best run (same round)"
-      style={{ ...btn(false), fontSize: compact ? 12 : 13, padding: compact ? "10px 12px" : "13px 14px", borderColor: "#9fe6ff", opacity: props.ready ? 1 : 0.5 }} data-testid="race-best">
+      style={{ ...btn(false), fontSize: small ? 12 : 13, padding: small ? "10px 12px" : "13px 14px", borderColor: "#9fe6ff", opacity: props.ready ? 1 : 0.5 }} data-testid="race-best">
       race your best · {props.bestGhost.t.toFixed(1)} s
     </button>
   );
   const campaignBtn = (
     <button onClick={props.onCampaign} disabled={!props.ready} title="12 levels across the four districts, 3 stars each"
-      style={{ ...btn(false), fontSize: compact ? 13 : 15, padding: compact ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
+      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: small ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
       CAMPAIGN · {stars}/{TOTAL_STARS} ★
     </button>
   );
   const practiceBtn = (
     <button onClick={props.onPractice} disabled={!props.ready} title="free swinging in the city: no runner, no timer"
-      style={{ ...btn(false), fontSize: compact ? 13 : 15, padding: compact ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
+      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: small ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
       PRACTICE
     </button>
   );
@@ -143,13 +148,13 @@ export function Title(props: {
       <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />
         <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
-        <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
+        <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
         {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
             challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs #${challenge.r}` : ""}
           </div>
         )}
-        <div style={{ ...panel, marginTop: compact ? 8 : 16, padding: compact ? "8px 12px" : panel.padding }}>
+        <div style={{ ...panel, marginTop: small ? 8 : 16, padding: small ? "8px 12px" : panel.padding }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: compact ? 6 : 10 }} data-testid="districts">
             {DISTRICT_IDS.map(id => {
               const open = id === PAGE_DISTRICT || districtUnlocked(progress, id);
@@ -165,8 +170,8 @@ export function Title(props: {
               );
             })}
           </div>
-          {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: compact ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
+          {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
           <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => (
               <button key={id} onClick={() => props.setChaser(id)} data-testid={`card-${id}`}
@@ -203,7 +208,7 @@ export function Title(props: {
             {compact && practiceBtn}
             {compact && bestBtn}
           </div>
-          {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
+          {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
           {availMut !== 0 && (
             <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: compact ? 6 : 10 }} data-testid="mutators">
               <span style={{ fontSize: 11, opacity: 0.75, alignSelf: "center" }}>mutators:</span>
@@ -218,9 +223,9 @@ export function Title(props: {
               })}
             </div>
           )}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{bestBtn}</div>}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{bestBtn}</div>}
         </div>
-        <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>
+        {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {touch ? (
             <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing from the ringed balloon, let go = release ·
             JUMP · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
@@ -228,8 +233,16 @@ export function Title(props: {
             <><b>controls</b> · mouse look/aim · WASD run · Space jump · LMB hold = web onto the ringed balloon, release = let go ·
             red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
+        </div>}
+        <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 10 : 11, textShadow: "0 1px 2px #000" }}>
+          {small && (
+            <><button onClick={() => setShowControls(v => !v)} aria-expanded={showControls} data-testid="controls-toggle"
+              style={{ ...btn(false), padding: "3px 10px", fontSize: 11, marginRight: 8, background: showControls ? "rgba(159,230,255,0.25)" : "rgba(14,16,30,0.55)" }}>
+              controls {showControls ? "▴" : "▾"}
+            </button></>
+          )}
+          <span style={{ opacity: 0.75 }}>{S.credits}</span>
         </div>
-        <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 10 : 11, opacity: 0.75, textShadow: "0 1px 2px #000" }}>{S.credits}</div>
       </div>
     </div>
   );

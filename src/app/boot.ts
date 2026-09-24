@@ -5,7 +5,7 @@ import type { CityModel } from "../world/cityModel.ts";
 import { PlayGame } from "../game/play.ts";
 import { decodePack } from "../route/trackPack.ts";
 import { applyGeorgeJson } from "./george.config.ts";
-import { lv } from "./district.ts";
+import { PAGE_DISTRICT, lv } from "./district.ts";
 import { TUNING_URL } from "../world/districts.ts";
 
 
@@ -56,7 +56,7 @@ export function bootPlay(): Promise<PlayGame> {
     if (pack.header.city !== model.hash) console.warn(`[rug-run] runner.pack.bin was baked for city ${pack.header.city}, model is ${model.hash}: run npm run level`);
     const { player, camera, difficulty } = applyTuningJson(tuningJson, m => console.info(m));
     applyGeorgeJson(tuningJson?.george, m => console.info(m));
-    return new PlayGame(model, pack, player, camera, difficulty);
+    return new PlayGame(model, pack, player, camera, difficulty, PAGE_DISTRICT);
   })();
   return play;
 }

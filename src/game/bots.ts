@@ -377,7 +377,10 @@ export class SwingBot {
     const tx = T.x - P.x, tz = T.z - P.z, th = Math.sqrt(tx * tx + tz * tz);
     let held = false;
     let zip = false;
-    if (d < SWING.engage || th < SWING.directBelow) {
+    // Lane planning first; with no street lane within reach (wide docks blocks) head straight at him.
+    let direct = d < SWING.engage || th < SWING.directBelow;
+    if (!direct) { this.plan(P); if (this.lane < 0) direct = true; }
+    if (direct) {
       // ---- straight at him --------------------------------------------------------------------------
       this.stats.directSteps++;
       this.lane = -1;
@@ -397,7 +400,6 @@ export class SwingBot {
     } else {
       // ---- down the streets -------------------------------------------------------------------------
       this.stats.laneSteps++;
-      this.plan(P);
       const L = this.lanes[this.lane];
       const al = L.along;
       const pa = al === 0 ? P.x : P.z, pl = al === 0 ? P.z : P.x;

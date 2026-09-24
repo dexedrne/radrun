@@ -31,6 +31,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
+On a phone-sized screen the title's controls list folds into a small **controls** button next to the
+credits (tap to show it), so the whole title fits on one screen.
 
 | | |
 |---|---|
@@ -169,7 +171,8 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | **Degen** | 1.2x base, sprints up to 2x from 50 m out, barely wanders, short taunts | 4 m | 30 / 45 / 65 |
 
 Tuned against a swinging bot (below): a strong swinger catches him on Normal in about 25-30 s (median),
-on Degen in about 45 s when it catches him at all (about a quarter of Degen rounds he escapes).
+on Degen in about 45 s when it catches him at all (about a quarter of Degen rounds he escapes). Every
+district lands in the same bands (see Districts).
 
 ## Districts
 
@@ -191,6 +194,14 @@ Each district has its own level files: Downtown in `public/levels/`, the others 
 - `npm run level -- --map docks` / `npm run level -- --all` re-derives and re-bakes one / every district.
 - `?editor&map=docks` / `?editor=decor&map=docks` edit a district; Save writes that district's files.
 - Best times and kept ghosts are per district; share links carry the district (`&m=docks`).
+- **Per-district chase tweak** (`chase` in `src/world/districts.ts`): the same runner and difficulty table
+  everywhere, nudged per district so the swinging bot gets the same catch times as in Downtown (without
+  it the Night Market fell in ~18 s on Normal and a quarter of its Chill rounds within ~3 s, the Docks
+  and Towers in ~20 s). The Night Market and the Docks start you ~26-30 m behind him (their blocks
+  squeezed the spawn); in the Night Market he sprints earlier and harder (his runs twist, so a swinger
+  cuts corners); the Docks and Towers get a faster sprint, and a shorter Yoink on Degen (3 m) and on
+  Towers Normal (4.5 m). Downtown has no tweak. `npm run balance -- --all --only swing` prints every
+  district.
 
 ## Mechanics and mutators (round 4)
 
@@ -238,14 +249,19 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 
 ## Art (round 4)
 
-- **Skies**: one painted panorama per district, `public/sky/<district>.webp` (3:2), wrapped round the
-  horizon twice mirrored; it fades into the district's zenith colour on top and the fog colour below
+- **Skies**: one painted panorama per district, `public/sky/<district>.webp`, wrapped once round the
+  horizon (the image is made tileable: its right edge cross-fades into its left, so no cloud shows twice
+  and there is no seam); it fades into the district's zenith colour on top and the fog colour below
   (`SkyGradient` in `src/app/cityLook.tsx`, `SKY_Y0` / `SKY_Y1` set how high it reaches). The colour
-  gradient shows until it loads; the night mutator still swaps in its own dark sky.
+  gradient shows until it loads; the night mutator still swaps in its own dark sky. A replacement
+  panorama must tile horizontally (left and right edges continue into each other).
 - **Billboards**: eight painted ads (`public/textures/billboards/*.webp`) are materials `ad_<name>` in
   every district's `decor.json`, so in `?editor=decor` a billboard face's material can be switched to any
   of them. `npm run billboards` re-applies them to boards that still use a text Sign (keeps hand edits);
   `gen-city --decor` makes new decor with them (`src/world/billboards.ts`). Banners stay text Signs.
+  The WAGMI board reads "SWING · CHASE · YOINK · REPEAT / WE'RE ALL GONNA MAKE IT" (its painted
+  taglines were lettered over; no money or earning lines on the boards). To change a board, replace its
+  `.webp` (same name) or point the `ad_<name>` material in `decor.json` at another texture.
 - **Key art**: `public/ui/key-art.webp` behind the title while the city loads (the four Radbro busts are
   composited from the title-card renders, never generated).
 
@@ -260,6 +276,7 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
+| `?hats` | George's three campaign hats on his head across his clips (one row per hat, 3/4 close-ups; `&yaw=` camera angle, `&lift=` / `&fwd=` try other offsets than `HAT_LIFT` / `HAT_FWD` in `src/app/hats.ts`) |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
 (`d=chill|normal|degen`); with `&s=<seed>&g=<ghost>` it is a ghost link (see "Ghost links").
@@ -328,7 +345,8 @@ at k x his speed, never swings), the camper, and the **swinging chaser** (`Swing
 each balloon near the bottom of the arc, cutting over to him and Yoinking after a ~0.1-0.2 s reaction).
 Targets: Normal swinger median 25-40 s, Degen swinger median ~45-70 s with some escapes, the old
 follower targets for Normal/Chill. `--set normal.gStar=36` tries a value, `--only swing` runs just those
-rows, `--n 500` more seeds. `npm run probe:canyon`
+rows, `--n 500` more seeds, `--map market` / `--all` another / every district (with its chase tweak).
+`npm run probe:canyon`
 reports chain speed on test canyons with the current `tuning.json`.
 
 **George** (visual only, never affects the chase) has his own section in `?tune` and an optional `george`
@@ -354,8 +372,9 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 - Frame rate is only measured in headless software rendering (5-25 fps there); check the fps counter
   (bottom right) on a real GPU.
 - Balance is tuned against a bot, not people: play-test Normal and Degen and adjust `difficulty.*` in
-  `?tune` if catches come too easily or too hard. Some rounds end in seconds when his first run bends back
-  toward you (his runs are pre-baked; he only re-decides at junctions).
+  `?tune` (or a district's `chase` tweak) if catches come too easily or too hard. A few rounds still end
+  in seconds when his first run bends back toward you (his runs are pre-baked; he only re-decides at
+  junctions): for the swinging bot about 1 in 10 Chill rounds ends within ~4-6 s, in every district.
 - The Milady loads from GitHub raw (raw.githubusercontent.com) with jsDelivr as the fallback (jsDelivr
   404'd on some cold files, e.g. #270). `?milady=0` turns her off.
 - Ghost links replay only on the same game version: a later change to `tuning.json` (player or difficulty
@@ -368,11 +387,13 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 - The production build is ~13.8 MB (models ~6.6 MB incl. four Radbros, four districts' level files, round 4 art); the 9 MB
   budget is not enforced.
 - Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
-  objectives (`src/game/campaign.ts`) and the district mechanics (`MECH`, `?tune`) need a human pass.
-  Some Night Market rounds end in seconds (the runner's first baked run bends back toward you).
-- The sky panoramas are mirrored round the horizon (two copies), so a very distinctive cloud shows twice.
-- George's hats float on his head bone's position (no rotation with the head); tweak `HAT_LIFT` in
-  `src/app/GeorgeView.tsx` if one sits too high or low.
+  objectives (`src/game/campaign.ts`; the time stars were re-set in round 6 so the bot needs a good run
+  for them) and the district mechanics (`MECH`, `?tune`) need a human pass.
+- The round-6 district retune changed Night Market / Docks / Towers rounds, so ghost links made there
+  before it show as "unverified" (Downtown links are unchanged).
+- George's hats ride his head bone (they turn, nod and tilt with his head). `HAT_LIFT` / `HAT_FWD` in
+  `src/app/hats.ts` set where they sit (preview: `?hats`); the crown and the tin-foil hat let his ears
+  poke through, which is intended.
 
 ## Link previews
 

@@ -11,6 +11,7 @@ import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_POPS, M_SIXTY, M_WIND } from "./muta
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { Pack } from "../route/trackPack.ts";
 import { Runner } from "../runner/runner.ts";
+import { DISTRICTS, type ChaseTweak, type DistrictId } from "../world/districts.ts";
 
 export type RadbroId = "652" | "4764" | "2564" | "723";
 export const RADBROS: readonly RadbroId[] = ["652", "4764", "2564", "723"];
@@ -60,6 +61,13 @@ export type RoundOptions = {
   practice?: boolean;
   /** Round 4 mutator bits (game/mutators.ts); 0 = the classic round. */
   mutators?: number;
+  /**
+   * The district the model belongs to: its chase tweak (spawn distance, first edge, runner deltas;
+   * world/districts.ts) applies. Missing = Downtown / the classic round.
+   */
+  district?: DistrictId;
+  /** Explicit chase tweak (tools sweep it); overrides the district's. */
+  chase?: ChaseTweak;
 };
 
 export const COUNTDOWN_STEPS = 360;
@@ -131,7 +139,11 @@ export class Round {
     this.index = o.index ?? new CityIndex(o.model);
     this.pack = o.pack;
     const mut = (this.mutators = o.mutators ?? 0);
-    this.tuning = { ...o.tuning, yoinkRange: o.params.yoinkRange + (o.yoinkBonus ?? 0) };
+    const tw = o.chase ?? (o.district ? DISTRICTS[o.district].chase : undefined);
+    const params = { ...o.params };
+    const add = tw?.add?.[o.difficulty];
+    if (add) for (const k of Object.keys(add) as (keyof DifficultyParams)[]) params[k] += add[k] ?? 0;
+    this.tuning = { ...o.tuning, yoinkRange: params.yoinkRange + (o.yoinkBonus ?? 0) };
     if (mut & M_LOWGRAV) this.tuning.gravity = o.tuning.gravity * MECH.lowGravity;
     if (mut & M_NOYOINK) this.tuning.yoink = false;
     this.clock = this.clock0 = mut & M_SIXTY ? MECH.sixtyClock : ROUND.seconds;
@@ -141,8 +153,10 @@ export class Round {
     this.startJunction = Math.floor(this.rng.next() * nj);
     const outs = pack.out[this.startJunction];
     const first = outs[Math.floor(this.rng.next() * outs.length)];
-    this.runner = new Runner(pack, { ...o.params }, this.rng, this.startJunction, first);
-    this.spawn = playerSpawn(this.model, pack, this.startJunction, first, 22 + 4 * this.rng.next());
+    // Same rng draws with or without a tweak (the tweak only moves the spawn and the runner numbers).
+    const spawnMin = tw?.spawnMin ?? 22, spawnSpan = tw?.spawnSpan ?? 4, other = tw?.spawnOther ?? 3;
+    this.runner = new Runner(pack, params, this.rng, this.startJunction, first);
+    this.spawn = playerSpawn(this.model, pack, this.startJunction, first, spawnMin + spawnSpan * this.rng.next(), other);
     this.player = createBody(this.spawn.x, this.spawn.y, this.spawn.z, this.spawn.roofId);
     this.prevPlayer = cloneBody(this.player);
     this.prevRunner.x = this.runner.p.x; this.prevRunner.y = this.runner.p.y; this.prevRunner.z = this.runner.p.z;
@@ -322,7 +336,7 @@ export function respawnNear(b: Body, model: CityModel, roofId: number, near: Vec
  * Player spawn (spec §3): on a roof adjacent to the start junction's roof, on the side away from his
  * first edge, about `dist` m behind him; yaw faces him (camera only).
  */
-export function playerSpawn(model: CityModel, pack: Pack, junction: number, firstEdge: number, dist: number): { roofId: number; x: number; y: number; z: number; yaw: number } {
+export function playerSpawn(model: CityModel, pack: Pack, junction: number, firstEdge: number, dist: number, otherPenalty = 3): { roofId: number; x: number; y: number; z: number; yaw: number } {
   const j = pack.junctions[junction];
   const e = pack.edges[firstEdge];
   const jr = j.roof;
@@ -331,7 +345,8 @@ export function playerSpawn(model: CityModel, pack: Pack, junction: number, firs
   // footprint gets closest to it.
   const qx = j.x - e.exitX * dist, qz = j.z - e.exitZ * dist;
   let best = -1, bestS = Infinity, x = j.x, z = j.z;
-  // Adjacent roofs first; any other landable roof only if it gets > 3 m closer (e.g. a tower is in the way).
+  // Adjacent roofs first; any other landable roof only if it gets > otherPenalty m closer (e.g. a tower is
+  // in the way; dense districts lower it so the spawn can reach past a small neighbour roof).
   const adjacent = new Set<number>();
   for (const a of model.adjacency) if (a.a === jr || a.b === jr) adjacent.add(a.a === jr ? a.b : a.a);
   for (const s of model.solids) {
@@ -340,7 +355,7 @@ export function playerSpawn(model: CityModel, pack: Pack, junction: number, firs
     const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
     const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
     const dq = Math.sqrt((cx - qx) * (cx - qx) + (cz - qz) * (cz - qz));
-    const dd = adjacent.has(other) ? dq : dq + 3;
+    const dd = adjacent.has(other) ? dq : dq + otherPenalty;
     if (dd < bestS - 1e-9 || (dd < bestS + 1e-9 && other < best)) { bestS = dd; best = other; x = cx; z = cz; }
   }
   const roof = model.solids[best >= 0 ? best : jr];

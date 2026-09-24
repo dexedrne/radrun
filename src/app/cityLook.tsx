@@ -10,7 +10,7 @@
 // world position already includes the instance matrix).
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { ClampToEdgeWrapping, LinearFilter, MirroredRepeatWrapping, RepeatWrapping, SRGBColorSpace, TextureLoader, type Material, type Mesh, type Texture } from "three";
+import { ClampToEdgeWrapping, LinearFilter, RepeatWrapping, SRGBColorSpace, TextureLoader, type Material, type Mesh, type Texture } from "three";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { abs, atan, color, mix, normalWorld, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, texture, vec2, PI } from "three/tsl";
 import { PAGE } from "./district.ts";
@@ -62,10 +62,11 @@ export function CityLook() {
 }
 
 /**
- * Round 4 sky panorama (public/sky/<district>.webp, 3:2): wrapped round the horizon twice, mirrored (so
- * the image never needs to tile), covering elevations SKY_Y0..SKY_Y1 (sin of the angle above the
- * horizon). Above it the image fades into the zenith colour, below it into the fog colour. No mipmaps:
- * the azimuth wraps at the back, and mip selection there would draw a seam line.
+ * Round 4 sky panorama (public/sky/<district>.webp): wrapped once round the horizon (round 6: the image
+ * is made tileable offline - its right edge cross-fades into its left - so no cloud shows twice and there
+ * is no seam), covering elevations SKY_Y0..SKY_Y1 (sin of the angle above the horizon). Above it the
+ * image fades into the zenith colour, below it into the fog colour. No mipmaps: the azimuth wraps at the
+ * back, and mip selection there would draw a seam line.
  */
 const SKY_Y0 = -0.03, SKY_Y1 = 0.62;
 
@@ -85,11 +86,11 @@ export function SkyGradient() {
       if (!alive) { t.dispose(); return; }
       tex = t;
       t.colorSpace = SRGBColorSpace;
-      t.wrapS = MirroredRepeatWrapping;
+      t.wrapS = RepeatWrapping;
       t.wrapT = ClampToEdgeWrapping;
       t.generateMipmaps = false;
       t.minFilter = LinearFilter;
-      const u = atan(d.x, d.z).div(PI).add(1); // 0..2 round the horizon
+      const u = atan(d.x, d.z).div(PI.mul(2)).add(0.5); // 0..1 once round the horizon
       const v = y.sub(SKY_Y0).div(SKY_Y1 - SKY_Y0);
       const img = texture(t, vec2(u, v)).rgb;
       const top = mix(img, zenith, smoothstep(SKY_Y1 - 0.14, SKY_Y1 + 0.04, y));

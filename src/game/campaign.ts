@@ -27,19 +27,22 @@ export type Level = {
 
 const catchIt: Objective = { kind: "catch" };
 
+// Round 6: time objectives re-checked against the swinging balance bot per level (with its district tweak
+// and mutators): each "under N s" star now takes a good run rather than any catch (the bot gets it in
+// ~60-85 % of rounds, ~30 % on the Degen finale).
 export const LEVELS: readonly Level[] = [
-  { n: 1, name: "First Pour", map: "downtown", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 60 }, { kind: "noFalls" }], blurb: "He swiped your bag. Learn the ropes." },
+  { n: 1, name: "First Pour", map: "downtown", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 30 }, { kind: "noFalls" }], blurb: "He swiped your bag. Learn the ropes." },
   { n: 2, name: "Rush Hour", map: "downtown", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "under", s: 50 }, { kind: "chain", n: 4 }], blurb: "Normal speed. Chain your swings down the streets." },
   { n: 3, name: "Pop Quiz", map: "downtown", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "Pale balloons pop when you let go. Pick your ropes." },
-  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 55 }, { kind: "noFalls" }], blurb: "Tight streets, lots of corners, some stretches with no balloons." },
-  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 55 }], blurb: "No lasso tonight. You have to touch him." },
+  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 25 }, { kind: "noFalls" }], blurb: "Tight streets, lots of corners, some stretches with no balloons." },
+  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 65 }], blurb: "No lasso tonight. You have to touch him." },
   { n: 6, name: "Lights Out", map: "market", difficulty: "normal", mutators: M_NIGHT, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 45 }], blurb: "The market after dark." },
   { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 55 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
   { n: 8, name: "Moon Jump", map: "docks", difficulty: "normal", mutators: M_WIND | M_LOWGRAV, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "yoink" }], blurb: "Low gravity, long flights, same wind." },
   { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 40 }, { kind: "closeCall", s: 10 }], blurb: "Sixty seconds on the clock." },
   { n: 10, name: "Vertigo", map: "towers", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, popping balloons." },
   { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_POPS | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Pops and wind at altitude." },
-  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_POPS | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 60 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
+  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_POPS | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 40 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
 ];
 export const TOTAL_STARS = LEVELS.length * 3;
 

@@ -240,6 +240,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       },
       autoQ: { quality: ui.quality, allowed: ui.autoQuality, fps: aq.fps, fired: aq.fired },
     };
+    // Dev / test builds: the game object for e2e scripts (e.g. turning the camera for sky shots).
+    if (DEV) (window as unknown as { __game?: PlayGame }).__game = game;
     acc.current += delta;
     if (acc.current >= 0.1) {
       const dt = acc.current;

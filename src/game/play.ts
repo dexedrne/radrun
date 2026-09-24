@@ -6,6 +6,7 @@ import { emptyInput, EV_LAND, RING_RUNNER, type Body, type InputFrame, type SimW
 import { FixedStepper } from "../sim/stepper.ts";
 import { TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
+import type { DistrictId } from "../world/districts.ts";
 import type { Pack } from "../route/trackPack.ts";
 import { PHASE_ROPE } from "../route/trackPack.ts";
 import { InputLatch } from "../input/input.ts";
@@ -90,7 +91,11 @@ export class PlayGame {
   private readonly rec = emptyRec();
   private ghostIndex: CityIndex | null = null;
 
-  constructor(model: CityModel, pack: Pack, tuning: Tuning, camera: CameraTuning, difficulty: DifficultyTable) {
+  /** The page's district (its chase tweak applies to every round and ghost; world/districts.ts). */
+  readonly district: DistrictId;
+
+  constructor(model: CityModel, pack: Pack, tuning: Tuning, camera: CameraTuning, difficulty: DifficultyTable, district: DistrictId = "downtown") {
+    this.district = district;
     this.model = model;
     this.pack = pack;
     this.index = new CityIndex(model);
@@ -131,7 +136,7 @@ export class PlayGame {
     return new Round({
       model: this.model, index: this.index, pack: this.pack, difficulty: s.difficulty, params: this.difficulty[s.difficulty],
       tuning: this.simTuning ?? this.tuning, chaser: s.chaser, runner: s.runner, seed: s.seed, countdown: true,
-      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0, practice: this.practice, mutators: s.mutators ?? 0,
+      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0, practice: this.practice, mutators: s.mutators ?? 0, district: this.district,
     });
   }
 
@@ -144,7 +149,7 @@ export class PlayGame {
     const round = new Round({
       model: this.model, index: this.ghostIndex, pack: this.pack, difficulty: g.difficulty, params: this.difficulty[g.difficulty],
       tuning: roundTuning(this.tuning, g.flags), chaser: g.chaser, runner: g.runner, seed: g.seed, countdown,
-      yoinkBonus: g.flags.touch ? TOUCH.yoinkBonus : 0, mutators: g.mutators ?? 0,
+      yoinkBonus: g.flags.touch ? TOUCH.yoinkBonus : 0, mutators: g.mutators ?? 0, district: this.district,
     });
     return new GhostRun(round, g.log, g.flags.touch);
   }
