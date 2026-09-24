@@ -3,14 +3,14 @@ import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { usePrefab } from "react-three-game";
 import { Matrix4, PerspectiveCamera, Vector3 } from "three";
-import type { Sandbox } from "../game/sandbox.ts";
+import type { ViewGame } from "./viewGame.ts";
 import { rigFov, rigUpdate, type SegmentHit } from "../camera/rig.ts";
 import { EV_LAND } from "../sim/player.ts";
 import { FRAME } from "./frame.ts";
 
-export function CameraView({ game }: { game: Sandbox }) {
+export function CameraView({ game }: { game: ViewGame }) {
   const prefab = usePrefab();
-  const tmp = useMemo(() => ({ m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 } }), []);
+  const tmp = useMemo(() => ({ m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 } }), []);
   const hit: SegmentHit = useMemo(() => {
     const idx = game.world.index;
     return (ax, ay, az, bx, by, bz) => idx.segmentHit(ax, ay, az, bx, by, bz);
@@ -26,8 +26,14 @@ export function CameraView({ game }: { game: Sandbox }) {
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     rigUpdate(game.rig, Math.min(delta, 0.1), { p: game.renderP, speed, grounded: b.grounded, hook, landed: (game.frameEvents & EV_LAND) !== 0 }, game.camera, hit);
     const r = game.rig;
-    tmp.eye.set(r.pos.x, r.pos.y, r.pos.z);
-    tmp.at.set(r.target.x, r.target.y, r.target.z);
+    const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;
+    if (scripted) {
+      tmp.eye.set(tmp.se.x, tmp.se.y, tmp.se.z);
+      tmp.at.set(tmp.sa.x, tmp.sa.y, tmp.sa.z);
+    } else {
+      tmp.eye.set(r.pos.x, r.pos.y, r.pos.z);
+      tmp.at.set(r.target.x, r.target.y, r.target.z);
+    }
     tmp.m.lookAt(tmp.eye, tmp.at, tmp.up);
     const node = prefab.getObject("camera");
     const cam = state.camera;
@@ -41,7 +47,7 @@ export function CameraView({ game }: { game: Sandbox }) {
       cam.quaternion.setFromRotationMatrix(tmp.m);
     }
     if (cam instanceof PerspectiveCamera) {
-      const fov = rigFov(r);
+      const fov = scripted ? game.camera.fov : rigFov(r);
       if (Math.abs(cam.fov - fov) > 0.01) {
         cam.fov = fov;
         cam.updateProjectionMatrix();

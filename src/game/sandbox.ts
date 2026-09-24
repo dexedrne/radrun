@@ -3,7 +3,7 @@
 // canvas. Pure TS apart from reading the latch; SimDriver calls frame() once per rendered frame.
 import { copyBody, createBody, emptyInput, stepBody, cloneBody, EV_BONK, EV_FALL, EV_ATTACH, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import { FixedStepper } from "../sim/stepper.ts";
-import { HOLD_DELAY_EASY, type CameraTuning, type Tuning } from "../sim/tuning.ts";
+import { HOLD_DELAY_EASY, type CameraTuning, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
@@ -33,6 +33,8 @@ export class Sandbox {
   /** Editable tuning (tuning.json / ?tune). */
   tuning: Tuning;
   camera: CameraTuning;
+  /** Difficulty table loaded from tuning.json (kept so ?tune Save preserves it). */
+  difficulty: DifficultyTable | null = null;
   /** What the sim actually runs: tuning + the easy-grab scheme (holdDelay 0.12, no zip). */
   simTuning: Tuning;
   readonly body: Body;

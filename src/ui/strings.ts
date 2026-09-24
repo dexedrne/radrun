@@ -1,0 +1,69 @@
+// Every player-facing string (spec §12: single definition) + medals, heat labels, share text.
+import { MEDALS, type Difficulty } from "../sim/tuning.ts";
+import type { RadbroId } from "../game/round.ts";
+
+export const S = {
+  title: "RUG RUN",
+  pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
+  youChase: "You chase one of the other two",
+  countdownBubble: "finders keepers",
+  panicBubble: "wtf",
+  panicTag: "PANIC",
+  gassedBadge: "GASSED",
+  gassedFeed: "He's gassed!",
+  corneredBubble: "pls no",
+  fall: "rekt.",
+  escape: "He rugged you.",
+  goneFishing: "gone fishing",
+  yoink: "YOINK",
+  go: "GO!",
+  loading: "LOADING",
+  paused: "PAUSED",
+  credits: "Radbro #652, #4764 and #2564 · by dexedrne · built on react-three-game by prnth",
+} as const;
+
+export const TAUNTS: Record<RadbroId, string[]> = {
+  "652": ["too slow, ser", "watch and learn", "catch me if u can", "main character energy"],
+  "4764": ["cope", "ngmi", "have fun staying poor", "skill issue"],
+  "2564": ["they're watching", "can't catch a ghost", "the balloons are listening", "you're being followed"],
+};
+
+export const PERSONA: Record<RadbroId, string> = {
+  "652": "showboat",
+  "4764": "smug",
+  "2564": "paranoid ghost",
+};
+
+export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {
+  "652": { body: "#ff8a3d", accent: "#2b2b35" },
+  "4764": { body: "#8e6cff", accent: "#16161d" },
+  "2564": { body: "#eef3fa", accent: "#b9c6d6" },
+};
+
+export function heat(d: number): { label: string; color: string; fill: number } {
+  if (d < 8) return { label: "ON HIS HEELS", color: "#ff3b3b", fill: 1 };
+  if (d < 20) return { label: "HOT", color: "#ff8a3d", fill: 0.75 };
+  if (d <= 40) return { label: "WARM", color: "#ffd23f", fill: 0.45 };
+  return { label: "COLD", color: "#6ec6ff", fill: 0.18 };
+}
+
+export function medal(d: Difficulty, t: number): string {
+  const m = MEDALS[d];
+  if (t <= m.rad) return "RAD";
+  if (t <= m.gold) return "GOLD";
+  if (t <= m.silver) return "SILVER";
+  return "BRONZE";
+}
+
+export const MEDAL_COLOR: Record<string, string> = { RAD: "#ff4fd8", GOLD: "#ffd23f", SILVER: "#d7dde6", BRONZE: "#d08a4a" };
+
+export function clockText(s: number): string {
+  const t = Math.max(0, s);
+  const m = Math.floor(t / 60);
+  const r = t - m * 60;
+  return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`;
+}
+
+export function shareText(kind: "tag" | "yoink" | "", runner: string, t: number): string {
+  return `I ${kind === "yoink" ? "yoinked" : "tagged"} #${runner} in ${t.toFixed(1)} s in Rug Run`;
+}

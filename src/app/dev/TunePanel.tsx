@@ -1,8 +1,7 @@
 // ?tune (dev/test builds only): live sliders over the sim + camera tuning. Save writes
 // public/levels/tuning.json through the dev server (or downloads it outside `npm run dev`).
 import { useState } from "react";
-import type { Sandbox } from "../../game/sandbox.ts";
-import { CAMERA, PLAYER, tuningToJson, type CameraTuning, type Tuning } from "../../sim/tuning.ts";
+import { CAMERA, DIFFICULTY, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type Tuning } from "../../sim/tuning.ts";
 import { saveLevelFile } from "./save.ts";
 
 type Slider<K> = [K, number, number, number]; // key, min, max, step
@@ -22,7 +21,15 @@ const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
 ];
 const TOGGLES: (keyof CameraTuning)[] = ["invertY", "reducedMotion", "easyGrab"];
 
-export default function TunePanel({ game }: { game: Sandbox }) {
+/** Anything tunable: the Sandbox and the PlayGame. */
+export type Tunable = { tuning: Tuning; camera: CameraTuning; difficulty: DifficultyTable | null; retune(): void; restart(): void };
+
+const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
+  ["base", 0.6, 1.4, 0.01], ["gStar", 8, 45, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 1.5, 0.01], ["panicBudget", 0, 60, 0.5],
+  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 1.5, 0.01],
+];
+
+export default function TunePanel({ game }: { game: Tunable }) {
   const [, force] = useState(0);
   const [status, setStatus] = useState("");
   const [open, setOpen] = useState(true);
@@ -42,7 +49,7 @@ export default function TunePanel({ game }: { game: Sandbox }) {
         <button onClick={() => { Object.assign(game.tuning, PLAYER); Object.assign(game.camera, CAMERA); bump(); }}>defaults</button>
         <button onClick={() => game.restart()}>respawn</button>
         <button
-          onClick={async () => setStatus(await saveLevelFile("tuning.json", tuningToJson(game.tuning, game.camera)))}
+          onClick={async () => setStatus(await saveLevelFile("tuning.json", tuningToJson(game.tuning, game.camera, game.difficulty ?? DIFFICULTY)))}
         >save</button>
       </div>
       {status && <div style={{ whiteSpace: "pre-wrap", opacity: 0.85, marginBottom: 6 }}>{status}</div>}
@@ -56,6 +63,12 @@ export default function TunePanel({ game }: { game: Sandbox }) {
             <label key={k} style={{ display: "block" }}>
               <input type="checkbox" checked={game.camera[k] as boolean} onChange={e => { (game.camera as Record<string, unknown>)[k] = e.target.checked; bump(); }} /> {k}
             </label>
+          ))}
+          {game.difficulty && (["chill", "normal"] as const).map(d => (
+            <div key={d}>
+              <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>runner: {d} (applies on the next round)</div>
+              {DIFF_SLIDERS.map(([k, min, max, step]) => row(`${d}.${k}`, game.difficulty![d][k], min, max, step, v => { game.difficulty![d][k] = v; }))}
+            </div>
           ))}
           <label style={{ display: "block" }}>
             <input type="checkbox" checked={game.tuning.zip} onChange={e => { game.tuning.zip = e.target.checked; bump(); }} /> zip (grounded LMB = jump + grab)

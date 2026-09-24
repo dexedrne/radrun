@@ -6,13 +6,13 @@ import {
   BoxGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3,
 } from "three";
-import type { Sandbox } from "../game/sandbox.ts";
+import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 
 const BALLOON_COLORS = ["#ff5a7a", "#ffd23f", "#4fc3f7", "#7cdb6a", "#b388ff", "#ff9f43"];
 const CLUSTER: [number, number, number][] = [[0, 1.25, 0], [0.55, 1.05, 0.25], [-0.45, 1.0, -0.35]];
 
-function useBalloons(game: Sandbox) {
+function useBalloons(game: ViewGame) {
   return useMemo(() => {
     const hooks = game.model.hooks;
     const balloons = new InstancedMesh(new SphereGeometry(0.42, 12, 10), new MeshStandardMaterial({ roughness: 0.35, metalness: 0 }), hooks.length * CLUSTER.length);
@@ -47,7 +47,7 @@ function useBalloons(game: Sandbox) {
   }, [game]);
 }
 
-export function FxView({ game }: { game: Sandbox }) {
+export function FxView({ game, hidePlayer }: { game: ViewGame; hidePlayer?: () => boolean }) {
   const { balloons, strings } = useBalloons(game);
   const ring = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
@@ -61,9 +61,11 @@ export function FxView({ game }: { game: Sandbox }) {
     const hooks = game.model.hooks;
     tmp.t += delta;
     // Reticle ring on snapshot.ringId (the hook the next web press gets).
+    const hide = hidePlayer?.() ?? false;
+    if (shadow.current) shadow.current.visible = !hide;
     const rm = ring.current;
     if (rm) {
-      const id = b.ringId;
+      const id = hide ? -1 : b.ringId;
       rm.visible = id >= 0;
       if (id >= 0) {
         const h = hooks[id];
@@ -78,8 +80,8 @@ export function FxView({ game }: { game: Sandbox }) {
     // Rope from the body point (the sim's attach point) to the hook knot.
     const ro = rope.current;
     if (ro) {
-      ro.visible = b.ropeHook >= 0;
-      if (b.ropeHook >= 0) {
+      ro.visible = b.ropeHook >= 0 && !hide;
+      if (ro.visible) {
         const h = hooks[b.ropeHook];
         tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
@@ -91,7 +93,7 @@ export function FxView({ game }: { game: Sandbox }) {
     }
     // Blob shadow on the ground below (pure groundBelow).
     const sh = shadow.current;
-    if (sh) {
+    if (sh && !hide) {
       const g = game.world.index.groundBelow(p.x, p.z, p.y - 0.9 + 0.05);
       const hgt = p.y - 0.9 - g;
       sh.position.set(p.x, g + 0.03, p.z);
