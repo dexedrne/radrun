@@ -40,7 +40,14 @@ export function Title(props: {
                   background: id === chaser ? "rgba(255,61,127,0.35)" : "rgba(255,255,255,0.06)",
                   border: id === chaser ? "2px solid #ff3d7f" : "2px solid rgba(255,255,255,0.2)",
                 }}>
-                <div style={{ margin: "0 auto 8px", width: 44, height: 64, borderRadius: 6, background: RADBRO_COLOR[id].body, boxShadow: `inset 0 -8px 0 ${RADBRO_COLOR[id].accent}` }} />
+                <div style={{
+                  margin: "0 auto 8px", width: 124, height: 124, borderRadius: 10, overflow: "hidden",
+                  background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}66, ${RADBRO_COLOR[id].accent}22 62%, rgba(0,0,0,0.25))`,
+                  boxShadow: id === chaser ? "0 0 0 1px rgba(255,255,255,0.25) inset" : "none",
+                }}>
+                  <img src={`/ui/radbro${id}.webp`} alt="" width={124} height={124} draggable={false}
+                    style={{ display: "block", width: 124, height: 124, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
+                </div>
                 <div>Radbro #{id}</div>
                 <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>
               </button>

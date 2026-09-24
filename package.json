@@ -23,6 +23,7 @@
     "trace:proto": "node test/fixtures/proto/dump-trace.ts",
     "shot": "node tools/shot.ts",
     "botshot": "node tools/botshot.ts",
+    "portraits": "node tools/portraits.ts",
     "assets": "node tools/assets.ts"
   },
   "dependencies": {

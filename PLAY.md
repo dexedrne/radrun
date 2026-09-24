@@ -38,6 +38,7 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, AC units, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=swing` chain-swings for screenshots) |
+| `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves all three to `public/ui/` for the title cards |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat.
 
@@ -89,8 +90,7 @@ delay, gait thresholds) and `src/app/george.config.ts` (model switch, render sca
   Normal and adjust `difficulty.normal` (gStar, mMax, panicBudget) if catches come too easily.
 - The Milady loads from jsDelivr with a GitHub raw fallback; some files 404 on jsDelivr (one console
   error, then the fallback loads her). `?milady=0` turns her off.
-- Title cards are colour swatches, SFX are synthesised tones, there is no music; buildings are plain
-  boxes (the generated seed-7 city) - edit them in `?editor`.
+- SFX are synthesised tones, there is no music.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
 - The production build is ~9 MB (models ~5.8 MB); the budget is not enforced.
