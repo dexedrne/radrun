@@ -75,7 +75,7 @@ link: Downtown, no mutators. If a replay no longer verifies and the link is olde
 build, the title says "made on an older build" next to "unverified". Links for another district open
 that district (the page boots the link's `m`).
 
-## 5. Art (OpenAI images, ≤ 25 generations, `gpt-image-2`, medium quality)
+## 5. Art (generated images, ≤ 25 generations, medium quality)
 
 | Asset | Count | Size → shipped | Use |
 |---|---|---|---|
