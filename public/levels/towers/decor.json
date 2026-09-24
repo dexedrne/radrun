@@ -1,0 +1,1562 @@
+{
+ "id": "decor",
+ "name": "Rug Run decor",
+ "materials": {
+  "metal": {
+   "color": "#9aa3ad",
+   "roughness": 0.7,
+   "metalness": 0
+  },
+  "stand": {
+   "color": "#e86a92",
+   "roughness": 0.9,
+   "metalness": 0
+  },
+  "balloonA": {
+   "color": "#ff5a7a",
+   "roughness": 0.4,
+   "metalness": 0
+  },
+  "balloonB": {
+   "color": "#ffd23f",
+   "roughness": 0.4,
+   "metalness": 0
+  }
+ },
+ "root": {
+  "id": "decor-root",
+  "children": [
+   {
+    "id": "balloon-stand",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        132,
+        48,
+        106
+       ],
+       "rotation": [
+        0,
+        0.55,
+        0
+       ]
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "miladyStand"
+       }
+      }
+     }
+    },
+    "children": [
+     {
+      "id": "stand-counter",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          0.55,
+          0
+         ],
+         "scale": [
+          2.4,
+          1.1,
+          1.2
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "stand"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "stand-sign",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          0.6,
+          0.61
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ]
+        }
+       },
+       "sign": {
+        "type": "Sign",
+        "properties": {
+         "text": "BALLOONS\n1 ETH",
+         "width": 2.2,
+         "height": 0.9,
+         "background": "#fff4d6",
+         "color": "#b0124f",
+         "border": "#b0124f"
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "sign"
+         }
+        }
+       }
+      }
+     },
+     {
+      "id": "stand-balloon-a",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          -0.8,
+          2.5,
+          -0.3
+         ],
+         "scale": [
+          0.8,
+          0.9199999999999999,
+          0.8
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "sphere",
+         "args": [
+          0.5,
+          12,
+          10
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "balloonA"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "stand-balloon-b",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0.7,
+          2.9,
+          -0.2
+         ],
+         "scale": [
+          0.9,
+          1.035,
+          0.9
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "sphere",
+         "args": [
+          0.5,
+          12,
+          10
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "balloonB"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "billboard-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        278.5,
+        38,
+        232
+       ],
+       "rotation": [
+        0,
+        -1.57,
+        0
+       ]
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard"
+       }
+      }
+     }
+    },
+    "children": [
+     {
+      "id": "billboard-0-face",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0.13
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ]
+        }
+       },
+       "sign": {
+        "type": "Sign",
+        "properties": {
+         "text": "WAGMI",
+         "width": 7,
+         "height": 3,
+         "background": "#f2c14e",
+         "color": "#16161d",
+         "border": "#16161d"
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "sign"
+         }
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-0-back",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0
+         ],
+         "scale": [
+          7.3,
+          3.3,
+          0.2
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-0-leg",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          1.55,
+          -0.1
+         ],
+         "scale": [
+          0.4,
+          3.1,
+          0.3
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "billboard-1",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        1.5,
+        42.5,
+        232
+       ],
+       "rotation": [
+        0,
+        1.57,
+        0
+       ]
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard"
+       }
+      }
+     }
+    },
+    "children": [
+     {
+      "id": "billboard-1-face",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0.13
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ]
+        }
+       },
+       "sign": {
+        "type": "Sign",
+        "properties": {
+         "text": "BUYING\nTHE DIP",
+         "width": 7,
+         "height": 3,
+         "background": "#16161d",
+         "color": "#7cdb6a",
+         "border": "#7cdb6a"
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "sign"
+         }
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-1-back",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0
+         ],
+         "scale": [
+          7.3,
+          3.3,
+          0.2
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-1-leg",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          1.55,
+          -0.1
+         ],
+         "scale": [
+          0.4,
+          3.1,
+          0.3
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "billboard-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        278.5,
+        38.5,
+        6
+       ],
+       "rotation": [
+        0,
+        -1.57,
+        0
+       ]
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard"
+       }
+      }
+     }
+    },
+    "children": [
+     {
+      "id": "billboard-2-face",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0.13
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ]
+        }
+       },
+       "sign": {
+        "type": "Sign",
+        "properties": {
+         "text": "gm",
+         "width": 7,
+         "height": 3,
+         "background": "#ff5ab4",
+         "color": "#ffffff",
+         "border": "#ffffff"
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "sign"
+         }
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-2-back",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0
+         ],
+         "scale": [
+          7.3,
+          3.3,
+          0.2
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-2-leg",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          1.55,
+          -0.1
+         ],
+         "scale": [
+          0.4,
+          3.1,
+          0.3
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "billboard-3",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        1.5,
+        43.5,
+        6
+       ],
+       "rotation": [
+        0,
+        1.57,
+        0
+       ]
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard"
+       }
+      }
+     }
+    },
+    "children": [
+     {
+      "id": "billboard-3-face",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0.13
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ]
+        }
+       },
+       "sign": {
+        "type": "Sign",
+        "properties": {
+         "text": "HAVE FUN\nSTAYING POOR",
+         "width": 7,
+         "height": 3,
+         "background": "#1c2a6b",
+         "color": "#ffd23f",
+         "border": "#ffd23f"
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "sign"
+         }
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-3-back",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          4.7,
+          0
+         ],
+         "scale": [
+          7.3,
+          3.3,
+          0.2
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     },
+     {
+      "id": "billboard-3-leg",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          0,
+          1.55,
+          -0.1
+         ],
+         "scale": [
+          0.4,
+          3.1,
+          0.3
+         ]
+        }
+       },
+       "geometry": {
+        "type": "Geometry",
+        "properties": {
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "metal"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
+        }
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "banner-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        48,
+        100,
+        28.08
+       ],
+       "rotation": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "HODL",
+       "width": 3.2,
+       "height": 13,
+       "background": "#b0124f",
+       "color": "#fff4d6",
+       "border": "#f2c14e"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "banner-1",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        216,
+        97.5,
+        12.08
+       ],
+       "rotation": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "FEW UNDERSTAND",
+       "width": 10.5,
+       "height": 2.8,
+       "background": "#16161d",
+       "color": "#f2c14e",
+       "border": "#f2c14e"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "banner-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        106,
+        111,
+        70.08
+       ],
+       "rotation": [
+        0,
+        0,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "NGMI",
+       "width": 3.2,
+       "height": 13,
+       "background": "#ffffff",
+       "color": "#e5484d",
+       "border": "#e5484d"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "banner-3",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        209.92,
+        112,
+        90
+       ],
+       "rotation": [
+        0,
+        -1.57,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "PROBABLY NOTHING",
+       "width": 10.5,
+       "height": 2.8,
+       "background": "#6ec6ff",
+       "color": "#16161d",
+       "border": "#16161d"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "banner-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        251.92,
+        90.5,
+        174
+       ],
+       "rotation": [
+        0,
+        -1.57,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "LFG",
+       "width": 3.2,
+       "height": 13,
+       "background": "#7cdb6a",
+       "color": "#16161d",
+       "border": "#16161d"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "banner-5",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        28.08,
+        123.5,
+        232
+       ],
+       "rotation": [
+        0,
+        1.57,
+        0
+       ]
+      }
+     },
+     "sign": {
+      "type": "Sign",
+      "properties": {
+       "text": "NOT FINANCIAL ADVICE",
+       "width": 10.5,
+       "height": 2.8,
+       "background": "#fff4d6",
+       "color": "#1c2a6b",
+       "border": "#1c2a6b"
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "sign"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        128.2,
+        48.6,
+        235.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        136.5,
+        50.5,
+        227.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-1",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        228.2,
+        42.1,
+        135.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        144.2,
+        43.6,
+        9.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        152.5,
+        45.5,
+        1.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-3",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        18.2,
+        40.6,
+        109.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        60.2,
+        47.1,
+        177.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        68.5,
+        49,
+        169.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-6",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        194.5,
+        45.5,
+        59.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {
+       "geometryType": "box",
+       "args": [
+        1,
+        1,
+        1
+       ]
+      }
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   }
+  ]
+ }
+}

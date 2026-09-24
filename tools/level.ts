@@ -1,7 +1,8 @@
-// npm run level: public/levels/city.json (editable source of truth) -> city.model.json -> runner bake
+// npm run level: a district's city.json (editable source of truth) -> city.model.json -> runner bake
 // -> runner.pack.bin + bake.report.json. Prints the city lint and the bake checks (never fails on
-// dropped edges; a non-zero exit only for lint errors or failed graph checks).
-//   node tools/level.ts [--city public/levels/city.json] [--no-bake]
+// dropped edges; a non-zero exit only for lint errors or failed graph checks). Tuning is the shared
+// public/levels/tuning.json.
+//   node tools/level.ts [--map downtown|market|docks|towers | --all | --city <path>] [--no-bake]
 import fs from "node:fs";
 import path from "node:path";
 import { modelFromCityPrefab } from "../src/world/level.ts";
@@ -9,6 +10,7 @@ import { lintModel } from "../src/world/derive.ts";
 import { prefabBatchStats } from "../src/world/fromPrefab.ts";
 import { applyTuningJson } from "../src/sim/tuning.ts";
 import { bake, BAKE, type BakeReport } from "../src/route/bake.ts";
+import { DISTRICTS, DISTRICT_IDS, isDistrictId } from "../src/world/districts.ts";
 
 export const LEVELS = path.resolve(import.meta.dirname, "..", "public", "levels");
 
@@ -30,7 +32,7 @@ export function bakeChecksFailed(r: BakeReport): string[] {
 export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = path.dirname(cityPath), doBake = true): number {
   const prefab = JSON.parse(fs.readFileSync(cityPath, "utf8"));
   const { model, warnings } = modelFromCityPrefab(prefab);
-  const tuningPath = path.join(path.dirname(cityPath), "tuning.json");
+  const tuningPath = path.join(LEVELS, "tuning.json");
   const tuning = applyTuningJson(fs.existsSync(tuningPath) ? JSON.parse(fs.readFileSync(tuningPath, "utf8")) : null).player;
   const lint = lintModel(model, tuning.aimRadius);
   const outPath = path.join(outDir, "city.model.json");
@@ -69,8 +71,20 @@ export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = pat
   return failures;
 }
 
+/** A district's city.json path. */
+export const districtCity = (id: string): string => {
+  if (!isDistrictId(id)) throw new Error(`level: unknown district ${id}`);
+  return path.resolve(LEVELS, "..", DISTRICTS[id].dir, "city.json");
+};
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const i = process.argv.indexOf("--city");
-  const n = runLevel(i > 0 ? path.resolve(process.argv[i + 1]) : undefined, undefined, !process.argv.includes("--no-bake"));
+  const argv = process.argv;
+  const doBake = !argv.includes("--no-bake");
+  const i = argv.indexOf("--city"), m = argv.indexOf("--map");
+  const cities = argv.includes("--all")
+    ? DISTRICT_IDS.map(districtCity).filter(p => fs.existsSync(p))
+    : [i > 0 ? path.resolve(argv[i + 1]) : m > 0 ? districtCity(argv[m + 1]) : path.join(LEVELS, "city.json")];
+  let n = 0;
+  for (const c of cities) n += runLevel(c, undefined, doBake);
   process.exitCode = n ? 1 : 0;
 }

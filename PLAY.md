@@ -136,13 +136,34 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 Tuned against a swinging bot (below): a strong swinger catches him on Normal in about 25-30 s (median),
 on Degen in about 45 s when it catches him at all (about a quarter of Degen rounds he escapes).
 
+## Districts
+
+Pick the district on the title (a district change reloads the page; Retry never does).
+
+| District | URL | Feel |
+|---|---|---|
+| **Downtown** | `/` | the original skyline: wide streets, balloons everywhere |
+| **Night Market** | `?map=market` | dense and narrow (10 m streets, 10 m roofs), many junctions, some street stretches with **no balloons** (route around or carry momentum), purple dusk |
+| **The Docks** | `?map=docks` | low warehouses (12-20 m), wide 15 m streets, long flights over the water |
+| **The Towers** | `?map=towers` | tall roofs (38-52 m) between eight 90-130 m towers, deeper falls |
+
+Each district has its own level files: Downtown in `public/levels/`, the others in
+`public/levels/<market|docks|towers>/` (`city.json`, `decor.json`, `city.model.json`, `runner.pack.bin`,
+`bake.report.json`). `tuning.json` is shared. Generator configs and looks: `src/world/districts.ts`.
+
+- `npm run gen-city -- --map docks [--force] [--decor]` (re)generates a district (never overwrites an
+  existing `city.json` without `--force`).
+- `npm run level -- --map docks` / `npm run level -- --all` re-derives and re-bakes one / every district.
+- `?editor&map=docks` / `?editor=decor&map=docks` edit a district; Save writes that district's files.
+- Best times and kept ghosts are per district; share links carry the district (`&m=docks`).
+
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
 | URL | What |
 |---|---|
 | `?sandbox` | the old dev free-roam page with a debug HUD (`?sandbox&autoplay` = scripted chain-swinger); players use PRACTICE |
 | `?tune` | live sliders for player, camera, the Chill/Normal runner table and George; Save writes `tuning.json` |
-| `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
+| `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout); `&map=<id>` for another district |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`) |
@@ -160,7 +181,7 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
    the ground.
 3. Save. Under `npm run dev` Save writes the file and, for `city.json`, runs `npm run level` for you
    (new sim model + a fresh runner bake). Outside the dev server Save downloads the file: copy it into
-   `public/levels/` and run `npm run level` yourself.
+   the district's level dir (`public/levels/` or `public/levels/<id>/`) and run `npm run level -- --map <id>`.
 4. Reload the game page. `npm run level` prints lint errors and bake checks; if the bake fails (graph
    not connected, too few junctions) the layout needs more reachable roofs around the failing spot.
 5. Commit `city.json`, `city.model.json`, `runner.pack.bin` and `bake.report.json` together

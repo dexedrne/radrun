@@ -13,10 +13,12 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { RepeatWrapping, type Material, type Mesh, type Texture } from "three";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import { abs, color, mix, normalWorld, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, vec2 } from "three/tsl";
+import { PAGE } from "./district.ts";
 
 /** Sky gradient stops (sRGB). The fog uses the horizon colour so distant boxes melt into it. */
-export const SKY_COLORS = { horizon: "#d3dcea", mid: "#98bde6", zenith: "#4c83d0" };
-export const FOG_COLOR = SKY_COLORS.horizon;
+/** Sky / fog of this page's district (Downtown: horizon #d3dcea, mid #98bde6, zenith #4c83d0). */
+export const SKY_COLORS = { horizon: PAGE.look.skyHorizon, mid: PAGE.look.skyMid, zenith: PAGE.look.skyZenith };
+export const FOG_COLOR = PAGE.look.fog;
 
 const worldUV = () => {
   const n = normalWorld, p = positionWorld;

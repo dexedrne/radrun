@@ -7,6 +7,8 @@ import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockTex
 import { challengeUrl, ghostUrl, type Challenge, type Settings, type StoredGhost } from "./prefs.ts";
 import type { GhostChoice } from "../app/PlayPage.tsx";
 import { hints } from "./hints.ts";
+import { DISTRICTS, DISTRICT_IDS } from "../world/districts.ts";
+import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
 
 const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 const btn = (primary = false): React.CSSProperties => ({
@@ -132,6 +134,17 @@ export function Title(props: {
           </div>
         )}
         <div style={{ ...panel, marginTop: compact ? 8 : 16, padding: compact ? "8px 12px" : panel.padding }}>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: compact ? 6 : 10 }} data-testid="districts">
+            {DISTRICT_IDS.map(id => (
+              <button key={id} onClick={() => id !== PAGE_DISTRICT && gotoDistrict(id)} data-testid={`map-${id}`} title={DISTRICTS[id].blurb}
+                style={{ ...btn(false), padding: compact ? "5px 9px" : "7px 12px", fontSize: compact ? 11 : 12,
+                  background: id === PAGE_DISTRICT ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.06)",
+                  borderColor: id === PAGE_DISTRICT ? "#9fe6ff" : "rgba(255,255,255,0.3)" }}>
+                {DISTRICTS[id].name}
+              </button>
+            ))}
+          </div>
+          {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
           <div style={{ fontSize: 12, opacity: 0.8, marginBottom: compact ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
           <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => (

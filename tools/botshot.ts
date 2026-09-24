@@ -14,6 +14,7 @@ import { Round } from "../src/game/round.ts";
 import { runBotRound } from "../src/game/bots.ts";
 import { emptyInput } from "../src/sim/player.ts";
 import type { Difficulty } from "../src/sim/tuning.ts";
+import { DISTRICTS, districtFromSearch } from "../src/world/districts.ts";
 
 const profile = process.env.RUGRUN_CHROME_PROFILE;
 if (!profile) {
@@ -28,9 +29,10 @@ fs.mkdirSync(profile, { recursive: true });
 // Node prediction.
 const q = new URL(url).searchParams;
 const levels = path.resolve(import.meta.dirname, "..", "public", "levels");
+const dir = path.resolve(import.meta.dirname, "..", "public", DISTRICTS[districtFromSearch(new URL(url).search)].dir);
 const tj = applyTuningJson(JSON.parse(fs.readFileSync(path.join(levels, "tuning.json"), "utf8")));
-const model = JSON.parse(fs.readFileSync(path.join(levels, "city.model.json"), "utf8"));
-const pack = decodePack(fs.readFileSync(path.join(levels, "runner.pack.bin")));
+const model = JSON.parse(fs.readFileSync(path.join(dir, "city.model.json"), "utf8"));
+const pack = decodePack(fs.readFileSync(path.join(dir, "runner.pack.bin")));
 const d = ((DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? q.get("d") : "chill") as Difficulty;
 const round = new Round({ model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false });
 const swing = q.get("bot") === "swing";

@@ -1,6 +1,7 @@
 // Settings, personal bests and challenge links. localStorage is optional (every access try/catch).
 import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
+import { PAGE_DISTRICT } from "../app/district.ts";
 
 const KEY = "rugrun.v1";
 
@@ -99,14 +100,17 @@ export function resetHintsSeen(): void {
   save(s);
 }
 
+/** Best-time / kept-ghost key: Downtown keeps the original `chaser:difficulty`; other districts add `:map`. */
+export const bestKey = (chaser: string, d: string): string => (PAGE_DISTRICT === "downtown" ? `${chaser}:${d}` : `${chaser}:${d}:${PAGE_DISTRICT}`);
+
 export function getBest(chaser: string, d: string): number | null {
-  const b = load().bests?.[`${chaser}:${d}`];
+  const b = load().bests?.[bestKey(chaser, d)];
   return typeof b === "number" ? b : null;
 }
 /** Records a catch time; returns the previous best (null if none). */
 export function recordBest(chaser: string, d: string, t: number): number | null {
   const s = load();
-  const key = `${chaser}:${d}`;
+  const key = bestKey(chaser, d);
   const prev = s.bests?.[key] ?? null;
   if (prev === null || t < prev) {
     s.bests = { ...(s.bests ?? {}), [key]: t };
@@ -152,9 +156,16 @@ export function readChallenge(search: string): Challenge {
   return { c, r, d, t, s, g };
 }
 
+/**
+ * Link format version (round 4): v=2 links carry the district (m=, omitted for Downtown) and later the
+ * mutators (mu=); a link without v is a v1 link = Downtown, no mutators.
+ */
+export const LINK_VERSION = 2;
+const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
+
 export function challengeUrl(chaser: string, runner: string, d: string, t: number): string {
   const u = new URL(location.href);
-  u.search = `?c=${chaser}&r=${runner}&d=${d}&t=${t.toFixed(1)}`;
+  u.search = `?v=${LINK_VERSION}${mapParam()}&c=${chaser}&r=${runner}&d=${d}&t=${t.toFixed(1)}`;
   u.hash = "";
   return u.toString();
 }
@@ -162,20 +173,20 @@ export function challengeUrl(chaser: string, runner: string, d: string, t: numbe
 /** A ghost link: the exact round (seed, pair, difficulty), the claimed time and the packed run. */
 export function ghostUrl(chaser: string, runner: string, d: string, t: number, seed: number, g: string): string {
   const u = new URL(location.href);
-  u.search = `?c=${chaser}&r=${runner}&d=${d}&s=${seed >>> 0}&t=${t.toFixed(1)}&g=${g}`;
+  u.search = `?v=${LINK_VERSION}${mapParam()}&c=${chaser}&r=${runner}&d=${d}&s=${seed >>> 0}&t=${t.toFixed(1)}&g=${g}`;
   u.hash = "";
   return u.toString();
 }
 
 /** Your kept personal-best run for a chaser x difficulty, if any. */
 export function getBestGhost(chaser: string, d: string): StoredGhost | null {
-  const g = load().ghosts?.[`${chaser}:${d}`];
+  const g = load().ghosts?.[bestKey(chaser, d)];
   return g && typeof g.g === "string" && typeof g.s === "number" && typeof g.t === "number" ? g : null;
 }
 /** Keep a run as the personal-best ghost (only if it is still the best for its chaser x difficulty). */
 export function saveBestGhost(g: StoredGhost): void {
   const s = load();
-  const key = `${g.c}:${g.d}`;
+  const key = bestKey(g.c, g.d);
   const best = s.bests?.[key];
   if (typeof best === "number" && g.t > best + 1e-9) return;
   s.ghosts = { ...(s.ghosts ?? {}), [key]: g };

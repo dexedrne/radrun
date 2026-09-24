@@ -9,6 +9,8 @@ import { Runner, RM_EDGE, RM_LOOK, RM_TAUNT, RM_TURN } from "../../runner/runner
 import { Rand } from "../../sim/math.ts";
 import { chaseDist } from "../../sim/player.ts";
 import { FixedStepper } from "../../sim/stepper.ts";
+import { lv } from "../district.ts";
+import { TUNING_URL } from "../../world/districts.ts";
 
 type Data = { model: CityModel; pack: Pack; report: BakeReport | null; table: DifficultyTable };
 
@@ -25,10 +27,10 @@ export default function RouteView() {
   useEffect(() => {
     (async () => {
       const [m, p, r, t] = await Promise.all([
-        fetch("/levels/city.model.json").then(x => x.json()),
-        fetch("/levels/runner.pack.bin").then(x => x.arrayBuffer()),
-        fetch("/levels/bake.report.json").then(x => (x.ok ? x.json() : null), () => null),
-        fetch("/levels/tuning.json").then(x => (x.ok ? x.json() : null), () => null),
+        fetch(lv("city.model.json")).then(x => x.json()),
+        fetch(lv("runner.pack.bin")).then(x => x.arrayBuffer()),
+        fetch(lv("bake.report.json")).then(x => (x.ok ? x.json() : null), () => null),
+        fetch(TUNING_URL).then(x => (x.ok ? x.json() : null), () => null),
       ]);
       setData({ model: m, pack: decodePack(p), report: r, table: applyTuningJson(t as TuningJson).difficulty });
     })().catch(e => setErr(String(e)));

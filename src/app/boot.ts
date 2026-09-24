@@ -5,6 +5,8 @@ import type { CityModel } from "../world/cityModel.ts";
 import { PlayGame } from "../game/play.ts";
 import { decodePack } from "../route/trackPack.ts";
 import { applyGeorgeJson } from "./george.config.ts";
+import { lv } from "./district.ts";
+import { TUNING_URL } from "../world/districts.ts";
 
 
 let game: Sandbox | null = null;
@@ -23,10 +25,10 @@ export function bootGame(): Promise<Sandbox> {
   if (game) return Promise.resolve(game);
   booting ??= (async () => {
     const [model, tuningJson] = await Promise.all([
-      getJson<CityModel>("/levels/city.model.json"),
-      getJson<TuningJson>("/levels/tuning.json"),
+      getJson<CityModel>(lv("city.model.json")),
+      getJson<TuningJson>(TUNING_URL),
     ]);
-    if (!model) throw new Error("levels/city.model.json missing: run npm run gen-city");
+    if (!model) throw new Error(`${lv("city.model.json")} missing: run npm run gen-city`);
     const { player, camera, difficulty } = applyTuningJson(tuningJson, m => console.info(m));
     applyGeorgeJson(tuningJson?.george, m => console.info(m));
     game = new Sandbox(model, player, camera);
@@ -44,12 +46,12 @@ let play: Promise<PlayGame> | null = null;
 export function bootPlay(): Promise<PlayGame> {
   play ??= (async () => {
     const [model, tuningJson, packBuf] = await Promise.all([
-      getJson<CityModel>("/levels/city.model.json"),
-      getJson<TuningJson>("/levels/tuning.json"),
-      fetch(`/levels/runner.pack.bin?v=${Date.now()}`).then(r => (r.ok ? r.arrayBuffer() : null), () => null),
+      getJson<CityModel>(lv("city.model.json")),
+      getJson<TuningJson>(TUNING_URL),
+      fetch(`${lv("runner.pack.bin")}?v=${Date.now()}`).then(r => (r.ok ? r.arrayBuffer() : null), () => null),
     ]);
-    if (!model) throw new Error("levels/city.model.json missing: run npm run level");
-    if (!packBuf) throw new Error("levels/runner.pack.bin missing: run npm run level");
+    if (!model) throw new Error(`${lv("city.model.json")} missing: run npm run level`);
+    if (!packBuf) throw new Error(`${lv("runner.pack.bin")} missing: run npm run level`);
     const pack = decodePack(packBuf);
     if (pack.header.city !== model.hash) console.warn(`[rug-run] runner.pack.bin was baked for city ${pack.header.city}, model is ${model.hash}: run npm run level`);
     const { player, camera, difficulty } = applyTuningJson(tuningJson, m => console.info(m));

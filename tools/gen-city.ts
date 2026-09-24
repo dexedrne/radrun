@@ -1,11 +1,13 @@
-// npm run gen-city -- [--seed 7] [--street 14] [--force] [--decor]   (--decor rewrites decor.json only)
-// Generates the district ONCE into public/levels/city.json (the editable source of truth; never
-// overwritten unless --force), seeds decor.json and tuning.json if they are missing, then runs
-// `npm run level` (city.json -> city.model.json).
+// npm run gen-city -- [--map downtown|market|docks|towers] [--seed 7] [--street 14] [--force] [--decor]
+// (--decor rewrites decor.json only). Generates a district ONCE into its level dir (Downtown:
+// public/levels/, others: public/levels/<id>/) as city.json (the editable source of truth; never
+// overwritten unless --force), seeds decor.json (and the shared tuning.json) if missing, then runs
+// `npm run level` for that district (city.json -> city.model.json -> runner bake).
 import fs from "node:fs";
 import path from "node:path";
 import type { GameObject, Prefab } from "react-three-game";
-import { DEFAULT_CONFIG, generate } from "../src/world/generate.ts";
+import { generate } from "../src/world/generate.ts";
+import { DISTRICTS, isDistrictId } from "../src/world/districts.ts";
 import { boxNode, toPrefab } from "../src/world/toPrefab.ts";
 import { modelFromCityPrefab } from "../src/world/level.ts";
 import { tuningToJson, PLAYER, CAMERA } from "../src/sim/tuning.ts";
@@ -17,12 +19,15 @@ const arg = (name: string) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const force = process.argv.includes("--force");
-const cfg = { ...DEFAULT_CONFIG };
+const map = arg("map") ?? "downtown";
+if (!isDistrictId(map)) throw new Error(`gen-city: unknown --map ${map}`);
+const cfg = { ...DISTRICTS[map].config };
 if (arg("seed")) cfg.seed = Number(arg("seed"));
 if (arg("street")) cfg.street = Number(arg("street"));
 
-fs.mkdirSync(LEVELS, { recursive: true });
-const cityPath = path.join(LEVELS, "city.json");
+const dir = path.resolve(LEVELS, "..", DISTRICTS[map].dir);
+fs.mkdirSync(dir, { recursive: true });
+const cityPath = path.join(dir, "city.json");
 if (fs.existsSync(cityPath) && !force) {
   console.log(`gen-city: ${path.relative(process.cwd(), cityPath)} exists (hand-edited source of truth) - not overwritten; pass --force to regenerate`);
 } else {
@@ -31,7 +36,7 @@ if (fs.existsSync(cityPath) && !force) {
   console.log(`gen-city: wrote ${path.relative(process.cwd(), cityPath)} (seed ${cfg.seed}, street ${cfg.street} m, ${model.solids.length} solids)`);
 }
 
-const decorPath = path.join(LEVELS, "decor.json");
+const decorPath = path.join(dir, "decor.json");
 if (!fs.existsSync(decorPath) || process.argv.includes("--decor")) {
   const { model } = modelFromCityPrefab(JSON.parse(fs.readFileSync(cityPath, "utf8")));
   fs.writeFileSync(decorPath, JSON.stringify(defaultDecor(model), null, 1) + "\n");
@@ -55,7 +60,8 @@ function defaultDecor(model: CityModel): Prefab {
   const b = model.bounds;
   const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
   const r2 = (v: number) => Math.round(v * 100) / 100;
-  const roofs = model.solids.filter(s => s.landable && s.x1 - s.x0 >= 11.9 && s.z1 - s.z0 >= 11.9);
+  const minW = model.config.building - 0.1;
+  const roofs = model.solids.filter(s => s.landable && s.x1 - s.x0 >= minW && s.z1 - s.z0 >= minW);
   const mid = (s: (typeof roofs)[number]) => ({ x: (s.x0 + s.x1) / 2, z: (s.z0 + s.z1) / 2 });
   // Stand roof: nearest the centre. Then farthest-point sampling for an even spread.
   const standRoof = roofs.reduce((a, s) => ((mid(s).x - cx) ** 2 + (mid(s).z - cz) ** 2 < (mid(a).x - cx) ** 2 + (mid(a).z - cz) ** 2 ? s : a));

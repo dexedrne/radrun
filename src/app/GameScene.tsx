@@ -13,6 +13,7 @@ import { FxView } from "./FxView.tsx";
 import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
 import { CityLook, FOG_COLOR, SkyGradient } from "./cityLook.tsx";
 import { ANTIALIAS, HIGH_DPR, QualityView, lowQuality } from "./quality.tsx";
+import { PAGE, lv } from "./district.ts";
 
 export const SKY = FOG_COLOR;
 
@@ -70,11 +71,11 @@ export function playPrefab(game: ViewGame, actors: { nodes: GameObject[]; materi
       node("camera", { transform: xf([sp.x, sp.y + 3, sp.z + 8]), camera: { type: "Camera", properties: { fov: 62, near: 0.1, far: 1500 } } }),
       node("sun", {
         transform: xf([cx + 90, 220, cz + 70]),
-        light: { type: "DirectionalLight", properties: { intensity: 1.5, castShadow: false, targetOffset: [-90, -220, -70], color: "#fff4e0" } },
+        light: { type: "DirectionalLight", properties: { intensity: PAGE.look.sunIntensity, castShadow: false, targetOffset: [-90, -220, -70], color: PAGE.look.sun } },
       }),
-      node("sky", { light: { type: "HemisphereLight", properties: { skyColor: "#e3eeff", groundColor: "#6b5d7a", intensity: 1.25 } } }),
-      node("city", { transform: xf([0, 0, 0]), prefabRef: { type: "PrefabRef", properties: { url: "/levels/city.json" } } }),
-      node("decor", { transform: xf([0, 0, 0]), prefabRef: { type: "PrefabRef", properties: { url: "/levels/decor.json" } } }),
+      node("sky", { light: { type: "HemisphereLight", properties: { skyColor: PAGE.look.hemiSky, groundColor: PAGE.look.hemiGround, intensity: PAGE.look.hemiIntensity } } }),
+      node("city", { transform: xf([0, 0, 0]), prefabRef: { type: "PrefabRef", properties: { url: lv("city.json") } } }),
+      node("decor", { transform: xf([0, 0, 0]), prefabRef: { type: "PrefabRef", properties: { url: lv("decor.json") } } }),
       ...actors.nodes,
     ]),
   };
@@ -113,7 +114,7 @@ export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: R
       }}
     >
       <color attach="background" args={[SKY]} />
-      <fog attach="fog" args={[FOG_COLOR, 120, 380]} />
+      <fog attach="fog" args={[FOG_COLOR, PAGE.look.fogNear, PAGE.look.fogFar]} />
       <SkyGradient />
       <CityLook />
       <QualityView />

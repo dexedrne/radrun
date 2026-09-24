@@ -51,11 +51,11 @@ const q = (v: number) => Math.round(v * 1000) / 1000;
 
 export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adjacency[], manual: ManualHook[]): Hook[] {
   const byId = new Map(solids.map(s => [s.id, s]));
-  const cand = new Map<string, { x: number; y: number; z: number; src: Hook["src"] }>();
-  const put = (x: number, y: number, z: number, src: Hook["src"]) => {
+  const cand = new Map<string, { x: number; y: number; z: number; src: Hook["src"]; axis: "x" | "z" | "" }>();
+  const put = (x: number, y: number, z: number, src: Hook["src"], axis: "x" | "z" | "" = "") => {
     const key = `${q(x)},${q(z)}`;
     const cur = cand.get(key);
-    if (!cur || y > cur.y) cand.set(key, { x: q(x), y: q(y), z: q(z), src: cur?.src === "intersection" ? "intersection" : src });
+    if (!cur || y > cur.y) cand.set(key, { x: q(x), y: q(y), z: q(z), src: cur?.src === "intersection" ? "intersection" : src, axis: cur?.axis || axis });
   };
   const sp = config.hookSpacing;
   if (config.autoHooks) {
@@ -71,7 +71,7 @@ export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adja
       const k0 = Math.ceil((e.lo - SPAN_SLACK) / sp), k1 = Math.floor((e.hi + SPAN_SLACK) / sp);
       for (let k = k0; k <= k1; k++) {
         const t = k * sp;
-        if (e.axis === "x") put(mid, y, t, "street"); else put(t, y, mid, "street");
+        if (e.axis === "x") put(mid, y, t, "street", "x"); else put(t, y, mid, "street", "z");
       }
       const m = e.axis === "x" ? midX : midZ;
       const key = q(mid);
@@ -101,6 +101,18 @@ export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adja
       }
     }
   }
+  // Balloon-free gaps (round 4): drop every street balloon of a chosen street segment (one pitch of one
+  // street midline); intersection balloons stay. Integer hash of (seed, midline, segment) - no rng state.
+  const gapChance = config.hookGapChance ?? 0;
+  if (gapChance > 0) {
+    const pitch = config.block + config.street;
+    for (const [key, c] of cand) {
+      if (c.src !== "street" || !c.axis) continue;
+      const mid = c.axis === "x" ? c.x : c.z, along = c.axis === "x" ? c.z : c.x;
+      const seg = Math.floor(along / pitch);
+      if (hash01(config.seed, c.axis === "x" ? 1 : 2, Math.round(mid * 2), seg) < gapChance) cand.delete(key);
+    }
+  }
   // Manual hooks (Data kind "hook" in city.json) replace any auto hook within 3 m horizontally.
   for (const m of manual) {
     for (const [key, c] of cand) {
@@ -112,9 +124,16 @@ export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adja
     for (const s of solids) if (pointBoxDist(h.x, h.y, h.z, s) < config.hookClearance) return false;
     return true;
   });
-  for (const m of manual) list.push({ x: q(m.x), y: q(m.y), z: q(m.z), src: "manual" });
+  for (const m of manual) list.push({ x: q(m.x), y: q(m.y), z: q(m.z), src: "manual", axis: "" });
   list.sort((a, b) => a.x - b.x || a.z - b.z || a.y - b.y);
-  return list.map((h, id) => ({ id, ...h }));
+  return list.map((h, id) => ({ id, x: h.x, y: h.y, z: h.z, src: h.src }));
+}
+
+/** Integer hash of four ints -> [0, 1) (murmur3 fmix32; no floats until the final scale). */
+export function hash01(a: number, b: number, c: number, d: number): number {
+  let h = (a | 0) ^ Math.imul(b | 0, 0x9e3779b1) ^ Math.imul(c | 0, 0x85ebca77) ^ Math.imul(d | 0, 0xc2b2ae3d);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 }
 
 export function modelHash(m: Pick<CityModel, "solids" | "hooks">): string {
@@ -237,7 +256,8 @@ export function lintModel(m: CityModel, aimRadius = 17): LintResult {
         }
         worstReach = Math.max(worstReach, best);
         if (best > reach) {
-          errors.push(`reach: roof ${s.id} edge point (${px.toFixed(1)}, ${pz.toFixed(1)}) nearest hook ${best.toFixed(2)} m > ${reach}`);
+          // Districts with balloon-free gaps (round 4) break reach on purpose: warn, don't fail.
+          ((cfg.hookGapChance ?? 0) > 0 ? warnings : errors).push(`reach: roof ${s.id} edge point (${px.toFixed(1)}, ${pz.toFixed(1)}) nearest hook ${best.toFixed(2)} m > ${reach}`);
           break;
         }
       }

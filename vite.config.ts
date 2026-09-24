@@ -6,7 +6,10 @@ import { execFileSync } from "node:child_process";
 
 const LEVEL_FILES = new Set(["city.json", "decor.json", "tuning.json"]);
 
-/** Dev-only: POST /__rugrun/save?file=<city|decor|tuning>.json writes public/levels/<file>. */
+/**
+ * Dev-only: POST /__rugrun/save?file=<city|decor|tuning>.json[&map=<district>] writes the district's
+ * level file (Downtown: public/levels/, others public/levels/<map>/; tuning.json is always shared).
+ */
 function devSave(): Plugin {
   return {
     name: "rugrun-dev-save",
@@ -19,8 +22,12 @@ function devSave(): Plugin {
           res.end(JSON.stringify({ ok, message }));
         };
         if (req.method !== "POST") return reply(405, false, "POST only");
-        const file = new URL(req.url ?? "", "http://localhost").searchParams.get("file") ?? "";
+        const q = new URL(req.url ?? "", "http://localhost").searchParams;
+        const file = q.get("file") ?? "";
+        const map = q.get("map") ?? "downtown";
         if (!LEVEL_FILES.has(file)) return reply(400, false, `not a level file: ${file}`);
+        if (!/^(downtown|market|docks|towers)$/.test(map)) return reply(400, false, `unknown map: ${map}`);
+        const sub = file === "tuning.json" || map === "downtown" ? "" : map;
         let body = "";
         req.on("data", c => (body += c));
         req.on("end", () => {
@@ -30,11 +37,12 @@ function devSave(): Plugin {
             return reply(400, false, `invalid JSON: ${String(e)}`);
           }
           const root = server.config.root;
-          fs.writeFileSync(path.join(root, "public", "levels", file), body);
-          let message = `saved public/levels/${file}`;
+          fs.writeFileSync(path.join(root, "public", "levels", sub, file), body);
+          let message = `saved public/levels/${sub ? sub + "/" : ""}${file}`;
           if (file === "city.json" || file === "tuning.json") {
             try {
-              const out = execFileSync(process.execPath, [path.join(root, "tools", "level.ts")], { cwd: root, encoding: "utf8" });
+              const args = file === "tuning.json" ? ["--all"] : ["--map", map];
+              const out = execFileSync(process.execPath, [path.join(root, "tools", "level.ts"), ...args], { cwd: root, encoding: "utf8" });
               message += `\n${out.trim()}\nreload the game page to play the new layout / runner bake`;
             } catch (e) {
               return reply(500, false, `${message}, but npm run level failed:\n${String((e as { stdout?: string }).stdout ?? e)}`);

@@ -56,6 +56,11 @@ export type CityConfig = {
   skylineCount: number;
   skylineMin: number;
   skylineMax: number;
+  /**
+   * Round 4: chance that a street segment (one block length of one street) has no balloons at all
+   * (intersection balloons stay). Seeded from `seed`; 0 / missing = every street keeps its balloons.
+   */
+  hookGapChance?: number;
 };
 
 export type CityModel = {

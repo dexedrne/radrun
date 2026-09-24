@@ -9,6 +9,7 @@ import { PrefabRoot, type Prefab } from "react-three-game";
 import { saveLevelFile } from "./save.ts";
 import { SKY } from "../GameScene.tsx";
 import { CityLook, SkyGradient } from "../cityLook.tsx";
+import { lv } from "../district.ts";
 
 type FileName = "city.json" | "decor.json";
 
@@ -44,7 +45,7 @@ function FrameLevel({ at }: { at: [number, number, number] }) {
 function CityContext() {
   const [city, setCity] = useState<Prefab | null>(null);
   useEffect(() => {
-    fetch(`/levels/city.json?v=${Date.now()}`).then(r => r.json()).then(setCity, () => setCity(null));
+    fetch(`${lv("city.json")}?v=${Date.now()}`).then(r => r.json()).then(setCity, () => setCity(null));
   }, []);
   return city ? <PrefabRoot data={city} /> : null;
 }
@@ -57,7 +58,7 @@ export default function EditorPage() {
   const ref = useRef<PrefabEditorRef>(null);
   useEffect(() => {
     setPrefab(null);
-    fetch(`/levels/${file}?v=${Date.now()}`).then(r => r.json()).then(setPrefab, e => setStatus(`load failed: ${String(e)}`));
+    fetch(`${lv(file)}?v=${Date.now()}`).then(r => r.json()).then(setPrefab, e => setStatus(`load failed: ${String(e)}`));
   }, [file]);
   const save = async () => {
     const data = ref.current?.save();
