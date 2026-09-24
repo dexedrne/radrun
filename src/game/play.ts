@@ -25,7 +25,8 @@ export const RUG = { arrive: 0.8, hop: 0.45 } as const;
 /** endT at which RESULTS appears: after the slow-mo catch beat / the rug tracking shot. */
 export const RESULTS_AFTER = { caught: 1.3, escaped: 2.6 } as const;
 
-export type RoundSetup = { chaser: RadbroId; runner: RadbroId; difficulty: Difficulty; seed: number };
+/** mutators: round 4 mutator bits (game/mutators.ts); missing = 0. */
+export type RoundSetup = { chaser: RadbroId; runner: RadbroId; difficulty: Difficulty; seed: number; mutators?: number };
 
 const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -130,7 +131,7 @@ export class PlayGame {
     return new Round({
       model: this.model, index: this.index, pack: this.pack, difficulty: s.difficulty, params: this.difficulty[s.difficulty],
       tuning: this.simTuning ?? this.tuning, chaser: s.chaser, runner: s.runner, seed: s.seed, countdown: true,
-      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0, practice: this.practice,
+      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0, practice: this.practice, mutators: s.mutators ?? 0,
     });
   }
 
@@ -143,7 +144,7 @@ export class PlayGame {
     const round = new Round({
       model: this.model, index: this.ghostIndex, pack: this.pack, difficulty: g.difficulty, params: this.difficulty[g.difficulty],
       tuning: roundTuning(this.tuning, g.flags), chaser: g.chaser, runner: g.runner, seed: g.seed, countdown,
-      yoinkBonus: g.flags.touch ? TOUCH.yoinkBonus : 0,
+      yoinkBonus: g.flags.touch ? TOUCH.yoinkBonus : 0, mutators: g.mutators ?? 0,
     });
     return new GhostRun(round, g.log, g.flags.touch);
   }

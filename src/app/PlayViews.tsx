@@ -12,7 +12,7 @@ import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
 import { COUNTDOWN_STEPS, RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK, type RadbroId } from "../game/round.ts";
 import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts";
-import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
+import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_POP, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
 import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
@@ -26,6 +26,7 @@ import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
 import { hints } from "../ui/hints.ts";
+import { MECH } from "../sim/tuning.ts";
 
 const DEV = import.meta.env.MODE !== "production";
 
@@ -110,7 +111,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const lastRun = useRef(-1);
   const lines = useRef(0);
   const beep = useRef(4);
-  const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120 });
+  const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120, gusting: false });
   const ghostPhase = useRef("");
   const autoQ = useRef(new AutoQuality());
   useFrame((_, delta) => {
@@ -150,6 +151,11 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (pe & EV_RELEASE) sfx.fling(sp);
       if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land(-b.landVy);
       if (pe & EV_BONK) sfx.bonk();
+      if (pe & EV_POP) sfx.pop();
+      const g = r.nextGust();
+      const gusting = !!g && g.level > 0;
+      if (gusting && !audio.current.gusting) sfx.gust();
+      audio.current.gusting = gusting;
     }
     if (rev & RE_TAUNT) { const t = TAUNTS[who]; showBubble(t[lines.current++ % t.length]); sfx.chatter(VOICE[who]); }
     if (rev & RE_PANIC) { showBubble(S.panicBubble); sfx.chatter(VOICE[who] * 1.25); }
@@ -232,11 +238,18 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       }
       const ring = b.ringId === RING_RUNNER ? "runner" : b.ropeHook >= 0 ? "attached" : b.ringId >= 0 ? "hook" : "none";
       const rs = r.stats;
+      // Wind (HUD only): push direction relative to the camera (forward = up on screen).
+      const g = r.nextGust();
+      let wind: { level: number; warn: number; angle: number } | null = null;
+      if (g && r.phase === "chase" && (g.level > 0 || g.inSeconds <= MECH.windWarn)) {
+        const yaw = game.rig.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+        wind = { level: g.level, warn: g.level > 0 ? 1 : 1 - g.inSeconds / MECH.windWarn, angle: Math.atan2(g.dx * rx + g.dz * rz, g.dx * fx + g.dz * fz) };
+      }
       useUi.setState({
         round: {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
-          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls,
+          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, wind,
         },
       });
       // First-run tips (chase / practice only, never on bot pages).

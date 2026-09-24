@@ -2,7 +2,7 @@
 // Save writes public/levels/tuning.json (incl. a "george" section) through the dev server (or
 // downloads it outside `npm run dev`).
 import { useState } from "react";
-import { CAMERA, DIFFICULTIES, DIFFICULTY, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type Tuning } from "../../sim/tuning.ts";
+import { CAMERA, DIFFICULTIES, DIFFICULTY, MECH, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type MechTuning, type Tuning } from "../../sim/tuning.ts";
 import { saveLevelFile } from "./save.ts";
 import { GEORGE, setGeorge, type GeorgeTunable } from "../../sidekick/george.ts";
 import { GEORGE_RENDER, georgeToJson, resetGeorge, setGeorgeScale } from "../george.config.ts";
@@ -33,6 +33,11 @@ const GEORGE_SLIDERS: Slider<GeorgeTunable>[] = [
   ["trotBelow", 0.3, 6, 0.05], ["rateMin", 0.2, 1.5, 0.05], ["rateMax", 1, 5, 0.1], ["runRateMin", 0.2, 1.5, 0.05], ["runRateMax", 1, 8, 0.1],
 ];
 
+const MECH_SLIDERS: Slider<keyof MechTuning>[] = [
+  ["popShare", 0, 1, 0.05], ["popRespawn", 1, 20, 0.5], ["windMax", 0, 20, 0.5], ["windGust", 0.5, 6, 0.1],
+  ["windRamp", 0.05, 1.5, 0.05], ["windGapMin", 2, 30, 0.5], ["windGapMax", 3, 40, 0.5], ["windWarn", 0, 3, 0.1],
+  ["lowGravity", 0.3, 1, 0.05], ["sixtyClock", 20, 90, 5],
+];
 const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
   ["base", 0.6, 1.4, 0.01], ["gStar", 8, 60, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 2.5, 0.01], ["panicBudget", 0, 60, 0.5],
   ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 2.5, 0.01],
@@ -79,6 +84,8 @@ export default function TunePanel({ game }: { game: Tunable }) {
               {DIFF_SLIDERS.map(([k, min, max, step]) => row(`${d}.${k}`, game.difficulty![d][k], min, max, step, v => { game.difficulty![d][k] = v; }))}
             </div>
           ))}
+          <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>round 4 mechanics (pops / wind / low gravity / 60 s; next round)</div>
+          {MECH_SLIDERS.map(([k, min, max, step]) => row(`mech.${k}`, MECH[k], min, max, step, v => { MECH[k] = v; }))}
           <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>George (visual only; delay in 120 Hz steps, gaits in m/s)</div>
           {row("scale", GEORGE_RENDER.scale, 0.6, 2, 0.01, setGeorgeScale)}
           {GEORGE_SLIDERS.map(([k, min, max, step]) => row(`george.${k}`, GEORGE[k], min, max, step, v => setGeorge(k, v)))}

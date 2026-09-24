@@ -147,6 +147,30 @@ export const MEDALS = {
   degen: { rad: 30, gold: 45, silver: 65 },
 } as const;
 
+/**
+ * Round 4 mechanics (docs/specs/2026-09-24-round4-depth.md §2). Mutable so tuning.json "mechanics" can
+ * override them at startup (same file for the page, Node tools and ghost replays, so replays match).
+ */
+export const MECH = {
+  /** Share of balloons that are fragile under the pops mutator (integer hash of seed + hook id). */
+  popShare: 0.55,
+  /** Seconds a popped balloon stays gone. */
+  popRespawn: 6,
+  /** Wind gust: peak horizontal acceleration (m/s^2), length, ramp and the gap between gusts (s). */
+  windMax: 7,
+  windGust: 2.4,
+  windRamp: 0.4,
+  windGapMin: 9,
+  windGapMax: 16,
+  /** Warning before a gust (HUD arrow), seconds. */
+  windWarn: 1,
+  /** Low-gravity mutator: player gravity factor. */
+  lowGravity: 0.65,
+  /** Sixty mutator: round clock in seconds. */
+  sixtyClock: 60,
+};
+export type MechTuning = typeof MECH;
+
 export const ROUND = {
   seconds: 90,
   tagRadius: 1.5,
@@ -201,6 +225,8 @@ export type TuningJson = {
   difficulty?: Partial<Record<Difficulty, Partial<Record<string, number>>>>;
   /** George's follow values + render scale (visual only; app/george.config.ts applies it). */
   george?: Partial<Record<string, number>>;
+  /** Round 4 mechanics (MECH). */
+  mechanics?: Partial<Record<string, number>>;
 };
 
 /** Merge tuning.json over the PLAYER preset and camera defaults. Unknown keys are ignored (warned). */
@@ -224,6 +250,10 @@ export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: s
     if (typeof v !== typeof (PLAYER as Record<string, unknown>)[k]) { warn(`tuning.json: bad type for ${k}`); continue; }
     (player as Record<string, unknown>)[k] = v;
   }
+  for (const [k, v] of Object.entries(json?.mechanics ?? {})) {
+    if (!(k in MECH) || typeof v !== "number") { warn(`tuning.json: bad mechanics.${k}`); continue; }
+    (MECH as Record<string, number>)[k] = v;
+  }
   const c = json?.camera ?? {};
   for (const [k, v] of Object.entries(c)) {
     if (!(k in CAMERA)) { warn(`tuning.json: unknown camera key ${k}`); continue; }
@@ -238,5 +268,6 @@ export function tuningToJson(player: Tuning, camera: CameraTuning, difficulty: D
   const out: TuningJson = { player: {}, camera: {}, difficulty: { chill: { ...difficulty.chill }, normal: { ...difficulty.normal }, degen: { ...difficulty.degen } } };
   for (const k of TUNABLE_KEYS) out.player![k] = player[k] as number | boolean;
   for (const k of Object.keys(CAMERA) as (keyof CameraTuning)[]) out.camera![k] = camera[k];
+  out.mechanics = { ...MECH };
   return out;
 }

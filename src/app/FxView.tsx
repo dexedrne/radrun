@@ -44,12 +44,55 @@ function useBalloons(game: ViewGame) {
     strings.instanceMatrix.needsUpdate = true;
     balloons.frustumCulled = false;
     strings.frustumCulled = false;
-    return { balloons, strings };
+    // Round 4: rest matrices / colours to restore after a pop, and what the last frame showed.
+    const baseB = balloons.instanceMatrix.array.slice();
+    const baseS = strings.instanceMatrix.array.slice();
+    const baseC = balloons.instanceColor ? balloons.instanceColor.array.slice() : null;
+    const shown = new Uint8Array(hooks.length).fill(1);
+    return { balloons, strings, baseB, baseS, baseC, shown, frag: { cur: undefined as Uint8Array | undefined } };
   }, [game]);
 }
 
+const ZERO = new Matrix4().makeScale(0, 0, 0).elements;
+
+/**
+ * Round 4 balloon states (player only): fragile balloons are drawn pale, popped ones are hidden until
+ * they grow back. Updates only the instances that changed.
+ */
+function syncBalloons(game: ViewGame, bl: ReturnType<typeof useBalloons>): void {
+  const w = game.world, down = w.hookDown, frag = w.fragile;
+  const n = game.model.hooks.length, k = CLUSTER.length;
+  if (frag !== bl.frag.cur && bl.baseC && bl.balloons.instanceColor) {
+    bl.frag.cur = frag;
+    const arr = bl.balloons.instanceColor.array as Float32Array;
+    for (let i = 0; i < n; i++) {
+      const pale = frag !== undefined && frag[i] === 1;
+      for (let j = 0; j < k; j++) {
+        const o = (i * k + j) * 3;
+        for (let c = 0; c < 3; c++) arr[o + c] = pale ? bl.baseC[o + c] * 0.45 + 0.55 : bl.baseC[o + c];
+      }
+    }
+    bl.balloons.instanceColor.needsUpdate = true;
+  }
+  const step = game.body.step;
+  let changed = false;
+  for (let i = 0; i < n; i++) {
+    const vis = down === undefined || down[i] <= step ? 1 : 0;
+    if (vis === bl.shown[i]) continue;
+    bl.shown[i] = vis;
+    changed = true;
+    for (let j = 0; j < k; j++) {
+      const o = (i * k + j) * 16;
+      const mb = bl.balloons.instanceMatrix.array as Float32Array, ms = bl.strings.instanceMatrix.array as Float32Array;
+      for (let e = 0; e < 16; e++) { mb[o + e] = vis ? bl.baseB[o + e] : ZERO[e]; ms[o + e] = vis ? bl.baseS[o + e] : ZERO[e]; }
+    }
+  }
+  if (changed) { bl.balloons.instanceMatrix.needsUpdate = true; bl.strings.instanceMatrix.needsUpdate = true; }
+}
+
 export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean }) {
-  const { balloons, strings } = useBalloons(game);
+  const bl = useBalloons(game);
+  const { balloons, strings } = bl;
   const ring = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
   const shadow = useRef<Mesh>(null);
@@ -57,6 +100,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), t: 0 }), []);
 
   useFrame((state, delta) => {
+    syncBalloons(game, bl);
     const b = game.body;
     const p = game.renderP;
     const hooks = game.model.hooks;

@@ -34,7 +34,7 @@ const tj = applyTuningJson(JSON.parse(fs.readFileSync(path.join(levels, "tuning.
 const model = JSON.parse(fs.readFileSync(path.join(dir, "city.model.json"), "utf8"));
 const pack = decodePack(fs.readFileSync(path.join(dir, "runner.pack.bin")));
 const d = ((DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? q.get("d") : "chill") as Difficulty;
-const round = new Round({ model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false });
+const round = new Round({ model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false , mutators: (Number(q.get("mu") ?? 0) >>> 0) & 127 });
 const swing = q.get("bot") === "swing";
 const chase = q.get("bot") === "chase";
 const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());

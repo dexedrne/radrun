@@ -157,6 +157,26 @@ Each district has its own level files: Downtown in `public/levels/`, the others 
 - `?editor&map=docks` / `?editor=decor&map=docks` edit a district; Save writes that district's files.
 - Best times and kept ghosts are per district; share links carry the district (`&m=docks`).
 
+## Mechanics and mutators (round 4)
+
+All deterministic and **player-only** (the runner plays his baked track and never feels them). They are
+round options, part of ghost links and (where they touch the sim) the round hash.
+
+| Mutator | What happens | Tell |
+|---|---|---|
+| **Popping balloons** | about 55 % of balloons (seeded per round) pop when your rope leaves them and grow back after 6 s | fragile balloons are pale; a pop sound |
+| **Wind** | every 9-16 s a 2.4 s gust (8 directions, up to 7 m/s²) pushes you while airborne or swinging | HUD arrow ~1 s before the gust (yellow GUST), fills while it blows (blue WIND); a whoosh |
+| **Low gravity** | your gravity x0.65: floaty jumps, long swings | - |
+| **No YOINK** | no lasso: touch him | - |
+| **One life** | the first fall ends the round ("He rugged you.") | - |
+| **60 seconds** | a 60 s clock | the timer |
+| **Night** | visual: dark sky, close fog, dimmed lights | - |
+
+Free play uses each district's defaults: **the Docks have wind, the Towers have popping balloons** (the
+Night Market's balloon-free streets are part of its layout). Campaign levels set their own mutators.
+Values live in `MECH` (`src/sim/tuning.ts`), overridable in `tuning.json` under `"mechanics"` and with the
+`?tune` sliders. Bots: `&mu=<bits>` (pops 1, wind 2, lowgrav 4, noyoink 8, onelife 16, sixty 32, night 64).
+
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
 | URL | What |

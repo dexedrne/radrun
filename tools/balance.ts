@@ -19,12 +19,12 @@ export type Row = { label: string; target: string; caught: number; n: number; me
 
 const q = (xs: number[], f: number) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(f * xs.length))] : NaN);
 
-export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1): { times: number[]; caught: number; yoinks: number } {
+export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1, mutators = 0): { times: number[]; caught: number; yoinks: number } {
   const times: number[] = [];
   let caught = 0, yoinks = 0;
   const inp = emptyInput();
   for (let s = 0; s < n; s++) {
-    const round = new Round({ model, index, pack, difficulty: d, params: table[d], tuning, chaser: "652", runner: "4764", seed: seed0 + s, countdown: false });
+    const round = new Round({ model, index, pack, difficulty: d, params: table[d], tuning, chaser: "652", runner: "4764", seed: seed0 + s, countdown: false, mutators });
     const r = runBotRound(round, bot, inp);
     if (r.caught) { caught++; times.push(r.time); if (r.kind === "yoink") yoinks++; }
   }

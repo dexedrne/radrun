@@ -73,3 +73,36 @@ export function SkyGradient() {
   }, [scene]);
   return null;
 }
+
+
+/**
+ * Round 4 "night" mutator (visual only): while a night round runs, a dark sky, closer fog and dimmed
+ * lights; restored on the title / other rounds. Checks one flag per frame, changes only on toggles.
+ */
+export function NightLook({ isNight }: { isNight: () => boolean }) {
+  const scene = useThree(s => s.scene);
+  const st = useRef<{ on: boolean; day: unknown; dayFog: { c: number; near: number; far: number } | null; lights: Map<object, number> }>({ on: false, day: null, dayFog: null, lights: new Map() });
+  useFrame(() => {
+    const on = isNight();
+    const cur = st.current;
+    if (on === cur.on) return;
+    cur.on = on;
+    const fog = scene.fog as unknown as { color: { getHex(): number; setHex(v: number): void }; near: number; far: number } | null;
+    if (on) {
+      cur.day = scene.backgroundNode;
+      const y = normalize(positionLocal).y;
+      scene.backgroundNode = mix(mix(color("#2a1d44"), color("#141033"), smoothstep(0.0, 0.3, y)), color("#05040f"), smoothstep(0.25, 0.95, y));
+      if (fog) { cur.dayFog = { c: fog.color.getHex(), near: fog.near, far: fog.far }; fog.color.setHex(0x1b1530); fog.near = 40; fog.far = 230; }
+      scene.traverse(o => {
+        const l = o as unknown as { isLight?: boolean; intensity: number };
+        if (l.isLight) { cur.lights.set(o, l.intensity); l.intensity *= 0.45; }
+      });
+    } else {
+      scene.backgroundNode = cur.day as typeof scene.backgroundNode;
+      if (fog && cur.dayFog) { fog.color.setHex(cur.dayFog.c); fog.near = cur.dayFog.near; fog.far = cur.dayFog.far; }
+      for (const [o, i] of cur.lights) (o as unknown as { intensity: number }).intensity = i;
+      cur.lights.clear();
+    }
+  });
+  return null;
+}

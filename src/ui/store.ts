@@ -35,6 +35,11 @@ export type RoundHud = {
   maxChain: number;
   topSpeed: number;
   falls: number;
+  /**
+   * Round 4 wind (wind mutator): level 0..1 of the current gust, warn 0..1 as the next one approaches,
+   * and its push direction on screen (radians clockwise from "forward"); null when there is no wind.
+   */
+  wind: { level: number; warn: number; angle: number } | null;
 };
 
 export type Results = {
@@ -119,7 +124,7 @@ export const useUi = create<UiState>(() => ({
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0 },
   screen: "boot",
   paused: false,
-  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0 },
+  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0, wind: null },
   results: null,
   feed: [],
   banner: null,

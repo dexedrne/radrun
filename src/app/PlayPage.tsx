@@ -29,6 +29,9 @@ import { FxView } from "./FxView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import type { Vector3 } from "three";
+import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
+import { NightLook } from "./cityLook.tsx";
+import { PAGE_DISTRICT } from "./district.ts";
 
 const DEV = import.meta.env.MODE !== "production";
 const TunePanel = DEV ? lazy(() => import("./dev/TunePanel.tsx")) : null;
@@ -72,6 +75,7 @@ function Scene({ game }: { game: PlayGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const hidePlayer = useCallback(() => game.mode !== "round", [game]);
   const ropeFrom = useCallback((out: Vector3) => handWorld(game.setup.chaser, "right", out) !== null, [game]);
+  const isNight = useCallback(() => game.mode === "round" && ((game.setup.mutators ?? 0) & M_NIGHT) !== 0, [game]);
   return (
     <SceneCanvas prefab={prefab}>
       <AssetsBridge />
@@ -84,6 +88,7 @@ function Scene({ game }: { game: PlayGame }) {
       <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} />
       <ChaseFx game={game} />
       <ScreenTracker game={game} />
+      <NightLook isNight={isNight} />
     </SceneCanvas>
   );
 }
@@ -191,7 +196,8 @@ export default function PlayPage() {
     void loadPair(ch, runner).then(ok => {
       if (!ok) return;
       game.paused = false;
-      game.startRound({ chaser: ch, runner, difficulty: d, seed: ghost ? ghost.spec.seed : seed }, practice, ghost?.spec ?? null);
+      const mutators = ghost ? ghost.spec.mutators ?? 0 : DISTRICT_MUTATORS[PAGE_DISTRICT];
+      game.startRound({ chaser: ch, runner, difficulty: d, seed: ghost ? ghost.spec.seed : seed, mutators }, practice, ghost?.spec ?? null);
       useUi.setState({ screen: practice ? "practice" : "countdown", ghost: ghost ? ghost.info : null });
       lockMouse();
     });

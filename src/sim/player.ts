@@ -36,6 +36,8 @@ export const EV_BONK = 16;
 export const EV_FALL = 32;
 export const EV_WALL = 64;
 export const EV_AUTORELEASE = 128;
+/** Round 4: a fragile balloon popped when the rope left it (player only). */
+export const EV_POP = 256;
 
 export type Body = {
   /** Body centre (feet = p.y - halfHeight). */
@@ -72,6 +74,16 @@ export type SimWorld = {
   runner: { p: Vec3; roofId: number } | null;
   /** Bake only: when set, the ring is this hook id (or none for -1) instead of pickTarget. */
   forceHook?: number;
+  /**
+   * Round 4 mechanics (player only; the runner plays his baked track and never reads these):
+   * hookDown[i] = body step until which balloon i is popped (skipped by pickTarget); fragile[i] = 1 if
+   * balloon i pops when the rope leaves it; popSteps = how long a popped balloon stays gone; wind = the
+   * horizontal acceleration (m/s^2) applied while airborne this step.
+   */
+  hookDown?: Int32Array;
+  fragile?: Uint8Array;
+  popSteps?: number;
+  wind?: { x: number; z: number };
 };
 
 export function createBody(x: number, y: number, z: number, roofId: number): Body {
@@ -178,8 +190,10 @@ export function pickTarget(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): nu
 
   const cx = p.x + ax * k.scoreAhead, cy = p.y + k.scoreUp, cz = p.z + az * k.scoreAhead;
   const r2 = k.aimRadius * k.aimRadius;
+  const down = w.hookDown;
   let best = RING_NONE, bestS = Infinity;
   for (let i = 0; i < hooks.length; i++) {
+    if (down !== undefined && down[i] > b.step) continue;
     const h = hooks[i];
     const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;
     if (dy < k.hookMinAbove) continue;
@@ -253,6 +267,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   b.jumpBuf = inp.jumpPressed ? k.jumpBuffer : Math.max(0, b.jumpBuf - dt);
   const locked = b.bonkT > 0;
   b.bonkT = Math.max(0, b.bonkT - dt);
+  const hookBefore = b.ropeHook;
 
   let mx = locked ? 0 : inp.moveX, mz = locked ? 0 : inp.moveZ;
   const ml = Math.sqrt(mx * mx + mz * mz);
@@ -289,6 +304,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   // Forces.
   if (!b.grounded) {
     v.y -= k.gravity * dt;
+    if (w.wind !== undefined) { v.x += w.wind.x * dt; v.z += w.wind.z * dt; }
     if (b.ropeHook >= 0) {
       if (k.ropeSteer > 0 && (mx !== 0 || mz !== 0)) {
         const h = w.hooks[b.ropeHook];
@@ -412,6 +428,11 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.chainCount = 0;
     b.lastSafeRoof = b.roofId;
     b.lastSafe.x = p.x; b.lastSafe.y = p.y; b.lastSafe.z = p.z;
+  }
+  // Round 4: a fragile balloon pops once the rope has left it (released, landed, bonked or auto).
+  if (hookBefore >= 0 && b.ropeHook !== hookBefore && w.fragile !== undefined && w.hookDown !== undefined && w.fragile[hookBefore] === 1) {
+    w.hookDown[hookBefore] = b.step + (w.popSteps ?? 720);
+    b.events |= EV_POP;
   }
   if (p.y - hh < w.lowestRoof - k.failBelowLowestRoof) b.events |= EV_FALL;
 }

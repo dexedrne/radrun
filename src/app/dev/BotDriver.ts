@@ -14,7 +14,7 @@ import { EV_JUMP, EV_RELEASE } from "../../sim/player.ts";
 import { DIFFICULTIES, type Difficulty } from "../../sim/tuning.ts";
 import { autoplayScript } from "../autoplay.ts";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean; mu: number } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -31,13 +31,15 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     r,
     rec: q.has("rec"),
     snap: q.has("snap"),
+    /** Round 4 mutator bits (&mu=); default = none (predictions in tools/botshot use the same). */
+    mu: (Number(q.get("mu") ?? 0) >>> 0) & 127,
   };
 }
 
 export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botParams>>): void {
   game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
   game.recordBot = p.rec;
-  game.startRound({ chaser: p.c, runner: p.r, difficulty: p.d, seed: p.seed });
+  game.startRound({ chaser: p.c, runner: p.r, difficulty: p.d, seed: p.seed, mutators: p.mu });
   if (p.kind === "swing") {
     const script = autoplayScript({
       get body() { return game.round.player; },

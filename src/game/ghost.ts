@@ -43,6 +43,8 @@ export type GhostSpec = {
   claimed: number;
   log: GhostLog;
   flags: GhostFlags;
+  /** Round 4 mutator bits the round was played with (v1 links: 0). */
+  mutators?: number;
 };
 
 // ---- deterministic sin / cos table ----------------------------------------------------------------

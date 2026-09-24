@@ -173,6 +173,16 @@ export const sfx = {
   fall: () => at(0, (e, t) => tone(e, "triangle", 900, 110, t, 0.75, 0.14, 0.02)),
   /** George after a catch (sulky after an escape). */
   meow: (sulky = false) => at(sulky ? 0.9 : 0.55, (e, t) => meow(e, t, sulky)),
+  /** Round 4: a fragile balloon pops (a sharp burst + a rubbery squeak). */
+  pop: () => at(0, (e, t) => {
+    noise(e, "highpass", 1800, 900, 0.8, t, 0.05, 0.55, 0.05);
+    tone(e, "square", 1400, 300, t, 0.06, 0.12, 0.001);
+  }),
+  /** Round 4: a wind gust starts (a rising, breathy swell). */
+  gust: () => at(0, (e, t) => {
+    noise(e, "bandpass", 300, 900, 0.7, t, 1.6, 0.22, 0.9);
+    noise(e, "bandpass", 700, 1500, 1.2, t + 0.3, 1.2, 0.12, 0.8);
+  }),
   /** The rug swoops in. */
   rug: () => at(0, (e, t) => {
     noise(e, "bandpass", 250, 1400, 1.1, t, 0.9, 0.3, 0.5);

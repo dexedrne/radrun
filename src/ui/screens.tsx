@@ -270,6 +270,17 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       <div id="rr-ghost-tag" style={{ ...box, left: 0, top: 0, visibility: "hidden" }}>
         <div style={{ color: "#dff6ff", font: "800 11px ui-monospace, monospace", letterSpacing: 2, padding: "1px 6px", borderRadius: 4, background: "rgba(20,60,90,0.55)", whiteSpace: "nowrap" }}>{S.ghost}</div>
       </div>
+      {/* round 4 wind: an arrow (push direction on screen) that appears ~1 s before a gust and fills while it blows */}
+      {r.wind && screen !== "results" && (
+        <div style={{ ...box, top: narrow ? 110 : 80, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(10,20,40,0.55)", border: "1px solid rgba(159,230,255,0.6)", borderRadius: 8, padding: "4px 10px", opacity: 0.35 + 0.65 * Math.max(r.wind.warn, r.wind.level) }} data-testid="wind">
+          <span style={{ display: "inline-block", transform: `rotate(${r.wind.angle}rad)`, fontSize: 20, lineHeight: 1, color: r.wind.level > 0 ? "#9fe6ff" : "#ffe14d" }}>↑</span>
+          <span style={{ font: "800 12px ui-monospace, monospace", letterSpacing: 2, color: "#dff6ff" }}>{r.wind.level > 0 ? "WIND" : "GUST"}</span>
+          <span style={{ width: 46, height: 6, background: "rgba(255,255,255,0.15)", borderRadius: 3 }}>
+            <span style={{ display: "block", height: 6, width: `${Math.round(r.wind.level * 100)}%`, background: "#9fe6ff", borderRadius: 3 }} />
+          </span>
+        </div>
+      )}
       {/* practice: speed + chain panel */}
       {practice && (
         <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }} data-testid="practice-stats">
