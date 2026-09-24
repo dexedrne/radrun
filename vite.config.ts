@@ -32,10 +32,10 @@ function devSave(): Plugin {
           const root = server.config.root;
           fs.writeFileSync(path.join(root, "public", "levels", file), body);
           let message = `saved public/levels/${file}`;
-          if (file === "city.json") {
+          if (file === "city.json" || file === "tuning.json") {
             try {
               const out = execFileSync(process.execPath, [path.join(root, "tools", "level.ts")], { cwd: root, encoding: "utf8" });
-              message += `\n${out.trim()}\nreload the game page to play the new layout`;
+              message += `\n${out.trim()}\nreload the game page to play the new layout / runner bake`;
             } catch (e) {
               return reply(500, false, `${message}, but npm run level failed:\n${String((e as { stdout?: string }).stdout ?? e)}`);
             }

@@ -45,5 +45,31 @@
     "fovEase": 3,
     "reducedMotion": false,
     "easyGrab": false
+  },
+  "difficulty": {
+    "chill": {
+      "base": 0.9,
+      "gStar": 20,
+      "mMin": 0.7,
+      "mMax": 1.1,
+      "panicBudget": 14,
+      "sigma": 0.6,
+      "yoinkRange": 6.5,
+      "taunt": 1.8,
+      "airMin": 0.9,
+      "airMax": 1.1
+    },
+    "normal": {
+      "base": 1,
+      "gStar": 28,
+      "mMin": 0.8,
+      "mMax": 1.3,
+      "panicBudget": 30,
+      "sigma": 0.15,
+      "yoinkRange": 5,
+      "taunt": 1.4,
+      "airMin": 0.9,
+      "airMax": 1.3
+    }
   }
 }

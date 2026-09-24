@@ -119,10 +119,17 @@ export const PROTOTYPE: Readonly<Tuning> = Object.freeze({
 });
 
 export type Difficulty = "chill" | "normal";
-export const DIFFICULTY = {
-  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8 },
-  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4 },
-} as const;
+export type DifficultyParams = {
+  base: number; gStar: number; mMin: number; mMax: number; panicBudget: number; sigma: number; yoinkRange: number; taunt: number;
+  /** Airborne playback-rate clamp (spec 0.9-1.1). */
+  airMin: number; airMax: number;
+};
+export type DifficultyTable = Record<Difficulty, DifficultyParams>;
+/** Spec §7 defaults; public/levels/tuning.json "difficulty" overrides them (set from tools/balance). */
+export const DIFFICULTY: Readonly<DifficultyTable> = Object.freeze({
+  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1 },
+  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1 },
+});
 
 export const MEDALS = {
   normal: { rad: 25, gold: 40, silver: 60 },
@@ -177,15 +184,27 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   easyGrab: false,
 });
 
-export type TuningJson = { player?: Partial<Record<string, number | boolean>>; camera?: Partial<Record<string, number | boolean>> };
+export type TuningJson = {
+  player?: Partial<Record<string, number | boolean>>;
+  camera?: Partial<Record<string, number | boolean>>;
+  difficulty?: Partial<Record<Difficulty, Partial<Record<string, number>>>>;
+};
 
 /** Merge tuning.json over the PLAYER preset and camera defaults. Unknown keys are ignored (warned). */
 export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: string) => void = () => {}): {
   player: Tuning;
   camera: CameraTuning;
+  difficulty: DifficultyTable;
 } {
   const player: Tuning = { ...PLAYER };
   const camera: CameraTuning = { ...CAMERA };
+  const difficulty: DifficultyTable = { chill: { ...DIFFICULTY.chill }, normal: { ...DIFFICULTY.normal } };
+  for (const d of ["chill", "normal"] as const) {
+    for (const [k, v] of Object.entries(json?.difficulty?.[d] ?? {})) {
+      if (!(k in DIFFICULTY[d]) || typeof v !== "number") { warn(`tuning.json: bad difficulty.${d}.${k}`); continue; }
+      (difficulty[d] as Record<string, number>)[k] = v;
+    }
+  }
   const p = json?.player ?? {};
   for (const [k, v] of Object.entries(p)) {
     if (!(TUNABLE_KEYS as readonly string[]).includes(k)) { warn(`tuning.json: unknown player key ${k}`); continue; }
@@ -198,12 +217,12 @@ export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: s
     if (typeof v !== typeof (CAMERA as Record<string, unknown>)[k]) { warn(`tuning.json: bad type for ${k}`); continue; }
     (camera as Record<string, unknown>)[k] = v;
   }
-  return { player, camera };
+  return { player, camera, difficulty };
 }
 
 /** The JSON written by `?tune` Save and by tools: only the tunable fields. */
-export function tuningToJson(player: Tuning, camera: CameraTuning): TuningJson {
-  const out: TuningJson = { player: {}, camera: {} };
+export function tuningToJson(player: Tuning, camera: CameraTuning, difficulty: DifficultyTable = DIFFICULTY): TuningJson {
+  const out: TuningJson = { player: {}, camera: {}, difficulty: { chill: { ...difficulty.chill }, normal: { ...difficulty.normal } } };
   for (const k of TUNABLE_KEYS) out.player![k] = player[k] as number | boolean;
   for (const k of Object.keys(CAMERA) as (keyof CameraTuning)[]) out.camera![k] = camera[k];
   return out;

@@ -1,22 +1,39 @@
-// npm run level: public/levels/city.json (editable source of truth) -> public/levels/city.model.json.
-// Prints the city lint. The runner bake (-> runner.pack.bin) joins this pipeline in M2.
-//   node tools/level.ts [--city public/levels/city.json]
+// npm run level: public/levels/city.json (editable source of truth) -> city.model.json -> runner bake
+// -> runner.pack.bin + bake.report.json. Prints the city lint and the bake checks (never fails on
+// dropped edges; a non-zero exit only for lint errors or failed graph checks).
+//   node tools/level.ts [--city public/levels/city.json] [--no-bake]
 import fs from "node:fs";
 import path from "node:path";
 import { modelFromCityPrefab } from "../src/world/level.ts";
 import { lintModel } from "../src/world/derive.ts";
 import { prefabBatchStats } from "../src/world/fromPrefab.ts";
 import { applyTuningJson } from "../src/sim/tuning.ts";
+import { bake, BAKE, type BakeReport } from "../src/route/bake.ts";
 
 export const LEVELS = path.resolve(import.meta.dirname, "..", "public", "levels");
 
-export function runLevel(cityPath = path.join(LEVELS, "city.json"), outPath = path.join(LEVELS, "city.model.json")): number {
+export function bakeChecksFailed(r: BakeReport): string[] {
+  const bad: string[] = [];
+  const c = r.checks;
+  if (!c.stronglyConnected) bad.push("graph not strongly connected");
+  if (c.forcedUTurns) bad.push(`${c.forcedUTurns} forced U-turn(s)`);
+  if (c.walkStalls) bad.push("300 s random walk stalled");
+  if (c.minSwingWindowMs < (BAKE.swingWindow * 1000) / 120 - 1) bad.push(`swing window ${c.minSwingWindowMs} ms < ${(BAKE.swingWindow * 1000) / 120}`);
+  if (c.minAlleyWindowMs < (BAKE.alleyWindow * 1000) / 120 - 1) bad.push(`alley window ${c.minAlleyWindowMs} ms < ${(BAKE.alleyWindow * 1000) / 120}`);
+  if (c.minLandMargin < 1.5) bad.push(`landing margin ${c.minLandMargin} < 1.5 m`);
+  if (c.maxSnap >= 0.05) bad.push(`junction snap ${c.maxSnap} m >= 5 cm`);
+  if (r.junctions < 6) bad.push(`only ${r.junctions} junctions`);
+  if (r.ms > 60000) bad.push(`bake took ${r.ms} ms > 60 s`);
+  return bad;
+}
+
+export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = path.dirname(cityPath), doBake = true): number {
   const prefab = JSON.parse(fs.readFileSync(cityPath, "utf8"));
   const { model, warnings } = modelFromCityPrefab(prefab);
-  let aimRadius = 17;
   const tuningPath = path.join(path.dirname(cityPath), "tuning.json");
-  if (fs.existsSync(tuningPath)) aimRadius = applyTuningJson(JSON.parse(fs.readFileSync(tuningPath, "utf8"))).player.aimRadius;
-  const lint = lintModel(model, aimRadius);
+  const tuning = applyTuningJson(fs.existsSync(tuningPath) ? JSON.parse(fs.readFileSync(tuningPath, "utf8")) : null).player;
+  const lint = lintModel(model, tuning.aimRadius);
+  const outPath = path.join(outDir, "city.model.json");
   fs.writeFileSync(outPath, JSON.stringify(model) + "\n");
   const cityStats = prefabBatchStats(prefab);
   console.log(`level: ${path.relative(process.cwd(), cityPath)} -> ${path.relative(process.cwd(), outPath)} (hash ${model.hash})`);
@@ -30,11 +47,30 @@ export function runLevel(cityPath = path.join(LEVELS, "city.json"), outPath = pa
   for (const w of warnings.concat(lint.warnings)) console.log(`  warn: ${w}`);
   for (const e of lint.errors.slice(0, 30)) console.log(`  LINT: ${e}`);
   if (lint.errors.length > 30) console.log(`  ... ${lint.errors.length - 30} more lint errors`);
-  console.log("  bake: runner.pack.bin is produced here from M2 on (not built yet)");
-  return lint.errors.length;
+  let failures = lint.errors.length;
+  if (doBake) {
+    const { bytes, report } = bake(model, tuning, m => console.log(`  ${m}`));
+    fs.writeFileSync(path.join(outDir, "runner.pack.bin"), bytes);
+    fs.writeFileSync(path.join(outDir, "bake.report.json"), JSON.stringify(report, null, 1) + "\n");
+    const kept = report.edges.filter(e => e.kept);
+    const secs = kept.map(e => e.seconds);
+    console.log(`  bake: ${report.junctions} junctions, ${report.kept} edges kept (${report.baked}/${report.candidates} baked), ` +
+      `${(secs.reduce((a, b) => a + b, 0)).toFixed(0)} s of track, edges ${Math.min(...secs).toFixed(1)}-${Math.max(...secs).toFixed(1)} s, ` +
+      `speed ${Math.min(...kept.map(e => e.speed)).toFixed(1)}-${Math.max(...kept.map(e => e.speed)).toFixed(1)} m/s, ` +
+      `pack ${(report.packBytes / 1024).toFixed(0)} KB (hash ${report.pack}), ${report.ms} ms`);
+    console.log(`  bake checks: ${JSON.stringify(report.checks)}`);
+    const reasons = new Map<string, number>();
+    for (const e of report.edges) if (!e.ok) { const r = e.reason.replace(/\d+(\.\d+)?/g, "#"); reasons.set(r, (reasons.get(r) ?? 0) + 1); }
+    if (reasons.size) console.log(`  dropped: ${[...reasons].map(([r, n]) => `${n}x ${r}`).join("; ")}`);
+    const bad = bakeChecksFailed(report);
+    for (const b of bad) console.log(`  BAKE CHECK FAILED: ${b}`);
+    failures += bad.length;
+  }
+  return failures;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const i = process.argv.indexOf("--city");
-  runLevel(i > 0 ? path.resolve(process.argv[i + 1]) : undefined);
+  const n = runLevel(i > 0 ? path.resolve(process.argv[i + 1]) : undefined, undefined, !process.argv.includes("--no-bake"));
+  process.exitCode = n ? 1 : 0;
 }

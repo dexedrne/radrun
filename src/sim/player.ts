@@ -70,6 +70,8 @@ export type SimWorld = {
   lowestRoof: number;
   /** Runner body point + the roof he stands on (-1 airborne), or null (sandbox). */
   runner: { p: Vec3; roofId: number } | null;
+  /** Bake only: when set, the ring is this hook id (or none for -1) instead of pickTarget. */
+  forceHook?: number;
 };
 
 export function createBody(x: number, y: number, z: number, roofId: number): Body {
@@ -259,7 +261,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   const px = p.x, pz = p.z, feetBefore = p.y - k.halfHeight;
 
   // Targeting from this step's latched aim. While on the rope the ring stays on its hook.
-  b.ringId = b.ropeHook >= 0 ? b.ropeHook : pickTarget(b, inp, k, w);
+  b.ringId = b.ropeHook >= 0 ? b.ropeHook : w.forceHook !== undefined ? w.forceHook : pickTarget(b, inp, k, w);
 
   // Actions (same precedence as the prototype).
   const wantJump = !locked && (inp.jumpPressed || b.jumpBuf > 0);

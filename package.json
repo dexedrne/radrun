@@ -17,6 +17,8 @@
     "test": "node --test test/*.test.ts",
     "gen-city": "node tools/gen-city.ts",
     "level": "node tools/level.ts",
+    "bake": "node tools/level.ts",
+    "balance": "node tools/balance.ts",
     "probe:canyon": "node tools/probe-canyon.ts",
     "trace:proto": "node test/fixtures/proto/dump-trace.ts",
     "shot": "node tools/shot.ts"

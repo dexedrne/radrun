@@ -70,3 +70,24 @@ export class Fnv1a {
     return (this.h >>> 0).toString(16).padStart(8, "0");
   }
 }
+
+/** mulberry32 with visible state (hashable / restorable); same sequence as mulberry32(seed). */
+export class Rand {
+  s: number;
+  constructor(seed: number) {
+    this.s = seed >>> 0;
+  }
+  next(): number {
+    this.s = (this.s + 0x6d2b79f5) >>> 0;
+    let t = this.s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  /** Irwin-Hall N(0,1) approximation: 12 uniforms - 6. */
+  gauss(): number {
+    let s = 0;
+    for (let i = 0; i < 12; i++) s += this.next();
+    return s - 6;
+  }
+}
