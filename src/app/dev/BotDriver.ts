@@ -4,14 +4,17 @@
 // with the scripted chain-swinger (app/autoplay.ts) - no catch expected; it is for mid-swing
 // screenshots. Params: k (follower speed factor), seed, d (chill|normal|degen), c / r (Radbro ids);
 // rec (with bot=chase): the bot's inputs go through the ghost codec, so a catch gives a ghost link
-// (window.__play.ghost.url) like a player's round.
+// (window.__play.ghost.url) like a player's round. snap (any bot): freeze the sim 0.12 s into each of
+// the chaser's airborne jumps / rope releases (window.__frozen, __frozenWhy = "jump" | "release") so a
+// screenshot catches the airborne pose; resume through window.__unfreeze.
 // Progress and the outcome are exposed on window.__play (PlayDriver).
 import type { PlayGame } from "../../game/play.ts";
 import { RADBROS, type RadbroId } from "../../game/round.ts";
+import { EV_JUMP, EV_RELEASE } from "../../sim/player.ts";
 import { DIFFICULTIES, type Difficulty } from "../../sim/tuning.ts";
 import { autoplayScript } from "../autoplay.ts";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -27,6 +30,7 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     c,
     r,
     rec: q.has("rec"),
+    snap: q.has("snap"),
   };
 }
 
@@ -54,5 +58,27 @@ export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botPar
       if (onRope === 30 && game.round.phase === "chase") { w.__frozen = true; game.paused = true; }
     };
   }
+  if (p.snap) snapAirborne(game);
   console.info(`[rug-run] bot=${p.kind} k=${p.k} seed=${p.seed} d=${p.d} c=${p.c} r=${p.r}${p.rec ? " rec" : ""}`);
+}
+
+/** ?snap: freeze 0.12 s after each airborne jump / rope release of the chaser (animation screenshots). */
+function snapAirborne(game: PlayGame): void {
+  const w = window as unknown as { __frozen?: boolean; __frozenWhy?: string; __unfreeze?: () => void };
+  w.__unfreeze = () => { w.__frozen = false; game.paused = false; };
+  let armed = "", t = 0;
+  const frame = game.frame.bind(game);
+  game.frame = (delta: number) => {
+    const n = frame(delta);
+    const b = game.round.player, ev = game.frameEvents;
+    if (ev & (EV_JUMP | EV_RELEASE)) { armed = ev & EV_RELEASE ? "release" : "jump"; t = 0; }
+    if (armed && (b.grounded || b.ropeHook >= 0 || game.round.phase !== "chase")) armed = "";
+    if (armed && n > 0 && (t += delta) >= 0.12) {
+      w.__frozenWhy = armed;
+      w.__frozen = true;
+      game.paused = true;
+      armed = "";
+    }
+    return n;
+  };
 }

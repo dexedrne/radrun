@@ -17,7 +17,7 @@ import type { RadbroId } from "../game/round.ts";
 import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
 import { RM_EDGE, RM_TAUNT } from "../runner/runner.ts";
 import { PHASE_AIR, PHASE_GROUND, PHASE_ROPE } from "../route/trackPack.ts";
-import { A_ATTACH, A_BONK, A_JUMP, A_LAND, A_RELEASE, AnimMachine, type AnimCmd, type Beat } from "../anim/animMachine.ts";
+import { A_ATTACH, A_BONK, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type Beat } from "../anim/animMachine.ts";
 import { AnimPlayer } from "./animPlayer.ts";
 import { CLIP_META, clipsPath, handHeight, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
@@ -78,8 +78,18 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
   const ref = meta.Idle?.hips.start;
   const own = ((src as unknown as { animations?: AnimationClip[] }).animations ?? []) as AnimationClip[];
   const lib = ((pack as unknown as { animations?: AnimationClip[] } | null)?.animations ?? []) as AnimationClip[];
-  const player = new AnimPlayer(model, [own, lib], { policy: name => meta[name]?.rootPolicy, reference: ref, fade: 0.2 });
-  const machine = new AnimMachine({ has: n => player.has(n), takeoffAt: n => meta[n]?.takeoffAt ?? 0 });
+  // CLIP.land = Regular_Jump again with the hips' height kept (the landing crouch plants the feet).
+  const player = new AnimPlayer(model, [own, lib], {
+    policy: name => (name === CLIP.land ? { xz: "pin", y: "keep" } : meta[name]?.rootPolicy), reference: ref, fade: 0.2,
+    alias: { [CLIP.land]: CLIP.jump },
+  });
+  const jump = meta[CLIP.jump];
+  const machine = new AnimMachine({
+    has: n => player.has(n),
+    takeoffAt: n => meta[n]?.takeoffAt ?? 0,
+    apexAt: n => meta[n]?.apexAt ?? (jump?.duration ?? 1.875) * 0.43,
+    landAt: n => meta[n]?.landAt ?? (jump?.duration ?? 1.875) * 0.6,
+  });
   return {
     id, root, model, player, machine, materials, hand: handHeight(id),
     bones: {
@@ -93,7 +103,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
 
 export function applyCmd(pl: AnimPlayer, c: AnimCmd | null): void {
   if (!c) return;
-  if (c.kind === "shot") pl.play(c.clip, { once: !c.hold, hold: c.hold, startAt: c.startAt, fade: c.fade, then: c.then });
+  if (c.kind === "shot") pl.play(c.clip, { once: !c.hold, hold: c.hold, startAt: c.startAt, fade: c.fade, then: c.then, freezeAt: c.freezeAt });
   else if (c.kind === "force") pl.force(c.clip, c.fade, c.scale);
   else { pl.setBase(c.clip, c.fade, c.scale); pl.setTimeScale(c.scale); }
 }

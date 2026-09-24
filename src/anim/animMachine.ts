@@ -1,6 +1,13 @@
 // Sim state -> Animator commands (spec §9). Pure TS (no three.js): the view feeds it one frame of
 // state (grounded / rope / speed / event bits / round beat) and applies the returned command to its
 // AnimPlayer. Animation never gates gameplay: nothing here feeds back into the sim.
+//
+// Airborne = one upright pose: a jump plays Regular_Jump from its takeoff frame and freezes on its apex
+// (arms up, knees tucked) until he lands or grabs a rope; a rope release, a bonk or walking off an edge
+// crossfade straight into that apex hold. Hard landings play Regular_Jump's landing crouch
+// (CLIP.land, the same clip with the hips' height kept) for a moment. The Meshy airborne clips all read
+// as dives (Run_and_Jump = front flip, Fall_1 = belly-down skydive, Leap_of_Faith = swan dive), so
+// they are only cut-list fallbacks now.
 
 export const A_JUMP = 1;
 export const A_ATTACH = 2;
@@ -30,16 +37,20 @@ export type AnimInput = {
 export type AnimCmd =
   | { kind: "base"; clip: string; fade: number; scale: number }
   | { kind: "force"; clip: string; fade: number; scale: number }
-  | { kind: "shot"; clip: string; fade: number; startAt: number; hold: boolean; then: string };
+  /** One-shot; `freezeAt` pauses it on that clip time (a hold until the next command). */
+  | { kind: "shot"; clip: string; fade: number; startAt: number; hold: boolean; then: string; freezeAt?: number };
 
-export type ClipInfo = { has(name: string): boolean; takeoffAt(name: string): number };
+/** Clip timings (clips.meta.json): Regular_Jump's takeoff / apex / land, seconds into the clip. */
+export type ClipInfo = { has(name: string): boolean; takeoffAt(name: string): number; apexAt(name: string): number; landAt(name: string): number };
 
 export const CLIP = {
   idle: "Idle",
   walk: "Casual_Walk",
   run: "Run_02",
   sprint: "Lean_Forward_Sprint",
-  jump: "Run_and_Jump",
+  jump: "Regular_Jump",
+  /** Regular_Jump registered a second time with the hips' height kept (AnimPlayer policy): landing crouch. */
+  land: "Regular_Jump_Land",
   fall: "Fall_1",
   grab: "Grab_Bar_and_Swing_Forward",
   hang: "Rope_Hang_Idle",
@@ -56,13 +67,16 @@ const RULE = {
   walkAbove: 0.5,
   runAbove: 5,
   sprintAbove: 11,
-  airFallAfter: 0.6,
-  airFallVy: -8,
-  rollBelowVy: -14,
+  /** Airborne without a jump (walked off an edge): apex hold after this long or when dropping this fast. */
+  airHoldAfter: 0.25,
+  airHoldVy: -5,
+  /** Rope release / bonk crossfade into the apex hold. */
+  airFade: 0.1,
+  /** Hard landing: Regular_Jump's landing crouch below this v.y, for landFor seconds. */
+  hardBelowVy: -14,
+  landFor: 0.3,
   landFade: 0.12,
   grabFor: 0.85,
-  leapFor: 1.4,
-  jumpFor: 0.6,
 } as const;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -87,13 +101,12 @@ export class AnimMachine {
     if (c.has(name)) return name;
     const sub: Record<string, string[]> = {
       [CLIP.idle]: [CLIP.run],
-      [CLIP.leap]: [CLIP.fall],
       [CLIP.wave]: [CLIP.cheer, CLIP.idle],
       [CLIP.flop]: [CLIP.fall],
-      [CLIP.roll]: [],
+      [CLIP.land]: [],
       [CLIP.grab]: [CLIP.hang],
-      [CLIP.hang]: [CLIP.fall],
-      [CLIP.jump]: ["Regular_Jump", CLIP.fall],
+      [CLIP.hang]: [CLIP.jump, CLIP.fall],
+      [CLIP.jump]: [CLIP.fall],
       [CLIP.sprint]: [CLIP.run],
       [CLIP.fish]: [CLIP.idle],
       [CLIP.waltz]: [CLIP.idle],
@@ -103,10 +116,10 @@ export class AnimMachine {
     return "";
   }
 
-  /** Locomotion base for this frame and its playback rate. */
+  /** Locomotion base for this frame and its playback rate (airborne: the apex hold's clip). */
   private locomotion(i: AnimInput): [string, number] {
     if (i.rope) return [this.pick(CLIP.hang), 1];
-    if (!i.grounded) return [this.pick(CLIP.fall), 1];
+    if (!i.grounded) return [this.pick(CLIP.jump), 1];
     const s = i.speed;
     if (s < RULE.walkAbove) return [this.pick(CLIP.idle), 1];
     if (i.panic || s > RULE.sprintAbove) return [this.pick(CLIP.sprint), clamp(s / 10, 0.85, 1.3)];
@@ -121,6 +134,32 @@ export class AnimMachine {
     this.shotT = 0;
     this.clip = clip;
     return { kind: "shot", clip, fade, startAt, hold, then };
+  }
+
+  /**
+   * Airborne pose: Regular_Jump frozen on its apex (from the takeoff frame on a jump, straight onto the
+   * apex otherwise). Without Regular_Jump: the cut-list fallback as a plain loop.
+   */
+  private air(fade: number, fromTakeoff = false): AnimCmd | null {
+    const clip = this.pick(CLIP.jump);
+    if (clip !== CLIP.jump) {
+      this.shot = "";
+      this.clip = this.base = clip;
+      return clip ? { kind: "force", clip, fade, scale: 1 } : null;
+    }
+    const apex = this.clips.apexAt(clip);
+    const cmd = this.startShot(clip, "", fromTakeoff ? Math.min(this.clips.takeoffAt(clip), apex) : apex, fade, true);
+    return cmd && cmd.kind === "shot" ? { ...cmd, freezeAt: apex } : cmd;
+  }
+
+  /** Back to locomotion now (a force), or the apex hold when airborne. */
+  private toLoco(i: AnimInput, fade: number): AnimCmd | null {
+    if (!i.grounded && !i.rope) return this.air(Math.min(fade, RULE.airFade));
+    const [loco, scale] = this.locomotion(i);
+    this.shot = "";
+    this.clip = loco;
+    this.base = loco;
+    return loco ? { kind: "force", clip: loco, fade, scale } : null;
   }
 
   private beatCmd(b: Beat, i: AnimInput): AnimCmd | null {
@@ -150,59 +189,41 @@ export class AnimMachine {
       this.beat = i.beat;
       if (i.beat) return this.beatCmd(i.beat, i);
       // Beat over: back to locomotion right away.
-      if (was) {
-        this.shot = "";
-        const [loco, scale] = this.locomotion(i);
-        this.base = loco;
-        this.clip = loco;
-        return loco ? { kind: "force", clip: loco, fade: 0.2, scale } : null;
-      }
+      if (was) return this.toLoco(i, 0.2);
     }
     if (this.beat && this.beat !== "taunt" && this.beat !== "wave") return null;
 
     const [loco, scale] = this.locomotion(i);
+    const air = !i.grounded && !i.rope;
     const ev = i.events;
     // Discrete events (priority: bonk > attach > release > land > jump).
-    if (ev & A_BONK) {
-      this.shot = "";
-      this.clip = loco;
-      this.base = loco;
-      return { kind: "force", clip: this.pick(CLIP.fall), fade: 0.1, scale: 1 };
-    }
+    if (ev & A_BONK) return air ? this.air(RULE.airFade) : this.toLoco(i, 0.1);
     if (ev & A_ATTACH) { this.base = loco; return this.startShot(CLIP.grab, this.pick(CLIP.hang), 0, 0.1); }
-    if (ev & A_RELEASE) { this.base = loco; return this.startShot(CLIP.leap, this.pick(CLIP.fall), 0, 0.12); }
-    if (ev & A_LAND) {
+    if ((ev & A_RELEASE) && air) return this.air(RULE.airFade);
+    if ((ev & A_LAND) && i.grounded) {
       this.base = loco;
-      if (i.landVy < RULE.rollBelowVy && this.clips.has(CLIP.roll)) return this.startShot(CLIP.roll, loco, 0, 0.08);
-      this.shot = "";
-      this.clip = loco;
-      return { kind: "force", clip: loco, fade: RULE.landFade, scale };
+      if (i.landVy < RULE.hardBelowVy && this.clips.has(CLIP.land)) return this.startShot(CLIP.land, loco, this.clips.landAt(CLIP.jump), 0.08);
+      return this.toLoco(i, RULE.landFade);
     }
-    if (ev & A_JUMP) { this.base = loco; return this.startShot(CLIP.jump, this.pick(CLIP.fall), this.clips.takeoffAt(CLIP.jump), 0.08); }
+    if ((ev & A_JUMP) && air) return this.air(0.08, true);
 
     // Shot cut-offs.
     if (this.shot) {
       const s = this.shot;
-      const air = !i.grounded && !i.rope;
       const cut =
-        (s === this.pick(CLIP.jump) && air && (this.airT > RULE.jumpFor || i.vy < RULE.airFallVy)) ||
-        (s === this.pick(CLIP.leap) && air && this.shotT > RULE.leapFor) ||
+        (s === CLIP.jump && !air) ||
+        (s === CLIP.land && (!i.grounded || this.shotT > RULE.landFor)) ||
         (s === this.pick(CLIP.grab) && i.rope && this.shotT > RULE.grabFor) ||
         (s === this.pick(CLIP.grab) && !i.rope) ||
-        ((s === this.pick(CLIP.jump) || s === this.pick(CLIP.leap)) && (i.grounded || i.rope)) ||
         (s === this.pick(CLIP.wave) && this.beat !== "wave" && this.beat !== "taunt" && i.speed > RULE.walkAbove);
-      if (cut) {
-        this.shot = "";
-        this.clip = loco;
-        this.base = loco;
-        return { kind: "force", clip: loco, fade: 0.2, scale };
-      }
-      if (loco !== this.base) { this.base = loco; return { kind: "base", clip: loco, fade: 0.2, scale }; }
+      if (cut) return this.toLoco(i, 0.2);
+      if (loco !== this.base && !air) { this.base = loco; return { kind: "base", clip: loco, fade: 0.2, scale }; }
       return null;
     }
-    // Airborne without a shot: Fall 1 only after 0.6 s or when dropping fast.
-    if (!i.grounded && !i.rope && this.airT <= RULE.airFallAfter && i.vy >= RULE.airFallVy && this.clip) {
-      return null;
+    // Airborne without a shot (walked off an edge): keep the stride for a moment, then the apex hold.
+    if (air) {
+      if (this.clip === loco || (this.clip && this.airT <= RULE.airHoldAfter && i.vy >= RULE.airHoldVy)) return null;
+      return this.air(0.2);
     }
     if (loco !== this.clip || loco !== this.base) {
       this.clip = loco;

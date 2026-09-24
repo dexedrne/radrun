@@ -1,10 +1,12 @@
 // AnimPlayer: the Animator core (spec §9) as a plain class, shared by the r3g Animator component and
 // the in-game characters. Own AnimationMixer on a SkeletonUtils clone, crossfades, one-shots that
 // return to the base loop, clip libraries merged by name, plus the §9 additions:
-//  - startAt(seconds) on play (e.g. Run_and_Jump starts at its takeoff frame),
+//  - startAt(seconds) on play (e.g. Regular_Jump starts at its takeoff frame), freezeAt(seconds) to
+//    pause a one-shot on one pose (Regular_Jump's apex is the airborne hold),
 //  - a per-clip root policy {xz: keep | pin, y: keep | pin} applied once to the root bone's
 //    position track (pin = hold the clip's first key; a first key far from the standing reference,
-//    like Leap_of_Faith's 14 m start, pins to the reference instead),
+//    like Leap_of_Faith's 14 m start, pins to the reference instead); `alias` registers a clip a second
+//    time under another name (its own policy, e.g. Regular_Jump's landing crouch with the hips' height kept),
 //  - no own frame loop: the owner calls update(dt) at the Animator priority (FRAME.animator).
 import {
   AnimationMixer, LoopOnce, LoopRepeat, VectorKeyframeTrack,
@@ -23,6 +25,8 @@ export type PlayOptions = {
   startAt?: number;
   /** One-shot that holds its last frame forever (no return). */
   hold?: boolean;
+  /** Pause the action once it reaches this clip time (stays on that pose until the next play). */
+  freezeAt?: number;
 };
 
 export type AnimPlayerOptions = {
@@ -31,6 +35,8 @@ export type AnimPlayerOptions = {
   policy?: (clip: string) => RootPolicy | undefined;
   /** Standing root position (parent space) used when a pinned first key is far off. */
   reference?: [number, number, number];
+  /** Extra names for clips: { alias: source clip }. */
+  alias?: Record<string, string>;
   onFinished?: (clip: string, next: string) => void;
 };
 
@@ -59,6 +65,7 @@ export class AnimPlayer {
   private cur: AnimationAction | null = null;
   private pending: { action: AnimationAction; then: string } | null = null;
   private held = false;
+  private freeze: { action: AnimationAction; at: number } | null = null;
   base = "";
 
   constructor(root: Object3D, clipSets: readonly (readonly AnimationClip[])[], opts: AnimPlayerOptions = {}) {
@@ -71,6 +78,14 @@ export class AnimPlayer {
       if (this.clips.has(c.name)) continue;
       const pol = opts.policy?.(c.name);
       this.clips.set(c.name, pol ? applyRootPolicy(c, pol, bone, opts.reference) : c);
+    }
+    for (const [name, from] of Object.entries(opts.alias ?? {})) {
+      const src = clipSets.flat().find(c => c.name === from);
+      if (!src || this.clips.has(name)) continue;
+      const c = src.clone();
+      c.name = name;
+      const pol = opts.policy?.(name);
+      this.clips.set(name, pol ? applyRootPolicy(c, pol, bone, opts.reference) : c);
     }
     this.mixer.addEventListener("finished", e => {
       const p = this.pending;
@@ -118,6 +133,8 @@ export class AnimPlayer {
     if (prev && prev !== next) {
       if (fade > 0) { prev.fadeOut(fade); next.fadeIn(fade); } else prev.stop();
     }
+    this.freeze = o.freezeAt !== undefined ? { action: next, at: Math.min(o.freezeAt, next.getClip().duration - 1e-3) } : null;
+    if (this.freeze && next.time >= this.freeze.at) { next.time = this.freeze.at; next.paused = true; }
     next.play();
     this.cur = next;
     this.held = Boolean(o.hold);
@@ -145,6 +162,12 @@ export class AnimPlayer {
   }
 
   update(dt: number): void {
+    // Freeze exactly on the pose (no overshoot frame): clamp before the mixer advances past it.
+    const f = this.freeze;
+    if (f && !f.action.paused && f.action.time + dt * f.action.getEffectiveTimeScale() >= f.at) {
+      f.action.time = f.at;
+      f.action.paused = true;
+    }
     this.mixer.update(dt);
   }
 
@@ -153,5 +176,6 @@ export class AnimPlayer {
     this.mixer.uncacheRoot(this.root);
     this.cur = null;
     this.pending = null;
+    this.freeze = null;
   }
 }

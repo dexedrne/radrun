@@ -75,7 +75,10 @@
     "rootPolicy": {
      "xz": "pin",
      "y": "pin"
-    }
+    },
+    "takeoffAt": 0.517,
+    "apexAt": 0.8,
+    "landAt": 1.117
    },
    "Run_02": {
     "duration": 0.708,
@@ -483,7 +486,10 @@
     "rootPolicy": {
      "xz": "pin",
      "y": "pin"
-    }
+    },
+    "takeoffAt": 0.5,
+    "apexAt": 0.8,
+    "landAt": 1.117
    },
    "Run_02": {
     "duration": 0.708,
@@ -891,7 +897,10 @@
     "rootPolicy": {
      "xz": "pin",
      "y": "pin"
-    }
+    },
+    "takeoffAt": 0.5,
+    "apexAt": 0.8,
+    "landAt": 1.117
    },
    "Run_02": {
     "duration": 0.708,

@@ -11,6 +11,10 @@
 // Character recipe (spec §9, exact order; draco LAST - unlit after it silently drops compression):
 //   unlit -> drop sit/lie clips -> resize 1024 -> webp 90 -> resample -> draco
 // Clip packs: skeleton + animations only, resample + prune + dedup (no mesh, nothing to draco).
+//
+// `npm run assets -- --meta-only` re-measures the jump timings (Regular_Jump takeoff / apex / land,
+// forward kinematics of the feet) from the committed public/models GLBs and updates only those fields
+// in clips.meta.json (no source folder needed, no GLB rewritten).
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -18,6 +22,7 @@ import { execFileSync } from "node:child_process";
 import { NodeIO, type Document } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, prune, resample } from "@gltf-transform/functions";
+import { Matrix4, Quaternion, Vector3 } from "three";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "models");
@@ -83,7 +88,9 @@ type ClipMeta = {
   /** Hips translation (parent space) at the first key and its range over the clip. */
   hips: { start: Vec; min: Vec; max: Vec };
   rootPolicy: { xz: "keep" | "pin"; y: "keep" | "pin" };
+  /** Run_and_Jump: from the clip manifest. Regular_Jump: measured (jumpTimes): feet leave / hips top / feet back. */
   takeoffAt?: number;
+  apexAt?: number;
   landAt?: number;
   /** Rope_Hang_Idle: RightHand height above the feet (errata 1). */
   handHeight?: number;
@@ -107,9 +114,73 @@ function measure(doc: Document, rootBone = "Hips"): Record<string, Omit<ClipMeta
     }
     hips.min = hips.min.map(r3) as Vec;
     hips.max = hips.max.map(r3) as Vec;
-    out[a.getName()] = { duration: r3(duration), hips };
+    out[a.getName()] = { duration: r3(duration), hips, ...(JUMP_CLIPS.includes(a.getName()) ? jumpTimes(doc, a.getName()) : {}) };
   }
   return out;
+}
+
+/** Clips whose takeoff / apex / land are measured from the feet (the in-place standing jump). */
+const JUMP_CLIPS = ["Regular_Jump"];
+const FEET = ["LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase"];
+
+/**
+ * Forward kinematics over the clip (60 Hz): takeoffAt = the last frame before the apex with the lowest
+ * foot within 2 cm of its first-frame height (the feet leave the ground right after), apexAt = the
+ * highest Hips, landAt = the first frame after the apex with the feet back down.
+ */
+function jumpTimes(doc: Document, clip: string): { takeoffAt: number; apexAt: number; landAt: number } | Record<string, never> {
+  const anim = doc.getRoot().listAnimations().find(a => a.getName() === clip);
+  const nodes = new Map(doc.getRoot().listNodes().map(n => [n.getName(), n]));
+  if (!anim || !nodes.has("Hips") || FEET.some(f => !nodes.has(f))) return {};
+  type Track = { t: ArrayLike<number>; v: ArrayLike<number> };
+  const tracks = new Map<string, Track>();
+  let dur = 0;
+  for (const ch of anim.listChannels()) {
+    const s = ch.getSampler(), n = ch.getTargetNode();
+    const t = s?.getInput()?.getArray(), v = s?.getOutput()?.getArray();
+    if (!t || !v || !n) continue;
+    dur = Math.max(dur, t[t.length - 1]);
+    tracks.set(`${n.getName()}.${ch.getTargetPath()}`, { t, v });
+  }
+  const sample = (tr: Track, time: number, k: number): number[] => {
+    const { t, v } = tr;
+    let i = 0;
+    while (i < t.length - 2 && t[i + 1] < time) i++;
+    const f = t.length < 2 ? 0 : Math.min(1, Math.max(0, (time - t[i]) / (t[i + 1] - t[i] || 1)));
+    const a = Array.from({ length: k }, (_, j) => v[i * k + j]);
+    const b = t.length < 2 ? a : Array.from({ length: k }, (_, j) => v[(i + 1) * k + j]);
+    if (k === 4) { const q = new Quaternion(...a).slerp(new Quaternion(...b), f); return [q.x, q.y, q.z, q.w]; }
+    return a.map((x, j) => x + (b[j] - x) * f);
+  };
+  type N = NonNullable<ReturnType<typeof nodes.get>>;
+  const worldY = (node: N, time: number): number => {
+    const m = new Matrix4();
+    for (let n: N | undefined = node; n; n = n.listParents().find(p => p.propertyType === "Node") as N | undefined) {
+      const nm = n.getName();
+      const tr = tracks.get(`${nm}.translation`), ro = tracks.get(`${nm}.rotation`), sc = tracks.get(`${nm}.scale`);
+      const local = new Matrix4().compose(
+        new Vector3(...(tr ? sample(tr, time, 3) : n.getTranslation())),
+        new Quaternion(...(ro ? sample(ro, time, 4) : n.getRotation())),
+        new Vector3(...(sc ? sample(sc, time, 3) : n.getScale())),
+      );
+      m.premultiply(local);
+    }
+    return new Vector3().setFromMatrixPosition(m).y;
+  };
+  const steps = Math.round(dur * 60);
+  const feet: number[] = [], hips: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const time = i / 60;
+    feet.push(Math.min(...FEET.map(f => worldY(nodes.get(f)!, time))));
+    hips.push(worldY(nodes.get("Hips")!, time));
+  }
+  const ground = feet[0] + 0.02;
+  let apex = 0;
+  for (let i = 1; i <= steps; i++) if (hips[i] > hips[apex]) apex = i;
+  let take = apex, land = apex;
+  while (take > 0 && feet[take] > ground) take--;
+  while (land < steps && feet[land] > ground) land++;
+  return { takeoffAt: r3(take / 60), apexAt: r3(apex / 60), landAt: r3(land / 60) };
 }
 
 // Loop / root policy per clip (spec §9 table + the clip manifest's measured suggestions).
@@ -194,10 +265,39 @@ async function george(dir: string) {
   console.log(`george.glb  ${kb(out)}  + src/generated/george_clips.json - set GEORGE_GLB in src/app/george.config.ts`);
 }
 
+/** --meta-only: jump timings from the committed web GLBs (draco decoder for the character meshes). */
+async function metaOnly() {
+  const file = path.join(GEN, "clips.meta.json");
+  const meta = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }>;
+  // draco3dgltf ships with @gltf-transform/cli (pinned devDependency).
+  const spec = "draco3dgltf"; // untyped module
+  const draco = (await import(spec)) as { default: { createDecoderModule(): Promise<unknown> } };
+  io.registerDependencies({ "draco3d.decoder": await draco.default.createDecoderModule() });
+  for (const id of IDS) {
+    for (const f of [path.join(OUT, `radbro${id}.glb`), path.join(OUT, `radbro${id}.clips.glb`)]) {
+      if (!fs.existsSync(f)) continue;
+      const doc = await io.read(f);
+      for (const name of JUMP_CLIPS) {
+        const c = meta[id]?.clips[name];
+        if (!c || !doc.getRoot().listAnimations().some(a => a.getName() === name)) continue;
+        Object.assign(c, jumpTimes(doc, name));
+        console.log(`#${id} ${name}: takeoffAt ${c.takeoffAt} apexAt ${c.apexAt} landAt ${c.landAt}`);
+      }
+    }
+  }
+  fs.writeFileSync(file, `${JSON.stringify(meta, null, 1)}\n`);
+  console.log(`src/generated/clips.meta.json updated`);
+}
+
+if (process.argv.includes("--meta-only")) {
+  await metaOnly();
+  fs.rmSync(tmp, { recursive: true, force: true });
+  process.exit(0);
+}
 const radbroDir = arg("radbros", "RUGRUN_RADBROS");
 const georgeDir = arg("george", "RUGRUN_GEORGE");
 if (!radbroDir && !georgeDir) {
-  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)");
+  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
   process.exit(2);
 }
 fs.mkdirSync(OUT, { recursive: true });

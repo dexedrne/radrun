@@ -13,6 +13,7 @@ export type ClipMeta = {
   hips: { start: Vec3T; min: Vec3T; max: Vec3T };
   rootPolicy: RootPolicy;
   takeoffAt?: number;
+  apexAt?: number;
   landAt?: number;
   handHeight?: number;
 };
