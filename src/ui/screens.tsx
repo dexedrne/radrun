@@ -45,11 +45,30 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
   );
 }
 
+// ---- mute button (title + HUD; M key too) ----------------------------------------------------------
+
+export function MuteButton({ muted, onMute, style }: { muted: boolean; onMute: () => void; style: React.CSSProperties }) {
+  const label = muted ? "sound off (M)" : "sound on (M)";
+  return (
+    <button onClick={onMute} title={label} aria-label={label} aria-pressed={muted} data-testid="mute"
+      style={{
+        position: "fixed", zIndex: 14, width: 40, height: 40, borderRadius: 20, padding: 0, display: "grid", placeItems: "center", cursor: "pointer",
+        background: muted ? "rgba(255,61,127,0.45)" : "rgba(14,16,30,0.55)", border: "1px solid rgba(255,255,255,0.4)", color: "#fff", pointerEvents: "auto",
+        touchAction: "manipulation", ...style,
+      }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+        {muted ? <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19.3 5.7a9 9 0 0 1 0 12.6" />}
+      </svg>
+    </button>
+  );
+}
+
 // ---- title -----------------------------------------------------------------------------------------
 
 export function Title(props: {
   chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean;
+  challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean; muted: boolean; onMute: () => void;
 }) {
   const { chaser, difficulty, challenge } = props;
   const touch = useUi(s => s.touch);
@@ -69,6 +88,7 @@ export function Title(props: {
   );
   return (
     <div style={{ ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))" }}>
+      <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: 10, right: 12, zIndex: 21 }} />
       <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />
         <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
@@ -119,7 +139,7 @@ export function Title(props: {
             JUMP · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
             <><b>controls</b> · mouse look/aim · WASD run · Space jump · LMB hold = web onto the ringed balloon, release = let go ·
-            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · Esc pause</>
+            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
         </div>
         <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 10 : 11, opacity: 0.75, textShadow: "0 1px 2px #000" }}>{S.credits}</div>
@@ -153,7 +173,7 @@ export function Loading({ onRetry, onMenu }: { onRetry: () => void; onMenu: () =
 
 // ---- in-round HUD --------------------------------------------------------------------------------
 
-export function RoundHud({ reducedMotion, easyGrab, practice = false }: { reducedMotion: boolean; easyGrab: boolean; practice?: boolean }) {
+export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onMute }: { reducedMotion: boolean; easyGrab: boolean; practice?: boolean; muted: boolean; onMute: () => void }) {
   const r = useUi(s => s.round);
   const screen = useUi(s => s.screen);
   const feed = useUi(s => s.feed);
@@ -262,6 +282,8 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false }: { reduce
         <div style={{ ...box, left: "50%", bottom: 40, transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>{practice ? "back to start…" : "retry…"} {Math.round(r.holdR * 100)}%</div>
       )}
       <HintPill />
+      {/* mute: top left on desktop (M key while the mouse is captured), under the II button on touch */}
+      <MuteButton muted={muted} onMute={onMute} style={touch ? { left: 12, top: 62 } : { left: 12, top: 10 }} />
       <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: 12 }), bottom: touch ? 4 : 8, fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
       <RotateHint />
     </>
@@ -316,7 +338,9 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             </div>
             {s.quality === "low" && <div style={{ opacity: 0.7, fontSize: 11 }}>Low: sharpness 1x, no shadows or trail, fewer rooftop props (anti-aliasing off after a reload)</div>}
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
-            <label>volume {Math.round(s.volume * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.volume} onChange={e => set({ volume: Number(e.target.value) })} style={{ width: "100%" }} /></label>
+            <label>music {Math.round(s.music * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.music} onChange={e => set({ music: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-music" /></label>
+            <label>sound effects {Math.round(s.sfx * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.sfx} onChange={e => set({ sfx: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-sfx" /></label>
+            <label><input type="checkbox" checked={s.muted} onChange={e => set({ muted: e.target.checked })} data-testid="mute-check" /> mute all (M)</label>
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>
             <label><input type="checkbox" checked={s.reducedMotion} onChange={e => set({ reducedMotion: e.target.checked })} /> reduced motion</label>

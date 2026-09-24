@@ -1,5 +1,5 @@
-// Canvas-side systems for the play page: PlayDriver (fixed steps, events -> UI store at 10 Hz, SFX,
-// window.__play), ChaseFx (his rope and yours from the RightHand bones, red YOINK ring, blob shadow,
+// Canvas-side systems for the play page: PlayDriver (fixed steps, events -> UI store at 10 Hz, SFX and
+// music, window.__play), ChaseFx (his rope and yours from the RightHand bones, red YOINK ring, blob shadow,
 // the procedural money bag on the LeftHand + the catch hand-off, the lasso, the runner trail and the
 // flying rug) and ScreenTracker (bubble anchor + edge arrow, DOM writes).
 import { useMemo, useRef } from "react";
@@ -10,20 +10,28 @@ import {
 } from "three";
 import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
-import { RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK } from "../game/round.ts";
+import { COUNTDOWN_STEPS, RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK, type RadbroId } from "../game/round.ts";
 import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts";
 import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
 import { getBest, recordBest } from "../ui/prefs.ts";
 import { sfx } from "../audio/sfx.ts";
+import { music } from "../audio/music.ts";
+import { musicTarget } from "../audio/score.ts";
+import { audioState, isMuted, outputLevel } from "../audio/engine.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
 import { hints } from "../ui/hints.ts";
 
+const DEV = import.meta.env.MODE !== "production";
+
 /** Bot pages (?bot=...) never show first-run tips. */
 const BOT_PAGE = new URLSearchParams(location.search).has("bot");
+
+/** Speech-bubble chatter pitch per runner (Hz). */
+const VOICE: Record<RadbroId, number> = { "652": 640, "4764": 780, "2564": 540 };
 
 // ---- driver --------------------------------------------------------------------------------------
 
@@ -48,6 +56,8 @@ export type PlayProbe = {
   fps: number;
   frames: number;
   backend: string;
+  /** AudioContext state ("none" before the first gesture), music mode / close-chase layer, notes and SFX played. */
+  audio: { state: string; muted: boolean; music: string; layer: boolean; notes: number; sfx: number; rms?: number; peak?: number };
 };
 
 declare global {
@@ -80,6 +90,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const lastRun = useRef(-1);
   const lines = useRef(0);
   const beep = useRef(4);
+  const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120 });
   useFrame((_, delta) => {
     game.frame(delta);
     frames.current++;
@@ -93,7 +104,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       clips.current.george.clear();
       beep.current = 4;
       hints.newRun();
-      if (game.mode === "round" && !game.practice) { showBubble(S.countdownBubble); sfx.blip(); }
+      if (game.mode === "round" && !game.practice) { showBubble(S.countdownBubble); sfx.chatter(VOICE[who]); music.countdown(COUNTDOWN_STEPS / 120); }
     }
     phases.current.add(run.pose.phase);
     const ch = rigs.get(game.setup.chaser), rn = rigs.get(who);
@@ -109,24 +120,29 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     const ev = game.roundEvents, rev = game.runnerEvents, pe = game.frameEvents;
     if (ev & RV_GO) { useUi.setState({ screen: "chase" }); showBanner(S.go); sfx.beep(true); }
     if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); }
+    const b = r.player;
+    const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (r.phase === "chase") {
       if (pe & EV_JUMP) sfx.jump();
-      if (pe & EV_ATTACH) sfx.grab();
-      if (pe & EV_RELEASE) sfx.whoosh();
-      if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land();
+      if (pe & EV_ATTACH) sfx.thwip();
+      if (pe & EV_RELEASE) sfx.fling(sp);
+      if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land(-b.landVy);
       if (pe & EV_BONK) sfx.bonk();
     }
-    if (rev & RE_TAUNT) { const t = TAUNTS[who]; showBubble(t[lines.current++ % t.length]); sfx.blip(); }
-    if (rev & RE_PANIC) { showBubble(S.panicBubble); sfx.blip(); }
-    if (rev & RE_CORNERED) { showBubble(S.corneredBubble); sfx.blip(); }
+    if (rev & RE_TAUNT) { const t = TAUNTS[who]; showBubble(t[lines.current++ % t.length]); sfx.chatter(VOICE[who]); }
+    if (rev & RE_PANIC) { showBubble(S.panicBubble); sfx.chatter(VOICE[who] * 1.25); }
+    if (rev & RE_CORNERED) { showBubble(S.corneredBubble); sfx.chatter(VOICE[who] * 1.1); }
     if (rev & RE_GASSED) pushFeed(S.gassedFeed);
     if (ev & (RV_CAUGHT | RV_ESCAPED)) {
-      if (ev & RV_ESCAPED) { showBanner(S.escape); showBubble(LINES.escaped[who]); sfx.escaped(); }
+      if (ev & RV_ESCAPED) { showBanner(S.escape); showBubble(LINES.escaped[who]); music.sting("escaped"); sfx.rug(); sfx.meow(true); }
       else {
-        showBanner(r.stats.catchKind === "yoink" ? `${S.yoink}!` : "TAGGED!");
+        const yoink = r.stats.catchKind === "yoink";
+        showBanner(yoink ? `${S.yoink}!` : "TAGGED!");
         showBubble(LINES.caught[who]);
         if (ev & RV_YOINK) sfx.yoink();
-        sfx.caught();
+        music.sting(yoink ? "yoink" : "caught");
+        sfx.jingle();
+        sfx.meow();
       }
       useUi.setState({ results: buildResults(game) });
     }
@@ -135,7 +151,23 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     }
 
     const st = useUi.getState();
-    const b = r.player;
+    // Music: calm on the title / results, the intro in the countdown, the chase groove (+ the close-chase
+    // layer under 20 m or while he panics) in the round, ducked while paused. Acts only on changes.
+    const inRound = game.mode === "round";
+    const tgt = musicTarget({
+      title: !inRound || st.screen === "title" || st.screen === "loading" || st.screen === "boot",
+      results: st.screen === "results", practice: game.practice, phase: inRound ? r.phase : "",
+      d: r.d, panic: run.band.panic, gassed: run.band.gassed,
+    }, audio.current.layer);
+    audio.current.layer = tgt.layer;
+    music.update(tgt, { difficulty: game.setup.difficulty, paused: game.paused });
+    // Wind while airborne / on the rope (20 Hz).
+    audio.current.windAcc += delta;
+    if (audio.current.windAcc >= 0.05) {
+      audio.current.windAcc = 0;
+      sfx.wind(sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
+    }
+    const mp = music.probe();
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
       outcome: r.phase === "caught" ? "CAUGHT" : r.phase === "escaped" ? "ESCAPED" : "", catchKind: r.stats.catchKind, catchTime: r.stats.catchTime,
@@ -143,12 +175,20 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       runner: { p: [run.p.x, run.p.y, run.p.z], mode: run.mode, phase: run.pose.phase, edge: run.edge, t: run.t, m: run.band.m, budget: run.band.budget },
       runnerPhases: [...phases.current], clips: { chaser: [...clips.current.chaser], runner: [...clips.current.runner], george: [...clips.current.george] },
       fps: fps.current, frames: frames.current, backend: st.backend,
+      audio: {
+        state: audioState(), muted: isMuted(), music: mp.mode, layer: mp.layer, notes: mp.scheduled, sfx: sfx.played(),
+        ...(DEV ? { rms: audio.current.rms, peak: audio.current.maxPeak } : {}),
+      },
     };
     acc.current += delta;
     if (acc.current >= 0.1) {
       const dt = acc.current;
       acc.current = 0;
-      const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
+      if (DEV) {
+        const lv = outputLevel();
+        audio.current.rms = lv.rms;
+        audio.current.maxPeak = Math.max(audio.current.maxPeak, lv.peak);
+      }
       const ring = b.ringId === RING_RUNNER ? "runner" : b.ropeHook >= 0 ? "attached" : b.ringId >= 0 ? "hook" : "none";
       const rs = r.stats;
       useUi.setState({

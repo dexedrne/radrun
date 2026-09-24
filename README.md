@@ -6,7 +6,8 @@ issues): `PLAY.md`. Live: https://radbro-rug-run.vercel.app
 
 Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764 or #2564, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
-balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo and SFX.
+balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo, and
+procedural WebAudio music + SFX (no audio files).
 
 ## Run
 
@@ -20,7 +21,7 @@ npm run build:test   # build keeping the dev pages and ?bot (preview deployments
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump · hold LMB to web onto the
 ringed balloon, release to let go (LMB on the ground with a ringed balloon = jump + grab) · red ring on
-him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · Esc pause.
+him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · M mute · Esc pause.
 
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).

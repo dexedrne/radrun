@@ -17,7 +17,11 @@ type Stored = {
 /** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
 export type Quality = "low" | "high";
 
-export type Settings = { sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; volume: number; quality: Quality };
+/** music / sfx = volume sliders 0..1; muted = the mute button / M key (both in pause -> Settings too). */
+export type Settings = {
+  sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; quality: Quality;
+  music: number; sfx: number; muted: boolean;
+};
 
 function load(): Stored {
   try {
@@ -35,15 +39,19 @@ function save(s: Stored): void {
 }
 
 export function loadSettings(cam: CameraTuning): Settings {
-  const s = load().settings ?? {};
+  const s = (load().settings ?? {}) as Partial<Settings> & { volume?: number };
+  const num = (v: unknown, d: number) => (typeof v === "number" && isFinite(v) ? Math.max(0, Math.min(1, v)) : d);
   return {
     sensitivity: s.sensitivity ?? cam.sensitivity,
     invertY: s.invertY ?? cam.invertY,
     fov: s.fov ?? cam.fov,
     reducedMotion: s.reducedMotion ?? cam.reducedMotion,
     easyGrab: s.easyGrab ?? cam.easyGrab,
-    volume: s.volume ?? 0.8,
     quality: s.quality === "low" ? "low" : "high",
+    // Round 1-3 had one "volume" (SFX only): it becomes the SFX volume.
+    music: num(s.music, 0.6),
+    sfx: num(s.sfx, num(s.volume, 0.8)),
+    muted: s.muted === true,
   };
 }
 

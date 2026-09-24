@@ -25,7 +25,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
-| Esc | pause (Settings: quality, sensitivity, volume, FOV, invert Y, reduced motion, easy grab) |
+| M | mute / unmute (same as the speaker button on the title and the HUD) |
+| Esc | pause (Settings: quality, sensitivity, music + sound-effects volume, mute, FOV, invert Y, reduced motion, easy grab) |
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
@@ -37,7 +38,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | WEB (hold) | web onto the ringed balloon; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
 | JUMP | jump |
 | HIM (hold) | ease the camera toward him |
-| II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch) |
+| II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch and the volumes) |
+| speaker (under II) | mute / unmute |
 
 Touch helps your aim: the cone widens to 85 degrees (desktop 70), balloon picking leans toward where you
 are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and locks landscape where the
@@ -48,6 +50,28 @@ to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOU
 pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasing off (after a reload),
 no blob shadows, no runner trail, and no rooftop AC units or antennas (the water towers stay). It switches
 immediately and is remembered in the browser (localStorage). Try Low if a phone runs hot or choppy.
+
+## Sound
+
+Everything is synthesised live with WebAudio (no audio files). Sound starts when you press PLAY or
+PRACTICE (browsers only allow audio after a click or a key press).
+
+- **Music:** a looping chiptune-ish track in A minor. Calm on the title and results (100 bpm), a
+  build-up under the 3-2-1 countdown (filter sweep + riser), then the chase groove from GO (122 / 128 /
+  136 bpm on Chill / Normal / Degen; 16 bars with a B section and fills, and the melody changes every 16
+  bars). When he is within 20 m (or panicking) a hi-hat + arpeggio layer comes in, and drops out past
+  24 m. A catch plays a short win sting (a longer one for a YOINK), "He rugged you." plays a sad trombone;
+  the calm track follows. The pause menu muffles the music.
+- **Sound effects:** rope "thwip" on grab, a fling whoosh on let-go, wind that grows with speed while you
+  are in the air, landing thuds by impact, wall bonks, the YOINK lasso whip + crack, a coin jingle when the
+  bag changes hands, George's meow after a catch (a sulky one after an escape), countdown beeps, speech
+  bubble chatter (each Radbro has his own pitch), the "rekt." whistle and the rug swoosh.
+- **Controls:** the speaker button (title top right; in a round top left, or under II on touch) and **M**
+  mute everything. Pause -> Settings has separate **music** and **sound effects** sliders and a mute box.
+  All remembered in the browser. Leaving the tab (or muting) suspends the audio completely.
+- **Tuning:** the patterns, chords and tempos are in `src/audio/score.ts`; the instruments and mix in
+  `src/audio/music.ts`; each sound effect is a few lines in `src/audio/sfx.ts`. Low quality also drops the
+  lead's echo. Dev / test builds report the audio state and output level in `window.__play.audio`.
 
 ## Practice and tips
 
@@ -185,7 +209,9 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   toward you (his runs are pre-baked; he only re-decides at junctions).
 - The Milady loads from GitHub raw (raw.githubusercontent.com) with jsDelivr as the fallback (jsDelivr
   404'd on some cold files, e.g. #270). `?milady=0` turns her off.
-- SFX are synthesised tones, there is no music.
+- Music and sound effects are synthesised (no recorded audio). The mix was set from measured output
+  levels (music + SFX peak around -9 dBFS), not by ear: adjust the levels in `src/audio/music.ts` /
+  `sfx.ts` if something is too loud or too quiet.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
 - The production build is ~9 MB (models ~5.8 MB); the budget is not enforced.

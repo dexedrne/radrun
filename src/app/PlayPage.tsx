@@ -23,7 +23,7 @@ import { GeorgeView } from "./GeorgeView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
-import { setVolume, unlockAudio } from "../audio/sfx.ts";
+import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import type { Vector3 } from "three";
 
 const DEV = import.meta.env.MODE !== "production";
@@ -33,6 +33,7 @@ const TUNE = DEV && params.has("tune");
 const BOT = DEV ? botParams(location.search) : null;
 
 const canvasEl = () => document.querySelector("canvas");
+const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx); setMuted(s.muted); setAudioLow(s.quality === "low"); };
 /** Touch play never uses pointer lock (spec §4 "Touch"). */
 const isTouch = () => useUi.getState().touch;
 const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock(); };
@@ -86,6 +87,7 @@ export default function PlayPage() {
   const ready = useUi(s => s.sceneReady);
   const touch = useUi(s => s.touch);
   const rHeld = useRef<number | null>(null);
+  const muteRef = useRef<() => void>(() => undefined);
 
   // Touch: switch on at the first touch anywhere; that tap (and PLAY) also asks for fullscreen +
   // landscape. The game picks up the wider aim cone / Yoink bonus from the next round.
@@ -102,7 +104,7 @@ export default function PlayPage() {
     bootPlay().then(g => {
       const s = loadSettings(g.camera);
       applySettings(g.camera, s);
-      setVolume(s.volume);
+      applyAudio(s);
       g.retune();
       setSettingsState(s);
       setGame(g);
@@ -115,6 +117,8 @@ export default function PlayPage() {
     if (BOT) {
       void loadPair(BOT.c, BOT.r).then(ok => {
         if (!ok) return;
+        // No gesture on a bot page: the context starts suspended and resumes at the first click / key.
+        unlockAudio();
         startBot(game, BOT);
         useUi.setState({ screen: "countdown", results: null });
       });
@@ -184,6 +188,7 @@ export default function PlayPage() {
       if (locked) setPaused(false);
     });
     const kd = (e: KeyboardEvent) => {
+      if (e.code === "KeyM" && !e.repeat) { muteRef.current(); return; }
       if (e.code !== "KeyR" || e.repeat) return;
       const sc = useUi.getState().screen;
       if (sc === "results") retry();
@@ -235,9 +240,16 @@ export default function PlayPage() {
     saveSettings(s);
     if (s.quality !== useUi.getState().quality) useUi.setState({ quality: s.quality });
     applySettings(game.camera, s);
-    setVolume(s.volume);
+    applyAudio(s);
     game.retune();
   };
+  // Mute button (title + HUD) and the M key; a gesture, so it also unlocks the audio.
+  const toggleMute = () => {
+    if (!settings) return;
+    setSettings({ ...settings, muted: !settings.muted });
+    unlockAudio();
+  };
+  muteRef.current = toggleMute;
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
   if (!game || !settings) return <div style={{ padding: 20 }}>loading…</div>;
@@ -247,10 +259,11 @@ export default function PlayPage() {
     <>
       <Scene game={game} />
       {(screen === "boot" || screen === "title") && (
-        <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready} />
+        <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready}
+          muted={settings.muted} onMute={toggleMute} />
       )}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
-      {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} />}
+      {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}
       {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
       {paused && inRound && (

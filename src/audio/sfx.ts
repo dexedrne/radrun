@@ -1,93 +1,198 @@
-// WebAudio one-shots (spec §13 audio/sfx.ts): synthesized, no files. One master gain (settings volume).
-// The context is created/resumed on the first user gesture (PLAY); before that every call is a no-op.
+// Synthesised SFX (no files), all into the SFX bus of audio/engine.ts. One-shots build a few nodes per
+// event (events are rare: a swing, a landing, a catch); the wind is one persistent loop (noise ->
+// band-pass -> gain) that the game only steers (sfx.wind at <= 20 Hz), never rebuilds.
+// Before the first user gesture, muted, tab hidden or SFX volume 0: every call is a no-op.
+import { sfxOn, whenCreated, type Engine } from "./engine.ts";
 
-type Ctx = { ac: AudioContext; master: GainNode; noise: AudioBuffer };
-let ctx: Ctx | null = null;
-let volume = 0.8;
-let muted = false;
+let played = 0;
 
-export function unlockAudio(): void {
-  try {
-    if (!ctx) {
-      const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AC) return;
-      const ac = new AC();
-      const master = ac.createGain();
-      master.gain.value = volume * 0.5;
-      master.connect(ac.destination);
-      const noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
-      const d = noise.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-      ctx = { ac, master, noise };
-    }
-    if (ctx.ac.state === "suspended") void ctx.ac.resume();
-  } catch {
-    ctx = null;
-  }
-}
-
-export function setVolume(v: number): void {
-  volume = Math.max(0, Math.min(1, v));
-  if (ctx) ctx.master.gain.value = volume * 0.5;
-}
-
-export function setMuted(m: boolean): void {
-  muted = m;
-}
-
-function ready(): Ctx | null {
-  if (!ctx || muted || volume <= 0 || ctx.ac.state !== "running") return null;
-  return ctx;
-}
-
-function tone(freq: number, dur: number, type: OscillatorType, gain: number, slideTo?: number, delay = 0): void {
-  const c = ready();
-  if (!c) return;
-  const t = c.ac.currentTime + delay;
-  const o = c.ac.createOscillator();
-  const g = c.ac.createGain();
+function tone(e: Engine, type: OscillatorType, f0: number, f1: number, t: number, dur: number, peak: number, attack = 0.006): OscillatorNode {
+  const o = e.ac.createOscillator();
   o.type = type;
-  o.frequency.setValueAtTime(freq, t);
-  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = e.ac.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(peak, t + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(c.master);
+  o.connect(g).connect(e.sfxGain);
   o.start(t);
-  o.stop(t + dur + 0.02);
+  o.stop(t + dur + 0.03);
+  return o;
 }
 
-function noise(dur: number, gain: number, f0: number, f1: number, q = 1, delay = 0): void {
-  const c = ready();
-  if (!c) return;
-  const t = c.ac.currentTime + delay;
-  const src = c.ac.createBufferSource();
-  src.buffer = c.noise;
-  const bp = c.ac.createBiquadFilter();
-  bp.type = "bandpass";
-  bp.Q.value = q;
-  bp.frequency.setValueAtTime(f0, t);
-  bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  const g = c.ac.createGain();
+function noise(e: Engine, type: BiquadFilterType, f0: number, f1: number, q: number, t: number, dur: number, peak: number, attackFrac = 0.25): void {
+  const src = e.ac.createBufferSource();
+  src.buffer = e.noise;
+  const f = e.ac.createBiquadFilter();
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = e.ac.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + dur * 0.3);
+  g.gain.exponentialRampToValueAtTime(peak, t + Math.max(0.002, dur * attackFrac));
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(bp).connect(g).connect(c.master);
-  src.start(t, Math.random() * 0.5);
+  src.connect(f).connect(g).connect(e.sfxGain);
+  src.start(t, Math.random() * 1.5);
   src.stop(t + dur + 0.05);
 }
 
+/** Run `f` with the live engine and "now" (+ delay), counting the sound for the probe. */
+function at(delay: number, f: (e: Engine, t: number) => void): void {
+  const e = sfxOn();
+  if (!e) return;
+  played++;
+  f(e, e.ac.currentTime + 0.005 + delay);
+}
+
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+// ---- wind: one persistent loop ---------------------------------------------------------------------
+let wind: { f: BiquadFilterNode; g: GainNode } | null = null;
+whenCreated(e => {
+  const src = e.ac.createBufferSource();
+  src.buffer = e.noise;
+  src.loop = true;
+  const f = e.ac.createBiquadFilter();
+  f.type = "bandpass";
+  f.Q.value = 0.8;
+  f.frequency.value = 400;
+  const g = e.ac.createGain();
+  g.gain.value = 0;
+  src.connect(f).connect(g).connect(e.sfxGain);
+  src.start();
+  wind = { f, g };
+});
+
+let windLevel = 0;
+
+/** A catch: George meows (formant synthesis: a sawtooth through two moving band-passes). */
+function meow(e: Engine, t: number, sulky: boolean): void {
+  const dur = sulky ? 0.75 : 0.5;
+  const o = e.ac.createOscillator();
+  o.type = "sawtooth";
+  const p = sulky ? [430, 470, 320] : [520, 780, 470];
+  o.frequency.setValueAtTime(p[0], t);
+  o.frequency.exponentialRampToValueAtTime(p[1], t + dur * 0.3);
+  o.frequency.exponentialRampToValueAtTime(p[2], t + dur);
+  // Vibrato.
+  const lfo = e.ac.createOscillator();
+  lfo.frequency.value = 7;
+  const lg = e.ac.createGain();
+  lg.gain.value = 12;
+  lfo.connect(lg).connect(o.frequency);
+  const out = e.ac.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(sulky ? 0.32 : 0.42, t + 0.06);
+  out.gain.setValueAtTime(sulky ? 0.3 : 0.4, t + dur * 0.6);
+  out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  // "m-e-o-w": formants open (ee), then round off (oo).
+  const f1 = [[350, 950, 600], [1200, 2300, 1000]];
+  for (const [i, fs] of f1.entries()) {
+    const bp = e.ac.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.Q.value = i === 0 ? 5 : 7;
+    bp.frequency.setValueAtTime(fs[0], t);
+    bp.frequency.exponentialRampToValueAtTime(fs[1], t + dur * 0.35);
+    bp.frequency.exponentialRampToValueAtTime(fs[2], t + dur);
+    const bg = e.ac.createGain();
+    bg.gain.value = i === 0 ? 1 : 0.6;
+    o.connect(bp).connect(bg).connect(out);
+  }
+  out.connect(e.sfxGain);
+  o.start(t);
+  lfo.start(t);
+  o.stop(t + dur + 0.05);
+  lfo.stop(t + dur + 0.05);
+}
+
 export const sfx = {
-  whoosh: () => noise(0.32, 0.5, 500, 2400, 0.8),
-  jump: () => tone(260, 0.12, "square", 0.08, 520),
-  grab: () => { tone(900, 0.06, "triangle", 0.18, 1400); noise(0.08, 0.25, 3000, 1500, 2); },
-  land: () => { tone(120, 0.12, "sine", 0.35, 60); noise(0.1, 0.2, 800, 300, 1); },
-  bonk: () => { tone(180, 0.2, "square", 0.2, 70); noise(0.15, 0.35, 600, 200, 1.5); },
-  yoink: () => { noise(0.25, 0.4, 1200, 5000, 1); tone(440, 0.18, "sawtooth", 0.12, 1320); },
-  blip: () => tone(1250, 0.05, "square", 0.06, 1600),
-  beep: (go = false) => tone(go ? 1046 : 523, go ? 0.35 : 0.14, "square", 0.12),
-  fall: () => tone(700, 0.7, "triangle", 0.18, 90),
-  meow: () => { tone(620, 0.22, "sawtooth", 0.08, 880); tone(880, 0.25, "sawtooth", 0.06, 540, 0.2); },
-  caught: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.22, "square", 0.1, undefined, i * 0.09)),
-  escaped: () => [392, 370, 349, 262].forEach((f, i) => tone(f, i === 3 ? 0.7 : 0.3, "triangle", 0.14, i === 3 ? 180 : undefined, i * 0.28)),
+  /** Rope attach: a noisy "thwip" (band-passed noise + a falling sine). */
+  thwip: () => at(0, (e, t) => {
+    noise(e, "bandpass", 5200, 1300, 3, t, 0.1, 0.5, 0.1);
+    tone(e, "sine", 2400, 520, t, 0.09, 0.22, 0.003);
+    tone(e, "triangle", 1300, 900, t + 0.01, 0.05, 0.06, 0.002);
+  }),
+  /** Let go of the rope: a short fling whoosh, brighter when fast. */
+  fling: (speed: number) => at(0, (e, t) => {
+    const k = clamp01(speed / 20);
+    noise(e, "bandpass", 500 + 400 * k, 1800 + 1800 * k, 0.9, t, 0.26 + 0.1 * k, 0.18 + 0.25 * k, 0.35);
+  }),
+  jump: () => at(0, (e, t) => tone(e, "square", 240, 470, t, 0.1, 0.05)),
+  /** Landing thud; impact = downward speed (m/s) at touch-down. */
+  land: (impact: number) => at(0, (e, t) => {
+    const k = clamp01((impact - 2) / 14);
+    if (k < 0.04) { noise(e, "bandpass", 900, 500, 1, t, 0.06, 0.08, 0.1); return; }
+    tone(e, "sine", 95 + 45 * k, 42, t, 0.12 + 0.12 * k, 0.25 + 0.55 * k, 0.003);
+    noise(e, "lowpass", 900 + 900 * k, 180, 0.8, t, 0.1 + 0.12 * k, 0.12 + 0.4 * k, 0.05);
+  }),
+  /** Wall bonk: a hollow cartoon "bonk". */
+  bonk: () => at(0, (e, t) => {
+    tone(e, "triangle", 540, 250, t, 0.16, 0.3, 0.002);
+    tone(e, "sine", 170, 70, t, 0.24, 0.38, 0.002);
+    noise(e, "bandpass", 1500, 700, 2, t, 0.05, 0.25, 0.05);
+  }),
+  /** YOINK: the lasso whips out and cracks. */
+  yoink: () => at(0, (e, t) => {
+    noise(e, "bandpass", 350, 3200, 1.2, t, 0.17, 0.35, 0.7);
+    tone(e, "sawtooth", 180, 900, t, 0.16, 0.05);
+    noise(e, "highpass", 2500, 2500, 0.7, t + 0.16, 0.035, 0.9, 0.05);
+    tone(e, "square", 2200, 1400, t + 0.16, 0.02, 0.25, 0.001);
+  }),
+  /** The bag changes hands: a coin jingle. */
+  jingle: () => at(0.12, (e, t) => {
+    const f = [2637, 3322, 2960, 3951, 3136, 4186, 3520];
+    f.forEach((hz, i) => {
+      const s = t + i * 0.045 + (i % 2) * 0.012;
+      tone(e, "sine", hz, hz, s, 0.22, 0.09, 0.002);
+      tone(e, "sine", hz * 2.76, hz * 2.76, s, 0.08, 0.03, 0.001);
+    });
+    noise(e, "highpass", 6000, 6000, 0.7, t, 0.35, 0.05, 0.1);
+  }),
+  /** Countdown 3-2-1 and GO. */
+  beep: (go = false) => at(0, (e, t) => {
+    if (go) {
+      tone(e, "square", 880, 880, t, 0.12, 0.09);
+      tone(e, "square", 1318, 1318, t + 0.1, 0.32, 0.1);
+      tone(e, "sine", 659, 659, t + 0.1, 0.32, 0.12);
+    } else {
+      tone(e, "square", 660, 660, t, 0.13, 0.08);
+      tone(e, "sine", 1320, 1320, t, 0.1, 0.05);
+    }
+  }),
+  /** Speech-bubble chatter: 2-4 quick blips around the speaker's pitch. */
+  chatter: (base = 700) => at(0, (e, t) => {
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const hz = base * (0.85 + Math.random() * 0.45);
+      tone(e, "square", hz, hz * (1 + (Math.random() - 0.5) * 0.3), t + i * 0.065, 0.05, 0.045, 0.003);
+    }
+  }),
+  /** Off the city ("rekt."): a falling whistle. */
+  fall: () => at(0, (e, t) => tone(e, "triangle", 900, 110, t, 0.75, 0.14, 0.02)),
+  /** George after a catch (sulky after an escape). */
+  meow: (sulky = false) => at(sulky ? 0.9 : 0.55, (e, t) => meow(e, t, sulky)),
+  /** The rug swoops in. */
+  rug: () => at(0, (e, t) => {
+    noise(e, "bandpass", 250, 1400, 1.1, t, 0.9, 0.3, 0.5);
+    tone(e, "sine", 70, 140, t + 0.2, 0.6, 0.18, 0.2);
+  }),
+  /**
+   * Wind while airborne / on the rope, louder and brighter with speed (m/s). Call at <= 20 Hz; it only
+   * sets two automation targets on the persistent loop.
+   */
+  wind: (speed: number, airborne: boolean) => {
+    const w = wind;
+    if (!w) return;
+    const e = sfxOn();
+    const k = airborne && e ? clamp01((speed - 5) / 15) : 0;
+    const level = k * k * 0.32;
+    if (level === windLevel || (level > 0 && Math.abs(level - windLevel) < 0.004)) return;
+    windLevel = level;
+    const now = w.g.context.currentTime;
+    w.g.gain.setTargetAtTime(level, now, 0.12);
+    w.f.frequency.setTargetAtTime(300 + 90 * speed, now, 0.12);
+  },
+  played: () => played,
 };
