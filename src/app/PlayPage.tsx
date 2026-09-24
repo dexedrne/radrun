@@ -137,9 +137,15 @@ export default function PlayPage() {
       if (f >= 1) { rHeld.current = null; retry(); }
       else useUi.setState(s => ({ round: { ...s.round, holdR: f } }));
     }, 50);
+    // A click on the canvas mid-round re-captures the mouse (e.g. a lock request the browser refused).
+    const click = () => {
+      const sc = useUi.getState().screen;
+      if (!BOT && (sc === "countdown" || sc === "chase") && document.pointerLockElement !== el) el.requestPointerLock?.();
+    };
+    el.addEventListener("click", click);
     addEventListener("keydown", kd);
     addEventListener("keyup", ku);
-    return () => { detach(); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
+    return () => { detach(); el.removeEventListener("click", click); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
   }, [game, retry, setPaused]);
 
   // Results: free the mouse so the buttons work.

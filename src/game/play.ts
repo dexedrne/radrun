@@ -100,7 +100,7 @@ export class PlayGame {
     this.stepper.reset();
     this.input.clear();
     this.rig.yaw = this.round.spawn.yaw;
-    this.rig.pitch = 0.08;
+    this.rig.pitch = this.botOptions ? -0.25 : 0.08; // the bot camera sits higher and looks down past the stand-in
     rigLook(this.rig, 0, 0, 0, false);
     this.bot = this.botOptions ? new Bot(this.round, this.botOptions) : null;
     this.snap();
