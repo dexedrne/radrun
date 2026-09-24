@@ -10,9 +10,9 @@
 // world position already includes the instance matrix).
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { RepeatWrapping, type Material, type Mesh, type Texture } from "three";
+import { ClampToEdgeWrapping, LinearFilter, MirroredRepeatWrapping, RepeatWrapping, SRGBColorSpace, TextureLoader, type Material, type Mesh, type Texture } from "three";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
-import { abs, color, mix, normalWorld, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, vec2 } from "three/tsl";
+import { abs, atan, color, mix, normalWorld, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, texture, vec2, PI } from "three/tsl";
 import { PAGE } from "./district.ts";
 
 /** Sky gradient stops (sRGB). The fog uses the horizon colour so distant boxes melt into it. */
@@ -61,15 +61,42 @@ export function CityLook() {
   return null;
 }
 
-/** Vertical sky gradient as the scene's background node (the fallback clear colour is the horizon). */
+/**
+ * Round 4 sky panorama (public/sky/<district>.webp, 3:2): wrapped round the horizon twice, mirrored (so
+ * the image never needs to tile), covering elevations SKY_Y0..SKY_Y1 (sin of the angle above the
+ * horizon). Above it the image fades into the zenith colour, below it into the fog colour. No mipmaps:
+ * the azimuth wraps at the back, and mip selection there would draw a seam line.
+ */
+const SKY_Y0 = -0.03, SKY_Y1 = 0.62;
+
+/** Vertical sky gradient as the scene's background node (the fallback clear colour is the horizon);
+ *  swapped for the district's panorama once it loads. */
 export function SkyGradient() {
   const scene = useThree(s => s.scene);
   useEffect(() => {
-    const y = normalize(positionLocal).y;
+    const d = normalize(positionLocal), y = d.y;
     const low = mix(color(SKY_COLORS.horizon), color(SKY_COLORS.mid), smoothstep(0.0, 0.3, y));
+    const zenith = color(SKY_COLORS.zenith);
+    const gradient = mix(low, zenith, smoothstep(0.25, 0.95, y));
     const prev = scene.backgroundNode;
-    scene.backgroundNode = mix(low, color(SKY_COLORS.zenith), smoothstep(0.25, 0.95, y));
-    return () => { scene.backgroundNode = prev; };
+    scene.backgroundNode = gradient;
+    let alive = true, tex: Texture | null = null;
+    new TextureLoader().load(`/${PAGE.sky}`, t => {
+      if (!alive) { t.dispose(); return; }
+      tex = t;
+      t.colorSpace = SRGBColorSpace;
+      t.wrapS = MirroredRepeatWrapping;
+      t.wrapT = ClampToEdgeWrapping;
+      t.generateMipmaps = false;
+      t.minFilter = LinearFilter;
+      const u = atan(d.x, d.z).div(PI).add(1); // 0..2 round the horizon
+      const v = y.sub(SKY_Y0).div(SKY_Y1 - SKY_Y0);
+      const img = texture(t, vec2(u, v)).rgb;
+      const top = mix(img, zenith, smoothstep(SKY_Y1 - 0.14, SKY_Y1 + 0.04, y));
+      // Only swap if nothing else (the night look) took the background meanwhile.
+      if (scene.backgroundNode === gradient) scene.backgroundNode = mix(color(FOG_COLOR), top, smoothstep(SKY_Y0 - 0.06, SKY_Y0 + 0.05, y));
+    }, undefined, () => { /* no panorama: keep the gradient */ });
+    return () => { alive = false; tex?.dispose(); scene.backgroundNode = prev; };
   }, [scene]);
   return null;
 }

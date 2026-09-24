@@ -206,6 +206,18 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 (`?map=docks&lvl=7` opens the campaign screen on level 7). Bots: `&lvl=N` scores a bot round as level N
 (pass that level's `d` and `mu` too).
 
+## Art (round 4)
+
+- **Skies**: one painted panorama per district, `public/sky/<district>.webp` (3:2), wrapped round the
+  horizon twice mirrored; it fades into the district's zenith colour on top and the fog colour below
+  (`SkyGradient` in `src/app/cityLook.tsx`, `SKY_Y0` / `SKY_Y1` set how high it reaches). The colour
+  gradient shows until it loads; the night mutator still swaps in its own dark sky.
+- **Billboards**: eight painted ads (`public/textures/billboards/*.webp`) are materials `ad_<name>` in
+  every district's `decor.json`, so in `?editor=decor` a billboard face's material can be switched to any
+  of them. `npm run billboards` re-applies them to boards that still use a text Sign (keeps hand edits);
+  `gen-city --decor` makes new decor with them (`src/world/billboards.ts`). Banners stay text Signs.
+- **Key art**: `public/ui/key-art.webp` behind the title while the city loads.
+
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
 | URL | What |

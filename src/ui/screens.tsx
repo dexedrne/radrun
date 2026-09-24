@@ -97,6 +97,9 @@ function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; activ
   );
 }
 
+const TITLE_SHADE = "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))";
+
+/** Title (round 4: over the key art until the scene is ready, then over the live city). */
 export function Title(props: {
   chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
   challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean; muted: boolean; onMute: () => void;
@@ -135,7 +138,7 @@ export function Title(props: {
     </button>
   );
   return (
-    <div style={{ ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))" }}>
+    <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
       <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: 10, right: 12, zIndex: 21 }} />
       <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />

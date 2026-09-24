@@ -365,7 +365,7 @@ export default function PlayPage() {
   muteRef.current = toggleMute;
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
-  if (!game || !settings) return <div style={{ padding: 20 }}>loading…</div>;
+  if (!game || !settings) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
   const practice = screen === "practice";
   const inRound = screen === "countdown" || screen === "chase" || practice;
   return (

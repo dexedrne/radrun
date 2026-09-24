@@ -31,6 +31,54 @@
    "color": "#4f4648",
    "roughness": 0.8,
    "metalness": 0
+  },
+  "ad_wagmi": {
+   "name": "billboard WAGMI",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/wagmi.webp",
+   "materialType": "basic"
+  },
+  "ad_ngmi": {
+   "name": "billboard NGMI",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/ngmi.webp",
+   "materialType": "basic"
+  },
+  "ad_hodl": {
+   "name": "billboard HODL",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/hodl.webp",
+   "materialType": "basic"
+  },
+  "ad_gm": {
+   "name": "billboard gm",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/gm.webp",
+   "materialType": "basic"
+  },
+  "ad_wenmoon": {
+   "name": "billboard WEN MOON?",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/wenmoon.webp",
+   "materialType": "basic"
+  },
+  "ad_rugs": {
+   "name": "billboard RUGS 50% OFF",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/rugs.webp",
+   "materialType": "basic"
+  },
+  "ad_nothing": {
+   "name": "billboard probably nothing",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/nothing.webp",
+   "materialType": "basic"
+  },
+  "ad_buyhigh": {
+   "name": "billboard BUY HIGH. SELL LOW.",
+   "color": "#ffffff",
+   "texture": "/textures/billboards/buyhigh.webp",
+   "materialType": "basic"
   }
  },
  "root": {
@@ -276,29 +324,42 @@
           4.7,
           0.13
          ],
-         "rotation": [
-          0,
-          0,
-          0
+         "scale": [
+          7,
+          3,
+          0.04
          ]
         }
        },
-       "sign": {
-        "type": "Sign",
+       "geometry": {
+        "type": "Geometry",
         "properties": {
-         "text": "WAGMI",
-         "width": 7,
-         "height": 3,
-         "background": "#f2c14e",
-         "color": "#16161d",
-         "border": "#16161d"
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "ad_wagmi"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
         }
        },
        "data": {
         "type": "Data",
         "properties": {
          "data": {
-          "kind": "sign"
+          "kind": "ad"
          }
         }
        }
@@ -433,29 +494,42 @@
           4.7,
           0.13
          ],
-         "rotation": [
-          0,
-          0,
-          0
+         "scale": [
+          7,
+          3,
+          0.04
          ]
         }
        },
-       "sign": {
-        "type": "Sign",
+       "geometry": {
+        "type": "Geometry",
         "properties": {
-         "text": "BUYING\nTHE DIP",
-         "width": 7,
-         "height": 3,
-         "background": "#16161d",
-         "color": "#7cdb6a",
-         "border": "#7cdb6a"
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "ad_hodl"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
         }
        },
        "data": {
         "type": "Data",
         "properties": {
          "data": {
-          "kind": "sign"
+          "kind": "ad"
          }
         }
        }
@@ -590,29 +664,42 @@
           4.7,
           0.13
          ],
-         "rotation": [
-          0,
-          0,
-          0
+         "scale": [
+          7,
+          3,
+          0.04
          ]
         }
        },
-       "sign": {
-        "type": "Sign",
+       "geometry": {
+        "type": "Geometry",
         "properties": {
-         "text": "gm",
-         "width": 7,
-         "height": 3,
-         "background": "#ff5ab4",
-         "color": "#ffffff",
-         "border": "#ffffff"
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "ad_gm"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
         }
        },
        "data": {
         "type": "Data",
         "properties": {
          "data": {
-          "kind": "sign"
+          "kind": "ad"
          }
         }
        }
@@ -747,29 +834,42 @@
           4.7,
           0.13
          ],
-         "rotation": [
-          0,
-          0,
-          0
+         "scale": [
+          7,
+          3,
+          0.04
          ]
         }
        },
-       "sign": {
-        "type": "Sign",
+       "geometry": {
+        "type": "Geometry",
         "properties": {
-         "text": "HAVE FUN\nSTAYING POOR",
-         "width": 7,
-         "height": 3,
-         "background": "#1c2a6b",
-         "color": "#ffd23f",
-         "border": "#ffd23f"
+         "geometryType": "box",
+         "args": [
+          1,
+          1,
+          1
+         ]
+        }
+       },
+       "material": {
+        "type": "Material",
+        "properties": {
+         "materialId": "ad_rugs"
+        }
+       },
+       "mesh": {
+        "type": "Mesh",
+        "properties": {
+         "castShadow": false,
+         "receiveShadow": false
         }
        },
        "data": {
         "type": "Data",
         "properties": {
          "data": {
-          "kind": "sign"
+          "kind": "ad"
          }
         }
        }

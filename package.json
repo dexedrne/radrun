@@ -28,7 +28,8 @@
     "gen-textures": "node tools/gen-textures.ts",
     "restyle-city": "node tools/restyle-city.ts",
     "gen-props": "node tools/gen-props.ts",
-    "og-image": "node tools/og-image.ts"
+    "og-image": "node tools/og-image.ts",
+    "billboards": "node tools/billboards.ts"
   },
   "dependencies": {
     "@pixiv/three-vrm": "3.5.5",

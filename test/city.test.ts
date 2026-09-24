@@ -23,8 +23,9 @@ test("committed city.json lints clean and matches city.model.json", () => {
   assert.ok(s.geometrySignatures <= 3, `geometry signatures ${s.geometrySignatures}`);
   assert.ok(s.batchKeys <= 12, `batch keys ${s.batchKeys}`);
   const d = prefabBatchStats(read("decor.json"));
-  // Decor: <= 6 batch keys (the draw-call budget); the node budget grew with the rooftop props (gen-props).
-  assert.ok(d.nodes <= 320 && d.batchKeys <= 6, `decor ${JSON.stringify(d)}`);
+  // Decor: <= 6 batch keys (the draw-call budget) plus one per painted ad board (round 4, four per
+  // district); the node budget grew with the rooftop props (gen-props).
+  assert.ok(d.nodes <= 320 && d.batchKeys <= 10, `decor ${JSON.stringify(d)}`);
 });
 
 test("generator output survives the prefab round trip and lints clean", () => {

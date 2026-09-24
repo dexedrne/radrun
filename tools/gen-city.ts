@@ -7,8 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { GameObject, Prefab } from "react-three-game";
 import { generate } from "../src/world/generate.ts";
-import { DISTRICTS, isDistrictId } from "../src/world/districts.ts";
+import { DISTRICTS, isDistrictId, type DistrictId } from "../src/world/districts.ts";
 import { boxNode, toPrefab } from "../src/world/toPrefab.ts";
+import { adFace, adMaterials, DISTRICT_ADS } from "../src/world/billboards.ts";
 import { modelFromCityPrefab } from "../src/world/level.ts";
 import { tuningToJson, PLAYER, CAMERA } from "../src/sim/tuning.ts";
 import type { CityModel } from "../src/world/cityModel.ts";
@@ -113,14 +114,9 @@ function defaultDecor(model: CityModel): Prefab {
       ball("stand-balloon-b", [0.7, 2.9, -0.2], 0.9, "balloonB"),
     ], { kind: "miladyStand" }));
   }
-  // 2. Rooftop billboards on the outer edge of their roof, facing the centre.
-  const BILL: Array<[string, [string, string, string]]> = [
-    ["WAGMI", ["#f2c14e", "#16161d", "#16161d"]],
-    ["BUYING\nTHE DIP", ["#16161d", "#7cdb6a", "#7cdb6a"]],
-    ["gm", ["#ff5ab4", "#ffffff", "#ffffff"]],
-    ["HAVE FUN\nSTAYING POOR", ["#1c2a6b", "#ffd23f", "#ffd23f"]],
-  ];
-  BILL.forEach(([text, colors], i) => {
+  // 2. Rooftop billboards on the outer edge of their roof, facing the centre (painted ads, round 4:
+  // src/world/billboards.ts).
+  DISTRICT_ADS[map as DistrictId].forEach((ad, i) => {
     const s = picked[1 + i];
     const m = mid(s);
     const dx = m.x - cx, dz = m.z - cz;
@@ -128,7 +124,7 @@ function defaultDecor(model: CityModel): Prefab {
     const oz = Math.abs(dx) > Math.abs(dz) ? 0 : Math.sign(dz || 1) * ((s.z1 - s.z0) / 2 - 1.5);
     const yaw = Math.atan2(-Math.sign(ox), -Math.sign(oz) || (ox ? 0 : 1));
     nodes.push(group(`billboard-${i}`, [m.x + ox, s.top, m.z + oz], yaw, [
-      sign(`billboard-${i}-face`, [0, 4.7, 0.13], 0, text, 7, 3, colors),
+      adFace(`billboard-${i}-face`, ad),
       boxNode(`billboard-${i}-back`, [0, 4.7, 0], [7.3, 3.3, 0.2], "metal"),
       boxNode(`billboard-${i}-leg`, [0, 1.55, -0.1], [0.4, 3.1, 0.3], "metal"),
     ], { kind: "billboard" }));
@@ -166,6 +162,7 @@ function defaultDecor(model: CityModel): Prefab {
       stand: { color: "#e86a92", roughness: 0.9, metalness: 0 },
       balloonA: { color: "#ff5a7a", roughness: 0.4, metalness: 0 },
       balloonB: { color: "#ffd23f", roughness: 0.4, metalness: 0 },
+      ...adMaterials(),
     },
     root: { id: "decor-root", children: nodes },
   };

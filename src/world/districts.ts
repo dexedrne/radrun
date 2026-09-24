@@ -29,6 +29,8 @@ export type District = {
   blurb: string;
   /** Level file directory under public/ ("levels/" for Downtown, "levels/<id>/" otherwise). */
   dir: string;
+  /** Sky panorama under public/ (round 4 art; the gradient shows until it loads). */
+  sky: string;
   config: CityConfig;
   look: DistrictLook;
 };
@@ -44,6 +46,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     name: "Downtown",
     blurb: "The original skyline. Wide streets, balloons everywhere.",
     dir: "levels/",
+    sky: "sky/downtown.webp",
     config: DEFAULT_CONFIG,
     look: DOWNTOWN_LOOK,
   },
@@ -52,6 +55,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     name: "Night Market",
     blurb: "Dense, narrow and twisty. Short hops, lots of junctions, some streets with no balloons.",
     dir: "levels/market/",
+    sky: "sky/market.webp",
     config: {
       ...DEFAULT_CONFIG, seed: 311, blocksX: 8, blocksZ: 6, block: 23, street: 10, alley: 3, building: 10,
       mergeChance: 0.12, roofMin: 18, roofMax: 26, streetMaxDh: 3, towers: 4, towerMin: 42, towerMax: 58,
@@ -67,6 +71,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     name: "The Docks",
     blurb: "Low warehouses, wide streets and long flights over the water. Mind the wind.",
     dir: "levels/docks/",
+    sky: "sky/docks.webp",
     config: {
       ...DEFAULT_CONFIG, seed: 902, blocksX: 7, blocksZ: 3, block: 32, street: 15, alley: 4, building: 14,
       mergeChance: 0.35, roofMin: 12, roofMax: 20, streetMaxDh: 3.5, towers: 3, towerMin: 36, towerMax: 48,
@@ -82,6 +87,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     name: "The Towers",
     blurb: "Tall, steep and vertical. Big drops between roofs and towers everywhere.",
     dir: "levels/towers/",
+    sky: "sky/towers.webp",
     config: {
       ...DEFAULT_CONFIG, seed: 1453, blocksX: 7, blocksZ: 6, roofMin: 38, roofMax: 52, streetMaxDh: 3.5,
       towers: 8, towerMin: 90, towerMax: 130, hookAbove: 10, skylineCount: 50, skylineMin: 260, skylineMax: 460,
