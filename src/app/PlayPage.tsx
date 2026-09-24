@@ -12,10 +12,16 @@ import { applySettings, lastPicks, loadSettings, pickRunner, readChallenge, reme
 import { Loading, Pause, ResultsScreen, RoundHud, Title } from "../ui/screens.tsx";
 import { bootPlay } from "./boot.ts";
 import { SceneCanvas, playPrefab } from "./GameScene.tsx";
-import { ActorsView, PlayDriver, RunnerFx, ScreenTracker, radbroActors } from "./PlayViews.tsx";
+import { ChaseFx, PlayDriver, ScreenTracker } from "./PlayViews.tsx";
+import { ActorsView, handWorld } from "./ActorsView.tsx";
+import { AssetsBridge, loadManifest, manifestFor } from "./characters.ts";
+import { MiladyView } from "./Milady.tsx";
+import { GeorgeView } from "./GeorgeView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
+import { setVolume, unlockAudio } from "../audio/sfx.ts";
+import type { Vector3 } from "three";
 
 const DEV = import.meta.env.MODE !== "production";
 const TunePanel = DEV ? lazy(() => import("./dev/TunePanel.tsx")) : null;
@@ -26,18 +32,39 @@ const BOT = DEV ? botParams(location.search) : null;
 const canvasEl = () => document.querySelector("canvas");
 
 function Scene({ game }: { game: PlayGame }) {
-  const prefab = useMemo(() => playPrefab(game, radbroActors()), [game]);
+  const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const hidePlayer = useCallback(() => game.mode !== "round", [game]);
+  const ropeFrom = useCallback((out: Vector3) => handWorld(game.setup.chaser, "right", out) !== null, [game]);
   return (
     <SceneCanvas prefab={prefab}>
+      <AssetsBridge />
       <PlayDriver game={game} />
       <ActorsView game={game} />
+      <GeorgeView game={game} />
+      <MiladyView game={game} />
       <CameraView game={game} />
-      <FxView game={game} hidePlayer={hidePlayer} />
-      <RunnerFx game={game} />
+      <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} />
+      <ChaseFx game={game} />
       <ScreenTracker game={game} />
     </SceneCanvas>
   );
+}
+
+/** LOADING (spec §20 item 4): preload the round pair's GLBs, then mount their nodes. */
+async function loadPair(chaser: RadbroId, runner: RadbroId): Promise<boolean> {
+  useUi.setState({ screen: "loading", load: { progress: 0, error: null } });
+  const failed = await loadManifest(manifestFor(chaser, runner), f => useUi.setState({ load: { progress: f, error: null } }));
+  if (failed) {
+    useUi.setState(s => ({ load: { progress: s.load.progress, error: failed } }));
+    return false;
+  }
+  const cur = useUi.getState().pair;
+  if (!cur || cur.chaser !== chaser || cur.runner !== runner) {
+    useUi.setState({ pair: { chaser, runner } });
+    // Let ActorsView mount the character nodes before the round starts.
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
+  return true;
 }
 
 export default function PlayPage() {
@@ -57,18 +84,22 @@ export default function PlayPage() {
     bootPlay().then(g => {
       const s = loadSettings(g.camera);
       applySettings(g.camera, s);
+      setVolume(s.volume);
       g.retune();
       setSettingsState(s);
       setGame(g);
     }, e => setErr(String(e)));
   }, []);
 
-  // Scene ready -> title (or straight into the bot round).
+  // Scene ready -> title (or straight into the bot round, through LOADING).
   useEffect(() => {
     if (!game || !ready || screen !== "boot") return;
     if (BOT) {
-      startBot(game, BOT);
-      useUi.setState({ screen: "countdown", results: null });
+      void loadPair(BOT.c, BOT.r).then(ok => {
+        if (!ok) return;
+        startBot(game, BOT);
+        useUi.setState({ screen: "countdown", results: null });
+      });
     } else useUi.setState({ screen: "title" });
   }, [game, ready, screen]);
 
@@ -80,18 +111,20 @@ export default function PlayPage() {
 
   const begin = useCallback((seed: number) => {
     if (!game) return;
-    useUi.setState({ screen: "loading", results: null, feed: [], banner: null, bubble: null, paused: false });
-    // LOADING: the manifest (chaser, runner, their clip packs, George) arrives with the models in M4;
-    // with box stand-ins everything is already resident, so the round starts on the next frame.
-    requestAnimationFrame(() => {
+    const runner = pickRunner(chaser, challenge.r);
+    useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
+    void loadPair(chaser, runner).then(ok => {
+      if (!ok) return;
       game.paused = false;
-      game.startRound({ chaser, runner: pickRunner(chaser, challenge.r), difficulty, seed });
+      game.startRound({ chaser, runner, difficulty, seed });
       useUi.setState({ screen: "countdown" });
+      if (document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock();
     });
   }, [game, chaser, difficulty, challenge]);
 
   const onPlay = useCallback(() => {
     rememberPicks(chaser, difficulty);
+    unlockAudio();
     canvasEl()?.requestPointerLock();
     begin(randomSeed());
   }, [begin, chaser, difficulty]);
@@ -167,6 +200,7 @@ export default function PlayPage() {
     setSettingsState(s);
     saveSettings(s);
     applySettings(game.camera, s);
+    setVolume(s.volume);
     game.retune();
   };
 
@@ -179,7 +213,7 @@ export default function PlayPage() {
       {(screen === "boot" || screen === "title") && (
         <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} ready={ready} />
       )}
-      {screen === "loading" && <Loading progress={1} />}
+      {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
       {paused && inRound && (

@@ -45,7 +45,7 @@ const browser = await puppeteer.launch({
 const log: string[] = [];
 const errors: string[] = [];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-type P = { screen: string; phase: string; chaseSteps: number; clock: number; d: number; outcome: string; catchKind: string; catchTime: number; ring: number; runner: { phase: number; mode: number }; runnerPhases: number[]; fps: number; backend: string };
+type P = { screen: string; phase: string; chaseSteps: number; clock: number; d: number; outcome: string; catchKind: string; catchTime: number; ring: number; runner: { phase: number; mode: number }; runnerPhases: number[]; clips?: { chaser: string[]; runner: string[] }; fps: number; backend: string };
 try {
   const page = await browser.newPage();
   page.on("console", m => { const t = `console.${m.type()}: ${m.text()}`; log.push(t); if (m.type() === "error") errors.push(t); });
@@ -53,7 +53,7 @@ try {
   page.on("response", r => { if (r.status() >= 400) log.push(`http ${r.status()}: ${r.url()}`); });
   const t0 = Date.now();
   await page.goto(url, { waitUntil: "load" });
-  const shots = { countdown: false, chase: false, results: false };
+  const shots = { countdown: false, chase: false, catch: false, results: false };
   let last: P | null = null;
   let firstChase = 0;
   while (Date.now() - t0 < 240_000) {
@@ -72,8 +72,13 @@ try {
         shots.chase = true;
         log.push(`SHOT mid-chase at chase step ${last.chaseSteps}: ${JSON.stringify({ d: +last.d.toFixed(1), runnerPhase: last.runner.phase, ring: last.ring, fps: +last.fps.toFixed(1) })}`);
       }
+      if (last.outcome && !shots.catch) {
+        await page.screenshot({ path: path.join(outDir, "bot-catch.png") });
+        shots.catch = true;
+        log.push(`SHOT catch (${last.outcome} ${last.catchKind})`);
+      }
       if (last.outcome && last.screen === "results" && !shots.results) {
-        await sleep(1200);
+        await sleep(2500);
         await page.screenshot({ path: path.join(outDir, "bot-results.png") });
         shots.results = true;
         log.push(`SHOT results`);
@@ -85,6 +90,7 @@ try {
   if (!last?.outcome) log.push(`NO outcome within 240 s; last probe ${JSON.stringify(last)}`);
   console.log(`browser: ${last?.outcome || "none"} (${last?.catchKind || "-"}) at chase step ${last?.chaseSteps} (${last?.catchTime?.toFixed(2)} s), backend ${last?.backend}, runner phases seen ${JSON.stringify(last?.runnerPhases)}`);
   if (last?.outcome) console.log(`catch step vs node: ${last.chaseSteps - predicted.steps} (must be within +-1)`);
+  console.log(`clips seen: chaser ${JSON.stringify(last?.clips?.chaser)} runner ${JSON.stringify(last?.clips?.runner)}`);
 } catch (e) {
   log.push(`FATAL: ${(e as Error)?.stack ?? e}`);
 } finally {

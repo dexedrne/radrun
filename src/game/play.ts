@@ -12,8 +12,15 @@ import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
 import { Round, RV_RESPAWN, RV_CAUGHT, RV_ESCAPED, type RadbroId } from "./round.ts";
 import { Bot, type BotOptions } from "./bots.ts";
+import { George } from "../sidekick/george.ts";
 
 export type Mode = "title" | "round";
+
+/** Catch slow-mo (spec §3, §8) and the flying-rug timeline (seconds of endT). */
+export const SLOWMO = { seconds: 1.2, scale: 0.35 } as const;
+export const RUG = { arrive: 0.8, hop: 0.45 } as const;
+/** endT at which RESULTS appears: after the slow-mo catch beat / the rug tracking shot. */
+export const RESULTS_AFTER = { caught: 1.3, escaped: 2.6 } as const;
 
 export type RoundSetup = { chaser: RadbroId; runner: RadbroId; difficulty: Difficulty; seed: number };
 
@@ -30,6 +37,8 @@ export class PlayGame {
   simTuning: Tuning;
   readonly rig: Rig;
   readonly input = new InputLatch();
+  /** George's follow model (visual only; stepped in the fixed step, outside the Round and its hash). */
+  readonly george: George;
   readonly stepper = new FixedStepper();
   readonly frameInput: InputFrame = emptyInput();
   mode: Mode = "title";
@@ -48,7 +57,11 @@ export class PlayGame {
   /** Seconds since the current round began (countdown included) / ended; title clock. */
   roundT = 0;
   endT = 0;
+  /** Real seconds since the round ended (endT runs at the slow-mo rate). */
+  endReal = 0;
   titleT = 0;
+  /** Render-time scale: 0.35 for the 1.2 s catch slow-mo, else 1 (mixers and FX use it). */
+  timeScale = 1;
   /** Horizontal facing hints for the views. */
   runnerVel: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -62,6 +75,7 @@ export class PlayGame {
     this.simTuning = { ...tuning };
     this.setup = { chaser: "652", runner: "4764", difficulty: "chill", seed: 1 };
     this.round = this.makeRound(this.setup);
+    this.george = new George(model);
     this.rig = createRig(this.round.spawn.yaw);
     this.retune();
     this.snap();
@@ -97,12 +111,17 @@ export class PlayGame {
     this.runId++;
     this.roundT = 0;
     this.endT = 0;
+    this.endReal = 0;
+    this.timeScale = 1;
     this.stepper.reset();
     this.input.clear();
     this.rig.yaw = this.round.spawn.yaw;
     this.rig.pitch = this.botOptions ? -0.25 : 0.08; // the bot camera sits higher and looks down past the stand-in
     rigLook(this.rig, 0, 0, 0, false);
     this.bot = this.botOptions ? new Bot(this.round, this.botOptions) : null;
+    const sp = this.round.spawn, rp = this.round.runner.p;
+    this.george.beat = "sit";
+    this.george.place(sp.x, sp.y, sp.z, sp.roofId, rp.x - sp.x, rp.z - sp.z);
     this.snap();
   }
 
@@ -146,6 +165,12 @@ export class PlayGame {
       const p = round.player.p, r = round.runner.p;
       rigFace(rig, r.x - p.x, r.z - p.z, Infinity, 0);
     }
+    // George: beats from the round phase; snapshots every step; placed beside you on respawn.
+    const g = this.george;
+    g.setBeat(round.phase === "countdown" ? "sit" : round.phase === "caught" ? "happy" : round.phase === "escaped" ? "sulk" : "");
+    const b = round.player;
+    if (round.events & RV_RESPAWN) g.place(b.p.x, b.p.y, b.p.z, b.roofId, -rig.sy, -rig.cy);
+    else g.step({ x: b.p.x, y: b.p.y, z: b.p.z, grounded: b.grounded, rope: b.ropeHook >= 0, roofId: b.roofId });
   }
 
   /** Once per rendered frame: look, fixed steps, interpolation. Returns steps run. */
@@ -160,12 +185,21 @@ export class PlayGame {
     if (!this.paused) rigLook(this.rig, dx, dy, this.camera.sensitivity, this.camera.invertY);
     if (this.paused) return 0;
     this.roundT += delta;
-    if (round.over) this.endT += delta;
+    // Catch: 1.2 s of 0.35x slow-mo (spec §3), then normal speed.
+    this.timeScale = round.phase === "caught" && this.endReal < SLOWMO.seconds ? SLOWMO.scale : 1;
+    if (round.over) { this.endReal += delta; this.endT += delta * this.timeScale; }
     // Q / RMB: ease the camera toward him at 8/s; bots always face him.
     const p = round.player.p, r = round.runner.p;
     if ((this.input.towardRunner || this.bot) && round.phase === "chase") rigFace(this.rig, r.x - p.x, r.z - p.z, this.bot ? 4 : 8, delta);
     const n = round.over ? 0 : this.stepper.frame(delta);
     for (let i = 0; i < n && !round.over; i++) this.step();
+    if (round.over) {
+      const g = this.george;
+      g.setBeat(round.phase === "caught" ? "happy" : "sulk");
+      // Keep his one-shot clock running after the sim stopped.
+      if (g.shotT > 0) g.shotT += delta * this.timeScale;
+      if (g.beat === "happy" && g.shotT > 1.6) { g.clip = "Sit_Idle"; g.shotT = 0; }
+    }
     const a = round.over ? 1 : this.stepper.alpha;
     const pp = round.prevPlayer.p, pr = round.prevRunner;
     this.renderP.x = pp.x + (p.x - pp.x) * a;
@@ -186,14 +220,15 @@ export class PlayGame {
       this.runnerP.y = r.y + (p.y - r.y) * t;
       this.runnerP.z = r.z + (p.z + dz * 1.2 - r.z) * t;
     }
-    // Escape: he rides the rug up and away.
+    // Escape: the rug swoops in under him (RUG.arrive s), then he rides it up and away.
     if (round.phase === "escaped") {
-      const t = this.endT;
+      const t = Math.max(0, this.endT - RUG.arrive);
       const e = round.runner.pack.edges[round.runner.mode === 0 ? round.runner.edge : round.runner.next];
       const ex = e ? e.exitX : 1, ez = e ? e.exitZ : 0;
-      this.runnerP.y = r.y + 0.6 + t * t * 2.2;
-      this.runnerP.x = r.x + ex * t * t * 3;
-      this.runnerP.z = r.z + ez * t * t * 3;
+      const lift = smooth(Math.min(1, this.endT / RUG.arrive)) * RUG.hop;
+      this.runnerP.y = r.y + lift + t * t * 1.6;
+      this.runnerP.x = r.x + ex * t * t * 3.2;
+      this.runnerP.z = r.z + ez * t * t * 3.2;
     }
     return n;
   }
@@ -243,12 +278,25 @@ export class PlayGame {
       at.x = ax + (rigAt.x - ax) * s; at.y = ay + (rigAt.y - ay) * s; at.z = az + (rigAt.z - az) * s;
       return true;
     }
+    if (round.phase === "escaped" && this.endT < RESULTS_AFTER.escaped) {
+      // Rug escape tracking shot: from behind your shoulder, follow him riding off.
+      const p = this.renderP;
+      let dx = r.x - p.x, dz = r.z - p.z;
+      const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+      dx /= dl; dz /= dl;
+      const k = smooth(this.endReal / 0.5);
+      const ex = p.x - dx * 5 - dz * 1.2, ey = p.y + 2.2, ez = p.z - dz * 5 + dx * 1.2;
+      eye.x = rigEye.x + (ex - rigEye.x) * k; eye.y = rigEye.y + (ey - rigEye.y) * k; eye.z = rigEye.z + (ez - rigEye.z) * k;
+      at.x = rigAt.x + (r.x - rigAt.x) * k; at.y = rigAt.y + (r.y + 0.3 - rigAt.y) * k; at.z = rigAt.z + (r.z - rigAt.z) * k;
+      return true;
+    }
     if (round.over) {
       const p = this.renderP;
       const esc = round.phase === "escaped";
       const mx = esc ? p.x : (p.x + r.x) / 2, my = esc ? p.y : (p.y + r.y) / 2, mz = esc ? p.z : (p.z + r.z) / 2;
-      const a = this.endT * 0.35 + this.rig.yaw;
-      const rad = esc ? 9 : 7;
+      // Catch: a faster sweep during the slow-mo, then a slow orbit (real time).
+      const a = this.rig.yaw + this.endReal * 0.3 + (esc ? 0 : 0.9 * Math.min(this.endReal, SLOWMO.seconds));
+      const rad = esc ? 9 : 5.5 + Math.min(1.5, this.endReal);
       eye.x = mx + Math.sin(a) * rad; eye.y = my + (esc ? 4 : 2.2); eye.z = mz + Math.cos(a) * rad;
       if (esc) { at.x = (p.x + r.x) / 2; at.y = (p.y + r.y) / 2 + 1; at.z = (p.z + r.z) / 2; }
       else { at.x = mx; at.y = my; at.z = mz; }

@@ -67,14 +67,24 @@ export function Title(props: {
   );
 }
 
-export function Loading({ progress }: { progress: number }) {
+export function Loading({ onRetry, onMenu }: { onRetry: () => void; onMenu: () => void }) {
+  const load = useUi(s => s.load);
   return (
     <div style={{ ...layer, display: "grid", placeItems: "center", background: "rgba(10,12,30,0.5)" }}>
-      <div style={{ ...panel, minWidth: 260, textAlign: "center" }}>
+      <div style={{ ...panel, minWidth: 260, textAlign: "center" }} data-testid="loading">
         <div style={{ fontWeight: 800, letterSpacing: 3 }}>{S.loading}</div>
         <div style={{ height: 8, background: "rgba(255,255,255,0.15)", borderRadius: 4, marginTop: 10 }}>
-          <div style={{ height: 8, width: `${Math.round(progress * 100)}%`, background: "#ff3d7f", borderRadius: 4 }} />
+          <div style={{ height: 8, width: `${Math.round(load.progress * 100)}%`, background: "#ff3d7f", borderRadius: 4, transition: "width 0.2s" }} />
         </div>
+        {load.error && (
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <div style={{ color: "#ff8a8a", wordBreak: "break-all" }}>failed to load {load.error}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8 }}>
+              <button style={btn(true)} onClick={onRetry}>Retry</button>
+              <button style={btn()} onClick={onMenu}>Menu</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -187,6 +197,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
         {open && (
           <div style={{ marginTop: 12, textAlign: "left", display: "grid", gap: 6, fontSize: 12 }}>
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
+            <label>volume {Math.round(s.volume * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.volume} onChange={e => set({ volume: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>
             <label><input type="checkbox" checked={s.reducedMotion} onChange={e => set({ reducedMotion: e.target.checked })} /> reduced motion</label>

@@ -1,4 +1,4 @@
-// npm run gen-city -- [--seed 7] [--street 14] [--force]
+// npm run gen-city -- [--seed 7] [--street 14] [--force] [--decor]   (--decor rewrites decor.json only)
 // Generates the district ONCE into public/levels/city.json (the editable source of truth; never
 // overwritten unless --force), seeds decor.json and tuning.json if they are missing, then runs
 // `npm run level` (city.json -> city.model.json).
@@ -32,7 +32,7 @@ if (fs.existsSync(cityPath) && !force) {
 }
 
 const decorPath = path.join(LEVELS, "decor.json");
-if (!fs.existsSync(decorPath) || (force && process.argv.includes("--decor"))) {
+if (!fs.existsSync(decorPath) || process.argv.includes("--decor")) {
   const { model } = modelFromCityPrefab(JSON.parse(fs.readFileSync(cityPath, "utf8")));
   fs.writeFileSync(decorPath, JSON.stringify(defaultDecor(model), null, 1) + "\n");
   console.log(`gen-city: wrote ${path.relative(process.cwd(), decorPath)} (placeholder decor)`);
@@ -46,34 +46,120 @@ if (!fs.existsSync(tuningPath)) {
 
 runLevel(cityPath);
 
-/** Placeholder decor near the spawn: AC units, antennas, a billboard frame and the balloon stand. */
+/**
+ * Default decor (hand-edit it afterwards in ?editor=decor): the Milady's balloon stand on the roof
+ * nearest the district centre, rooftop billboards and tower banners with Radbro / crypto jokes (the
+ * "Sign" component), AC units and antennas spread over the city. Budget: <= 40 nodes, <= 6 batch keys.
+ */
 function defaultDecor(model: CityModel): Prefab {
-  const roofs = model.solids.filter(s => s.landable);
-  const sp = model.spawn;
-  const near = roofs
-    .map(s => ({ s, d: ((s.x0 + s.x1) / 2 - sp.x) ** 2 + ((s.z0 + s.z1) / 2 - sp.z) ** 2 }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 6)
-    .map(e => e.s);
-  const nodes: GameObject[] = [];
-  near.forEach((s, i) => {
-    const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2;
-    nodes.push(boxNode(`ac-${i}`, [s.x0 + 2.2, s.top + 0.6, s.z1 - 2.2], [1.6, 1.2, 1.2], "metal", { kind: "ac" }));
-    if (i % 2 === 0) nodes.push(boxNode(`antenna-${i}`, [s.x1 - 1.5, s.top + 2.5, s.z0 + 1.5], [0.15, 5, 0.15], "metal", { kind: "antenna" }));
-    if (i === 1 || i === 4) {
-      nodes.push(boxNode(`billboard-${i}`, [cx, s.top + 4, s.z0 + 0.6], [8, 3.5, 0.3], "billboard", { kind: "billboard", text: i === 1 ? "WAGMI" : "gm" }));
-      nodes.push(boxNode(`billboard-${i}-leg`, [cx, s.top + 1.1, s.z0 + 0.6], [0.3, 2.2, 0.3], "metal", { kind: "billboardLeg" }));
+  const b = model.bounds;
+  const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const roofs = model.solids.filter(s => s.landable && s.x1 - s.x0 >= 11.9 && s.z1 - s.z0 >= 11.9);
+  const mid = (s: (typeof roofs)[number]) => ({ x: (s.x0 + s.x1) / 2, z: (s.z0 + s.z1) / 2 });
+  // Stand roof: nearest the centre. Then farthest-point sampling for an even spread.
+  const standRoof = roofs.reduce((a, s) => ((mid(s).x - cx) ** 2 + (mid(s).z - cz) ** 2 < (mid(a).x - cx) ** 2 + (mid(a).z - cz) ** 2 ? s : a));
+  const picked = [standRoof];
+  while (picked.length < 14) {
+    let best = roofs[0], bestD = -1;
+    for (const s of roofs) {
+      if (picked.includes(s)) continue;
+      const m = mid(s);
+      const d = Math.min(...picked.map(p => (mid(p).x - m.x) ** 2 + (mid(p).z - m.z) ** 2));
+      if (d > bestD) { bestD = d; best = s; }
     }
+    picked.push(best);
+  }
+  const nodes: GameObject[] = [];
+  const group = (id: string, pos: number[], yaw: number, children: GameObject[], data?: Record<string, unknown>): GameObject => ({
+    id,
+    components: {
+      transform: { type: "Transform", properties: { position: pos.map(r2), rotation: [0, r2(yaw), 0] } },
+      ...(data ? { data: { type: "Data", properties: { data } } } : {}),
+    },
+    children,
   });
-  const stand = near[2] ?? near[0];
-  nodes.push(boxNode("balloon-stand", [(stand.x0 + stand.x1) / 2, stand.top + 0.55, (stand.z0 + stand.z1) / 2], [2.4, 1.1, 1.2], "stand", { kind: "miladyStand" }));
+  const sign = (id: string, pos: number[], yaw: number, text: string, w: number, h: number, colors: [string, string, string]): GameObject => ({
+    id,
+    components: {
+      transform: { type: "Transform", properties: { position: pos.map(r2), rotation: [0, r2(yaw), 0] } },
+      sign: { type: "Sign", properties: { text, width: w, height: h, background: colors[0], color: colors[1], border: colors[2] } },
+      data: { type: "Data", properties: { data: { kind: "sign" } } },
+    },
+  });
+  const ball = (id: string, pos: [number, number, number], s: number, materialId: string): GameObject => ({
+    id,
+    components: {
+      transform: { type: "Transform", properties: { position: pos, scale: [s, s * 1.15, s] } },
+      geometry: { type: "Geometry", properties: { geometryType: "sphere", args: [0.5, 12, 10] } },
+      material: { type: "Material", properties: { materialId } },
+      mesh: { type: "Mesh", properties: { castShadow: false, receiveShadow: false } },
+    },
+  });
+  // 1. The Milady's balloon stand (Data kind "miladyStand": origin = counter base centre on the roof).
+  {
+    const m = mid(standRoof);
+    const yaw = Math.atan2(cx - m.x, cz - m.z);
+    nodes.push(group("balloon-stand", [m.x, standRoof.top, m.z], yaw, [
+      boxNode("stand-counter", [0, 0.55, 0], [2.4, 1.1, 1.2], "stand"),
+      sign("stand-sign", [0, 0.6, 0.61], 0, "BALLOONS\n1 ETH", 2.2, 0.9, ["#fff4d6", "#b0124f", "#b0124f"]),
+      ball("stand-balloon-a", [-0.8, 2.5, -0.3], 0.8, "balloonA"),
+      ball("stand-balloon-b", [0.7, 2.9, -0.2], 0.9, "balloonB"),
+    ], { kind: "miladyStand" }));
+  }
+  // 2. Rooftop billboards on the outer edge of their roof, facing the centre.
+  const BILL: Array<[string, [string, string, string]]> = [
+    ["WAGMI", ["#f2c14e", "#16161d", "#16161d"]],
+    ["BUYING\nTHE DIP", ["#16161d", "#7cdb6a", "#7cdb6a"]],
+    ["gm", ["#ff5ab4", "#ffffff", "#ffffff"]],
+    ["HAVE FUN\nSTAYING POOR", ["#1c2a6b", "#ffd23f", "#ffd23f"]],
+  ];
+  BILL.forEach(([text, colors], i) => {
+    const s = picked[1 + i];
+    const m = mid(s);
+    const dx = m.x - cx, dz = m.z - cz;
+    const ox = Math.abs(dx) > Math.abs(dz) ? Math.sign(dx) * ((s.x1 - s.x0) / 2 - 1.5) : 0;
+    const oz = Math.abs(dx) > Math.abs(dz) ? 0 : Math.sign(dz || 1) * ((s.z1 - s.z0) / 2 - 1.5);
+    const yaw = Math.atan2(-Math.sign(ox), -Math.sign(oz) || (ox ? 0 : 1));
+    nodes.push(group(`billboard-${i}`, [m.x + ox, s.top, m.z + oz], yaw, [
+      sign(`billboard-${i}-face`, [0, 4.7, 0.13], 0, text, 7, 3, colors),
+      boxNode(`billboard-${i}-back`, [0, 4.7, 0], [7.3, 3.3, 0.2], "metal"),
+      boxNode(`billboard-${i}-leg`, [0, 1.55, -0.1], [0.4, 3.1, 0.3], "metal"),
+    ], { kind: "billboard" }));
+  });
+  // 3. Tower banners on the face toward the centre.
+  const BANNER: Array<[string, boolean, [string, string, string]]> = [
+    ["HODL", true, ["#b0124f", "#fff4d6", "#f2c14e"]],
+    ["FEW UNDERSTAND", false, ["#16161d", "#f2c14e", "#f2c14e"]],
+    ["NGMI", true, ["#ffffff", "#e5484d", "#e5484d"]],
+    ["PROBABLY NOTHING", false, ["#6ec6ff", "#16161d", "#16161d"]],
+    ["LFG", true, ["#7cdb6a", "#16161d", "#16161d"]],
+    ["NOT FINANCIAL ADVICE", false, ["#fff4d6", "#1c2a6b", "#1c2a6b"]],
+  ];
+  model.solids.filter(s => s.kind === "tower").slice(0, BANNER.length).forEach((t, i) => {
+    const [text, vertical, colors] = BANNER[i];
+    const tx = (t.x0 + t.x1) / 2, tz = (t.z0 + t.z1) / 2;
+    const dx = cx - tx, dz = cz - tz;
+    const alongX = Math.abs(dx) > Math.abs(dz);
+    const nx = alongX ? Math.sign(dx) : 0, nz = alongX ? 0 : Math.sign(dz || 1);
+    const px = alongX ? (nx > 0 ? t.x1 : t.x0) + nx * 0.08 : tx;
+    const pz = alongX ? tz : (nz > 0 ? t.z1 : t.z0) + nz * 0.08;
+    const w = vertical ? 3.2 : 10.5, h = vertical ? 13 : 2.8;
+    nodes.push(sign(`banner-${i}`, [px, t.top - (vertical ? 9 : 5), pz], Math.atan2(nx, nz), text, w, h, colors));
+  });
+  // 4. AC units and antennas on the remaining picked roofs.
+  picked.slice(5).forEach((s, i) => {
+    if (i < 5) nodes.push(boxNode(`ac-${i}`, [r2(s.x0 + 2.2), r2(s.top + 0.6), r2(s.z1 - 2.2)], [1.6, 1.2, 1.2], "metal", { kind: "ac" }));
+    if (i % 2 === 0 && i < 8) nodes.push(boxNode(`antenna-${i}`, [r2(s.x1 - 1.5), r2(s.top + 2.5), r2(s.z0 + 1.5)], [0.15, 5, 0.15], "metal", { kind: "antenna" }));
+  });
   return {
     id: "decor",
     name: "Rug Run decor",
     materials: {
       metal: { color: "#9aa3ad", roughness: 0.7, metalness: 0 },
-      billboard: { color: "#f2c14e", roughness: 0.9, metalness: 0 },
       stand: { color: "#e86a92", roughness: 0.9, metalness: 0 },
+      balloonA: { color: "#ff5a7a", roughness: 0.4, metalness: 0 },
+      balloonB: { color: "#ffd23f", roughness: 0.4, metalness: 0 },
     },
     root: { id: "decor-root", children: nodes },
   };

@@ -22,7 +22,8 @@
     "probe:canyon": "node tools/probe-canyon.ts",
     "trace:proto": "node test/fixtures/proto/dump-trace.ts",
     "shot": "node tools/shot.ts",
-    "botshot": "node tools/botshot.ts"
+    "botshot": "node tools/botshot.ts",
+    "assets": "node tools/assets.ts"
   },
   "dependencies": {
     "@pixiv/three-vrm": "3.5.5",
@@ -36,6 +37,10 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "4.5.0",
+    "@gltf-transform/core": "4.5.0",
+    "@gltf-transform/extensions": "4.5.0",
+    "@gltf-transform/functions": "4.5.0",
     "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

@@ -19,13 +19,19 @@ export const S = {
   go: "GO!",
   loading: "LOADING",
   paused: "PAUSED",
-  credits: "Radbro #652, #4764 and #2564 · by dexedrne · built on react-three-game by prnth",
+  credits: "Radbro #652, #4764 and #2564 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
 export const TAUNTS: Record<RadbroId, string[]> = {
-  "652": ["too slow, ser", "watch and learn", "catch me if u can", "main character energy"],
-  "4764": ["cope", "ngmi", "have fun staying poor", "skill issue"],
-  "2564": ["they're watching", "can't catch a ghost", "the balloons are listening", "you're being followed"],
+  "652": ["too slow, ser", "watch and learn", "catch me if u can", "main character energy", "clip that", "wagmi (not you)"],
+  "4764": ["cope", "ngmi", "have fun staying poor", "skill issue", "sir this is my bag", "buying the dip on you"],
+  "2564": ["they're watching", "can't catch a ghost", "the balloons are listening", "you're being followed", "who sent you", "rad response team, stand down"],
+};
+
+/** Per-character one-liners for the catch / escape beats (#652 showboat, #4764 smug, #2564 paranoid ghost). */
+export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
+  caught: { "652": "ok ok, good content", "4764": "this changes nothing", "2564": "how did you see me" },
+  escaped: { "652": "gm, bagholder", "4764": "few understand", "2564": "i was never here" },
 };
 
 export const PERSONA: Record<RadbroId, string> = {

@@ -28,6 +28,14 @@ export async function loadVrm(url: string): Promise<LoadedVrm> {
   const response = await fetch(url, { mode: "cors" });
   if (!response.ok) throw new Error(`VRM fetch ${response.status} for ${url}`);
   const buffer = await response.arrayBuffer();
+  const out = await parseVrm(buffer, url);
+  out.ms = Math.round(performance.now() - t0);
+  return out;
+}
+
+/** Parse an already-fetched .vrm (the Milady cameo fetches first, parses only outside the chase). */
+export async function parseVrm(buffer: ArrayBuffer, url: string): Promise<LoadedVrm> {
+  const t0 = performance.now();
   const base = url.slice(0, url.lastIndexOf("/") + 1);
   const gltf = await vrmLoader().parseAsync(buffer, base);
   const vrm = gltf.userData.vrm as VRM | undefined;

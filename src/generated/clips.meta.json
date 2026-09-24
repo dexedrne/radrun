@@ -1,0 +1,1226 @@
+{
+ "652": {
+  "clipPack": true,
+  "clips": {
+   "Casual_Walk": {
+    "duration": 4.167,
+    "hips": {
+     "start": [
+      0.006,
+      0.592,
+      -0.008
+     ],
+     "min": [
+      0.006,
+      0.583,
+      -0.017
+     ],
+     "max": [
+      0.045,
+      0.599,
+      -0.006
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Lean_Forward_Sprint": {
+    "duration": 0.583,
+    "hips": {
+     "start": [
+      -0.011,
+      0.496,
+      0.004
+     ],
+     "min": [
+      -0.011,
+      0.485,
+      0.004
+     ],
+     "max": [
+      0.013,
+      0.545,
+      1.726
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Regular_Jump": {
+    "duration": 1.875,
+    "hips": {
+     "start": [
+      -0.007,
+      0.534,
+      -0.011
+     ],
+     "min": [
+      -0.045,
+      0.361,
+      -0.04
+     ],
+     "max": [
+      0.02,
+      0.87,
+      0.02
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Run_02": {
+    "duration": 0.708,
+    "hips": {
+     "start": [
+      0.007,
+      0.535,
+      -0.003
+     ],
+     "min": [
+      -0.005,
+      0.492,
+      -0.004
+     ],
+     "max": [
+      0.023,
+      0.551,
+      0.003
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Big_Wave_Hello": {
+    "duration": 5.333,
+    "hips": {
+     "start": [
+      0.195,
+      0.603,
+      -0.159
+     ],
+     "min": [
+      0.126,
+      0.576,
+      -0.215
+     ],
+     "max": [
+      0.298,
+      0.629,
+      -0.145
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fall_1": {
+    "duration": 4.5,
+    "hips": {
+     "start": [
+      0.011,
+      0.658,
+      -0.03
+     ],
+     "min": [
+      -0.013,
+      0.653,
+      -0.049
+     ],
+     "max": [
+      0.015,
+      0.662,
+      -0.009
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Falling_Down": {
+    "duration": 2.267,
+    "hips": {
+     "start": [
+      0.003,
+      0.554,
+      -0.004
+     ],
+     "min": [
+      -0.328,
+      0.031,
+      -0.523
+     ],
+     "max": [
+      0.013,
+      0.554,
+      -0.004
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Grab_Bar_and_Swing_Forward": {
+    "duration": 2.467,
+    "hips": {
+     "start": [
+      0.006,
+      0.521,
+      -0.006
+     ],
+     "min": [
+      0.002,
+      0.443,
+      -0.006
+     ],
+     "max": [
+      0.046,
+      1.084,
+      3.373
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Idle": {
+    "duration": 4,
+    "hips": {
+     "start": [
+      0.013,
+      0.515,
+      0.005
+     ],
+     "min": [
+      -0.008,
+      0.498,
+      0
+     ],
+     "max": [
+      0.013,
+      0.522,
+      0.01
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Leap_of_Faith": {
+    "duration": 5.4,
+    "hips": {
+     "start": [
+      -0.002,
+      14.782,
+      -0.008
+     ],
+     "min": [
+      -0.056,
+      0.723,
+      -0.31
+     ],
+     "max": [
+      0.101,
+      17.483,
+      9.786
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Roll_Dodge": {
+    "duration": 1.833,
+    "hips": {
+     "start": [
+      -0.005,
+      0.588,
+      -0.009
+     ],
+     "min": [
+      -0.007,
+      0.108,
+      -0.015
+     ],
+     "max": [
+      0.234,
+      0.588,
+      2.13
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Rope_Hang_Idle": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      0.004,
+      0.727,
+      0.026
+     ],
+     "min": [
+      -0.004,
+      0.722,
+      0.023
+     ],
+     "max": [
+      0.008,
+      0.729,
+      0.028
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    },
+    "handHeight": 1.258
+   },
+   "Run_and_Jump": {
+    "duration": 2.333,
+    "hips": {
+     "start": [
+      0.009,
+      0.529,
+      -0.012
+     ],
+     "min": [
+      -0.043,
+      0.077,
+      -0.012
+     ],
+     "max": [
+      0.104,
+      0.979,
+      3.632
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    },
+    "takeoffAt": 0.6,
+    "landAt": 1.633
+   },
+   "Victory_Cheer": {
+    "duration": 9.333,
+    "hips": {
+     "start": [
+      0.037,
+      0.601,
+      -0.007
+     ],
+     "min": [
+      -0.029,
+      0.558,
+      -0.047
+     ],
+     "max": [
+      0.097,
+      0.654,
+      0.1
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fishing_Cast": {
+    "duration": 5.958,
+    "hips": {
+     "start": [
+      0.009,
+      0.554,
+      0.017
+     ],
+     "min": [
+      -0.17,
+      0.486,
+      0.017
+     ],
+     "max": [
+      0.01,
+      0.568,
+      0.149
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Waltz": {
+    "duration": 7.958,
+    "hips": {
+     "start": [
+      -0.011,
+      0.539,
+      0.022
+     ],
+     "min": [
+      -0.035,
+      0.477,
+      -0.009
+     ],
+     "max": [
+      0.937,
+      0.567,
+      0.925
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   }
+  }
+ },
+ "2564": {
+  "clipPack": true,
+  "clips": {
+   "Casual_Walk": {
+    "duration": 4.167,
+    "hips": {
+     "start": [
+      0.004,
+      0.715,
+      -0.008
+     ],
+     "min": [
+      0.001,
+      0.704,
+      -0.023
+     ],
+     "max": [
+      0.056,
+      0.729,
+      -0.007
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Lean_Forward_Sprint": {
+    "duration": 0.583,
+    "hips": {
+     "start": [
+      -0.015,
+      0.614,
+      -0.004
+     ],
+     "min": [
+      -0.015,
+      0.597,
+      -0.004
+     ],
+     "max": [
+      0.01,
+      0.667,
+      2.095
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Regular_Jump": {
+    "duration": 1.875,
+    "hips": {
+     "start": [
+      -0.016,
+      0.652,
+      -0.01
+     ],
+     "min": [
+      -0.062,
+      0.444,
+      -0.065
+     ],
+     "max": [
+      0.024,
+      1.085,
+      0.022
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Run_02": {
+    "duration": 0.708,
+    "hips": {
+     "start": [
+      0.005,
+      0.655,
+      -0.001
+     ],
+     "min": [
+      -0.009,
+      0.61,
+      -0.013
+     ],
+     "max": [
+      0.023,
+      0.673,
+      0.002
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Big_Wave_Hello": {
+    "duration": 5.333,
+    "hips": {
+     "start": [
+      0.235,
+      0.729,
+      -0.195
+     ],
+     "min": [
+      0.135,
+      0.713,
+      -0.244
+     ],
+     "max": [
+      0.354,
+      0.77,
+      -0.176
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fall_1": {
+    "duration": 4.5,
+    "hips": {
+     "start": [
+      0.01,
+      0.78,
+      -0.017
+     ],
+     "min": [
+      -0.016,
+      0.775,
+      -0.039
+     ],
+     "max": [
+      0.018,
+      0.785,
+      0.003
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Falling_Down": {
+    "duration": 2.267,
+    "hips": {
+     "start": [
+      0,
+      0.673,
+      -0.002
+     ],
+     "min": [
+      -0.438,
+      0.045,
+      -0.655
+     ],
+     "max": [
+      0.012,
+      0.673,
+      -0.002
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Grab_Bar_and_Swing_Forward": {
+    "duration": 2.467,
+    "hips": {
+     "start": [
+      0.003,
+      0.632,
+      -0.007
+     ],
+     "min": [
+      0.002,
+      0.532,
+      -0.007
+     ],
+     "max": [
+      0.047,
+      1.344,
+      4.103
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Idle": {
+    "duration": 4,
+    "hips": {
+     "start": [
+      0.008,
+      0.625,
+      0.005
+     ],
+     "min": [
+      -0.014,
+      0.61,
+      -0.002
+     ],
+     "max": [
+      0.009,
+      0.63,
+      0.012
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Leap_of_Faith": {
+    "duration": 5.4,
+    "hips": {
+     "start": [
+      -0.002,
+      17.979,
+      -0.005
+     ],
+     "min": [
+      -0.073,
+      0.91,
+      -0.371
+     ],
+     "max": [
+      0.118,
+      21.245,
+      11.881
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Roll_Dodge": {
+    "duration": 1.833,
+    "hips": {
+     "start": [
+      -0.011,
+      0.714,
+      -0.012
+     ],
+     "min": [
+      -0.011,
+      0.13,
+      -0.018
+     ],
+     "max": [
+      0.283,
+      0.714,
+      2.601
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Rope_Hang_Idle": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      0.007,
+      0.9,
+      0.041
+     ],
+     "min": [
+      -0.004,
+      0.896,
+      0.039
+     ],
+     "max": [
+      0.012,
+      0.902,
+      0.044
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    },
+    "handHeight": 1.437
+   },
+   "Run_and_Jump": {
+    "duration": 2.333,
+    "hips": {
+     "start": [
+      0.007,
+      0.642,
+      -0.006
+     ],
+     "min": [
+      -0.039,
+      0.101,
+      -0.006
+     ],
+     "max": [
+      0.141,
+      1.159,
+      4.383
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    },
+    "takeoffAt": 0.567,
+    "landAt": 1.6
+   },
+   "Victory_Cheer": {
+    "duration": 9.333,
+    "hips": {
+     "start": [
+      0.043,
+      0.728,
+      -0.006
+     ],
+     "min": [
+      -0.036,
+      0.684,
+      -0.031
+     ],
+     "max": [
+      0.116,
+      0.826,
+      0.14
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fishing_Cast": {
+    "duration": 5.967,
+    "hips": {
+     "start": [
+      -0.009,
+      0.676,
+      0.032
+     ],
+     "min": [
+      -0.023,
+      0.627,
+      0.032
+     ],
+     "max": [
+      0.094,
+      0.679,
+      0.135
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Waltz": {
+    "duration": 7.967,
+    "hips": {
+     "start": [
+      0.004,
+      0.646,
+      0.018
+     ],
+     "min": [
+      0.001,
+      0.582,
+      -0.03
+     ],
+     "max": [
+      1.134,
+      0.674,
+      1.172
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   }
+  }
+ },
+ "4764": {
+  "clipPack": true,
+  "clips": {
+   "Casual_Walk": {
+    "duration": 4.167,
+    "hips": {
+     "start": [
+      0.016,
+      0.56,
+      0.036
+     ],
+     "min": [
+      0.016,
+      0.553,
+      0.026
+     ],
+     "max": [
+      0.051,
+      0.567,
+      0.038
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Lean_Forward_Sprint": {
+    "duration": 0.583,
+    "hips": {
+     "start": [
+      -0.005,
+      0.461,
+      0.04
+     ],
+     "min": [
+      -0.005,
+      0.452,
+      0.04
+     ],
+     "max": [
+      0.026,
+      0.512,
+      1.705
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Regular_Jump": {
+    "duration": 1.875,
+    "hips": {
+     "start": [
+      -0.03,
+      0.504,
+      0.031
+     ],
+     "min": [
+      -0.061,
+      0.328,
+      -0.012
+     ],
+     "max": [
+      -0.007,
+      0.838,
+      0.059
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Run_02": {
+    "duration": 0.708,
+    "hips": {
+     "start": [
+      0.024,
+      0.496,
+      0.032
+     ],
+     "min": [
+      0.011,
+      0.453,
+      0.03
+     ],
+     "max": [
+      0.035,
+      0.513,
+      0.038
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Big_Wave_Hello": {
+    "duration": 5.333,
+    "hips": {
+     "start": [
+      0.19,
+      0.569,
+      -0.105
+     ],
+     "min": [
+      0.131,
+      0.543,
+      -0.158
+     ],
+     "max": [
+      0.294,
+      0.598,
+      -0.094
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fall_1": {
+    "duration": 4.5,
+    "hips": {
+     "start": [
+      0.027,
+      0.587,
+      -0.012
+     ],
+     "min": [
+      -0.009,
+      0.583,
+      -0.033
+     ],
+     "max": [
+      0.031,
+      0.591,
+      0.009
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Falling_Down": {
+    "duration": 2.267,
+    "hips": {
+     "start": [
+      0.008,
+      0.525,
+      0.047
+     ],
+     "min": [
+      -0.296,
+      0.068,
+      -0.515
+     ],
+     "max": [
+      0.017,
+      0.525,
+      0.047
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Grab_Bar_and_Swing_Forward": {
+    "duration": 2.467,
+    "hips": {
+     "start": [
+      0.018,
+      0.483,
+      0.044
+     ],
+     "min": [
+      0.004,
+      0.42,
+      0.044
+     ],
+     "max": [
+      0.055,
+      1.077,
+      3.255
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Idle": {
+    "duration": 4,
+    "hips": {
+     "start": [
+      -0.018,
+      0.486,
+      0.053
+     ],
+     "min": [
+      -0.059,
+      0.474,
+      0.023
+     ],
+     "max": [
+      0.023,
+      0.497,
+      0.061
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Leap_of_Faith": {
+    "duration": 5.4,
+    "hips": {
+     "start": [
+      0.021,
+      14.05,
+      0.036
+     ],
+     "min": [
+      -0.04,
+      0.674,
+      -0.27
+     ],
+     "max": [
+      0.102,
+      16.641,
+      9.28
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
+   },
+   "Roll_Dodge": {
+    "duration": 1.833,
+    "hips": {
+     "start": [
+      0.038,
+      0.556,
+      0.015
+     ],
+     "min": [
+      0.028,
+      0.132,
+      0.015
+     ],
+     "max": [
+      0.268,
+      0.556,
+      2.031
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Rope_Hang_Idle": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      0.015,
+      0.702,
+      0.066
+     ],
+     "min": [
+      0.007,
+      0.699,
+      0.064
+     ],
+     "max": [
+      0.019,
+      0.704,
+      0.068
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    },
+    "handHeight": 1.241
+   },
+   "Run_and_Jump": {
+    "duration": 2.333,
+    "hips": {
+     "start": [
+      0.016,
+      0.489,
+      0.036
+     ],
+     "min": [
+      -0.026,
+      0.109,
+      0.036
+     ],
+     "max": [
+      0.128,
+      0.906,
+      3.499
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    },
+    "takeoffAt": 0.6,
+    "landAt": 1.6
+   },
+   "Victory_Cheer": {
+    "duration": 9.333,
+    "hips": {
+     "start": [
+      0.044,
+      0.567,
+      0.038
+     ],
+     "min": [
+      -0.009,
+      0.525,
+      -0.005
+     ],
+     "max": [
+      0.095,
+      0.622,
+      0.138
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Fishing_Cast": {
+    "duration": 5.958,
+    "hips": {
+     "start": [
+      0.019,
+      0.526,
+      0.066
+     ],
+     "min": [
+      -0.163,
+      0.457,
+      0.066
+     ],
+     "max": [
+      0.019,
+      0.54,
+      0.199
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Waltz": {
+    "duration": 7.958,
+    "hips": {
+     "start": [
+      -0.002,
+      0.511,
+      0.071
+     ],
+     "min": [
+      -0.027,
+      0.448,
+      0.039
+     ],
+     "max": [
+      0.96,
+      0.54,
+      0.987
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   }
+  }
+ }
+}

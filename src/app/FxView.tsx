@@ -47,7 +47,7 @@ function useBalloons(game: ViewGame) {
   }, [game]);
 }
 
-export function FxView({ game, hidePlayer }: { game: ViewGame; hidePlayer?: () => boolean }) {
+export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean }) {
   const { balloons, strings } = useBalloons(game);
   const ring = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
@@ -77,13 +77,13 @@ export function FxView({ game, hidePlayer }: { game: ViewGame; hidePlayer?: () =
         rm.scale.set(s, s, s);
       }
     }
-    // Rope from the body point (the sim's attach point) to the hook knot.
+    // Rope to the hook knot from the character's RightHand (ropeFrom), else from the body point.
     const ro = rope.current;
     if (ro) {
       ro.visible = b.ropeHook >= 0 && !hide;
       if (ro.visible) {
         const h = hooks[b.ropeHook];
-        tmp.a.set(p.x, p.y + 0.25, p.z);
+        if (!ropeFrom?.(tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
         const len = tmp.a.distanceTo(tmp.b);
         ro.position.copy(tmp.a).add(tmp.b).multiplyScalar(0.5);

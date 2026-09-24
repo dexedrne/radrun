@@ -1,5 +1,6 @@
 // Small zustand UI store. The drivers push HUD numbers at 10 Hz so the canvas tree never re-renders.
 import { create } from "zustand";
+import type { RadbroId } from "../game/round.ts";
 
 export type Hud = {
   speed: number;
@@ -63,6 +64,10 @@ export type UiState = {
   /** Runner speech bubble. */
   bubble: { text: string; t: number } | null;
   fade: number;
+  /** The round's two Radbros once LOADING resolved (ActorsView mounts these). */
+  pair: { chaser: RadbroId; runner: RadbroId } | null;
+  /** LOADING progress 0..1 and the failed asset, if any. */
+  load: { progress: number; error: string | null };
 };
 
 export const useUi = create<UiState>(() => ({
@@ -79,6 +84,8 @@ export const useUi = create<UiState>(() => ({
   banner: null,
   bubble: null,
   fade: 0,
+  pair: null,
+  load: { progress: 0, error: null },
 }));
 
 let feedId = 0;

@@ -10,6 +10,7 @@ import { SimDriver } from "./SimDriver.tsx";
 import { PlayerView } from "./PlayerView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
+import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
 
 export const SKY = "#9fc3e6";
 
@@ -92,10 +93,13 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
 }
 
 /** The one canvas + PrefabRoot. Mounted once per page; children are the runtime systems. */
+const FORCE_WEBGL = new URLSearchParams(location.search).has("webgl2");
+
 export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: React.ReactNode }) {
   return (
     <GameCanvas
       flat
+      glConfig={FORCE_WEBGL ? { forceWebGL: true } : undefined}
       onCreated={s => {
         const be = (s.gl as unknown as { backend?: { isWebGPUBackend?: boolean; isWebGLBackend?: boolean } }).backend;
         const name = be?.isWebGPUBackend ? "WebGPU" : be?.isWebGLBackend ? "WebGL2" : "unknown";
