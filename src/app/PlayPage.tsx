@@ -12,6 +12,8 @@ import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
 import { applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
 import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
+import { CampaignScreen } from "../ui/campaignScreen.tsx";
+import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaign.ts";
 import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
 import { GhostView } from "./GhostView.tsx";
 import { S } from "../ui/strings.ts";
@@ -31,13 +33,15 @@ import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/en
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
 import { NightLook } from "./cityLook.tsx";
-import { PAGE_DISTRICT } from "./district.ts";
+import { PAGE_DISTRICT, gotoDistrict } from "./district.ts";
 
 const DEV = import.meta.env.MODE !== "production";
 const TunePanel = DEV ? lazy(() => import("./dev/TunePanel.tsx")) : null;
 const params = new URLSearchParams(location.search);
 const TUNE = DEV && params.has("tune");
 const BOT = DEV ? botParams(location.search) : null;
+/** ?lvl=N: open the campaign screen on level N (a campaign level in another district navigates here). */
+const LVL = Number(params.get("lvl") ?? 0) | 0;
 
 const canvasEl = () => document.querySelector("canvas");
 
@@ -45,7 +49,7 @@ const canvasEl = () => document.querySelector("canvas");
 export type GhostChoice = { spec: GhostSpec; info: GhostInfo };
 
 /** Replay the ghost headless (its own Round, no countdown; ~10-20 ms for a 90 s run) and judge the claim. */
-function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"]): GhostChoice {
+function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"], older = false): GhostChoice {
   const run = game.makeGhostRun(spec, false);
   run.advance(spec.log.n + 1);
   const r = run.round, caught = r.phase === "caught";
@@ -53,15 +57,16 @@ function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"
     spec,
     info: {
       chaser: spec.chaser, status: run.verifies(spec.claimed) ? "verified" : "unverified", claimed: spec.claimed,
-      time: caught ? r.stats.catchTime : null, kind: caught ? r.stats.catchKind : "", source,
+      time: caught ? r.stats.catchTime : null, kind: caught ? r.stats.catchKind : "", source, older,
     },
   };
 }
 
-async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["source"]): Promise<GhostChoice | null> {
+/** `older`: a link from before versioned links (v < 2) - it is replayed as Downtown with no mutators. */
+async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["source"], older = false): Promise<GhostChoice | null> {
   const dec = await unpackGhost(g.g);
   if (!dec) return null;
-  return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags }, source);
+  return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older);
 }
 const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx); setMuted(s.muted); setAudioLow(s.quality === "low"); };
 /** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */
@@ -130,6 +135,9 @@ export default function PlayPage() {
   const [linkGhostBusy, setLinkGhostBusy] = useState(false);
   const ghostActive = !!linkGhost && linkGhost.spec.chaser === chaser && linkGhost.spec.difficulty === difficulty;
   const [bestGhost, setBestGhost] = useState<StoredGhost | null>(null);
+  /** Round 4: campaign progress (re-read on every title / campaign screen) and the free-play mutators. */
+  const [progress, setProgress] = useState<Progress>(() => loadProgress());
+  const [freeMut, setFreeMut] = useState<number>(() => challenge.mu || DISTRICT_MUTATORS[PAGE_DISTRICT]);
 
   // Touch: switch on at the first touch anywhere; that tap (and PLAY) also asks for fullscreen +
   // landscape. The game picks up the wider aim cone / Yoink bonus from the next round.
@@ -156,16 +164,17 @@ export default function PlayPage() {
   // A ghost link: decode + verify once the game exists (the replay needs the city and the pack).
   useEffect(() => {
     if (!game || BOT) return;
-    const { c, r, d, s, t, g } = challenge;
+    const { c, r, d, s, t, g, mu, v } = challenge;
     if (!c || !r || !d || s === null || t === null || !g) return;
     setLinkGhostBusy(true);
-    void decodeGhost(game, { c, r, d, s, t, g }, "link").then(ch => { setLinkGhost(ch); setLinkGhostBusy(false); });
+    void decodeGhost(game, { c, r, d, s, t, g, mu }, "link", v < 2).then(ch => { setLinkGhost(ch); setLinkGhostBusy(false); });
   }, [game, challenge]);
 
   // Your kept best run for the picked chaser x difficulty (title: "race your best").
   useEffect(() => {
-    if (screen === "title" || screen === "boot") setBestGhost(getBestGhost(chaser, difficulty));
-  }, [chaser, difficulty, screen]);
+    if (screen === "title" || screen === "boot") setBestGhost(getBestGhost(chaser, difficulty, freeMut));
+    if (screen === "title" || screen === "campaign") setProgress(loadProgress());
+  }, [chaser, difficulty, screen, freeMut]);
 
   // Scene ready -> title (or straight into the bot round, through LOADING).
   useEffect(() => {
@@ -173,12 +182,15 @@ export default function PlayPage() {
     if (BOT) {
       void loadPair(BOT.c, BOT.r).then(ok => {
         if (!ok) return;
+        // &lvl=N on a bot page: score the round as campaign level N (pass the level's d / mu too).
+        if (LVL >= 1 && LVL <= LEVELS.length) useUi.setState({ campaign: { n: LVL } });
         // No gesture on a bot page: the context starts suspended and resumes at the first click / key.
         unlockAudio();
         startBot(game, BOT);
         useUi.setState({ screen: "countdown", results: null });
       });
-    } else useUi.setState({ screen: "title" });
+    } else if (LVL >= 1 && LVL <= LEVELS.length) useUi.setState({ screen: "campaign", campaignSel: LVL });
+    else useUi.setState({ screen: "title" });
   }, [game, ready, screen]);
 
   const setPaused = useCallback((p: boolean) => {
@@ -187,21 +199,24 @@ export default function PlayPage() {
     useUi.setState({ paused: p });
   }, [game]);
 
-  /** Start a round (a ghost race: its exact round - seed, pair, difficulty - with the ghost beside you). */
-  const begin = useCallback((seed: number, practice = false, ghost: GhostChoice | null = null) => {
+  /**
+   * Start a round (a ghost race: its exact round - seed, pair, difficulty, mutators - with the ghost
+   * beside you; a campaign level: its difficulty and mutators, scored against its objectives).
+   */
+  const begin = useCallback((seed: number, practice = false, ghost: GhostChoice | null = null, level: Level | null = null) => {
     if (!game) return;
-    const runner = ghost ? ghost.spec.runner : pickRunner(chaser, challenge.r);
-    const ch = ghost ? ghost.spec.chaser : chaser, d = ghost ? ghost.spec.difficulty : difficulty;
-    useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
+    const runner = ghost ? ghost.spec.runner : pickRunner(chaser, level ? null : challenge.r);
+    const ch = ghost ? ghost.spec.chaser : chaser, d = ghost ? ghost.spec.difficulty : level ? level.difficulty : difficulty;
+    useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false, campaign: level ? { n: level.n } : null });
     void loadPair(ch, runner).then(ok => {
       if (!ok) return;
       game.paused = false;
-      const mutators = ghost ? ghost.spec.mutators ?? 0 : DISTRICT_MUTATORS[PAGE_DISTRICT];
+      const mutators = ghost ? ghost.spec.mutators ?? 0 : level ? level.mutators : freeMut;
       game.startRound({ chaser: ch, runner, difficulty: d, seed: ghost ? ghost.spec.seed : seed, mutators }, practice, ghost?.spec ?? null);
       useUi.setState({ screen: practice ? "practice" : "countdown", ghost: ghost ? ghost.info : null });
       lockMouse();
     });
-  }, [game, chaser, difficulty, challenge]);
+  }, [game, chaser, difficulty, challenge, freeMut]);
 
   const onPlay = useCallback(() => {
     rememberPicks(chaser, difficulty);
@@ -228,6 +243,26 @@ export default function PlayPage() {
     begin(randomSeed(), true);
   }, [begin, chaser, difficulty]);
 
+  /** A campaign level: in another district that is a navigation (?map=..&lvl=N -> campaign screen). */
+  const startLevel = useCallback((n: number) => {
+    const level = LEVELS[n - 1];
+    if (!level) return;
+    if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
+    rememberPicks(chaser, difficulty);
+    unlockAudio();
+    if (isTouch()) enterFullscreen();
+    else canvasEl()?.requestPointerLock();
+    useUi.setState({ campaignSel: n });
+    begin(randomSeed(), false, null, level);
+  }, [begin, chaser, difficulty]);
+
+  const toLevels = useCallback(() => {
+    if (!game) return;
+    game.toTitle();
+    document.exitPointerLock?.();
+    useUi.setState(s => ({ screen: "campaign", results: null, paused: false, ghost: null, campaignSel: s.campaign?.n ?? s.campaignSel, campaign: null }));
+  }, [game]);
+
   const retry = useCallback(() => {
     if (!game || game.mode !== "round") return;
     useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
@@ -242,7 +277,7 @@ export default function PlayPage() {
     if (!game) return;
     game.toTitle();
     document.exitPointerLock?.();
-    useUi.setState({ screen: "title", results: null, paused: false, ghost: null });
+    useUi.setState({ screen: "title", results: null, paused: false, ghost: null, campaign: null });
   }, [game]);
 
   // Input + pointer lock + keys.
@@ -339,12 +374,14 @@ export default function PlayPage() {
       {(screen === "boot" || screen === "title") && (
         <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready}
           muted={settings.muted} onMute={toggleMute} ghost={linkGhost} ghostBusy={linkGhostBusy} ghostActive={ghostActive}
-          bestGhost={ghostActive ? null : bestGhost} onRaceBest={onRaceBest} />
+          bestGhost={ghostActive ? null : bestGhost} onRaceBest={onRaceBest}
+          progress={progress} freeMut={freeMut} setFreeMut={setFreeMut} onCampaign={() => useUi.setState({ screen: "campaign" })} />
       )}
+      {screen === "campaign" && <CampaignScreen onStart={startLevel} onBack={() => useUi.setState({ screen: "title" })} ready={ready} />}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}
       {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
-      {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
+      {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} onNext={startLevel} onLevels={toLevels} />}
       <Toast />
       {paused && inRound && (
         <Pause

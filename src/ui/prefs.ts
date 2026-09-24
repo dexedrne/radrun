@@ -18,7 +18,8 @@ type Stored = {
 };
 
 /** A kept run: the round (chaser, runner, difficulty, seed), its catch time and the packed record. */
-export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; t: number; g: string };
+/** mu = the round's mutator bits (round 4; missing = 0). */
+export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; t: number; g: string; mu?: number };
 
 /** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
 export type Quality = "low" | "high";
@@ -101,16 +102,17 @@ export function resetHintsSeen(): void {
 }
 
 /** Best-time / kept-ghost key: Downtown keeps the original `chaser:difficulty`; other districts add `:map`. */
-export const bestKey = (chaser: string, d: string): string => (PAGE_DISTRICT === "downtown" ? `${chaser}:${d}` : `${chaser}:${d}:${PAGE_DISTRICT}`);
+export const bestKey = (chaser: string, d: string, mu = 0): string =>
+  (PAGE_DISTRICT === "downtown" ? `${chaser}:${d}` : `${chaser}:${d}:${PAGE_DISTRICT}`) + (mu ? `:m${mu}` : "");
 
-export function getBest(chaser: string, d: string): number | null {
-  const b = load().bests?.[bestKey(chaser, d)];
+export function getBest(chaser: string, d: string, mu = 0): number | null {
+  const b = load().bests?.[bestKey(chaser, d, mu)];
   return typeof b === "number" ? b : null;
 }
 /** Records a catch time; returns the previous best (null if none). */
-export function recordBest(chaser: string, d: string, t: number): number | null {
+export function recordBest(chaser: string, d: string, t: number, mu = 0): number | null {
   const s = load();
-  const key = bestKey(chaser, d);
+  const key = bestKey(chaser, d, mu);
   const prev = s.bests?.[key] ?? null;
   if (prev === null || t < prev) {
     s.bests = { ...(s.bests ?? {}), [key]: t };
@@ -132,8 +134,11 @@ export function rememberPicks(chaser: RadbroId, difficulty: Difficulty): void {
   save(s);
 }
 
-/** s = the round seed and g = the packed ghost (both only in ghost links). */
-export type Challenge = { c: RadbroId | null; r: RadbroId | null; d: Difficulty | null; t: number | null; s: number | null; g: string | null };
+/**
+ * s = the round seed and g = the packed ghost (both only in ghost links); v = link version (1 = no v);
+ * mu = mutator bits (round 4; v1 links: 0).
+ */
+export type Challenge = { c: RadbroId | null; r: RadbroId | null; d: Difficulty | null; t: number | null; s: number | null; g: string | null; v: number; mu: number };
 
 /**
  * ?c=<chaser>&r=<runner>&d=<chill|normal|degen>&t=<seconds>[&s=<seed>&g=<ghost>]; invalid fields are
@@ -153,7 +158,11 @@ export function readChallenge(search: string): Challenge {
   const s = /^\d{1,10}$/.test(sv) && Number(sv) <= 0xffffffff ? Number(sv) : null;
   const gv = q.get("g") ?? "";
   const g = /^[A-Za-z0-9_-]{8,60000}$/.test(gv) ? gv : null;
-  return { c, r, d, t, s, g };
+  const vv = Number(q.get("v"));
+  const v = q.has("v") && Number.isInteger(vv) && vv > 0 ? vv : 1;
+  const mv = Number(q.get("mu"));
+  const mu = q.has("mu") && Number.isInteger(mv) && mv >= 0 ? mv & 127 : 0;
+  return { c, r, d, t, s, g, v, mu };
 }
 
 /**
@@ -163,30 +172,32 @@ export function readChallenge(search: string): Challenge {
 export const LINK_VERSION = 2;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
-export function challengeUrl(chaser: string, runner: string, d: string, t: number): string {
+const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");
+
+export function challengeUrl(chaser: string, runner: string, d: string, t: number, mu = 0): string {
   const u = new URL(location.href);
-  u.search = `?v=${LINK_VERSION}${mapParam()}&c=${chaser}&r=${runner}&d=${d}&t=${t.toFixed(1)}`;
+  u.search = `?v=${LINK_VERSION}${mapParam()}${muParam(mu)}&c=${chaser}&r=${runner}&d=${d}&t=${t.toFixed(1)}`;
   u.hash = "";
   return u.toString();
 }
 
 /** A ghost link: the exact round (seed, pair, difficulty), the claimed time and the packed run. */
-export function ghostUrl(chaser: string, runner: string, d: string, t: number, seed: number, g: string): string {
+export function ghostUrl(chaser: string, runner: string, d: string, t: number, seed: number, g: string, mu = 0): string {
   const u = new URL(location.href);
-  u.search = `?v=${LINK_VERSION}${mapParam()}&c=${chaser}&r=${runner}&d=${d}&s=${seed >>> 0}&t=${t.toFixed(1)}&g=${g}`;
+  u.search = `?v=${LINK_VERSION}${mapParam()}${muParam(mu)}&c=${chaser}&r=${runner}&d=${d}&s=${seed >>> 0}&t=${t.toFixed(1)}&g=${g}`;
   u.hash = "";
   return u.toString();
 }
 
 /** Your kept personal-best run for a chaser x difficulty, if any. */
-export function getBestGhost(chaser: string, d: string): StoredGhost | null {
-  const g = load().ghosts?.[bestKey(chaser, d)];
+export function getBestGhost(chaser: string, d: string, mu = 0): StoredGhost | null {
+  const g = load().ghosts?.[bestKey(chaser, d, mu)];
   return g && typeof g.g === "string" && typeof g.s === "number" && typeof g.t === "number" ? g : null;
 }
 /** Keep a run as the personal-best ghost (only if it is still the best for its chaser x difficulty). */
 export function saveBestGhost(g: StoredGhost): void {
   const s = load();
-  const key = bestKey(g.c, g.d);
+  const key = bestKey(g.c, g.d, g.mu ?? 0);
   const best = s.bests?.[key];
   if (typeof best === "number" && g.t > best + 1e-9) return;
   s.ghosts = { ...(s.ghosts ?? {}), [key]: g };

@@ -9,15 +9,18 @@ import type { GhostChoice } from "../app/PlayPage.tsx";
 import { hints } from "./hints.ts";
 import { DISTRICTS, DISTRICT_IDS } from "../world/districts.ts";
 import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
+import { DEGEN_STARS, LEVELS, TOTAL_STARS, degenUnlocked, districtUnlocked, starCount, unlockedMutators, type Progress } from "../game/campaign.ts";
+import { MUTATORS } from "../game/mutators.ts";
+import { CampaignHud, CampaignResult } from "./campaignScreen.tsx";
 
-const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
-const btn = (primary = false): React.CSSProperties => ({
+export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
+export const btn = (primary = false): React.CSSProperties => ({
   font: "700 15px ui-monospace, monospace", padding: "10px 18px", borderRadius: 8, cursor: "pointer", letterSpacing: 1,
   border: primary ? "none" : "1px solid rgba(255,255,255,0.35)", background: primary ? "#ff3d7f" : "rgba(255,255,255,0.08)", color: "#fff",
 });
-const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
+export const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
 /** A full-screen layer that centres its child and scrolls (from the top) when the child is taller. */
-const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties;
+export const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties;
 
 /** Viewport size, re-read on resize / rotation. compact = a short (landscape phone) screen. */
 export function useViewport(): { w: number; h: number; compact: boolean; narrow: boolean; portrait: boolean } {
@@ -86,7 +89,7 @@ function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; activ
     <div style={{ marginTop: 10, display: "inline-block", background: "rgba(20,40,60,0.88)", border: "2px solid #9fe6ff", borderRadius: 8, padding: "6px 14px", fontWeight: 800 }} data-testid="ghost-banner">
       <span style={{ color: "#9fe6ff", letterSpacing: 2, marginRight: 8 }}>{S.ghost} RACE</span>
       #{spec.chaser} {caughtVerb(info.kind)} #{spec.runner} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
-      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}</span>
+      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}{info.status === "unverified" && info.older ? " · made on an older build" : ""}</span>
       <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>
         {active ? "same city, same start, same runner: PLAY races their ghost" : `pick #${spec.chaser} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
       </div>
@@ -98,8 +101,12 @@ export function Title(props: {
   chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
   challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean; muted: boolean; onMute: () => void;
   ghost: GhostChoice | null; ghostBusy: boolean; ghostActive: boolean; bestGhost: StoredGhost | null; onRaceBest: () => void;
+  /** Round 4: campaign progress (locks), the free-play mutators and the CAMPAIGN button. */
+  progress: Progress; freeMut: number; setFreeMut: (m: number) => void; onCampaign: () => void;
 }) {
-  const { chaser, difficulty, challenge } = props;
+  const { chaser, difficulty, challenge, progress } = props;
+  const availMut = unlockedMutators(progress) | props.freeMut;
+  const stars = starCount(progress);
   const touch = useUi(s => s.touch);
   const { compact, narrow } = useViewport();
   const img = compact ? 60 : narrow ? 72 : 124;
@@ -113,6 +120,12 @@ export function Title(props: {
     <button onClick={props.onRaceBest} disabled={!props.ready} title="race the ghost of your best run (same round)"
       style={{ ...btn(false), fontSize: compact ? 12 : 13, padding: compact ? "10px 12px" : "13px 14px", borderColor: "#9fe6ff", opacity: props.ready ? 1 : 0.5 }} data-testid="race-best">
       race your best · {props.bestGhost.t.toFixed(1)} s
+    </button>
+  );
+  const campaignBtn = (
+    <button onClick={props.onCampaign} disabled={!props.ready} title="12 levels across the four districts, 3 stars each"
+      style={{ ...btn(false), fontSize: compact ? 13 : 15, padding: compact ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
+      CAMPAIGN · {stars}/{TOTAL_STARS} ★
     </button>
   );
   const practiceBtn = (
@@ -135,14 +148,19 @@ export function Title(props: {
         )}
         <div style={{ ...panel, marginTop: compact ? 8 : 16, padding: compact ? "8px 12px" : panel.padding }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: compact ? 6 : 10 }} data-testid="districts">
-            {DISTRICT_IDS.map(id => (
-              <button key={id} onClick={() => id !== PAGE_DISTRICT && gotoDistrict(id)} data-testid={`map-${id}`} title={DISTRICTS[id].blurb}
-                style={{ ...btn(false), padding: compact ? "5px 9px" : "7px 12px", fontSize: compact ? 11 : 12,
-                  background: id === PAGE_DISTRICT ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.06)",
-                  borderColor: id === PAGE_DISTRICT ? "#9fe6ff" : "rgba(255,255,255,0.3)" }}>
-                {DISTRICTS[id].name}
-              </button>
-            ))}
+            {DISTRICT_IDS.map(id => {
+              const open = id === PAGE_DISTRICT || districtUnlocked(progress, id);
+              const first = LEVELS.find(l => l.map === id);
+              return (
+                <button key={id} onClick={() => open && id !== PAGE_DISTRICT && gotoDistrict(id)} data-testid={`map-${id}`} disabled={!open}
+                  title={open ? DISTRICTS[id].blurb : `locked: catch him in campaign level ${first?.n} (${first?.name}) to open ${DISTRICTS[id].name} in free play`}
+                  style={{ ...btn(false), padding: compact ? "5px 9px" : "7px 12px", fontSize: compact ? 11 : 12, opacity: open ? 1 : 0.45,
+                    background: id === PAGE_DISTRICT ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.06)",
+                    borderColor: id === PAGE_DISTRICT ? "#9fe6ff" : "rgba(255,255,255,0.3)" }}>
+                  {open ? "" : "🔒 "}{DISTRICTS[id].name}
+                </button>
+              );
+            })}
           </div>
           {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
           <div style={{ fontSize: 12, opacity: 0.8, marginBottom: compact ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
@@ -168,17 +186,36 @@ export function Title(props: {
             ))}
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap", marginTop: compact ? 8 : 14 }}>
-            {DIFFICULTIES.map(d => (
-              <button key={d} onClick={() => props.setDifficulty(d)} data-testid={`diff-${d}`} style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
-                {DIFF_LABEL[d]}
-              </button>
-            ))}
+            {DIFFICULTIES.map(d => {
+              const open = d !== "degen" || degenUnlocked(progress) || d === difficulty;
+              return (
+                <button key={d} onClick={() => open && props.setDifficulty(d)} data-testid={`diff-${d}`} disabled={!open} title={open ? undefined : `locked: earn ${DEGEN_STARS} campaign stars (${stars} so far)`}
+                  style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", opacity: open ? 1 : 0.45, background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
+                  {open ? "" : "🔒 "}{DIFF_LABEL[d]}
+                </button>
+              );
+            })}
             {compact && playBtn}
+            {compact && campaignBtn}
             {compact && practiceBtn}
             {compact && bestBtn}
           </div>
           {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>{playBtn}{practiceBtn}{bestBtn}</div>}
+          {availMut !== 0 && (
+            <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: compact ? 6 : 10 }} data-testid="mutators">
+              <span style={{ fontSize: 11, opacity: 0.75, alignSelf: "center" }}>mutators:</span>
+              {MUTATORS.filter(m => (availMut & m.bit) !== 0).map(m => {
+                const on = (props.freeMut & m.bit) !== 0;
+                return (
+                  <button key={m.id} onClick={() => props.setFreeMut(props.freeMut ^ m.bit)} title={m.blurb} data-testid={`mut-${m.id}`}
+                    style={{ ...btn(false), padding: "4px 9px", fontSize: 11, background: on ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.05)", borderColor: on ? "#9fe6ff" : "rgba(255,255,255,0.25)" }}>
+                    {on ? "✓ " : ""}{m.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{bestBtn}</div>}
         </div>
         <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>
           {touch ? (
@@ -251,6 +288,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         <div style={{ ...box, inset: 0, opacity: speedLines * 0.55, background: "radial-gradient(ellipse at center, transparent 55%, rgba(255,255,255,0.55) 100%)" }} />
       )}
       {fadeA > 0 && <div style={{ ...box, inset: 0, background: `rgba(0,0,0,${(fadeA * 0.8).toFixed(2)})` }} />}
+      {!practice && <CampaignHud />}
       {/* timer (practice: the mode tag) */}
       {practice ? (
         <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: `900 ${touch || narrow ? 16 : 22}px ui-monospace, monospace`, letterSpacing: touch || narrow ? 2 : 4, color: "#fff", textShadow: "3px 3px 0 #ff3d7f, 0 2px 4px rgba(0,0,0,0.6)" }} data-testid="practice-tag">
@@ -425,7 +463,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
 
 // ---- results -------------------------------------------------------------------------------------
 
-export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }) {
+export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; onNext?: (n: number) => void; onLevels?: () => void }) {
   const r = useUi(s => s.results);
   const touch = useUi(s => s.touch);
   const { compact } = useViewport();
@@ -433,7 +471,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
   if (!r) return null;
   const share = async () => {
     // With the packed run: a ghost link (the exact round + your inputs); else the plain time claim.
-    const url = r.ghostCode ? ghostUrl(r.chaser, r.runner, r.difficulty, r.time, r.seed, r.ghostCode) : challengeUrl(r.chaser, r.runner, r.difficulty, r.time);
+    const url = r.ghostCode ? ghostUrl(r.chaser, r.runner, r.difficulty, r.time, r.seed, r.ghostCode, r.mutators) : challengeUrl(r.chaser, r.runner, r.difficulty, r.time, r.mutators);
     const text = `${shareText(r.kind, r.runner, r.time)}${r.ghostCode ? " - race my ghost:" : ""} ${url}`;
     try {
       await navigator.clipboard.writeText(text);
@@ -474,10 +512,15 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
           longest swing chain {r.maxChain} · top speed {r.topSpeed.toFixed(1)} m/s · falls {r.falls} · #{r.chaser} vs #{r.runner} · {r.difficulty}
         </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
+        <CampaignResult />
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
+          {r.campaign && r.campaign.stars[0] && r.campaign.n < LEVELS.length && props.onNext && (
+            <button style={{ ...btn(true), background: "#ffd23f", color: "#111" }} onClick={() => props.onNext?.(r.campaign!.n + 1)} data-testid="next-level">Next level</button>
+          )}
+          {r.campaign && props.onLevels && <button style={btn()} onClick={props.onLevels} data-testid="levels">Levels</button>}
           {r.caught && <button style={btn()} onClick={share} data-testid="share" title={r.ghostCode ? "copy a ghost link: friends race your run" : "copy a challenge link"}>{r.ghostCode ? "Share ghost" : "Share"}</button>}
           <button style={btn(true)} onClick={props.onRetry} data-testid="retry">{touch ? "Retry" : "Retry (R)"}</button>
-          <button style={btn()} onClick={props.onMenu}>Menu</button>
+          <button style={btn()} onClick={props.onMenu} data-testid="menu">Menu</button>
         </div>
         {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text", maxHeight: 84, overflowY: "auto" }} data-testid="share-text">{copied}</div>}
       </div>

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useAssetRuntime } from "react-three-game";
 import {
-  BoxGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, Quaternion, Vector3,
+  BoxGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, Vector3,
   type AnimationClip, type Object3D,
 } from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -16,6 +16,7 @@ import { GEORGE_GLB, GEORGE_JUMP, GEORGE_RENDER, GEORGE_ROOT_BONE } from "./geor
 import type { RootPolicy } from "./animPlayer.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
+import { loadProgress } from "../game/campaign.ts";
 
 const UP = new Vector3(0, 1, 0);
 
@@ -127,6 +128,46 @@ function poseCat(c: Cat, clip: string, t: number, rate: number, speed: number): 
   }
 }
 
+/**
+ * Round 4 campaign hats (party / crown / tin foil), picked on the campaign screen. They float on his
+ * head bone's world position (not parented, so the rig's bone scales never matter); HAT_LIFT is the
+ * height above that point in metres at render scale 1.
+ */
+const HAT_LIFT = 0.1;
+function makeHats(): Group {
+  const hats = new Group();
+  const party = new Group();
+  party.name = "party";
+  const cone = new Mesh(new ConeGeometry(0.05, 0.13, 10), new MeshBasicMaterial({ color: "#ff3d7f" }));
+  cone.position.y = 0.065;
+  const pom = new Mesh(new IcosahedronGeometry(0.018, 0), new MeshBasicMaterial({ color: "#ffd23f" }));
+  pom.position.y = 0.135;
+  party.add(cone, pom);
+  party.rotation.z = 0.18;
+  const crown = new Group();
+  crown.name = "crown";
+  const gold = new MeshBasicMaterial({ color: "#f5c542", side: DoubleSide });
+  const band = new Mesh(new CylinderGeometry(0.058, 0.052, 0.035, 10, 1, true), gold);
+  band.position.y = 0.018;
+  crown.add(band);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const spike = new Mesh(new ConeGeometry(0.014, 0.035, 4), gold);
+    spike.position.set(Math.sin(a) * 0.054, 0.052, Math.cos(a) * 0.054);
+    crown.add(spike);
+  }
+  const foil = new Group();
+  foil.name = "foil";
+  const tin = new Mesh(new ConeGeometry(0.066, 0.12, 7), new MeshStandardMaterial({ color: "#d9dee6", metalness: 0.85, roughness: 0.3, flatShading: true }));
+  tin.position.y = 0.05;
+  tin.rotation.y = 0.4;
+  foil.add(tin);
+  foil.rotation.x = -0.12;
+  hats.add(party, crown, foil);
+  hats.visible = false;
+  return hats;
+}
+
 /** The delivered George (GEORGE_GLB): clone + AnimPlayer; clips named like GeorgeClip. */
 function useGeorgeGlb(): { root: Object3D; player: AnimPlayer } | null {
   const assets = useAssetRuntime();
@@ -151,15 +192,24 @@ const STANDING = new Set(["Idle", "Walk", "Trot", "Run", "Land", "Happy"]);
 
 export function GeorgeView({ game }: { game: PlayGame }) {
   const cat = useMemo(makeCat, []);
+  const hats = useMemo(makeHats, []);
   const glb = useGeorgeGlb();
+  const headBone = useMemo(() => glb?.root.getObjectByName("head") ?? null, [glb]);
   const shadow = useRef<Mesh>(null);
-  const tmp = useMemo(() => ({ q: new Quaternion(), yaw: 0, t: 0, clip: "" }), []);
+  const tmp = useMemo(() => ({ q: new Quaternion(), yaw: 0, t: 0, clip: "", wasOn: false, hat: "none", head: new Vector3() }), []);
   useFrame((state, rawDelta) => {
     const g = game.george;
     const on = game.mode === "round";
     const node = glb ? glb.root : cat.root;
     node.visible = on;
     if (shadow.current) shadow.current.visible = on && !lowQuality();
+    // The campaign hat: read once per round start (the campaign screen may have changed it).
+    if (on && !tmp.wasOn) {
+      tmp.hat = loadProgress().hat;
+      for (const h of hats.children) h.visible = h.name === tmp.hat;
+    }
+    tmp.wasOn = on;
+    hats.visible = false;
     if (!on) return;
     const delta = rawDelta * game.timeScale;
     tmp.t += delta;
@@ -194,6 +244,16 @@ export function GeorgeView({ game }: { game: PlayGame }) {
       } else glb.player.setTimeScale(g.rate);
       glb.player.update(delta);
     } else poseCat(cat, g.clip, tmp.t, g.rate, g.speed);
+    if (tmp.hat !== "none" && node.visible) {
+      const head = glb ? headBone : cat.head;
+      if (head) {
+        head.getWorldPosition(tmp.head);
+        hats.position.copy(tmp.head).addScaledVector(UP, HAT_LIFT * GEORGE_RENDER.scale);
+        hats.quaternion.copy(node.quaternion);
+        hats.scale.setScalar(GEORGE_RENDER.scale);
+        hats.visible = true;
+      }
+    }
     const sh = shadow.current;
     if (sh) {
       const gy = game.index.groundBelow(x, z, y + 0.05);
@@ -203,6 +263,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
   return (
     <>
       {glb ? <primitive object={glb.root} /> : <primitive object={cat.root} />}
+      <primitive object={hats} />
       <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[0.3, 14]} />
         <meshBasicMaterial color="#000000" transparent opacity={0.28} depthWrite={false} />

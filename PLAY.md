@@ -112,6 +112,11 @@ Radbro or difficulty on the title plays a normal round instead.
 Your personal best per Radbro x difficulty keeps its run in the browser: **race your best · 41.2 s** on the
 title replays it as a ghost.
 
+Since round 4 links are versioned: `?v=2&m=docks&mu=2&c=...` carries the link version, the district
+(`m=`, left out for Downtown) and the mutator bits (`mu=`, left out when none). A link without `v` is an
+older link: it opens Downtown with no mutators, and if its replay does not verify the banner adds "made on
+an older build".
+
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
 
@@ -172,10 +177,34 @@ round options, part of ghost links and (where they touch the sim) the round hash
 | **60 seconds** | a 60 s clock | the timer |
 | **Night** | visual: dark sky, close fog, dimmed lights | - |
 
-Free play uses each district's defaults: **the Docks have wind, the Towers have popping balloons** (the
-Night Market's balloon-free streets are part of its layout). Campaign levels set their own mutators.
+Free play starts with each district's defaults: **the Docks have wind, the Towers have popping balloons**
+(the Night Market's balloon-free streets are part of its layout). Every other mutator appears as a toggle
+on the title once you have caught him in a campaign level that uses it. Campaign levels set their own
+mutators.
 Values live in `MECH` (`src/sim/tuning.ts`), overridable in `tuning.json` under `"mechanics"` and with the
 `?tune` sliders. Bots: `&mu=<bits>` (pops 1, wind 2, lowgrav 4, noyoink 8, onelife 16, sixty 32, night 64).
+
+## Campaign (round 4)
+
+**CAMPAIGN** on the title: 12 levels, 3 per district, each with a difficulty, mutators and three
+objectives (a star each; the first is always "catch him"). The others mix: under N s, no falls, finish
+with a YOINK, chain N swings, a close call (under N s left). The round HUD lists the level's objectives
+live (crossed out once lost, ticked once met), and the results show which you got plus NEW stars.
+
+| # | Level | District | Difficulty | Mutators |
+|---|---|---|---|---|
+| 1-3 | First Pour, Rush Hour, Pop Quiz | Downtown | chill, normal, normal | -, -, pops |
+| 4-6 | Neon Alleys, Hands Only, Lights Out | Night Market | chill, normal, normal | -, no YOINK, night |
+| 7-9 | Sea Breeze, Moon Jump, Last Call | Docks | normal | wind; wind + low gravity; wind + 60 s |
+| 10-12 | Vertigo, High Winds, Rugpull | Towers | normal, normal, **degen** | pops; pops + wind; pops + wind + one life |
+
+Unlocks: the next level once you catch him in the previous one; a district in free play once you catch him
+in its first level; a mutator toggle once you catch him in a level using it; **Degen** in free play at 12
+stars; hats for George at 9 / 21 / 33 stars (party hat, crown, tin foil; pick on the campaign screen).
+Stars are best-of and live in the browser (`localStorage` "rugrun.campaign.v1"). Level list, objectives and
+unlock thresholds: `src/game/campaign.ts`. A level in another district reloads the page on that district
+(`?map=docks&lvl=7` opens the campaign screen on level 7). Bots: `&lvl=N` scores a bot round as level N
+(pass that level's `d` and `mu` too).
 
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 

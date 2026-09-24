@@ -27,6 +27,7 @@ import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
 import { hints } from "../ui/hints.ts";
 import { MECH } from "../sim/tuning.ts";
+import { LEVELS, evaluate, loadProgress, recordLevel, saveProgress, starCount } from "../game/campaign.ts";
 
 const DEV = import.meta.env.MODE !== "production";
 
@@ -78,12 +79,24 @@ declare global {
 
 function buildResults(game: PlayGame): Results {
   const r = game.round, st = r.stats, s = game.setup;
+  const mu = s.mutators ?? 0;
   const caught = r.phase === "caught";
-  const best = getBest(s.chaser, s.difficulty);
+  const best = getBest(s.chaser, s.difficulty, mu);
   let newBest = false;
   if (caught) {
-    const prev = recordBest(s.chaser, s.difficulty, st.catchTime);
+    const prev = recordBest(s.chaser, s.difficulty, st.catchTime, mu);
     newBest = prev === null || st.catchTime < prev;
+  }
+  // Round 4 campaign: evaluate this level's objectives and keep the stars (best-of).
+  let campaign: Results["campaign"] = null;
+  const camp = useUi.getState().campaign;
+  const level = camp ? LEVELS.find(l => l.n === camp.n) : undefined;
+  if (level && !game.ghostSpec) {
+    const got = evaluate(level, r.phase, st, r.clock);
+    const p = loadProgress();
+    const fresh = recordLevel(p, level.n, got, caught ? st.catchTime : null);
+    saveProgress(p);
+    campaign = { n: level.n, got, fresh, stars: p.stars[level.n], totalStars: starCount(p) };
   }
   const gi = useUi.getState().ghost;
   const vsGhost = game.ghostSpec && gi ? { time: gi.time, verified: gi.status === "verified" } : null;
@@ -91,14 +104,14 @@ function buildResults(game: PlayGame): Results {
   if (caught && game.recording && game.log.n === r.chaseSteps) {
     const bytes = encodeBytes(game.log, game.roundFlags), runId = game.runId, t = st.catchTime;
     void packBytes(bytes).then(code => {
-      if (newBest) saveBestGhost({ c: s.chaser, r: s.runner, d: s.difficulty, s: s.seed, t, g: code });
+      if (newBest) saveBestGhost({ c: s.chaser, r: s.runner, d: s.difficulty, s: s.seed, t, g: code, mu });
       if (game.runId === runId) useUi.setState(u => (u.results ? { results: { ...u.results, ghostCode: code } } : {}));
     }, () => undefined);
   }
   return {
     caught, kind: st.catchKind, time: st.catchTime, closest: st.closest, maxChain: st.maxChain, topSpeed: st.topSpeed, falls: st.falls,
     medal: caught ? medal(s.difficulty, st.catchTime) : "", best, newBest, runner: s.runner, chaser: s.chaser, difficulty: s.difficulty,
-    seed: s.seed, ghostCode: null, vsGhost,
+    seed: s.seed, ghostCode: null, vsGhost, mutators: mu, campaign,
   };
 }
 
@@ -223,7 +236,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       ghost: {
         recorded: game.log.n, on: !!gh, phase: gr ? gr.phase : "", steps: gr ? gr.chaseSteps : 0, n: gh ? gh.log.n : 0,
         catchTime: gr ? gr.stats.catchTime : 0, status: ui.ghost?.status ?? "", p: gh ? [game.ghostP.x, game.ghostP.y, game.ghostP.z] : null,
-        url: res?.ghostCode ? ghostUrl(res.chaser, res.runner, res.difficulty, res.time, res.seed, res.ghostCode) : "",
+        url: res?.ghostCode ? ghostUrl(res.chaser, res.runner, res.difficulty, res.time, res.seed, res.ghostCode, res.mutators) : "",
       },
       autoQ: { quality: ui.quality, allowed: ui.autoQuality, fps: aq.fps, fired: aq.fired },
     };
@@ -249,7 +262,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         round: {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
-          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, wind,
+          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, wind,
         },
       });
       // First-run tips (chase / practice only, never on bot pages).

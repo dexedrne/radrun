@@ -17,7 +17,7 @@ export type Hud = {
   steps: number;
 };
 
-export type Screen = "boot" | "title" | "loading" | "countdown" | "chase" | "results" | "practice";
+export type Screen = "boot" | "title" | "loading" | "countdown" | "chase" | "results" | "practice" | "campaign";
 
 export type RoundHud = {
   clock: number;
@@ -35,6 +35,8 @@ export type RoundHud = {
   maxChain: number;
   topSpeed: number;
   falls: number;
+  /** Seconds since the chase started (campaign "under N s" objectives). */
+  elapsed: number;
   /**
    * Round 4 wind (wind mutator): level 0..1 of the current gust, warn 0..1 as the next one approaches,
    * and its push direction on screen (radians clockwise from "forward"); null when there is no wind.
@@ -61,6 +63,10 @@ export type Results = {
   ghostCode: string | null;
   /** Raced a ghost: its catch time (null = it never caught him) and whether the replay verified it. */
   vsGhost: { time: number | null; verified: boolean } | null;
+  /** Round 4: the round's mutator bits (share links carry them). */
+  mutators: number;
+  /** Round 4 campaign level result: which objectives this run met, which stars are new, the level's stars. */
+  campaign: { n: number; got: boolean[]; fresh: boolean[]; stars: boolean[]; totalStars: number } | null;
 };
 
 /** The ghost raced this round (HUD tag, GhostView). */
@@ -68,6 +74,8 @@ export type GhostInfo = {
   chaser: RadbroId;
   /** checking = the replay is still running; unverified = it does not reproduce the claimed time. */
   status: "checking" | "verified" | "unverified";
+  /** A v1 link (made before round 4): an unverified replay is most likely just an older build. */
+  older?: boolean;
   /** Claimed catch time (the link's t, or your stored best). */
   claimed: number;
   /** The replay's catch time / kind (null = the replay never caught him). */
@@ -112,6 +120,9 @@ export type UiState = {
   autoQuality: boolean;
   /** PlayDriver's auto-quality check failed: PlayPage switches to Low once. */
   autoLow: boolean;
+  /** Round 4: the campaign level being played (null = free play / practice) and the one selected on the campaign screen. */
+  campaign: { n: number } | null;
+  campaignSel: number;
 };
 
 export const useUi = create<UiState>(() => ({
@@ -124,7 +135,7 @@ export const useUi = create<UiState>(() => ({
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0 },
   screen: "boot",
   paused: false,
-  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0, wind: null },
+  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0, elapsed: 0, wind: null },
   results: null,
   feed: [],
   banner: null,
@@ -137,6 +148,8 @@ export const useUi = create<UiState>(() => ({
   toast: null,
   autoQuality: false,
   autoLow: false,
+  campaign: null,
+  campaignSel: 1,
 }));
 
 let feedId = 0;
