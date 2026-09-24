@@ -12,6 +12,7 @@ import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
 import { CityLook, FOG_COLOR, SkyGradient } from "./cityLook.tsx";
+import { canvasDpr, detectTouch } from "../input/touch.ts";
 
 export const SKY = FOG_COLOR;
 
@@ -95,11 +96,14 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
 
 /** The one canvas + PrefabRoot. Mounted once per page; children are the runtime systems. */
 const FORCE_WEBGL = new URLSearchParams(location.search).has("webgl2");
+/** Quality default: touch devices cap the pixel ratio at 1.5, phones at 1.25. */
+const DPR = canvasDpr(detectTouch());
 
 export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: React.ReactNode }) {
   return (
     <GameCanvas
       flat
+      dpr={DPR}
       glConfig={FORCE_WEBGL ? { forceWebGL: true } : undefined}
       onCreated={s => {
         const be = (s.gl as unknown as { backend?: { isWebGPUBackend?: boolean; isWebGLBackend?: boolean } }).backend;

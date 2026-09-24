@@ -1,4 +1,4 @@
-// Keyboard / mouse / pointer lock -> a latched InputFrame consumed once per 120 Hz step (spec §4).
+// Keyboard / mouse / pointer lock / touch -> a latched InputFrame consumed once per 120 Hz step (spec §4).
 // Press edges stay latched until a step consumes them (so a frame with zero steps never loses a
 // press); a press is also reported as held on the step that consumes it (a quick click still grabs).
 // Window blur clears every held key. The DOM part (attachDom) is separate from the pure latch so the
@@ -15,6 +15,12 @@ export class InputLatch {
   rmb = false;
   jumpEdge = false;
   webEdge = false;
+  /** Touch: the left-thumb stick (x right, y forward, dead zone applied, |stick| <= 1). */
+  stickX = 0;
+  stickY = 0;
+  /** Touch: WEB button held / look-at-him button held. */
+  touchWeb = false;
+  touchFace = false;
   /** Easy grab: Space press also counts as a web press (Yoink), Space held = web held. */
   easyGrab = false;
   /** Optional per-step recording (replays / tests). */
@@ -42,8 +48,27 @@ export class InputLatch {
     if (button === 0) this.lmb = false;
     if (button === 2) this.rmb = false;
   }
+  /** Touch stick in unit-radius coordinates: dead zone 0.15, full speed at 0.8. */
+  setStick(x: number, y: number): void {
+    const l = Math.sqrt(x * x + y * y);
+    if (l < 0.15) { this.stickX = this.stickY = 0; return; }
+    const k = Math.min(1, (l - 0.15) / 0.65) / l;
+    this.stickX = x * k;
+    this.stickY = y * k;
+  }
+  touchWebDown(): void {
+    if (!this.touchWeb) { this.touchWeb = true; this.webEdge = true; }
+  }
+  touchWebUp(): void {
+    this.touchWeb = false;
+  }
+  touchJump(): void {
+    this.jumpEdge = true;
+  }
   clear(): void {
     this.keys.clear();
+    this.stickX = this.stickY = 0;
+    this.touchWeb = this.touchFace = false;
     this.lmb = this.rmb = false;
     this.jumpEdge = this.webEdge = false;
     this.mouseDX = this.mouseDY = 0;
@@ -55,7 +80,7 @@ export class InputLatch {
     return d;
   }
   get towardRunner(): boolean {
-    return this.keys.has("KeyQ") || this.rmb;
+    return this.keys.has("KeyQ") || this.rmb || this.touchFace;
   }
 
   /**
@@ -63,8 +88,8 @@ export class InputLatch {
    * `aim` is the camera forward vector.
    */
   consume(f: InputFrame, yawSin: number, yawCos: number, aimX: number, aimY: number, aimZ: number): InputFrame {
-    const fwd = (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0);
-    const right = (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0);
+    const fwd = (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) + this.stickY;
+    const right = (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0) + this.stickX;
     let mx = -yawSin * fwd + yawCos * right;
     let mz = -yawCos * fwd - yawSin * right;
     const ml = Math.sqrt(mx * mx + mz * mz);
@@ -74,7 +99,7 @@ export class InputLatch {
     f.aimX = aimX;
     f.aimY = aimY;
     f.aimZ = aimZ;
-    const webHeldNow = this.lmb || (this.easyGrab && this.keys.has("Space"));
+    const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
     f.jumpPressed = this.jumpEdge;
     f.webPressed = this.webEdge;
     f.webHeld = webHeldNow || this.webEdge;

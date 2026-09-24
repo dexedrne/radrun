@@ -51,7 +51,14 @@ export const DT = 1 / 120;
 export const MAX_FRAME_DELTA = 0.25;
 export const MAX_STEPS_PER_FRAME = 30;
 export const AIM_COS = 0.3420201433256687; // cos(70°)
-export const AIM_COS_TOUCH = 0.08715574274765817; // cos(85°), post-v1 touch
+export const AIM_COS_TOUCH = 0.08715574274765817; // cos(85°), touch
+/**
+ * Touch play (spec §4 "Touch"): the wider aim cone above, Yoink range + yoinkBonus m, hook picking
+ * biased toward your velocity (aim_xz + velBias * v_xz/|v_xz|, full weight at runSpeed; applied to
+ * the InputFrame's aim, so the sim is unchanged), and right-half drag look = lookScale x the mouse
+ * sensitivity per px.
+ */
+export const TOUCH = { yoinkBonus: 1, velBias: 0.5, lookScale: 2.5 } as const;
 export const M_SMOOTH = 1 / 48;
 export const HOLD_DELAY_EASY = 0.12;
 

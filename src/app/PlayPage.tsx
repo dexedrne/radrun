@@ -10,6 +10,8 @@ import { attachDom } from "../input/input.ts";
 import { useUi } from "../ui/store.ts";
 import { applySettings, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings } from "../ui/prefs.ts";
 import { Loading, Pause, ResultsScreen, RoundHud, Title } from "../ui/screens.tsx";
+import { TouchControls } from "../ui/TouchControls.tsx";
+import { enterFullscreen } from "../input/touch.ts";
 import { bootPlay } from "./boot.ts";
 import { SceneCanvas, playPrefab } from "./GameScene.tsx";
 import { ChaseFx, PlayDriver, ScreenTracker } from "./PlayViews.tsx";
@@ -30,6 +32,9 @@ const TUNE = DEV && params.has("tune");
 const BOT = DEV ? botParams(location.search) : null;
 
 const canvasEl = () => document.querySelector("canvas");
+/** Touch play never uses pointer lock (spec §4 "Touch"). */
+const isTouch = () => useUi.getState().touch;
+const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock(); };
 
 function Scene({ game }: { game: PlayGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
@@ -78,7 +83,19 @@ export default function PlayPage() {
   const screen = useUi(s => s.screen);
   const paused = useUi(s => s.paused);
   const ready = useUi(s => s.sceneReady);
+  const touch = useUi(s => s.touch);
   const rHeld = useRef<number | null>(null);
+
+  // Touch: switch on at the first touch anywhere; that tap (and PLAY) also asks for fullscreen +
+  // landscape. The game picks up the wider aim cone / Yoink bonus from the next round.
+  useEffect(() => {
+    const onTouch = () => { if (!useUi.getState().touch) useUi.setState({ touch: true }); };
+    const onEnd = () => { if (!BOT) enterFullscreen(); removeEventListener("touchend", onEnd); };
+    addEventListener("touchstart", onTouch, { passive: true });
+    addEventListener("touchend", onEnd);
+    return () => { removeEventListener("touchstart", onTouch); removeEventListener("touchend", onEnd); };
+  }, []);
+  useEffect(() => { game?.setTouch(touch); }, [game, touch]);
 
   useEffect(() => {
     bootPlay().then(g => {
@@ -118,14 +135,15 @@ export default function PlayPage() {
       game.paused = false;
       game.startRound({ chaser, runner, difficulty, seed });
       useUi.setState({ screen: "countdown" });
-      if (document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock();
+      lockMouse();
     });
   }, [game, chaser, difficulty, challenge]);
 
   const onPlay = useCallback(() => {
     rememberPicks(chaser, difficulty);
     unlockAudio();
-    canvasEl()?.requestPointerLock();
+    if (isTouch()) enterFullscreen();
+    else canvasEl()?.requestPointerLock();
     begin(randomSeed());
   }, [begin, chaser, difficulty]);
 
@@ -135,7 +153,7 @@ export default function PlayPage() {
     game.paused = false;
     game.retry(BOT ? (game.setup.seed + 1) >>> 0 : randomSeed());
     useUi.setState({ screen: "countdown" });
-    if (!BOT && document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock();
+    if (!BOT) lockMouse();
   }, [game]);
 
   const toMenu = useCallback(() => {
@@ -173,12 +191,18 @@ export default function PlayPage() {
     // A click on the canvas mid-round re-captures the mouse (e.g. a lock request the browser refused).
     const click = () => {
       const sc = useUi.getState().screen;
-      if (!BOT && (sc === "countdown" || sc === "chase") && document.pointerLockElement !== el) el.requestPointerLock?.();
+      if (!BOT && !isTouch() && (sc === "countdown" || sc === "chase") && document.pointerLockElement !== el) el.requestPointerLock?.();
     };
+    // Phones: leaving the tab / locking the screen mid-round pauses.
+    const vis = () => {
+      const sc = useUi.getState().screen;
+      if (document.hidden && !BOT && (sc === "countdown" || sc === "chase")) setPaused(true);
+    };
+    document.addEventListener("visibilitychange", vis);
     el.addEventListener("click", click);
     addEventListener("keydown", kd);
     addEventListener("keyup", ku);
-    return () => { detach(); el.removeEventListener("click", click); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
+    return () => { detach(); document.removeEventListener("visibilitychange", vis); el.removeEventListener("click", click); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
   }, [game, retry, setPaused]);
 
   // Results: free the mouse so the buttons work.
@@ -215,12 +239,13 @@ export default function PlayPage() {
       )}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} />}
+      {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
       {paused && inRound && (
         <Pause
           settings={settings}
           setSettings={setSettings}
-          onResume={() => canvasEl()?.requestPointerLock()}
+          onResume={() => (touch ? setPaused(false) : canvasEl()?.requestPointerLock())}
           onRestart={() => { setPaused(false); retry(); }}
           onQuit={toMenu}
         />

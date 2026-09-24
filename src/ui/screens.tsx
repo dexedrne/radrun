@@ -12,6 +12,37 @@ const btn = (primary = false): React.CSSProperties => ({
   border: primary ? "none" : "1px solid rgba(255,255,255,0.35)", background: primary ? "#ff3d7f" : "rgba(255,255,255,0.08)", color: "#fff",
 });
 const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
+/** A full-screen layer that centres its child and scrolls (from the top) when the child is taller. */
+const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties;
+
+/** Viewport size, re-read on resize / rotation. compact = a short (landscape phone) screen. */
+export function useViewport(): { w: number; h: number; compact: boolean; narrow: boolean; portrait: boolean } {
+  const [vp, setVp] = useState(() => ({ w: innerWidth, h: innerHeight }));
+  useEffect(() => {
+    const f = () => setVp({ w: innerWidth, h: innerHeight });
+    addEventListener("resize", f);
+    addEventListener("orientationchange", f);
+    return () => { removeEventListener("resize", f); removeEventListener("orientationchange", f); };
+  }, []);
+  return { ...vp, compact: vp.h < 520, narrow: vp.w < 560, portrait: vp.h > vp.w };
+}
+
+/** Touch in portrait: ask for landscape (non-blocking; the game still runs). */
+export function RotateHint({ inline = false }: { inline?: boolean }) {
+  const touch = useUi(s => s.touch);
+  const { portrait } = useViewport();
+  if (!touch || !portrait) return null;
+  const pill: React.CSSProperties = {
+    background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "8px 14px", borderRadius: 10, fontSize: 13,
+    boxShadow: "0 3px 12px rgba(0,0,0,0.35)", textAlign: "center",
+  };
+  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: Rug Run plays in landscape</div>;
+  return (
+    <div style={{ position: "fixed", left: "50%", top: 96, transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
+      <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
+    </div>
+  );
+}
 
 // ---- title -----------------------------------------------------------------------------------------
 
@@ -20,55 +51,69 @@ export function Title(props: {
   challenge: Challenge; onPlay: () => void; ready: boolean;
 }) {
   const { chaser, difficulty, challenge } = props;
+  const touch = useUi(s => s.touch);
+  const { compact, narrow } = useViewport();
+  const img = compact ? 60 : narrow ? 72 : 124;
+  const titlePx = compact ? 36 : narrow ? 46 : 72;
+  const playBtn = (
+    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), marginTop: compact ? 0 : 14, fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
+      {props.ready ? "PLAY" : "loading city…"}
+    </button>
+  );
   return (
-    <div style={{ ...layer, display: "grid", placeItems: "center", background: "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))" }}>
-      <div style={{ textAlign: "center", maxWidth: 760, padding: 16 }}>
-        <div style={{ font: "900 72px/1 ui-monospace, monospace", letterSpacing: 6, color: "#fff", textShadow: "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
-        <div style={{ marginTop: 10, fontSize: 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
+    <div style={{ ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))" }}>
+      <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
+        <RotateHint inline />
+        <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
+        <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
         {challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
             challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs #${challenge.r}` : ""}
           </div>
         )}
-        <div style={{ ...panel, marginTop: 16 }}>
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>pick your Radbro · {S.youChase}</div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ ...panel, marginTop: compact ? 8 : 16, padding: compact ? "8px 12px" : panel.padding }}>
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: compact ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
+          <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => (
               <button key={id} onClick={() => props.setChaser(id)} data-testid={`card-${id}`}
                 style={{
-                  width: 150, padding: "12px 8px", borderRadius: 10, cursor: "pointer", color: "#fff", font: "700 14px ui-monospace, monospace",
+                  width: img + 26, padding: compact ? "6px 4px" : "12px 8px", borderRadius: 10, cursor: "pointer", color: "#fff", font: `700 ${compact || narrow ? 12 : 14}px ui-monospace, monospace`,
                   background: id === chaser ? "rgba(255,61,127,0.35)" : "rgba(255,255,255,0.06)",
                   border: id === chaser ? "2px solid #ff3d7f" : "2px solid rgba(255,255,255,0.2)",
                 }}>
                 <div style={{
-                  margin: "0 auto 8px", width: 124, height: 124, borderRadius: 10, overflow: "hidden",
+                  margin: compact ? "0 auto 4px" : "0 auto 8px", width: img, height: img, borderRadius: 10, overflow: "hidden",
                   background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}66, ${RADBRO_COLOR[id].accent}22 62%, rgba(0,0,0,0.25))`,
                   boxShadow: id === chaser ? "0 0 0 1px rgba(255,255,255,0.25) inset" : "none",
                 }}>
-                  <img src={`/ui/radbro${id}.webp`} alt="" width={124} height={124} draggable={false}
-                    style={{ display: "block", width: 124, height: 124, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
+                  <img src={`/ui/radbro${id}.webp`} alt="" width={img} height={img} draggable={false}
+                    style={{ display: "block", width: img, height: img, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
                 </div>
                 <div>Radbro #{id}</div>
-                <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>
+                {!compact && <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>}
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", marginTop: compact ? 8 : 14 }}>
             {(["chill", "normal"] as const).map(d => (
-              <button key={d} onClick={() => props.setDifficulty(d)} style={{ ...btn(false), background: d === difficulty ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
+              <button key={d} onClick={() => props.setDifficulty(d)} style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", background: d === difficulty ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
                 {d === "chill" ? "Chill" : "Normal"}
               </button>
             ))}
+            {compact && playBtn}
           </div>
-          <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), marginTop: 14, fontSize: 22, padding: "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
-            {props.ready ? "PLAY" : "loading city…"}
-          </button>
+          {!compact && playBtn}
         </div>
-        <div style={{ ...panel, marginTop: 12, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }}>
-          <b>controls</b> · mouse look/aim · WASD run · Space jump · LMB hold = web onto the ringed balloon, release = let go ·
-          red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · Esc pause
+        <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>
+          {touch ? (
+            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing from the ringed balloon, let go = release ·
+            JUMP · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
+          ) : (
+            <><b>controls</b> · mouse look/aim · WASD run · Space jump · LMB hold = web onto the ringed balloon, release = let go ·
+            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · Esc pause</>
+          )}
         </div>
-        <div style={{ marginTop: 10, fontSize: 11, opacity: 0.75, textShadow: "0 1px 2px #000" }}>{S.credits}</div>
+        <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 10 : 11, opacity: 0.75, textShadow: "0 1px 2px #000" }}>{S.credits}</div>
       </div>
     </div>
   );
@@ -108,6 +153,8 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
   const fade = useUi(s => s.fade);
   const [now, setNow] = useState(performance.now());
   const [hints, setHints] = useState(true);
+  const touch = useUi(s => s.touch);
+  const { narrow } = useViewport();
   useEffect(() => {
     const t = setInterval(() => setNow(performance.now()), 100);
     const h = setTimeout(() => setHints(false), 10000);
@@ -132,7 +179,7 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
         {clockText(r.clock)}
       </div>
       {/* distance + heat */}
-      {screen !== "results" && <div style={{ ...box, top: 10, right: 12, ...panel, padding: "8px 12px", minWidth: 180 }}>
+      {screen !== "results" && <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
           <span>{r.d.toFixed(0)} m</span>
           <span style={{ color: hot.color }}>{hot.label}</span>
@@ -167,20 +214,23 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
         <div style={{ width: 0, height: 0, borderTop: "14px solid transparent", borderBottom: "14px solid transparent", borderLeft: "26px solid #ff3355", filter: "drop-shadow(0 1px 2px #000)" }} />
       </div>
       {/* feed */}
-      <div style={{ ...box, left: 12, bottom: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ ...box, left: touch ? 62 : 12, ...(touch ? { top: 12 } : { bottom: 12 }), maxWidth: touch ? "44vw" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
         {feed.filter(f => now - f.t < 5000).map(f => (
           <div key={f.id} style={{ background: "rgba(14,16,30,0.7)", padding: "3px 8px", borderRadius: 5 }}>{f.text}</div>
         ))}
         {hints && (
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
-            WASD run · Space jump · {easyGrab ? "hold Space" : "hold LMB"} = web · red ring = {easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry
+            {touch
+              ? "left thumb run · drag right to look · hold WEB = swing · red ring = WEB to YOINK"
+              : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
           </div>
         )}
       </div>
       {r.holdR > 0 && (
         <div style={{ ...box, left: "50%", bottom: 40, transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>retry… {Math.round(r.holdR * 100)}%</div>
       )}
-      <div style={{ ...box, right: 12, bottom: 8, fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
+      <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: 12 }), bottom: touch ? 4 : 8, fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
+      <RotateHint />
     </>
   );
 }
@@ -189,11 +239,12 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
 
 export function Pause(props: { onResume: () => void; onRestart: () => void; onQuit: () => void; settings: Settings; setSettings: (s: Settings) => void }) {
   const [open, setOpen] = useState(false);
+  const touch = useUi(s => s.touch);
   const s = props.settings;
   const set = (patch: Partial<Settings>) => props.setSettings({ ...s, ...patch });
   return (
-    <div style={{ ...layer, zIndex: 30, display: "grid", placeItems: "center", background: "rgba(8,10,20,0.55)" }}>
-      <div style={{ ...panel, minWidth: 300, textAlign: "center" }}>
+    <div style={{ ...scroller, zIndex: 30, background: "rgba(8,10,20,0.55)" }}>
+      <div style={{ ...panel, margin: "auto", minWidth: "min(300px, 86vw)", textAlign: "center", boxSizing: "border-box" }} data-testid="pause">
         <div style={{ font: "900 28px ui-monospace, monospace", letterSpacing: 4 }}>{S.paused}</div>
         <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
           <button style={btn(true)} onClick={props.onResume}>Resume</button>
@@ -208,7 +259,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>
             <label><input type="checkbox" checked={s.reducedMotion} onChange={e => set({ reducedMotion: e.target.checked })} /> reduced motion</label>
-            <label><input type="checkbox" checked={s.easyGrab} onChange={e => set({ easyGrab: e.target.checked })} /> easy grab (tap Space = jump, hold Space = swing)</label>
+            {!touch && <label><input type="checkbox" checked={s.easyGrab} onChange={e => set({ easyGrab: e.target.checked })} /> easy grab (tap Space = jump, hold Space = swing)</label>}
           </div>
         )}
       </div>
@@ -220,6 +271,8 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
 
 export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }) {
   const r = useUi(s => s.results);
+  const touch = useUi(s => s.touch);
+  const { compact } = useViewport();
   const [copied, setCopied] = useState("");
   if (!r) return null;
   const share = async () => {
@@ -232,12 +285,13 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
     }
   };
   const delta = r.caught && r.best !== null ? r.time - r.best : null;
+  const big = compact ? 26 : 34;
   return (
-    <div style={{ ...layer, display: "grid", placeItems: "end center", paddingBottom: "8vh", pointerEvents: "none" }}>
-      <div style={{ ...panel, minWidth: 360, textAlign: "center", pointerEvents: "auto" }} data-testid="results">
+    <div style={{ ...layer, display: "grid", placeItems: "end center", paddingBottom: compact ? "3vh" : "8vh", pointerEvents: "none" }}>
+      <div style={{ ...panel, minWidth: "min(360px, 90vw)", maxWidth: "94vw", boxSizing: "border-box", padding: compact ? "10px 14px" : panel.padding, textAlign: "center", pointerEvents: "auto" }} data-testid="results">
         {r.caught ? (
           <>
-            <div style={{ font: "900 34px ui-monospace, monospace", letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
+            <div style={{ font: `900 ${big}px ui-monospace, monospace`, letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
             <div style={{ marginTop: 8, display: "inline-block", padding: "4px 14px", borderRadius: 20, fontWeight: 900, color: "#111", background: MEDAL_COLOR[r.medal] }}>{r.medal}</div>
             <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
               {r.newBest ? (r.best === null ? "first catch - personal best" : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}
@@ -245,7 +299,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
           </>
         ) : (
           <>
-            <div style={{ font: "900 34px ui-monospace, monospace" }}>{S.escape}</div>
+            <div style={{ font: `900 ${big}px ui-monospace, monospace` }}>{S.escape}</div>
             <div style={{ marginTop: 6, opacity: 0.9 }}>closest {r.closest.toFixed(1)} m · {S.goneFishing}</div>
           </>
         )}
@@ -254,7 +308,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
           {r.caught && <button style={btn()} onClick={share}>Share</button>}
-          <button style={btn(true)} onClick={props.onRetry} data-testid="retry">Retry (R)</button>
+          <button style={btn(true)} onClick={props.onRetry} data-testid="retry">{touch ? "Retry" : "Retry (R)"}</button>
           <button style={btn()} onClick={props.onMenu}>Menu</button>
         </div>
         {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text" }}>{copied}</div>}

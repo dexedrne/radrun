@@ -49,6 +49,8 @@ export type RoundOptions = {
   seed: number;
   /** Skip the 3 s countdown (bots, balance, tests). */
   countdown?: boolean;
+  /** Added to the difficulty's Yoink range (touch play: +1 m). */
+  yoinkBonus?: number;
 };
 
 export const COUNTDOWN_STEPS = 360;
@@ -83,7 +85,7 @@ export class Round {
     this.model = o.model;
     this.index = o.index ?? new CityIndex(o.model);
     this.pack = o.pack;
-    this.tuning = { ...o.tuning, yoinkRange: o.params.yoinkRange };
+    this.tuning = { ...o.tuning, yoinkRange: o.params.yoinkRange + (o.yoinkBonus ?? 0) };
     this.rng = new Rand(o.seed);
     const pack = o.pack;
     const nj = pack.junctions.length;

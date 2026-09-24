@@ -25,6 +25,23 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | R | retry (hold 1 s mid-round; tap on the results screen) |
 | Esc | pause (settings: sensitivity, volume, FOV, invert Y, reduced motion, easy grab) |
 
+**Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
+`?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
+
+| | |
+|---|---|
+| Left thumb (anywhere on the left half) | floating stick: run / steer on the rope |
+| Drag on the right half | look / aim |
+| WEB (hold) | web onto the ringed balloon; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
+| JUMP | jump |
+| HIM (hold) | ease the camera toward him |
+| II | pause (Resume / Restart / Settings / Quit) |
+
+Touch helps your aim: the cone widens to 85 degrees (desktop 70), balloon picking leans toward where you
+are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and locks landscape where the
+browser allows it). There is no pointer lock, and leaving the tab pauses. On phones the canvas renders at up
+to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOUCH` in `src/sim/tuning.ts`.
+
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
 and gets GASSED when his panic budget runs out. He stops to taunt you when you are over 35 m back.
 

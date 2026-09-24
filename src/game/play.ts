@@ -3,7 +3,7 @@
 // new seed (nothing reloads). Also drives the optional test bot (?bot=follow|yoink).
 import { emptyInput, EV_LAND, RING_RUNNER, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import { FixedStepper } from "../sim/stepper.ts";
-import { HOLD_DELAY_EASY, type CameraTuning, type Difficulty, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
+import { AIM_COS_TOUCH, HOLD_DELAY_EASY, TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { Pack } from "../route/trackPack.ts";
 import { PHASE_ROPE } from "../route/trackPack.ts";
@@ -47,6 +47,8 @@ export class PlayGame {
   setup: RoundSetup;
   runId = 0;
   paused = false;
+  /** Touch play: wider aim cone, +1 m Yoink, velocity-biased aim (spec §4 "Touch"). */
+  touch = false;
   bot: Bot | null = null;
   botOptions: BotOptions | null = null;
   /** Bits OR-ed over the steps of the last frame. */
@@ -92,14 +94,27 @@ export class PlayGame {
 
   retune(): void {
     const easy = this.camera.easyGrab;
-    this.simTuning = { ...this.tuning, holdDelay: easy ? Math.max(this.tuning.holdDelay, HOLD_DELAY_EASY) : this.tuning.holdDelay, zip: easy ? false : this.tuning.zip };
+    this.simTuning = {
+      ...this.tuning,
+      holdDelay: easy ? Math.max(this.tuning.holdDelay, HOLD_DELAY_EASY) : this.tuning.holdDelay,
+      zip: easy ? false : this.tuning.zip,
+      aimCos: this.touch ? Math.min(this.tuning.aimCos, AIM_COS_TOUCH) : this.tuning.aimCos,
+    };
     this.input.easyGrab = easy;
+  }
+
+  /** Switch touch play on/off; takes effect from the next round. */
+  setTouch(on: boolean): void {
+    if (this.touch === on) return;
+    this.touch = on;
+    this.retune();
   }
 
   private makeRound(s: RoundSetup): Round {
     return new Round({
       model: this.model, index: this.index, pack: this.pack, difficulty: s.difficulty, params: this.difficulty[s.difficulty],
       tuning: this.simTuning ?? this.tuning, chaser: s.chaser, runner: s.runner, seed: s.seed, countdown: true,
+      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0,
     });
   }
 
@@ -151,7 +166,20 @@ export class PlayGame {
   private step(): void {
     const round = this.round;
     const rig = this.rig;
-    this.input.consume(this.frameInput, rig.sy, rig.cy, rig.fwd.x, rig.fwd.y, rig.fwd.z);
+    let ax = rig.fwd.x, az = rig.fwd.z;
+    if (this.touch) {
+      // Touch: bias the aim toward where you are going, so a thumb-aimed camera still rings the
+      // balloon ahead (the ring you see is still the hook you get: the sim reads this aim).
+      const v = round.player.v;
+      const vl = Math.sqrt(v.x * v.x + v.z * v.z), hl = Math.sqrt(ax * ax + az * az);
+      if (vl > 0.5 && hl > 1e-6) {
+        const w = TOUCH.velBias * Math.min(1, vl / this.tuning.runSpeed);
+        const bx = ax / hl + (w * v.x) / vl, bz = az / hl + (w * v.z) / vl;
+        const bl = Math.sqrt(bx * bx + bz * bz);
+        if (bl > 1e-6) { ax = (bx / bl) * hl; az = (bz / bl) * hl; }
+      }
+    }
+    this.input.consume(this.frameInput, rig.sy, rig.cy, ax, rig.fwd.y, az);
     if (this.bot && round.phase === "chase") {
       const ov = this.bot.next(round, this.frameInput);
       round.step(this.frameInput, ov);
