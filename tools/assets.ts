@@ -1,12 +1,14 @@
-// npm run assets -- --radbros <dir> [--george <dir>]
+// npm run assets -- --radbros <dir> [--george <dir>] [--only 723[,652...]]
 // Turns the owner's character GLBs into web GLBs + clip packs in public/models/ and writes
 // src/generated/clips.meta.json (and george_clips.json when George's delivery exists).
 //
-// <radbros> is the owner's Radbro folder: delivery/radbro{652,4764,2564}_animations.glb, plus
+// <radbros> is the owner's Radbro folder: delivery/radbro{652,4764,2564,723}_animations.glb, plus
 // game-clips/ (radbro<id>.clips.glb packs, re-rigged radbro<id>_character.glb replacements and
 // manifest.json). A re-rigged character replaces its delivery GLB (the old rig no longer matches
 // the bought clips). <george> is George's folder: delivery/george_animations.glb + george_clips.json.
 // Both can also come from RUGRUN_RADBROS / RUGRUN_GEORGE. Source paths are never written anywhere.
+// --only <ids> rebuilds just those Radbros and merges their entries into the existing clips.meta.json
+// (the other GLBs and meta entries are left byte-for-byte alone).
 //
 // Character recipe (spec §9, exact order; draco LAST - unlit after it silently drops compression):
 //   unlit -> drop sit/lie clips -> resize 1024 -> webp 90 -> resample -> draco
@@ -28,13 +30,20 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "models");
 const GEN = path.join(ROOT, "src", "generated");
 const BIN = path.join(ROOT, "node_modules", ".bin", "gltf-transform");
-const IDS = ["652", "4764", "2564"] as const;
+const IDS = ["652", "4764", "2564", "723"] as const;
 const DROP = ["Stand_to_Sit_Transition_M", "Chair_Sit_Idle_M", "Sit_Lie_Bed"];
 
 function arg(name: string, env: string): string | null {
   const i = process.argv.indexOf(`--${name}`);
   const v = i >= 0 ? process.argv[i + 1] : process.env[env];
   return v ? path.resolve(v) : null;
+}
+
+const onlyAt = process.argv.indexOf("--only");
+const ONLY = onlyAt >= 0 ? (process.argv[onlyAt + 1] ?? "").split(",").filter(Boolean) : null;
+if (ONLY && (!ONLY.length || ONLY.some(id => !(IDS as readonly string[]).includes(id)))) {
+  console.error(`--only takes Radbro ids from ${IDS.join(", ")}`);
+  process.exit(2);
 }
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -207,9 +216,11 @@ async function radbros(dir: string) {
   const clipsDir = path.join(dir, "game-clips");
   const manifestPath = path.join(clipsDir, "manifest.json");
   const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : { characters: {} };
-  const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> = {};
+  const metaFile = path.join(GEN, "clips.meta.json");
+  const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> =
+    ONLY && fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
   const notes: string[] = [];
-  for (const id of IDS) {
+  for (const id of ONLY ?? IDS) {
     const replacement = path.join(clipsDir, `radbro${id}_character.glb`);
     const delivery = path.join(dir, "delivery", `radbro${id}_animations.glb`);
     const src = fs.existsSync(replacement) ? replacement : delivery;
@@ -241,7 +252,7 @@ async function radbros(dir: string) {
     meta[id] = { clipPack: packClips.length > 0, clips };
   }
   fs.mkdirSync(GEN, { recursive: true });
-  fs.writeFileSync(path.join(GEN, "clips.meta.json"), `${JSON.stringify(meta, null, 1)}\n`);
+  fs.writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
   console.log(`src/generated/clips.meta.json written`);
   for (const n of notes) console.log(`NOTE ${n}`);
 }
@@ -297,7 +308,7 @@ if (process.argv.includes("--meta-only")) {
 const radbroDir = arg("radbros", "RUGRUN_RADBROS");
 const georgeDir = arg("george", "RUGRUN_GEORGE");
 if (!radbroDir && !georgeDir) {
-  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
+  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>] [--only <id,...>]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
   process.exit(2);
 }
 fs.mkdirSync(OUT, { recursive: true });

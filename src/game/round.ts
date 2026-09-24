@@ -12,8 +12,8 @@ import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { Pack } from "../route/trackPack.ts";
 import { Runner } from "../runner/runner.ts";
 
-export type RadbroId = "652" | "4764" | "2564";
-export const RADBROS: readonly RadbroId[] = ["652", "4764", "2564"];
+export type RadbroId = "652" | "4764" | "2564" | "723";
+export const RADBROS: readonly RadbroId[] = ["652", "4764", "2564", "723"];
 
 export type RoundPhase = "countdown" | "chase" | "caught" | "escaped";
 

@@ -127,6 +127,36 @@ seed and gets the same result bit for bit. sin/cos come from a table built with 
 made in Chrome replays the same in Safari or Firefox. The link string is varint RLE of per-step changes,
 deflate-raw (CompressionStream), base64url.
 
+## Radbros
+
+Pick your Radbro on the title; you chase one of the other three (the link's `r=` if it names one, else at
+random). All four are playable from the start (none is a campaign unlock), and the pick is cosmetic: the
+round is the same with any pair, so ghost links replay the same whoever you pick.
+
+| | persona | taunts (a few) | caught / escaped |
+|---|---|---|---|
+| **#652** | showboat | "too slow, ser", "main character energy" | "ok ok, good content" / "gm, bagholder" |
+| **#4764** | smug | "cope", "skill issue" | "this changes nothing" / "few understand" |
+| **#2564** | paranoid ghost | "they're watching", "the balloons are listening" | "how did you see me" / "i was never here" |
+| **#723** | cowboy (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "yeehaw", "this rooftop ain't big enough for the two of us", "catch me at Hot Topic, partner", "you're slower than dial-up" | "well, dang. fair draw, partner" / "happy trails, partner" |
+
+Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
+the chatter pitch per Radbro is `VOICE` in `src/app/PlayViews.tsx` (#723 has the lowest). A speech bubble
+stays up 1.8 s, longer for long lines (about 60 ms a character).
+
+Adding a Radbro (how #723 went in):
+1. In the owner's Radbro folder: `game-clips/radbro<id>_character.glb` (mesh + locomotion clips),
+   `game-clips/radbro<id>.clips.glb` (the other clips on the same rig) and the `manifest.json` entry.
+2. Add the id to `RadbroId` / `RADBROS` (`src/game/round.ts`) and `IDS` (`tools/assets.ts`), then fill
+   the per-Radbro tables (`npm run typecheck` lists what is missing).
+3. `npm run assets -- --radbros <folder> --only <id>` builds that Radbro's web GLB + clip pack and its
+   `clips.meta.json` entry (the other Radbros' files stay untouched); `npm run assets -- --meta-only`
+   measures the Regular_Jump takeoff / apex / feet-down times (#723: 0.467 / 0.8 / 1.1 s).
+4. Dev server up, `RUGRUN_CHROME_PROFILE` set: `npm run portraits -- --only <id>` (title card),
+   `npm run og-image -- --bg <saved frame>` (share card, one bust per Radbro); the key art busts are
+   composited by the art script (untracked).
+5. `npm test` (`test/roster.test.ts` checks the files, clip meta, lines and links for every Radbro).
+
 ## The chase and difficulties
 
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
@@ -216,7 +246,8 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
   every district's `decor.json`, so in `?editor=decor` a billboard face's material can be switched to any
   of them. `npm run billboards` re-applies them to boards that still use a text Sign (keeps hand edits);
   `gen-city --decor` makes new decor with them (`src/world/billboards.ts`). Banners stay text Signs.
-- **Key art**: `public/ui/key-art.webp` behind the title while the city loads.
+- **Key art**: `public/ui/key-art.webp` behind the title while the city loads (the four Radbro busts are
+  composited from the title-card renders, never generated).
 
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
@@ -228,7 +259,7 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`) |
-| `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves all three to `public/ui/` for the title cards |
+| `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
 (`d=chill|normal|degen`); with `&s=<seed>&g=<ghost>` it is a ghost link (see "Ghost links").
@@ -334,7 +365,7 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   `sfx.ts` if something is too loud or too quiet.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
-- The production build is ~12.5 MB (models ~5.8 MB, four districts' level files, round 4 art); the 9 MB
+- The production build is ~13.8 MB (models ~6.6 MB incl. four Radbros, four districts' level files, round 4 art); the 9 MB
   budget is not enforced.
 - Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
   objectives (`src/game/campaign.ts`) and the district mechanics (`MECH`, `?tune`) need a human pass.
@@ -349,7 +380,7 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on https://rugrun.vyvanse.beer (the canonical
 address; the old vercel.app alias serves the same page), so change them if the game moves. Share and
 challenge / ghost links are built from the address the game was opened on.
-`public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the three
+`public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the four
 Radbro portraits; `public/favicon.svg` is drawn by hand. `npm run og-image` (dev server up,
 `RUGRUN_CHROME_PROFILE` set) re-renders `og.jpg` and `apple-touch-icon.png`: `--pick N` takes another
 frozen swing from the `?bot=swing` round, and `--bg <png>` re-composites over a saved frame.

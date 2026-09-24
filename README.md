@@ -4,7 +4,7 @@ A rooftop chase with balloon swinging, built on [react-three-game](https://prnth
 Design: `docs/specs/2026-09-23-rug-run-design.md`. Quick guide (run, controls, editing, tuning, known
 issues): `PLAY.md`. Live: https://rugrun.vyvanse.beer (the old https://radbro-rug-run.vercel.app still works)
 
-Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764 or #2564, chase
+Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564 or #723 (the cowboy), chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
 balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo, and
 procedural WebAudio music + SFX (no audio files).
@@ -26,7 +26,7 @@ him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
 
-Challenge links: `?c=<652|4764|2564>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
+Challenge links: `?c=<652|4764|2564|723>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
 Ghost links add `&s=<seed>&g=<packed run>`: that exact round with the challenger's run replayed as a
 translucent ghost, checked on the title ("verified replay" / "unverified"); Share after a catch makes one,
 and your personal best's run is kept for "race your best" (`src/game/ghost.ts`, PLAY.md "Ghost links").
@@ -80,4 +80,4 @@ Tools (print results, never gate the build): `npm run balance` (follower/camper/
 (headless `?bot` round: outcome vs the Node prediction + screenshots; `?bot=swing` URLs save mid-swing
 shots).
 
-Credits: Radbro #652, #4764 and #2564 · dexedrne · built on react-three-game by prnth.
+Credits: Radbro #652, #4764, #2564 and #723 · dexedrne · built on react-three-game by prnth.

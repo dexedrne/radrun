@@ -112,7 +112,7 @@ export function Title(props: {
   const stars = starCount(progress);
   const touch = useUi(s => s.touch);
   const { compact, narrow } = useViewport();
-  const img = compact ? 60 : narrow ? 72 : 124;
+  const img = compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
   const titlePx = compact ? 36 : narrow ? 46 : 72;
   const playBtn = (
     <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
@@ -183,7 +183,7 @@ export function Title(props: {
                   <img src={`/ui/radbro${id}.webp`} alt="" width={img} height={img} draggable={false}
                     style={{ display: "block", width: img, height: img, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
                 </div>
-                <div>Radbro #{id}</div>
+                <div>{narrow ? `#${id}` : `Radbro #${id}`}</div>
                 {!compact && <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>}
               </button>
             ))}
@@ -281,7 +281,8 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const cd = screen === "countdown" ? Math.ceil(r.countdown) : 0;
   const ringColor = r.ring === "runner" ? "#ff3355" : r.ring === "attached" ? "#3ddc84" : r.ring === "hook" ? "#ffe14d" : "rgba(255,255,255,0.85)";
   const bannerOn = banner && now - banner.t < 1300;
-  const bubbleOn = bubble && now - bubble.t < 1800;
+  // 1.8 s, longer for long lines (~60 ms a character: the cowboy's rooftop line stays ~2.8 s).
+  const bubbleOn = bubble && now - bubble.t < Math.max(1800, bubble.text.length * 60);
   const fadeA = fade && now - fade < 600 ? 1 - (now - fade) / 600 : 0;
   const speedLines = !reducedMotion && r.speed > 14 ? Math.min(1, (r.speed - 14) / 10) : 0;
   const box: React.CSSProperties = { position: "fixed", zIndex: 10, pointerEvents: "none" };

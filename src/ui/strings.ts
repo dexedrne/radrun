@@ -5,7 +5,7 @@ import type { RadbroId } from "../game/round.ts";
 export const S = {
   title: "RUG RUN",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
-  youChase: "You chase one of the other two",
+  youChase: "You chase one of the other three",
   countdownBubble: "finders keepers",
   panicBubble: "wtf",
   panicTag: "PANIC",
@@ -22,19 +22,20 @@ export const S = {
   practice: "PRACTICE",
   ghost: "GHOST",
   autoLow: "switched to Low quality for smoother play — change in Settings",
-  credits: "Radbro #652, #4764 and #2564 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
+  credits: "Radbro #652, #4764, #2564 and #723 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
 export const TAUNTS: Record<RadbroId, string[]> = {
   "652": ["too slow, ser", "watch and learn", "catch me if u can", "main character energy", "clip that", "wagmi (not you)"],
   "4764": ["cope", "ngmi", "have fun staying poor", "skill issue", "sir this is my bag", "buying the dip on you"],
   "2564": ["they're watching", "can't catch a ghost", "the balloons are listening", "you're being followed", "who sent you", "rad response team, stand down"],
+  "723": ["yeehaw", "this rooftop ain't big enough for the two of us", "catch me at Hot Topic, partner", "you're slower than dial-up", "hold onto your hat", "giddy up, bagholder"],
 };
 
-/** Per-character one-liners for the catch / escape beats (#652 showboat, #4764 smug, #2564 paranoid ghost). */
+/** Per-character one-liners for the catch / escape beats (#652 showboat, #4764 smug, #2564 paranoid ghost, #723 cowboy). */
 export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
-  caught: { "652": "ok ok, good content", "4764": "this changes nothing", "2564": "how did you see me" },
-  escaped: { "652": "gm, bagholder", "4764": "few understand", "2564": "i was never here" },
+  caught: { "652": "ok ok, good content", "4764": "this changes nothing", "2564": "how did you see me", "723": "well, dang. fair draw, partner" },
+  escaped: { "652": "gm, bagholder", "4764": "few understand", "2564": "i was never here", "723": "happy trails, partner" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -48,12 +49,14 @@ export const PERSONA: Record<RadbroId, string> = {
   "652": "showboat",
   "4764": "smug",
   "2564": "paranoid ghost",
+  "723": "cowboy",
 };
 
 export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {
   "652": { body: "#ff8a3d", accent: "#2b2b35" },
   "4764": { body: "#8e6cff", accent: "#16161d" },
   "2564": { body: "#eef3fa", accent: "#b9c6d6" },
+  "723": { body: "#a8683a", accent: "#1b1b22" },
 };
 
 export function heat(d: number): { label: string; color: string; fill: number } {

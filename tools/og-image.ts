@@ -1,5 +1,5 @@
 // Link-preview assets: public/og.jpg (1200x630 OG / Twitter card: a mid-swing frame from the game with
-// the RUG RUN logo, the pitch and the three Radbro portraits) and public/apple-touch-icon.png (180 px,
+// the RUG RUN logo, the pitch and the Radbro portraits) and public/apple-touch-icon.png (180 px,
 // from public/favicon.svg).
 //   npm run dev   (in another shell)
 //   RUGRUN_CHROME_PROFILE=<throwaway dir> node tools/og-image.ts [--url <game url>] [--pick N] [--bg <png>] [--bg-out <png>]
@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { RADBRO_COLOR } from "../src/ui/strings.ts";
+import { RADBROS } from "../src/game/round.ts";
 
 const profile = process.env.RUGRUN_CHROME_PROFILE;
 if (!profile) {
@@ -77,13 +78,14 @@ try {
   }
 
   // 2. The card.
-  const cards = (["652", "4764", "2564"] as const).map(id => `
+  const cards = RADBROS.map(id => `
     <div class="card">
       <div class="bust" style="background: radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}88, ${RADBRO_COLOR[id].accent}33 62%, rgba(0,0,0,0.35))">
         <img src="${dataUrl(path.join(pub, "ui", `radbro${id}.webp`), "image/webp")}">
       </div>
       <div class="id">#${id}</div>
     </div>`).join("");
+  const bust = RADBROS.length > 3 ? 118 : 150; // the column of busts fits the 630 px card
   const html = `<!doctype html><html><head><style>
     * { margin: 0; box-sizing: border-box; }
     body { width: ${W}px; height: ${H}px; overflow: hidden; position: relative; font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; color: #fff; background: #141833; }
@@ -95,10 +97,10 @@ try {
     .cta { position: absolute; left: 62px; bottom: 58px; display: flex; gap: 14px; align-items: center; font-size: 21px; font-weight: 700; }
     .play { background: #ff3d7f; padding: 12px 26px; border-radius: 10px; letter-spacing: 2px; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
     .url { opacity: 0.92; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
-    .cards { position: absolute; right: 40px; top: 44px; display: flex; flex-direction: column; gap: 12px; }
+    .cards { position: absolute; right: 40px; top: ${bust > 130 ? 44 : 32}px; display: flex; flex-direction: column; gap: ${bust > 130 ? 12 : 10}px; }
     .card { display: flex; align-items: center; gap: 10px; background: rgba(14,16,30,0.72); border: 2px solid rgba(255,255,255,0.22); border-radius: 14px; padding: 6px 14px 6px 6px; box-shadow: 0 6px 22px rgba(0,0,0,0.35); }
-    .bust { width: 150px; height: 150px; border-radius: 10px; overflow: hidden; }
-    .bust img { width: 150px; height: 150px; display: block; }
+    .bust { width: ${bust}px; height: ${bust}px; border-radius: 10px; overflow: hidden; }
+    .bust img { width: ${bust}px; height: ${bust}px; display: block; }
     .id { font-weight: 800; font-size: 22px; writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 2px; }
   </style></head><body>
     <img class="bg" src="${bg}">
