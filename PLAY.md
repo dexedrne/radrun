@@ -51,6 +51,12 @@ pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasi
 no blob shadows, no runner trail, and no rooftop AC units or antennas (the water towers stay). It switches
 immediately and is remembered in the browser (localStorage). Try Low if a phone runs hot or choppy.
 
+**Auto quality.** During the first 10 s of each chase on High (after a 1.5 s warm-up) the game measures
+its frame time. If the median says it runs below ~40 fps, it switches to Low once and shows "switched to
+Low quality for smoother play — change in Settings". That choice is remembered; it never switches back by
+itself, and once you pick Low or High in Settings it never touches the setting again. `?autoq=0` turns
+it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
+
 ## Sound
 
 Everything is synthesised live with WebAudio (no audio files). Sound starts when you press PLAY or

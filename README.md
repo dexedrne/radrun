@@ -31,6 +31,9 @@ Ghost links add `&s=<seed>&g=<packed run>`: that exact round with the challenger
 translucent ghost, checked on the title ("verified replay" / "unverified"); Share after a catch makes one,
 and your personal best's run is kept for "race your best" (`src/game/ghost.ts`, PLAY.md "Ghost links").
 
+Auto quality: if the first 10 s of a chase on High run below ~40 fps, the game switches to Low once and
+says so (a quality picked by hand in Settings always wins; `?autoq=0` turns it off).
+
 Dev pages (dev and test builds): `?sandbox` free roam (`?autoplay` scripted swinging) · `?tune` live
 sliders incl. the runner difficulty table (save writes `public/levels/tuning.json` and re-bakes) ·
 `?editor` / `?editor=decor` PrefabEditor on `city.json` / `decor.json` · `?routeview` junction graph +

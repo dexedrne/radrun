@@ -374,13 +374,13 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             <div style={{ display: "flex", gap: 6, alignItems: "center" }} data-testid="quality">
               <span style={{ flex: 1 }}>quality</span>
               {(["low", "high"] as const).map(q => (
-                <button key={q} onClick={() => set({ quality: q })} data-testid={`quality-${q}`}
+                <button key={q} onClick={() => set({ quality: q, qualityChosen: true })} data-testid={`quality-${q}`}
                   style={{ ...btn(false), padding: "5px 12px", fontSize: 12, background: s.quality === q ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: s.quality === q ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
                   {q === "low" ? "Low" : "High"}
                 </button>
               ))}
             </div>
-            {s.quality === "low" && <div style={{ opacity: 0.7, fontSize: 11 }}>Low: sharpness 1x, no shadows or trail, fewer rooftop props (anti-aliasing off after a reload)</div>}
+            {s.quality === "low" && <div style={{ opacity: 0.7, fontSize: 11 }}>Low: sharpness 1x, no shadows or trail, fewer rooftop props (anti-aliasing off after a reload){s.qualityAuto && !s.qualityChosen ? ". Switched automatically (the game ran below ~40 fps); pick High to keep High." : ""}</div>}
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label>music {Math.round(s.music * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.music} onChange={e => set({ music: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-music" /></label>
             <label>sound effects {Math.round(s.sfx * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.sfx} onChange={e => set({ sfx: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-sfx" /></label>
@@ -457,6 +457,22 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
         </div>
         {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text", maxHeight: 84, overflowY: "auto" }} data-testid="share-text">{copied}</div>}
       </div>
+    </div>
+  );
+}
+
+/** A short notice (auto quality) near the top, gone after 6 s. */
+export function Toast() {
+  const toast = useUi(s => s.toast);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => useUi.setState({ toast: null }), 6000);
+    return () => clearTimeout(id);
+  }, [toast]);
+  if (!toast) return null;
+  return (
+    <div style={{ position: "fixed", zIndex: 35, left: "50%", top: "16%", transform: "translateX(-50%)", pointerEvents: "none", width: "max-content", maxWidth: "88vw" }}>
+      <div style={{ ...panel, padding: "8px 14px", fontSize: 13, fontWeight: 700, borderLeft: "4px solid #ffd23f", textAlign: "center" }} data-testid="toast">{toast.text}</div>
     </div>
   );
 }

@@ -101,6 +101,12 @@ export type UiState = {
   hint: { id: string; text: string } | null;
   /** The ghost raced in the current round, or null. */
   ghost: GhostInfo | null;
+  /** Small notice (auto quality), cleared by time. */
+  toast: { text: string; t: number } | null;
+  /** Auto quality may switch this page to Low (High, not chosen by hand, not switched before). */
+  autoQuality: boolean;
+  /** PlayDriver's auto-quality check failed: PlayPage switches to Low once. */
+  autoLow: boolean;
 };
 
 export const useUi = create<UiState>(() => ({
@@ -123,6 +129,9 @@ export const useUi = create<UiState>(() => ({
   load: { progress: 0, error: null },
   hint: null,
   ghost: null,
+  toast: null,
+  autoQuality: false,
+  autoLow: false,
 }));
 
 let feedId = 0;

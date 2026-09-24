@@ -21,6 +21,7 @@ export const S = {
   paused: "PAUSED",
   practice: "PRACTICE",
   ghost: "GHOST",
+  autoLow: "switched to Low quality for smoother play — change in Settings",
   credits: "Radbro #652, #4764 and #2564 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 

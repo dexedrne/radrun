@@ -17,6 +17,7 @@ import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/sto
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
 import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
 import { encodeBytes, packBytes } from "../game/ghost.ts";
+import { AutoQuality } from "./autoQuality.ts";
 import { sfx } from "../audio/sfx.ts";
 import { music } from "../audio/music.ts";
 import { musicTarget } from "../audio/score.ts";
@@ -64,6 +65,8 @@ export type PlayProbe = {
    * time, status); the ghost link of the last catch once packed.
    */
   ghost: { recorded: number; on: boolean; phase: string; steps: number; n: number; catchTime: number; status: string; p: [number, number, number] | null; url: string };
+  /** Auto quality: the quality now, whether it may still switch, median fps of this round's window, switched. */
+  autoQ: { quality: string; allowed: boolean; fps: number; fired: boolean };
 };
 
 declare global {
@@ -109,6 +112,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const beep = useRef(4);
   const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120 });
   const ghostPhase = useRef("");
+  const autoQ = useRef(new AutoQuality());
   useFrame((_, delta) => {
     game.frame(delta);
     frames.current++;
@@ -192,7 +196,12 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       sfx.wind(sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
     }
     const mp = music.probe();
+    // Auto quality: the first ~10 s of each real chase on High (never on bot pages).
+    const aq = autoQ.current;
     const ui = useUi.getState();
+    if (aq.frame(delta, game.runId, !BOT_PAGE && ui.autoQuality && ui.quality === "high" && game.mode === "round" && !game.practice && !game.paused && r.phase === "chase")) {
+      useUi.setState({ autoLow: true });
+    }
     const gr = gh?.round, res = ui.results;
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
@@ -210,6 +219,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         catchTime: gr ? gr.stats.catchTime : 0, status: ui.ghost?.status ?? "", p: gh ? [game.ghostP.x, game.ghostP.y, game.ghostP.z] : null,
         url: res?.ghostCode ? ghostUrl(res.chaser, res.runner, res.difficulty, res.time, res.seed, res.ghostCode) : "",
       },
+      autoQ: { quality: ui.quality, allowed: ui.autoQuality, fps: aq.fps, fired: aq.fired },
     };
     acc.current += delta;
     if (acc.current >= 0.1) {

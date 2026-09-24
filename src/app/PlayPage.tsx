@@ -11,9 +11,10 @@ import type { Difficulty } from "../sim/tuning.ts";
 import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
 import { applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
-import { Loading, Pause, ResultsScreen, RoundHud, Title } from "../ui/screens.tsx";
+import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
 import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
 import { GhostView } from "./GhostView.tsx";
+import { S } from "../ui/strings.ts";
 import { TouchControls } from "../ui/TouchControls.tsx";
 import { enterFullscreen } from "../input/touch.ts";
 import { bootPlay } from "./boot.ts";
@@ -60,6 +61,9 @@ async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["so
   return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags }, source);
 }
 const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx); setMuted(s.muted); setAudioLow(s.quality === "low"); };
+/** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */
+const AUTOQ_OFF = params.get("autoq") === "0";
+const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" && !s.qualityChosen && !s.qualityAuto;
 /** Touch play never uses pointer lock (spec §4 "Touch"). */
 const isTouch = () => useUi.getState().touch;
 const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock(); };
@@ -115,6 +119,7 @@ export default function PlayPage() {
   const touch = useUi(s => s.touch);
   const rHeld = useRef<number | null>(null);
   const muteRef = useRef<() => void>(() => undefined);
+  const autoLow = useUi(s => s.autoLow);
   /** The link's ghost (null: none, or it failed to decode) and whether it is still decoding. */
   const [linkGhost, setLinkGhost] = useState<GhostChoice | null>(null);
   const [linkGhostBusy, setLinkGhostBusy] = useState(false);
@@ -296,10 +301,20 @@ export default function PlayPage() {
     setSettingsState(s);
     saveSettings(s);
     if (s.quality !== useUi.getState().quality) useUi.setState({ quality: s.quality });
+    useUi.setState({ autoQuality: autoQualityAllowed(s) });
     applySettings(game.camera, s);
     applyAudio(s);
     game.retune();
   };
+  useEffect(() => { if (settings) useUi.setState({ autoQuality: autoQualityAllowed(settings) }); }, [settings]);
+  // Auto quality asked for Low (PlayDriver): switch once, remember it, tell the player.
+  useEffect(() => {
+    if (!autoLow || !settings) return;
+    useUi.setState({ autoLow: false });
+    if (!autoQualityAllowed(settings)) return;
+    setSettings({ ...settings, quality: "low", qualityAuto: true });
+    useUi.setState({ toast: { text: S.autoLow, t: performance.now() } });
+  }, [autoLow, settings]);
   // Mute button (title + HUD) and the M key; a gesture, so it also unlocks the audio.
   const toggleMute = () => {
     if (!settings) return;
@@ -324,6 +339,7 @@ export default function PlayPage() {
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}
       {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
+      <Toast />
       {paused && inRound && (
         <Pause
           settings={settings}
