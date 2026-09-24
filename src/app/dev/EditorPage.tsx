@@ -8,6 +8,7 @@ import { PrefabEditor, type PrefabEditorRef } from "react-three-game/editor";
 import { PrefabRoot, type Prefab } from "react-three-game";
 import { saveLevelFile } from "./save.ts";
 import { SKY } from "../GameScene.tsx";
+import { CityLook, SkyGradient } from "../cityLook.tsx";
 
 type FileName = "city.json" | "decor.json";
 
@@ -70,6 +71,8 @@ export default function EditorPage() {
       {prefab && (
         <PrefabEditor ref={ref} key={file} prefab={prefab} canvasProps={{ flat: true, camera: { position: [180, 120, 300], far: 3000 } }}>
           <color attach="background" args={[SKY]} />
+          <SkyGradient />
+          <CityLook />
           {/* Same lights as the play prefab (the level files carry none). */}
           <hemisphereLight args={["#e3eeff", "#6b5d7a", 1.25]} />
           <directionalLight position={[216, 220, 175]} intensity={1.5} color="#fff4e0" />

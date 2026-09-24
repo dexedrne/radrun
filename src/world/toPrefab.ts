@@ -6,16 +6,33 @@ import type { GameObject, Prefab, PrefabMaterial } from "react-three-game";
 import type { CityConfig, CityModel, Solid } from "./cityModel.ts";
 import type { DecoBox } from "./generate.ts";
 
+/** Repeating textures are mapped in world space in the game (src/app/cityLook.tsx): repeatCount = tiles
+ *  per metre. Facade tiles are 16 x 24 m (8 bays of 2 m, 8 floors of 3 m); tools/gen-textures.ts. */
+const FACADE_TILE: [number, number] = [0.0625, 0.041667];
+const tex = (texture: string, repeatCount: [number, number]) => ({ texture, repeat: true, repeatCount });
+
 export const CITY_MATERIALS: Record<string, PrefabMaterial> = {
-  facadeA: { color: "#5b6b8c", roughness: 0.92, metalness: 0 },
-  facadeB: { color: "#7a6a8f", roughness: 0.92, metalness: 0 },
-  facadeC: { color: "#4f7f86", roughness: 0.92, metalness: 0 },
-  roofCap: { color: "#d8cbb4", roughness: 0.95, metalness: 0 },
-  tower: { color: "#3d4a72", roughness: 0.85, metalness: 0 },
-  skyline: { materialType: "basic", color: "#a9bcd6" },
-  ground: { color: "#343845", roughness: 1, metalness: 0 },
-  water: { materialType: "basic", color: "#5a9fb8" },
+  facadeA: { name: "slate grid", color: "#8a9ac0", roughness: 0.9, metalness: 0, ...tex("/textures/facade_grid.png", FACADE_TILE) },
+  facadeB: { name: "terracotta brick", color: "#d9927a", roughness: 0.95, metalness: 0, ...tex("/textures/facade_brick.png", FACADE_TILE) },
+  facadeC: { name: "teal grid", color: "#78b0b2", roughness: 0.9, metalness: 0, ...tex("/textures/facade_grid.png", FACADE_TILE) },
+  facadeD: { name: "sand brick", color: "#e0c9a0", roughness: 0.95, metalness: 0, ...tex("/textures/facade_brick.png", FACADE_TILE) },
+  facadeE: { name: "lilac grid", color: "#ab96c9", roughness: 0.9, metalness: 0, ...tex("/textures/facade_grid.png", FACADE_TILE) },
+  roofCap: { name: "roof", color: "#d8cbb4", roughness: 0.95, metalness: 0, ...tex("/textures/roof.png", [0.25, 0.25]) },
+  tower: { name: "tower glass", color: "#8ba2cf", roughness: 0.6, metalness: 0, ...tex("/textures/facade_glass.png", FACADE_TILE) },
+  skyline: { name: "skyline", materialType: "basic", color: "#b3c3dc", ...tex("/textures/facade_grid.png", [0.03125, 0.020833]) },
+  ground: { name: "streets", color: "#c4c6d0", roughness: 1, metalness: 0, ...tex("/textures/street.png", [0.0238095, 0.0238095]) },
+  water: { name: "water", materialType: "basic", color: "#4f9dbf", ...tex("/textures/water.png", [0.0625, 0.0625]) },
 };
+
+/** Five facade looks, spread by a small hash of the solid id. */
+export const FACADES = ["facadeA", "facadeB", "facadeC", "facadeD", "facadeE"];
+export function facadeFor(id: number): string {
+  let x = Math.imul(id + 0x9e37, 0x27d4eb2d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13;
+  return FACADES[(x >>> 0) % FACADES.length];
+}
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -52,17 +69,18 @@ const group = (id: string, children: GameObject[], data?: Record<string, unknown
   return node;
 };
 
-const CAP_T = 0.4;
+/** Roof cap (the surface you run on + a coping band down the facade), metres; top sits 2 cm above the roof. */
+export const CAP_T = 0.8;
 
 /** A solid as a unit box plus a roof-cap child (local coordinates, so it follows edits). */
 export function solidNode(s: Solid, nodeId: string): GameObject {
   const w = s.x1 - s.x0, d = s.z1 - s.z0, h = s.top;
-  const facade = s.kind === "tower" ? "tower" : ["facadeA", "facadeB", "facadeC"][(s.id * 7 + (s.id >> 2)) % 3];
+  const facade = s.kind === "tower" ? "tower" : facadeFor(s.id);
   const cap = boxNode(
     `${nodeId}-cap`,
     [0, 0.5 - (CAP_T / 2 - 0.02) / h, 0],
     [1 + 0.3 / w, CAP_T / h, 1 + 0.3 / d],
-    s.kind === "tower" ? "skyline" : "roofCap",
+    "roofCap",
     { kind: "trim" },
   );
   return boxNode(nodeId, [r3((s.x0 + s.x1) / 2), r3(h / 2), r3((s.z0 + s.z1) / 2)], [r3(w), r3(h), r3(d)], facade, { kind: s.kind }, [cap]);

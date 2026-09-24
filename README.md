@@ -57,8 +57,11 @@ height) and `src/generated/george_clips.json`. Re-rigged `game-clips/radbro<id>_
 replace their delivery GLBs. George's switch, render scale and gait speeds are in
 `src/app/george.config.ts` (empty `GEORGE_GLB` = the procedural placeholder cat).
 
-Rooftop decor (signs, AC units, antennas, the Milady's balloon stand tagged `Data {kind: "miladyStand"}`)
-lives in `public/levels/decor.json`, editable in `?editor=decor`.
+Rooftop decor (signs, the Milady's balloon stand tagged `Data {kind: "miladyStand"}`, and the
+`rooftop-props` group of water towers / AC units / antennas from `npm run gen-props`) lives in
+`public/levels/decor.json`, editable in `?editor=decor`. City textures (`public/textures/`, from
+`npm run gen-textures`) are mapped in world space at runtime (`src/app/cityLook.tsx`); `PLAY.md` has the
+details. `npm run portraits` renders the title-card busts into `public/ui/`.
 
 Tools (print results, never gate the build): `npm run balance` (follower/camper bots per difficulty),
 `npm run probe:canyon` (street-width probe), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run shot`

@@ -11,8 +11,9 @@ import { PlayerView } from "./PlayerView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
+import { CityLook, FOG_COLOR, SkyGradient } from "./cityLook.tsx";
 
-export const SKY = "#9fc3e6";
+export const SKY = FOG_COLOR;
 
 /** Pending-loads count -> UI store; sceneReady once it drains after the PrefabRefs started. */
 export function LoadBridge() {
@@ -108,7 +109,9 @@ export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: R
       }}
     >
       <color attach="background" args={[SKY]} />
-      <fog attach="fog" args={[SKY, 120, 380]} />
+      <fog attach="fog" args={[FOG_COLOR, 120, 380]} />
+      <SkyGradient />
+      <CityLook />
       <PrefabRoot data={prefab}>
         <LoadBridge />
         {children}

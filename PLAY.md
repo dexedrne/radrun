@@ -35,7 +35,7 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | `?sandbox` | free-roam swinging, no runner (`?sandbox&autoplay` = scripted chain-swinger) |
 | `?tune` | live sliders for player, camera and the Chill/Normal runner table; Save writes `tuning.json` |
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
-| `?editor=decor` | the same editor on `public/levels/decor.json` (signs, AC units, the Milady stand) |
+| `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=swing` chain-swings for screenshots) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves all three to `public/ui/` for the title cards |
@@ -56,6 +56,24 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
    not connected, too few junctions) the layout needs more reachable roofs around the failing spot.
 5. Commit `city.json`, `city.model.json`, `runner.pack.bin` and `bake.report.json` together
    (`decor.json` alone for decor edits; decor never affects gameplay).
+
+### The city look
+
+- **Materials** live in the `materials` table of `city.json` (facadeA-E, tower, roofCap, skyline,
+  ground, water) and `decor.json`; pick one in the editor's Material panel to change colour, texture or
+  repeat. Buildings sharing a material draw in one instanced batch, so recolour a look rather than
+  adding one material per building.
+- **Textures are world-space:** in the game, a level material whose texture has *Repeat Texture* on is
+  mapped by world position (walls: along the face x height; tops: x, z), and *Repeat (X, Y)* means
+  tiles per metre. Windows keep their size on any building. The facade tiles are 16 x 24 m (8 bays of
+  2 m, 8 floors of 3 m) = repeat `0.0625, 0.041667`; streets repeat every 42 m (one block pitch).
+  Textures are in `public/textures/` (`npm run gen-textures` regenerates them).
+- **Rooftop props** (water towers, AC units, antennas) are the `rooftop-props` group in `decor.json`,
+  never solid. `npm run gen-props` re-places them (clear of the runner's baked path; run it after
+  `npm run level` if the layout changed); hand edits to other decor nodes are kept.
+- `npm run restyle-city` re-applies the look from `src/world/toPrefab.ts` (materials table, facade
+  rule, roof caps) to `city.json` without touching gameplay geometry.
+- The sky gradient and fog colour are `SKY_COLORS` in `src/app/cityLook.tsx`.
 
 ## tuning.json
 

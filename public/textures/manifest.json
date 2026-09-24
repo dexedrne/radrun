@@ -1,0 +1,10 @@
+{
+ "files": [
+  "/textures/facade_grid.png",
+  "/textures/facade_brick.png",
+  "/textures/facade_glass.png",
+  "/textures/roof.png",
+  "/textures/street.png",
+  "/textures/water.png"
+ ]
+}

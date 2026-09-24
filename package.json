@@ -24,7 +24,10 @@
     "shot": "node tools/shot.ts",
     "botshot": "node tools/botshot.ts",
     "portraits": "node tools/portraits.ts",
-    "assets": "node tools/assets.ts"
+    "assets": "node tools/assets.ts",
+    "gen-textures": "node tools/gen-textures.ts",
+    "restyle-city": "node tools/restyle-city.ts",
+    "gen-props": "node tools/gen-props.ts"
   },
   "dependencies": {
     "@pixiv/three-vrm": "3.5.5",

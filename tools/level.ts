@@ -42,7 +42,7 @@ export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = pat
   const decorPath = path.join(path.dirname(cityPath), "decor.json");
   if (fs.existsSync(decorPath)) {
     const d = prefabBatchStats(JSON.parse(fs.readFileSync(decorPath, "utf8")));
-    console.log(`  decor.json: ${d.nodes} nodes, ${d.batchKeys} batch keys (budget 40 / 6)`);
+    console.log(`  decor.json: ${d.nodes} nodes, ${d.batchKeys} batch keys (budget 320 / 6)`);
   }
   for (const w of warnings.concat(lint.warnings)) console.log(`  warn: ${w}`);
   for (const e of lint.errors.slice(0, 30)) console.log(`  LINT: ${e}`);
