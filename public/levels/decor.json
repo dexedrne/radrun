@@ -1,0 +1,655 @@
+{
+ "id": "decor",
+ "name": "Rug Run decor",
+ "materials": {
+  "metal": {
+   "color": "#9aa3ad",
+   "roughness": 0.7
+  },
+  "billboard": {
+   "color": "#f2c14e",
+   "roughness": 0.9
+  },
+  "stand": {
+   "color": "#e86a92",
+   "roughness": 0.9
+  }
+ },
+ "root": {
+  "id": "decor-root",
+  "children": [
+   {
+    "id": "ac-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        102.2,
+        29.6,
+        93.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-0",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        110.5,
+        31.5,
+        85.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-1",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        86.2,
+        30.1,
+        93.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "billboard-1",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        90,
+        33.5,
+        84.6
+       ],
+       "scale": [
+        8,
+        3.5,
+        0.3
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "billboard"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard",
+        "text": "WAGMI"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "billboard-1-leg",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        90,
+        30.6,
+        84.6
+       ],
+       "scale": [
+        0.3,
+        2.2,
+        0.3
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboardLeg"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        102.2,
+        30.1,
+        109.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-2",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        110.5,
+        32,
+        101.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-3",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        86.2,
+        31.1,
+        109.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        102.2,
+        29.6,
+        67.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "antenna-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        110.5,
+        31.5,
+        59.5
+       ],
+       "scale": [
+        0.15,
+        5,
+        0.15
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "antenna"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "billboard-4",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        106,
+        33,
+        58.6
+       ],
+       "scale": [
+        8,
+        3.5,
+        0.3
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "billboard"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboard",
+        "text": "gm"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "billboard-4-leg",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        106,
+        30.1,
+        58.6
+       ],
+       "scale": [
+        0.3,
+        2.2,
+        0.3
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "billboardLeg"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "ac-5",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        128.2,
+        27.1,
+        93.8
+       ],
+       "scale": [
+        1.6,
+        1.2,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "metal"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "ac"
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "balloon-stand",
+    "components": {
+     "transform": {
+      "type": "Transform",
+      "properties": {
+       "position": [
+        106,
+        30.05,
+        106
+       ],
+       "scale": [
+        2.4,
+        1.1,
+        1.2
+       ]
+      }
+     },
+     "geometry": {
+      "type": "Geometry",
+      "properties": {}
+     },
+     "material": {
+      "type": "Material",
+      "properties": {
+       "materialId": "stand"
+      }
+     },
+     "mesh": {
+      "type": "Mesh",
+      "properties": {
+       "castShadow": false,
+       "receiveShadow": false
+      }
+     },
+     "data": {
+      "type": "Data",
+      "properties": {
+       "data": {
+        "kind": "miladyStand"
+       }
+      }
+     }
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "rug-run",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "license": "UNLICENSED",
+  "author": "dexedrne",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node tools/postbuild.ts",
+    "build:test": "vite build --mode test && node tools/postbuild.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "gen-city": "node tools/gen-city.ts",
+    "level": "node tools/level.ts",
+    "probe:canyon": "node tools/probe-canyon.ts",
+    "trace:proto": "node test/fixtures/proto/dump-trace.ts",
+    "shot": "node tools/shot.ts"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.8.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-three-game": "0.0.113",
+    "three": "0.186.0",
+    "three-text": "0.6.5",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "puppeteer-core": "25.12.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}
