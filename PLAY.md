@@ -2,7 +2,8 @@
 
 He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) before the rug shows up.
 
-**Play it: https://radbro-rug-run.vercel.app** (desktop with a mouse, or a phone / tablet in landscape).
+**Play it: https://rugrun.vyvanse.beer** (desktop with a mouse, or a phone / tablet in landscape; the old
+https://radbro-rug-run.vercel.app address still works).
 
 ## Run it
 
@@ -256,7 +257,9 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 ## Link previews
 
 `index.html` carries the title, description, theme colour, favicon and the Open Graph / Twitter card
-tags. The image URLs are absolute on https://radbro-rug-run.vercel.app, so change them if the game moves.
+tags. The canonical / og:url / image URLs are absolute on https://rugrun.vyvanse.beer (the canonical
+address; the old vercel.app alias serves the same page), so change them if the game moves. Share and
+challenge / ghost links are built from the address the game was opened on.
 `public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the three
 Radbro portraits; `public/favicon.svg` is drawn by hand. `npm run og-image` (dev server up,
 `RUGRUN_CHROME_PROFILE` set) re-renders `og.jpg` and `apple-touch-icon.png`: `--pick N` takes another

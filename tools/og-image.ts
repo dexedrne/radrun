@@ -105,7 +105,7 @@ try {
     <div class="shade"></div>
     <div class="logo">RUG RUN</div>
     <div class="pitch">He swiped your bag. 90 seconds.<br>Swing across the rooftops and <b>YOINK</b> him.</div>
-    <div class="cta"><span class="play">PLAY FREE</span><span class="url">radbro-rug-run.vercel.app</span></div>
+    <div class="cta"><span class="play">PLAY FREE</span><span class="url">rugrun.vyvanse.beer</span></div>
     <div class="cards">${cards}</div>
   </body></html>`;
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });

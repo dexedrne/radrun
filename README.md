@@ -2,7 +2,7 @@
 
 A rooftop chase with balloon swinging, built on [react-three-game](https://prnth.com/react-three-game/).
 Design: `docs/specs/2026-09-23-rug-run-design.md`. Quick guide (run, controls, editing, tuning, known
-issues): `PLAY.md`. Live: https://radbro-rug-run.vercel.app
+issues): `PLAY.md`. Live: https://rugrun.vyvanse.beer (the old https://radbro-rug-run.vercel.app still works)
 
 Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764 or #2564, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
