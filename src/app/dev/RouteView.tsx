@@ -134,6 +134,7 @@ export default function RouteView() {
         <select value={diff} onChange={e => setDiff(e.target.value as Difficulty)}>
           <option value="normal">normal</option>
           <option value="chill">chill</option>
+          <option value="degen">degen</option>
         </select>
         <div style={{ marginTop: 4, opacity: 0.9 }}>{info}</div>
       </div>

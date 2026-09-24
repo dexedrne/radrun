@@ -34,6 +34,13 @@ export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
   escaped: { "652": "gm, bagholder", "4764": "few understand", "2564": "i was never here" },
 };
 
+export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
+export const DIFF_BLURB: Record<Difficulty, string> = {
+  chill: "he jogs, gets gassed fast, big Yoink range",
+  normal: "he sprints when you close in - swing to catch him",
+  degen: "faster, smarter, short taunts, 4 m Yoink - chain or get rugged",
+};
+
 export const PERSONA: Record<RadbroId, string> = {
   "652": "showboat",
   "4764": "smug",

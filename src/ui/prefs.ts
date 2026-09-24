@@ -1,6 +1,6 @@
 // Settings, personal bests and challenge links. localStorage is optional (every access try/catch).
 import { RADBROS, type RadbroId } from "../game/round.ts";
-import type { CameraTuning, Difficulty } from "../sim/tuning.ts";
+import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
 
 const KEY = "rugrun.v1";
 
@@ -81,7 +81,8 @@ export function recordBest(chaser: string, d: string, t: number): number | null 
 
 export function lastPicks(): { chaser: RadbroId; difficulty: Difficulty; firstVisit: boolean } {
   const s = load();
-  return { chaser: s.chaser ?? "652", difficulty: s.visited ? (s.difficulty ?? "chill") : "chill", firstVisit: !s.visited };
+  const d = s.difficulty && (DIFFICULTIES as readonly string[]).includes(s.difficulty) ? s.difficulty : "chill";
+  return { chaser: s.chaser ?? "652", difficulty: s.visited ? d : "chill", firstVisit: !s.visited };
 }
 export function rememberPicks(chaser: RadbroId, difficulty: Difficulty): void {
   const s = load();
@@ -93,7 +94,7 @@ export function rememberPicks(chaser: RadbroId, difficulty: Difficulty): void {
 
 export type Challenge = { c: RadbroId | null; r: RadbroId | null; d: Difficulty | null; t: number | null };
 
-/** ?c=<chaser>&r=<runner>&d=<chill|normal>&t=<seconds>; invalid fields are ignored one by one. */
+/** ?c=<chaser>&r=<runner>&d=<chill|normal|degen>&t=<seconds>; invalid fields are ignored one by one. */
 export function readChallenge(search: string): Challenge {
   const q = new URLSearchParams(search);
   const id = (v: string | null) => (v && (RADBROS as readonly string[]).includes(v) ? (v as RadbroId) : null);
@@ -101,7 +102,7 @@ export function readChallenge(search: string): Challenge {
   let r = id(q.get("r"));
   if (r && r === c) r = null;
   const dv = q.get("d");
-  const d = dv === "chill" || dv === "normal" ? dv : null;
+  const d = dv && (DIFFICULTIES as readonly string[]).includes(dv) ? (dv as Difficulty) : null;
   const tv = Number(q.get("t"));
   const t = q.has("t") && isFinite(tv) && tv > 0 && tv <= 90 ? Math.round(tv * 10) / 10 : null;
   return { c, r, d, t };

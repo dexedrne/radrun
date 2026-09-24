@@ -8,7 +8,7 @@ He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) 
 
 ```sh
 npm ci
-npm run dev        # open http://localhost:4870/  -> pick a Radbro -> Chill or Normal -> PLAY
+npm run dev        # open http://localhost:4870/  -> pick a Radbro -> Chill / Normal / Degen -> PLAY
 ```
 
 Node 23.6 or newer. A WebGPU browser is best (recent Chrome/Chromium); `?webgl2` forces the WebGL2
@@ -52,6 +52,17 @@ immediately and is remembered in the browser (localStorage). Try Low if a phone 
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
 and gets GASSED when his panic budget runs out. He stops to taunt you when you are over 35 m back.
 
+## Difficulties
+
+| | runner | Yoink range | medals (RAD / GOLD / SILVER, s) |
+|---|---|---|---|
+| **Chill** | jogs (0.9x), sprints to 1.1x, gassed after ~14 s of sprinting, wanders | 6.5 m | 35 / 55 / 75 |
+| **Normal** | sprints up to 1.5x from 40 m out, 30 s panic budget | 5 m | 25 / 40 / 60 |
+| **Degen** | 1.2x base, sprints up to 2x from 50 m out, barely wanders, short taunts | 4 m | 30 / 45 / 65 |
+
+Tuned against a swinging bot (below): a strong swinger catches him on Normal in about 25-30 s (median),
+on Degen in about 45 s when it catches him at all (about a quarter of Degen rounds he escapes).
+
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
 | URL | What |
@@ -61,10 +72,11 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
-| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=swing` chain-swings for screenshots) |
+| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen` |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves all three to `public/ui/` for the title cards |
 
-Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat.
+Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
+(`d=chill|normal|degen`).
 
 ## Editing the city and decor by hand
 
@@ -102,7 +114,13 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
 ## tuning.json
 
 `public/levels/tuning.json` is read at startup and overrides the built-in constants: `player`, `camera`,
-and `difficulty.chill` / `difficulty.normal` (the runner's rubber band). Edit it by hand or with `?tune`.
+and `difficulty.chill` / `difficulty.normal` / `difficulty.degen` (the runner's rubber band). Edit it by
+hand or with `?tune`.
+
+Runner table keys: `base` (playback speed of his baked runs), `gStar` (the gap he tries to keep: closer =
+he speeds up by 2.5 %/m), `mMin` / `mMax` (slowest / fastest rate), `panicBudget` (seconds of full sprint
+before GASSED), `airMin` / `airMax` (rate clamp while airborne), `sigma` (branch noise: higher = dumber
+choices), `yoinkRange` (m), `taunt` (seconds he stops to taunt when you are far back).
 
 Swing defaults (changed from the spec's 28 m/s cap):
 
@@ -115,8 +133,16 @@ Swing defaults (changed from the spec's 28 m/s cap):
 | `ropeSteer` | 5 | steering force while on the rope |
 
 The runner is baked with the same player constants, so after changing any `player` value run
-`npm run level` (the dev-server Save does it), then `npm run balance` to see the Chill/Normal catch
-rates, and commit the regenerated `runner.pack.bin` and `bake.report.json`. `npm run probe:canyon`
+`npm run level` (the dev-server Save does it), then `npm run balance` to see the catch rates, and commit
+the regenerated `runner.pack.bin` and `bake.report.json`.
+
+`npm run balance` plays 200 seeded rounds per row with three kinds of bot: the follower (runs his trail
+at k x his speed, never swings), the camper, and the **swinging chaser** (`SwingBot` in
+`src/game/bots.ts`: the real player sim, chain-swinging down the streets at ~16 m/s, letting go past
+each balloon near the bottom of the arc, cutting over to him and Yoinking after a ~0.1-0.2 s reaction).
+Targets: Normal swinger median 25-40 s, Degen swinger median ~45-70 s with some escapes, the old
+follower targets for Normal/Chill. `--set normal.gStar=36` tries a value, `--only swing` runs just those
+rows, `--n 500` more seeds. `npm run probe:canyon`
 reports chain speed on test canyons with the current `tuning.json`.
 
 **George** (visual only, never affects the chase) has his own section in `?tune` and an optional `george`
@@ -141,8 +167,9 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   runtime from prnth's repo are still pending.
 - Frame rate is only measured in headless software rendering (5-25 fps there); check the fps counter
   (bottom right) on a real GPU.
-- Balance bots never swing. With the 20 m/s cap a good human chain is ~1.7x his speed; play-test
-  Normal and adjust `difficulty.normal` (gStar, mMax, panicBudget) if catches come too easily.
+- Balance is tuned against a bot, not people: play-test Normal and Degen and adjust `difficulty.*` in
+  `?tune` if catches come too easily or too hard. Some rounds end in seconds when his first run bends back
+  toward you (his runs are pre-baked; he only re-decides at junctions).
 - The Milady loads from GitHub raw (raw.githubusercontent.com) with jsDelivr as the fallback (jsDelivr
   404'd on some cold files, e.g. #270). `?milady=0` turns her off.
 - SFX are synthesised tones, there is no music.

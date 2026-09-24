@@ -125,7 +125,8 @@ export const PROTOTYPE: Readonly<Tuning> = Object.freeze({
   yoink: false,
 });
 
-export type Difficulty = "chill" | "normal";
+export type Difficulty = "chill" | "normal" | "degen";
+export const DIFFICULTIES: readonly Difficulty[] = ["chill", "normal", "degen"];
 export type DifficultyParams = {
   base: number; gStar: number; mMin: number; mMax: number; panicBudget: number; sigma: number; yoinkRange: number; taunt: number;
   /** Airborne playback-rate clamp (spec 0.9-1.1). */
@@ -136,11 +137,14 @@ export type DifficultyTable = Record<Difficulty, DifficultyParams>;
 export const DIFFICULTY: Readonly<DifficultyTable> = Object.freeze({
   chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1 },
   normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1 },
+  /** Round 3: faster, smarter, shorter taunts, 4 m Yoink (tuned against the swinging bot, tools/balance). */
+  degen: { base: 1.2, gStar: 50, mMin: 0.85, mMax: 2.0, panicBudget: 30, sigma: 0.08, yoinkRange: 4, taunt: 0.9, airMin: 0.9, airMax: 2.0 },
 });
 
 export const MEDALS = {
   normal: { rad: 25, gold: 40, silver: 60 },
   chill: { rad: 35, gold: 55, silver: 75 },
+  degen: { rad: 30, gold: 45, silver: 65 },
 } as const;
 
 export const ROUND = {
@@ -207,8 +211,8 @@ export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: s
 } {
   const player: Tuning = { ...PLAYER };
   const camera: CameraTuning = { ...CAMERA };
-  const difficulty: DifficultyTable = { chill: { ...DIFFICULTY.chill }, normal: { ...DIFFICULTY.normal } };
-  for (const d of ["chill", "normal"] as const) {
+  const difficulty: DifficultyTable = { chill: { ...DIFFICULTY.chill }, normal: { ...DIFFICULTY.normal }, degen: { ...DIFFICULTY.degen } };
+  for (const d of DIFFICULTIES) {
     for (const [k, v] of Object.entries(json?.difficulty?.[d] ?? {})) {
       if (!(k in DIFFICULTY[d]) || typeof v !== "number") { warn(`tuning.json: bad difficulty.${d}.${k}`); continue; }
       (difficulty[d] as Record<string, number>)[k] = v;
@@ -231,7 +235,7 @@ export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: s
 
 /** The JSON written by `?tune` Save and by tools: only the tunable fields. */
 export function tuningToJson(player: Tuning, camera: CameraTuning, difficulty: DifficultyTable = DIFFICULTY): TuningJson {
-  const out: TuningJson = { player: {}, camera: {}, difficulty: { chill: { ...difficulty.chill }, normal: { ...difficulty.normal } } };
+  const out: TuningJson = { player: {}, camera: {}, difficulty: { chill: { ...difficulty.chill }, normal: { ...difficulty.normal }, degen: { ...difficulty.degen } } };
   for (const k of TUNABLE_KEYS) out.player![k] = player[k] as number | boolean;
   for (const k of Object.keys(CAMERA) as (keyof CameraTuning)[]) out.camera![k] = camera[k];
   return out;

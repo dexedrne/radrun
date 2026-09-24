@@ -2,7 +2,7 @@
 // Save writes public/levels/tuning.json (incl. a "george" section) through the dev server (or
 // downloads it outside `npm run dev`).
 import { useState } from "react";
-import { CAMERA, DIFFICULTY, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type Tuning } from "../../sim/tuning.ts";
+import { CAMERA, DIFFICULTIES, DIFFICULTY, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type Tuning } from "../../sim/tuning.ts";
 import { saveLevelFile } from "./save.ts";
 import { GEORGE, setGeorge, type GeorgeTunable } from "../../sidekick/george.ts";
 import { GEORGE_RENDER, georgeToJson, resetGeorge, setGeorgeScale } from "../george.config.ts";
@@ -34,8 +34,8 @@ const GEORGE_SLIDERS: Slider<GeorgeTunable>[] = [
 ];
 
 const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
-  ["base", 0.6, 1.4, 0.01], ["gStar", 8, 45, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 1.5, 0.01], ["panicBudget", 0, 60, 0.5],
-  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 1.5, 0.01],
+  ["base", 0.6, 1.4, 0.01], ["gStar", 8, 60, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 2.5, 0.01], ["panicBudget", 0, 60, 0.5],
+  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 2.5, 0.01],
 ];
 
 export default function TunePanel({ game }: { game: Tunable }) {
@@ -73,7 +73,7 @@ export default function TunePanel({ game }: { game: Tunable }) {
               <input type="checkbox" checked={game.camera[k] as boolean} onChange={e => { (game.camera as Record<string, unknown>)[k] = e.target.checked; bump(); }} /> {k}
             </label>
           ))}
-          {game.difficulty && (["chill", "normal"] as const).map(d => (
+          {game.difficulty && DIFFICULTIES.map(d => (
             <div key={d}>
               <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>runner: {d} (applies on the next round)</div>
               {DIFF_SLIDERS.map(([k, min, max, step]) => row(`${d}.${k}`, game.difficulty![d][k], min, max, step, v => { game.difficulty![d][k] = v; }))}

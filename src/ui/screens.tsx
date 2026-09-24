@@ -1,9 +1,9 @@
 // Plain React DOM screens over the canvas (spec §12): title, loading, in-round HUD, pause, results.
 import { useEffect, useState } from "react";
 import { RADBROS, type RadbroId } from "../game/round.ts";
-import type { Difficulty } from "../sim/tuning.ts";
+import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
-import { MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
+import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
 import { challengeUrl, type Challenge, type Settings } from "./prefs.ts";
 
 const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
@@ -94,14 +94,15 @@ export function Title(props: {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", marginTop: compact ? 8 : 14 }}>
-            {(["chill", "normal"] as const).map(d => (
-              <button key={d} onClick={() => props.setDifficulty(d)} style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", background: d === difficulty ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
-                {d === "chill" ? "Chill" : "Normal"}
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap", marginTop: compact ? 8 : 14 }}>
+            {DIFFICULTIES.map(d => (
+              <button key={d} onClick={() => props.setDifficulty(d)} data-testid={`diff-${d}`} style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
+                {DIFF_LABEL[d]}
               </button>
             ))}
             {compact && playBtn}
           </div>
+          {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
           {!compact && playBtn}
         </div>
         <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>

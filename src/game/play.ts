@@ -11,7 +11,7 @@ import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
 import { Round, RV_RESPAWN, RV_CAUGHT, RV_ESCAPED, type RadbroId } from "./round.ts";
-import { Bot, type BotOptions } from "./bots.ts";
+import { Bot, SwingBot, type BotOptions } from "./bots.ts";
 import { George } from "../sidekick/george.ts";
 import { GEORGE_SPEEDS } from "../app/george.config.ts";
 
@@ -49,7 +49,7 @@ export class PlayGame {
   paused = false;
   /** Touch play: wider aim cone, +1 m Yoink, velocity-biased aim (spec §4 "Touch"). */
   touch = false;
-  bot: Bot | null = null;
+  bot: Bot | SwingBot | null = null;
   botOptions: BotOptions | null = null;
   /** Bits OR-ed over the steps of the last frame. */
   frameEvents = 0;
@@ -134,7 +134,8 @@ export class PlayGame {
     this.rig.yaw = this.round.spawn.yaw;
     this.rig.pitch = this.botOptions ? -0.25 : 0.08; // the bot camera sits higher and looks down past the stand-in
     rigLook(this.rig, 0, 0, 0, false);
-    this.bot = this.botOptions ? new Bot(this.round, this.botOptions) : null;
+    const bo = this.botOptions;
+    this.bot = bo ? (bo.kind === "swing" ? new SwingBot(this.round, s.seed) : new Bot(this.round, bo)) : null;
     const sp = this.round.spawn, rp = this.round.runner.p;
     this.george.beat = "sit";
     this.george.place(sp.x, sp.y, sp.z, sp.roofId, rp.x - sp.x, rp.z - sp.z);

@@ -22,13 +22,13 @@ Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump ·
 ringed balloon, release to let go (LMB on the ground with a ringed balloon = jump + grab) · red ring on
 him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · Esc pause.
 
-Challenge links: `?c=<652|4764|2564>&r=<runner>&d=<chill|normal>&t=<seconds>` preselect the title.
+Challenge links: `?c=<652|4764|2564>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
 
 Dev pages (dev and test builds): `?sandbox` free roam (`?autoplay` scripted swinging) · `?tune` live
 sliders incl. the runner difficulty table (save writes `public/levels/tuning.json` and re-bakes) ·
 `?editor` / `?editor=decor` PrefabEditor on `city.json` / `decor.json` · `?routeview` junction graph +
-a live runner fleeing your mouse · `?bot=follow|yoink&k=1.3&seed=123&d=chill&c=652&r=4764` plays a round
-with the test bot · `?bot=swing&seed=77&c=2564&r=652` drives the real player sim with the scripted
+a live runner fleeing your mouse · `?bot=follow|yoink|chase&k=1.3&seed=123&d=chill&c=652&r=4764` plays a
+round with a test bot (`chase` = the swinging balance bot on the real player sim) · `?bot=swing&seed=77&c=2564&r=652` drives the real player sim with the scripted
 chain-swinger (it freezes 0.25 s into each swing for screenshots) · `?webgl2` forces the WebGL2 backend ·
 `?milady=<1..3333>` picks her file, `?milady=0` turns her off.
 
@@ -44,8 +44,8 @@ otherwise derived from the roofs by rule. Solids must stay unrotated boxes stand
 - `npm run level` (alias `bake`): `city.json` -> `city.model.json` (the sim model, lint printed) -> the
   runner bake -> `runner.pack.bin` (his recorded tracks) + `bake.report.json`. Commit all four files.
   Saving `city.json` or `tuning.json` from the dev pages under `npm run dev` runs this automatically.
-- `public/levels/tuning.json` holds the player/camera constants and the Chill/Normal runner table,
-  read at startup.
+- `public/levels/tuning.json` holds the player/camera constants and the Chill/Normal/Degen runner
+  table, read at startup.
 
 ## Characters
 
@@ -64,7 +64,7 @@ Rooftop decor (signs, the Milady's balloon stand tagged `Data {kind: "miladyStan
 `npm run gen-textures`) are mapped in world space at runtime (`src/app/cityLook.tsx`); `PLAY.md` has the
 details. `npm run portraits` renders the title-card busts into `public/ui/`.
 
-Tools (print results, never gate the build): `npm run balance` (follower/camper bots per difficulty),
+Tools (print results, never gate the build): `npm run balance` (follower/camper/swinging bots per difficulty),
 `npm run probe:canyon` (street-width probe), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run shot`
 (headless mid-swing screenshot of `?autoplay`), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run botshot`
 (headless `?bot` round: outcome vs the Node prediction + screenshots; `?bot=swing` URLs save mid-swing

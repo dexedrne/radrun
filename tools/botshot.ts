@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { applyTuningJson } from "../src/sim/tuning.ts";
+import { applyTuningJson, DIFFICULTIES } from "../src/sim/tuning.ts";
 import { decodePack } from "../src/route/trackPack.ts";
 import { Round } from "../src/game/round.ts";
 import { runBotRound } from "../src/game/bots.ts";
@@ -31,10 +31,11 @@ const levels = path.resolve(import.meta.dirname, "..", "public", "levels");
 const tj = applyTuningJson(JSON.parse(fs.readFileSync(path.join(levels, "tuning.json"), "utf8")));
 const model = JSON.parse(fs.readFileSync(path.join(levels, "city.model.json"), "utf8"));
 const pack = decodePack(fs.readFileSync(path.join(levels, "runner.pack.bin")));
-const d = (q.get("d") === "normal" ? "normal" : "chill") as Difficulty;
+const d = ((DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? q.get("d") : "chill") as Difficulty;
 const round = new Round({ model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false });
 const swing = q.get("bot") === "swing";
-const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
+const chase = q.get("bot") === "chase";
+const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
 if (!swing) console.log(`node prediction: ${predicted.caught ? "CAUGHT" : "ESCAPED"} (${predicted.kind || "-"}) at chase step ${predicted.steps} (${predicted.time.toFixed(2)} s)`);
 
 const browser = await puppeteer.launch({
