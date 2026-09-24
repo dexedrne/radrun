@@ -4,6 +4,7 @@
 // Window blur clears every held key. The DOM part (attachDom) is separate from the pure latch so the
 // latch can be driven by scripts, bots and tests.
 import type { InputFrame } from "../sim/player.ts";
+import { recFromInput, type InputRec } from "../game/ghost.ts";
 
 export type Scheme = { easyGrab: boolean };
 
@@ -83,13 +84,34 @@ export class InputLatch {
     return this.keys.has("KeyQ") || this.rmb || this.touchFace;
   }
 
+  private get fwd(): number {
+    return (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) + this.stickY;
+  }
+  private get right(): number {
+    return (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0) + this.stickX;
+  }
+
+  /**
+   * The play page's path (ghost-exact): one step as a quantised record (camera yaw, camera-space move,
+   * buttons); PlayGame rebuilds the InputFrame from it (game/ghost.ts buildFrame) so a recorded run
+   * replays bit-exactly. Consumes the press edges like consume().
+   */
+  sample(rec: InputRec, yaw: number): InputRec {
+    const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
+    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge);
+    this.jumpEdge = false;
+    this.webEdge = false;
+    this.steps++;
+    return rec;
+  }
+
   /**
    * Fill `f` for one fixed step. Move is camera-relative: forward = (-sin yaw, -cos yaw) on xz.
    * `aim` is the camera forward vector.
    */
   consume(f: InputFrame, yawSin: number, yawCos: number, aimX: number, aimY: number, aimZ: number): InputFrame {
-    const fwd = (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) + this.stickY;
-    const right = (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0) + this.stickX;
+    const fwd = this.fwd;
+    const right = this.right;
     let mx = -yawSin * fwd + yawCos * right;
     let mz = -yawCos * fwd - yawSin * right;
     const ml = Math.sqrt(mx * mx + mz * mz);

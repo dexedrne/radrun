@@ -51,6 +51,24 @@ export type Results = {
   runner: string;
   chaser: string;
   difficulty: string;
+  seed: number;
+  /** This run packed for a ghost link (game/ghost.ts), once ready (catches only). */
+  ghostCode: string | null;
+  /** Raced a ghost: its catch time (null = it never caught him) and whether the replay verified it. */
+  vsGhost: { time: number | null; verified: boolean } | null;
+};
+
+/** The ghost raced this round (HUD tag, GhostView). */
+export type GhostInfo = {
+  chaser: RadbroId;
+  /** checking = the replay is still running; unverified = it does not reproduce the claimed time. */
+  status: "checking" | "verified" | "unverified";
+  /** Claimed catch time (the link's t, or your stored best). */
+  claimed: number;
+  /** The replay's catch time / kind (null = the replay never caught him). */
+  time: number | null;
+  kind: "tag" | "yoink" | "";
+  source: "link" | "best";
 };
 
 export type FeedLine = { id: number; text: string; t: number };
@@ -81,6 +99,8 @@ export type UiState = {
   load: { progress: number; error: string | null };
   /** First-run tip shown right now (ui/hints.ts), or null. */
   hint: { id: string; text: string } | null;
+  /** The ghost raced in the current round, or null. */
+  ghost: GhostInfo | null;
 };
 
 export const useUi = create<UiState>(() => ({
@@ -102,6 +122,7 @@ export const useUi = create<UiState>(() => ({
   pair: null,
   load: { progress: 0, error: null },
   hint: null,
+  ghost: null,
 }));
 
 let feedId = 0;

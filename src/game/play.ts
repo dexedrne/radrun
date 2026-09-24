@@ -1,9 +1,10 @@
 // The play session (title attract mode + rounds) outside React: one per page, never remounted.
 // Owns the input latch, camera rig, fixed stepper and the current Round; restart = a fresh Round with a
-// new seed (nothing reloads). Also drives the optional test bot (?bot=follow|yoink).
+// new seed (nothing reloads). Also drives the optional test bot (?bot=follow|yoink), records every real
+// round's input (game/ghost.ts) and steps a challenge ghost in lockstep with the round.
 import { emptyInput, EV_LAND, RING_RUNNER, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import { FixedStepper } from "../sim/stepper.ts";
-import { AIM_COS_TOUCH, HOLD_DELAY_EASY, TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
+import { TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { Pack } from "../route/trackPack.ts";
 import { PHASE_ROPE } from "../route/trackPack.ts";
@@ -14,6 +15,7 @@ import { Round, RV_RESPAWN, RV_CAUGHT, RV_ESCAPED, type RadbroId } from "./round
 import { Bot, SwingBot, type BotOptions } from "./bots.ts";
 import { George } from "../sidekick/george.ts";
 import { GEORGE_SPEEDS } from "../app/george.config.ts";
+import { GhostLog, GhostRun, buildFrame, emptyRec, recFromFrame, roundTuning, type GhostFlags, type GhostSpec } from "./ghost.ts";
 
 export type Mode = "title" | "round";
 
@@ -70,6 +72,23 @@ export class PlayGame {
   /** Horizontal facing hints for the views. */
   runnerVel: Vec3 = { x: 0, y: 0, z: 0 };
 
+  // ---- ghosts (game/ghost.ts) ----
+  /** This round's input record (real rounds; bot rounds only with recordBot). */
+  readonly log = new GhostLog();
+  recording = false;
+  /** ?bot=chase&rec: the swinging bot's rounds go through the ghost codec too (e2e). */
+  recordBot = false;
+  /** What the current round was created with (touch: aim cone, +1 m Yoink, aim bias; easy grab). */
+  roundFlags: GhostFlags = { touch: false, easy: false };
+  /** The ghost being raced this round (null = none) and the spec Retry re-races. */
+  ghost: GhostRun | null = null;
+  ghostSpec: GhostSpec | null = null;
+  /** Ghost render state: interpolated body point and the ghost's sim event bits of the last frame. */
+  readonly ghostP: Vec3 = { x: 0, y: 0, z: 0 };
+  ghostEvents = 0;
+  private readonly rec = emptyRec();
+  private ghostIndex: CityIndex | null = null;
+
   constructor(model: CityModel, pack: Pack, tuning: Tuning, camera: CameraTuning, difficulty: DifficultyTable) {
     this.model = model;
     this.pack = pack;
@@ -96,12 +115,7 @@ export class PlayGame {
 
   retune(): void {
     const easy = this.camera.easyGrab;
-    this.simTuning = {
-      ...this.tuning,
-      holdDelay: easy ? Math.max(this.tuning.holdDelay, HOLD_DELAY_EASY) : this.tuning.holdDelay,
-      zip: easy ? false : this.tuning.zip,
-      aimCos: this.touch ? Math.min(this.tuning.aimCos, AIM_COS_TOUCH) : this.tuning.aimCos,
-    };
+    this.simTuning = roundTuning(this.tuning, { easy, touch: this.touch });
     this.input.easyGrab = easy;
   }
 
@@ -120,12 +134,36 @@ export class PlayGame {
     });
   }
 
-  /** Start a round (PLAY, Retry) or, with practice = true, free roam (PRACTICE). Keeps the canvas, prefab and caches. */
-  startRound(s: RoundSetup, practice = false): void {
+  /**
+   * A ghost's own Round (same setup and flags as the recorded one, its own CityIndex, runner and rng).
+   * countdown = true for the lockstep ghost, false for the title's verification replay.
+   */
+  makeGhostRun(g: GhostSpec, countdown: boolean): GhostRun {
+    this.ghostIndex ??= new CityIndex(this.model);
+    const round = new Round({
+      model: this.model, index: this.ghostIndex, pack: this.pack, difficulty: g.difficulty, params: this.difficulty[g.difficulty],
+      tuning: roundTuning(this.tuning, g.flags), chaser: g.chaser, runner: g.runner, seed: g.seed, countdown,
+      yoinkBonus: g.flags.touch ? TOUCH.yoinkBonus : 0,
+    });
+    return new GhostRun(round, g.log, g.flags.touch);
+  }
+
+  /**
+   * Start a round (PLAY, Retry) or, with practice = true, free roam (PRACTICE). Keeps the canvas, prefab
+   * and caches. `ghost` (its setup must be `s`) replays beside you.
+   */
+  startRound(s: RoundSetup, practice = false, ghost: GhostSpec | null = null): void {
     this.setup = s;
     this.practice = practice;
     this.retune();
+    this.roundFlags = { touch: this.touch, easy: this.camera.easyGrab };
     this.round = this.makeRound(s);
+    this.log.n = 0;
+    this.recording = !practice && (!this.botOptions || (this.recordBot && this.botOptions.kind === "swing"));
+    this.ghostSpec = practice ? null : ghost;
+    this.ghost = this.ghostSpec ? this.makeGhostRun(this.ghostSpec, true) : null;
+    this.ghostEvents = 0;
+    if (this.ghost) { const gp = this.ghost.round.player.p; this.ghostP.x = gp.x; this.ghostP.y = gp.y; this.ghostP.z = gp.z; }
     this.mode = "round";
     this.runId++;
     this.roundT = 0;
@@ -151,9 +189,10 @@ export class PlayGame {
     if (this.mode === "round") this.retry();
   }
 
-  /** Retry: same pair and difficulty, new seed (practice: back to the start roof). */
+  /** Retry: same pair and difficulty, new seed (practice: back to the start roof; a ghost race: its round again). */
   retry(seed = randomSeed()): void {
-    this.startRound({ ...this.setup, seed }, this.practice);
+    const g = this.ghostSpec;
+    this.startRound({ ...this.setup, seed: g ? g.seed : seed }, this.practice, g);
   }
 
   toTitle(): void {
@@ -161,6 +200,8 @@ export class PlayGame {
     this.paused = false;
     this.practice = false;
     this.bot = null;
+    this.ghost = null;
+    this.ghostSpec = null;
   }
 
   private snap(): void {
@@ -172,27 +213,34 @@ export class PlayGame {
   private step(): void {
     const round = this.round;
     const rig = this.rig;
-    let ax = rig.fwd.x, az = rig.fwd.z;
-    if (this.touch) {
-      // Touch: bias the aim toward where you are going, so a thumb-aimed camera still rings the
-      // balloon ahead (the ring you see is still the hook you get: the sim reads this aim).
-      const v = round.player.v;
-      const vl = Math.sqrt(v.x * v.x + v.z * v.z), hl = Math.sqrt(ax * ax + az * az);
-      if (vl > 0.5 && hl > 1e-6) {
-        const w = TOUCH.velBias * Math.min(1, vl / this.tuning.runSpeed);
-        const bx = ax / hl + (w * v.x) / vl, bz = az / hl + (w * v.z) / vl;
-        const bl = Math.sqrt(bx * bx + bz * bz);
-        if (bl > 1e-6) { ax = (bx / bl) * hl; az = (bz / bl) * hl; }
+    const f = this.frameInput, rec = this.rec;
+    const chase = round.phase === "chase";
+    if (this.bot && chase) {
+      const ov = this.bot.next(round, f);
+      if (this.recording && !ov) {
+        // ?bot=chase&rec: through the codec like a player (the bot's frame is quantised).
+        recFromFrame(rec, f);
+        buildFrame(f, rec, round.player.v, this.roundFlags.touch, round.tuning.runSpeed);
+        this.log.push(rec);
       }
-    }
-    this.input.consume(this.frameInput, rig.sy, rig.cy, ax, rig.fwd.y, az);
-    if (this.bot && round.phase === "chase") {
-      const ov = this.bot.next(round, this.frameInput);
-      round.step(this.frameInput, ov);
+      round.step(f, ov);
       this.bot.after(round);
+    } else if (this.input.script) {
+      // Scripted input (?bot=swing autoplay): raw frames, never recorded.
+      this.input.consume(f, rig.sy, rig.cy, rig.fwd.x, rig.fwd.y, rig.fwd.z);
+      round.step(f);
     } else {
-      round.step(this.frameInput);
+      // Players: the step's input is a quantised record and the frame is rebuilt from it, so the
+      // recorded run replays bit-exactly (game/ghost.ts). Touch biases the aim toward where you are
+      // going (buildFrame), so a thumb-aimed camera still rings the balloon ahead.
+      this.input.sample(rec, rig.yaw);
+      buildFrame(f, rec, round.player.v, this.roundFlags.touch, round.tuning.runSpeed);
+      if (this.recording && chase) this.log.push(rec);
+      round.step(f);
     }
+    // The ghost: its own round, one step in lockstep (never touches this round).
+    const gh = this.ghost;
+    if (gh && gh.step()) this.ghostEvents |= gh.round.player.events;
     this.frameEvents |= round.player.events;
     this.roundEvents |= round.events;
     this.runnerEvents |= round.runner.events;
@@ -211,7 +259,7 @@ export class PlayGame {
   /** Once per rendered frame: look, fixed steps, interpolation. Returns steps run. */
   frame(delta: number): number {
     const [dx, dy] = this.input.takeLook();
-    this.frameEvents = this.roundEvents = this.runnerEvents = 0;
+    this.frameEvents = this.roundEvents = this.runnerEvents = this.ghostEvents = 0;
     if (this.mode === "title") {
       this.titleT += delta;
       return 0;
@@ -239,6 +287,13 @@ export class PlayGame {
     this.runnerP.y = pr.y + (r.y - pr.y) * a;
     this.runnerP.z = pr.z + (r.z - pr.z) * a;
     if (delta > 0) { this.runnerVel.x = (this.runnerP.x - ox) / delta; this.runnerVel.z = (this.runnerP.z - oz) / delta; }
+    const g = this.ghost;
+    if (g) {
+      const ga = g.done || round.over ? 1 : a, gp = g.round.player.p, gq = g.round.prevPlayer.p;
+      this.ghostP.x = gq.x + (gp.x - gq.x) * ga;
+      this.ghostP.y = gq.y + (gp.y - gq.y) * ga;
+      this.ghostP.z = gq.z + (gp.z - gq.z) * ga;
+    }
     // Yoink: the lasso reels him in to arm's length over 0.5 s.
     if (round.phase === "caught" && round.stats.catchKind === "yoink") {
       const t = smooth(this.endT / 0.5);

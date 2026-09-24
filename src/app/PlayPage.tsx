@@ -1,16 +1,19 @@
 // The game page: TITLE -> LOADING -> COUNTDOWN -> CHASE -> RESULTS over one canvas that is mounted
 // once, plus TITLE -> PRACTICE (free swinging with your Radbro and George, no runner; pause -> Back
 // to title). Restart / Retry create a fresh Round outside React (nothing remounts). ?bot=... runs the
-// test bot (dev/test builds), ?tune adds sliders.
+// test bot (dev/test builds), ?tune adds sliders. A ghost link (?c&r&d&s&t&g) is decoded and verified
+// on the title; PLAY then races that exact round with the ghost (game/ghost.ts, GhostView).
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlayGame } from "../game/play.ts";
 import { randomSeed } from "../game/play.ts";
 import type { RadbroId } from "../game/round.ts";
 import type { Difficulty } from "../sim/tuning.ts";
 import { attachDom } from "../input/input.ts";
-import { useUi } from "../ui/store.ts";
-import { applySettings, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings } from "../ui/prefs.ts";
+import { useUi, type GhostInfo } from "../ui/store.ts";
+import { applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
 import { Loading, Pause, ResultsScreen, RoundHud, Title } from "../ui/screens.tsx";
+import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
+import { GhostView } from "./GhostView.tsx";
 import { TouchControls } from "../ui/TouchControls.tsx";
 import { enterFullscreen } from "../input/touch.ts";
 import { bootPlay } from "./boot.ts";
@@ -33,6 +36,29 @@ const TUNE = DEV && params.has("tune");
 const BOT = DEV ? botParams(location.search) : null;
 
 const canvasEl = () => document.querySelector("canvas");
+
+/** A decoded ghost plus its verification (the title banner, the HUD tag, the results line). */
+export type GhostChoice = { spec: GhostSpec; info: GhostInfo };
+
+/** Replay the ghost headless (its own Round, no countdown; ~10-20 ms for a 90 s run) and judge the claim. */
+function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"]): GhostChoice {
+  const run = game.makeGhostRun(spec, false);
+  run.advance(spec.log.n + 1);
+  const r = run.round, caught = r.phase === "caught";
+  return {
+    spec,
+    info: {
+      chaser: spec.chaser, status: run.verifies(spec.claimed) ? "verified" : "unverified", claimed: spec.claimed,
+      time: caught ? r.stats.catchTime : null, kind: caught ? r.stats.catchKind : "", source,
+    },
+  };
+}
+
+async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["source"]): Promise<GhostChoice | null> {
+  const dec = await unpackGhost(g.g);
+  if (!dec) return null;
+  return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags }, source);
+}
 const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx); setMuted(s.muted); setAudioLow(s.quality === "low"); };
 /** Touch play never uses pointer lock (spec §4 "Touch"). */
 const isTouch = () => useUi.getState().touch;
@@ -48,6 +74,7 @@ function Scene({ game }: { game: PlayGame }) {
       <PlayDriver game={game} />
       <ActorsView game={game} />
       <GeorgeView game={game} />
+      <GhostView game={game} />
       <MiladyView game={game} />
       <CameraView game={game} ropeDrop={1} />
       <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} />
@@ -88,6 +115,11 @@ export default function PlayPage() {
   const touch = useUi(s => s.touch);
   const rHeld = useRef<number | null>(null);
   const muteRef = useRef<() => void>(() => undefined);
+  /** The link's ghost (null: none, or it failed to decode) and whether it is still decoding. */
+  const [linkGhost, setLinkGhost] = useState<GhostChoice | null>(null);
+  const [linkGhostBusy, setLinkGhostBusy] = useState(false);
+  const ghostActive = !!linkGhost && linkGhost.spec.chaser === chaser && linkGhost.spec.difficulty === difficulty;
+  const [bestGhost, setBestGhost] = useState<StoredGhost | null>(null);
 
   // Touch: switch on at the first touch anywhere; that tap (and PLAY) also asks for fullscreen +
   // landscape. The game picks up the wider aim cone / Yoink bonus from the next round.
@@ -111,6 +143,20 @@ export default function PlayPage() {
     }, e => setErr(String(e)));
   }, []);
 
+  // A ghost link: decode + verify once the game exists (the replay needs the city and the pack).
+  useEffect(() => {
+    if (!game || BOT) return;
+    const { c, r, d, s, t, g } = challenge;
+    if (!c || !r || !d || s === null || t === null || !g) return;
+    setLinkGhostBusy(true);
+    void decodeGhost(game, { c, r, d, s, t, g }, "link").then(ch => { setLinkGhost(ch); setLinkGhostBusy(false); });
+  }, [game, challenge]);
+
+  // Your kept best run for the picked chaser x difficulty (title: "race your best").
+  useEffect(() => {
+    if (screen === "title" || screen === "boot") setBestGhost(getBestGhost(chaser, difficulty));
+  }, [chaser, difficulty, screen]);
+
   // Scene ready -> title (or straight into the bot round, through LOADING).
   useEffect(() => {
     if (!game || !ready || screen !== "boot") return;
@@ -131,15 +177,17 @@ export default function PlayPage() {
     useUi.setState({ paused: p });
   }, [game]);
 
-  const begin = useCallback((seed: number, practice = false) => {
+  /** Start a round (a ghost race: its exact round - seed, pair, difficulty - with the ghost beside you). */
+  const begin = useCallback((seed: number, practice = false, ghost: GhostChoice | null = null) => {
     if (!game) return;
-    const runner = pickRunner(chaser, challenge.r);
+    const runner = ghost ? ghost.spec.runner : pickRunner(chaser, challenge.r);
+    const ch = ghost ? ghost.spec.chaser : chaser, d = ghost ? ghost.spec.difficulty : difficulty;
     useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
-    void loadPair(chaser, runner).then(ok => {
+    void loadPair(ch, runner).then(ok => {
       if (!ok) return;
       game.paused = false;
-      game.startRound({ chaser, runner, difficulty, seed }, practice);
-      useUi.setState({ screen: practice ? "practice" : "countdown" });
+      game.startRound({ chaser: ch, runner, difficulty: d, seed: ghost ? ghost.spec.seed : seed }, practice, ghost?.spec ?? null);
+      useUi.setState({ screen: practice ? "practice" : "countdown", ghost: ghost ? ghost.info : null });
       lockMouse();
     });
   }, [game, chaser, difficulty, challenge]);
@@ -149,8 +197,17 @@ export default function PlayPage() {
     unlockAudio();
     if (isTouch()) enterFullscreen();
     else canvasEl()?.requestPointerLock();
-    begin(randomSeed());
-  }, [begin, chaser, difficulty]);
+    begin(randomSeed(), false, ghostActive ? linkGhost : null);
+  }, [begin, chaser, difficulty, ghostActive, linkGhost]);
+
+  const onRaceBest = useCallback(() => {
+    if (!game || !bestGhost) return;
+    rememberPicks(chaser, difficulty);
+    unlockAudio();
+    if (isTouch()) enterFullscreen();
+    else canvasEl()?.requestPointerLock();
+    void decodeGhost(game, bestGhost, "best").then(ch => { if (ch) begin(ch.spec.seed, false, ch); });
+  }, [game, bestGhost, begin, chaser, difficulty]);
 
   const onPractice = useCallback(() => {
     rememberPicks(chaser, difficulty);
@@ -174,7 +231,7 @@ export default function PlayPage() {
     if (!game) return;
     game.toTitle();
     document.exitPointerLock?.();
-    useUi.setState({ screen: "title", results: null, paused: false });
+    useUi.setState({ screen: "title", results: null, paused: false, ghost: null });
   }, [game]);
 
   // Input + pointer lock + keys.
@@ -260,7 +317,8 @@ export default function PlayPage() {
       <Scene game={game} />
       {(screen === "boot" || screen === "title") && (
         <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready}
-          muted={settings.muted} onMute={toggleMute} />
+          muted={settings.muted} onMute={toggleMute} ghost={linkGhost} ghostBusy={linkGhostBusy} ghostActive={ghostActive}
+          bestGhost={ghostActive ? null : bestGhost} onRaceBest={onRaceBest} />
       )}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}

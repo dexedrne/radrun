@@ -20,6 +20,7 @@ export const S = {
   loading: "LOADING",
   paused: "PAUSED",
   practice: "PRACTICE",
+  ghost: "GHOST",
   credits: "Radbro #652, #4764 and #2564 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 

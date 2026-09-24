@@ -86,6 +86,35 @@ to fling forward" (you are on the rope), "chain swings down the streets to go fa
 let-go) and "red ring on him = click / tap WEB to YOINK" (the first red ring in a real round). They are
 remembered in the browser; pause -> Settings -> **show tips again** brings them back.
 
+## Ghost links
+
+Every real round records your inputs (camera yaw, WASD / stick, jump / web buttons: one small record per
+120 Hz step). After a catch, **Share** (it reads **Share ghost** once the run is packed) copies a link like
+`?c=652&r=4764&d=normal&s=<seed>&t=41.2&g=<ghost>`: the exact round (city seed, both Radbros,
+difficulty), your claimed time and your packed run (about 1 KB for a 30-45 s catch).
+
+Opening a ghost link shows a **GHOST RACE** banner on the title. The game replays the run in the
+background first (~15 ms). If the replay catches him on its last recorded step at the claimed time, the
+banner says **verified replay**; otherwise **unverified** (a tampered link, or a link from an older version
+of the game whose tuning or city has changed). **RACE GHOST** starts that exact round with the challenger
+as a translucent Radbro with a "GHOST" tag, replaying their inputs through its own copy of the sim
+(its own runner, never solid, never touches your round). Its time sits under the clock, the feed says when
+it catches him, and the results say whether you beat it. Retry races the same round again; picking another
+Radbro or difficulty on the title plays a normal round instead.
+
+Your personal best per Radbro x difficulty keeps its run in the browser: **race your best · 41.2 s** on the
+title replays it as a ghost.
+
+Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
+41.2 s" (claimed, not checked).
+
+How it stays exact: the sim only reads the horizontal aim direction, the move vector and three buttons, so
+a live round steps with the input **rebuilt from its quantised record** (yaw in 1024 steps per turn, move
+in 1/64 steps; `src/game/ghost.ts`). The replay feeds the same records to a second Round with the same
+seed and gets the same result bit for bit. sin/cos come from a table built with + - * / only, so a link
+made in Chrome replays the same in Safari or Firefox. The link string is varint RLE of per-step changes,
+deflate-raw (CompressionStream), base64url.
+
 ## The chase and difficulties
 
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
@@ -109,11 +138,11 @@ on Degen in about 45 s when it catches him at all (about a quarter of Degen roun
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
-| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen` |
+| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves all three to `public/ui/` for the title cards |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
-(`d=chill|normal|degen`).
+(`d=chill|normal|degen`); with `&s=<seed>&g=<ghost>` it is a ghost link (see "Ghost links").
 
 ## Editing the city and decor by hand
 
@@ -209,6 +238,8 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   toward you (his runs are pre-baked; he only re-decides at junctions).
 - The Milady loads from GitHub raw (raw.githubusercontent.com) with jsDelivr as the fallback (jsDelivr
   404'd on some cold files, e.g. #270). `?milady=0` turns her off.
+- Ghost links replay only on the same game version: a later change to `tuning.json` (player or difficulty
+  values), the city or the runner pack makes older ghosts drift and show as "unverified".
 - Music and sound effects are synthesised (no recorded audio). The mix was set from measured output
   levels (music + SFX peak around -9 dBFS), not by ear: adjust the levels in `src/audio/music.ts` /
   `sfx.ts` if something is too loud or too quiet.

@@ -4,7 +4,8 @@ import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
 import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
-import { challengeUrl, type Challenge, type Settings } from "./prefs.ts";
+import { challengeUrl, ghostUrl, type Challenge, type Settings, type StoredGhost } from "./prefs.ts";
+import type { GhostChoice } from "../app/PlayPage.tsx";
 import { hints } from "./hints.ts";
 
 const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
@@ -66,9 +67,35 @@ export function MuteButton({ muted, onMute, style }: { muted: boolean; onMute: (
 
 // ---- title -----------------------------------------------------------------------------------------
 
+const GHOST_STATUS: Record<string, { text: string; color: string }> = {
+  checking: { text: "checking the replay…", color: "#cfd8e3" },
+  verified: { text: "verified replay", color: "#3ddc84" },
+  unverified: { text: "unverified", color: "#ffb347" },
+};
+const caughtVerb = (kind: string) => (kind === "yoink" ? "yoinked" : kind === "tag" ? "tagged" : "caught");
+
+/** Title: the ghost link's banner (who, what time, whether the replay reproduces it). */
+function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; active: boolean; busy: boolean }) {
+  if (busy) return <div style={{ marginTop: 10, display: "inline-block", ...panel, padding: "6px 12px", fontSize: 13 }}>loading the ghost…</div>;
+  if (!ghost) return null;
+  const { spec, info } = ghost;
+  const st = GHOST_STATUS[info.status];
+  return (
+    <div style={{ marginTop: 10, display: "inline-block", background: "rgba(20,40,60,0.88)", border: "2px solid #9fe6ff", borderRadius: 8, padding: "6px 14px", fontWeight: 800 }} data-testid="ghost-banner">
+      <span style={{ color: "#9fe6ff", letterSpacing: 2, marginRight: 8 }}>{S.ghost} RACE</span>
+      #{spec.chaser} {caughtVerb(info.kind)} #{spec.runner} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
+      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}</span>
+      <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>
+        {active ? "same city, same start, same runner: PLAY races their ghost" : `pick #${spec.chaser} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
+      </div>
+    </div>
+  );
+}
+
 export function Title(props: {
   chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
   challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean; muted: boolean; onMute: () => void;
+  ghost: GhostChoice | null; ghostBusy: boolean; ghostActive: boolean; bestGhost: StoredGhost | null; onRaceBest: () => void;
 }) {
   const { chaser, difficulty, challenge } = props;
   const touch = useUi(s => s.touch);
@@ -77,7 +104,13 @@ export function Title(props: {
   const titlePx = compact ? 36 : narrow ? 46 : 72;
   const playBtn = (
     <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
-      {props.ready ? "PLAY" : "loading city…"}
+      {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
+    </button>
+  );
+  const bestBtn = props.bestGhost && (
+    <button onClick={props.onRaceBest} disabled={!props.ready} title="race the ghost of your best run (same round)"
+      style={{ ...btn(false), fontSize: compact ? 12 : 13, padding: compact ? "10px 12px" : "13px 14px", borderColor: "#9fe6ff", opacity: props.ready ? 1 : 0.5 }} data-testid="race-best">
+      race your best · {props.bestGhost.t.toFixed(1)} s
     </button>
   );
   const practiceBtn = (
@@ -93,7 +126,7 @@ export function Title(props: {
         <RotateHint inline />
         <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
         <div style={{ marginTop: compact ? 4 : 10, fontSize: compact ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
-        {challenge.t !== null && (
+        {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
             challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs #${challenge.r}` : ""}
           </div>
@@ -129,9 +162,10 @@ export function Title(props: {
             ))}
             {compact && playBtn}
             {compact && practiceBtn}
+            {compact && bestBtn}
           </div>
           {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14 }}>{playBtn}{practiceBtn}</div>}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>{playBtn}{practiceBtn}{bestBtn}</div>}
         </div>
         <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>
           {touch ? (
@@ -183,6 +217,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const [now, setNow] = useState(performance.now());
   const [hints, setHints] = useState(true);
   const touch = useUi(s => s.touch);
+  const ghost = useUi(s => s.ghost);
   const { narrow } = useViewport();
   useEffect(() => {
     const t = setInterval(() => setNow(performance.now()), 100);
@@ -213,6 +248,15 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
           {clockText(r.clock)}
         </div>
       )}
+      {/* the raced ghost: a chip under the timer + the floating tag GhostView positions */}
+      {ghost && !practice && screen !== "results" && (
+        <div style={{ ...box, top: 48, left: "50%", transform: "translateX(-50%)", background: "rgba(20,40,60,0.8)", border: "1px solid #9fe6ff", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" }} data-testid="ghost-chip">
+          <span style={{ color: "#9fe6ff", letterSpacing: 2 }}>{S.ghost}</span> {ghost.claimed.toFixed(1)} s{ghost.status === "unverified" ? " (unverified)" : ""}
+        </div>
+      )}
+      <div id="rr-ghost-tag" style={{ ...box, left: 0, top: 0, visibility: "hidden" }}>
+        <div style={{ color: "#dff6ff", font: "800 11px ui-monospace, monospace", letterSpacing: 2, padding: "1px 6px", borderRadius: 4, background: "rgba(20,60,90,0.55)", whiteSpace: "nowrap" }}>{S.ghost}</div>
+      </div>
       {/* practice: speed + chain panel */}
       {practice && (
         <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }} data-testid="practice-stats">
@@ -364,7 +408,9 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
   const [copied, setCopied] = useState("");
   if (!r) return null;
   const share = async () => {
-    const text = `${shareText(r.kind, r.runner, r.time)} ${challengeUrl(r.chaser, r.runner, r.difficulty, r.time)}`;
+    // With the packed run: a ghost link (the exact round + your inputs); else the plain time claim.
+    const url = r.ghostCode ? ghostUrl(r.chaser, r.runner, r.difficulty, r.time, r.seed, r.ghostCode) : challengeUrl(r.chaser, r.runner, r.difficulty, r.time);
+    const text = `${shareText(r.kind, r.runner, r.time)}${r.ghostCode ? " - race my ghost:" : ""} ${url}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied("copied to clipboard");
@@ -373,6 +419,15 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
     }
   };
   const delta = r.caught && r.best !== null ? r.time - r.best : null;
+  const vg = r.vsGhost;
+  let ghostLine = "";
+  if (vg) {
+    const d = vg.time !== null && r.caught ? r.time - vg.time : 0;
+    ghostLine = r.caught
+      ? vg.time === null ? "you beat the ghost (it never caught him)" : d < -0.05 ? `you beat the ghost by ${(-d).toFixed(1)} s` : d > 0.05 ? `the ghost was ${d.toFixed(1)} s faster` : "dead heat with the ghost"
+      : vg.time !== null ? `the ghost caught him in ${vg.time.toFixed(1)} s` : "the ghost never caught him either";
+    if (!vg.verified) ghostLine += " (unverified ghost)";
+  }
   const big = compact ? 26 : 34;
   return (
     <div style={{ ...layer, display: "grid", placeItems: "end center", paddingBottom: compact ? "3vh" : "8vh", pointerEvents: "none" }}>
@@ -391,15 +446,16 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void }
             <div style={{ marginTop: 6, opacity: 0.9 }}>closest {r.closest.toFixed(1)} m · {S.goneFishing}</div>
           </>
         )}
+        {ghostLine && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: "#9fe6ff" }} data-testid="ghost-result">{ghostLine}</div>}
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
           longest swing chain {r.maxChain} · top speed {r.topSpeed.toFixed(1)} m/s · falls {r.falls} · #{r.chaser} vs #{r.runner} · {r.difficulty}
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
-          {r.caught && <button style={btn()} onClick={share}>Share</button>}
+          {r.caught && <button style={btn()} onClick={share} data-testid="share" title={r.ghostCode ? "copy a ghost link: friends race your run" : "copy a challenge link"}>{r.ghostCode ? "Share ghost" : "Share"}</button>}
           <button style={btn(true)} onClick={props.onRetry} data-testid="retry">{touch ? "Retry" : "Retry (R)"}</button>
           <button style={btn()} onClick={props.onMenu}>Menu</button>
         </div>
-        {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text" }}>{copied}</div>}
+        {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text", maxHeight: 84, overflowY: "auto" }} data-testid="share-text">{copied}</div>}
       </div>
     </div>
   );

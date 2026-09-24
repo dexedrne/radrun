@@ -12,7 +12,12 @@ type Stored = {
   visited?: boolean;
   /** First-run tips already shown (ui/hints.ts). */
   hints?: Record<string, boolean>;
+  /** Your personal-best run per chaser:difficulty (game/ghost.ts link string). */
+  ghosts?: Record<string, StoredGhost>;
 };
+
+/** A kept run: the round (chaser, runner, difficulty, seed), its catch time and the packed record. */
+export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; t: number; g: string };
 
 /** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
 export type Quality = "low" | "high";
@@ -117,9 +122,13 @@ export function rememberPicks(chaser: RadbroId, difficulty: Difficulty): void {
   save(s);
 }
 
-export type Challenge = { c: RadbroId | null; r: RadbroId | null; d: Difficulty | null; t: number | null };
+/** s = the round seed and g = the packed ghost (both only in ghost links). */
+export type Challenge = { c: RadbroId | null; r: RadbroId | null; d: Difficulty | null; t: number | null; s: number | null; g: string | null };
 
-/** ?c=<chaser>&r=<runner>&d=<chill|normal|degen>&t=<seconds>; invalid fields are ignored one by one. */
+/**
+ * ?c=<chaser>&r=<runner>&d=<chill|normal|degen>&t=<seconds>[&s=<seed>&g=<ghost>]; invalid fields are
+ * ignored one by one.
+ */
 export function readChallenge(search: string): Challenge {
   const q = new URLSearchParams(search);
   const id = (v: string | null) => (v && (RADBROS as readonly string[]).includes(v) ? (v as RadbroId) : null);
@@ -130,7 +139,11 @@ export function readChallenge(search: string): Challenge {
   const d = dv && (DIFFICULTIES as readonly string[]).includes(dv) ? (dv as Difficulty) : null;
   const tv = Number(q.get("t"));
   const t = q.has("t") && isFinite(tv) && tv > 0 && tv <= 90 ? Math.round(tv * 10) / 10 : null;
-  return { c, r, d, t };
+  const sv = q.get("s") ?? "";
+  const s = /^\d{1,10}$/.test(sv) && Number(sv) <= 0xffffffff ? Number(sv) : null;
+  const gv = q.get("g") ?? "";
+  const g = /^[A-Za-z0-9_-]{8,60000}$/.test(gv) ? gv : null;
+  return { c, r, d, t, s, g };
 }
 
 export function challengeUrl(chaser: string, runner: string, d: string, t: number): string {
@@ -138,6 +151,29 @@ export function challengeUrl(chaser: string, runner: string, d: string, t: numbe
   u.search = `?c=${chaser}&r=${runner}&d=${d}&t=${t.toFixed(1)}`;
   u.hash = "";
   return u.toString();
+}
+
+/** A ghost link: the exact round (seed, pair, difficulty), the claimed time and the packed run. */
+export function ghostUrl(chaser: string, runner: string, d: string, t: number, seed: number, g: string): string {
+  const u = new URL(location.href);
+  u.search = `?c=${chaser}&r=${runner}&d=${d}&s=${seed >>> 0}&t=${t.toFixed(1)}&g=${g}`;
+  u.hash = "";
+  return u.toString();
+}
+
+/** Your kept personal-best run for a chaser x difficulty, if any. */
+export function getBestGhost(chaser: string, d: string): StoredGhost | null {
+  const g = load().ghosts?.[`${chaser}:${d}`];
+  return g && typeof g.g === "string" && typeof g.s === "number" && typeof g.t === "number" ? g : null;
+}
+/** Keep a run as the personal-best ghost (only if it is still the best for its chaser x difficulty). */
+export function saveBestGhost(g: StoredGhost): void {
+  const s = load();
+  const key = `${g.c}:${g.d}`;
+  const best = s.bests?.[key];
+  if (typeof best === "number" && g.t > best + 1e-9) return;
+  s.ghosts = { ...(s.ghosts ?? {}), [key]: g };
+  save(s);
 }
 
 /** Runner selection at PLAY (spec §20 item 2): the link's r if valid and != chaser, else random. */

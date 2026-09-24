@@ -15,7 +15,8 @@ import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts"
 import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
-import { getBest, recordBest } from "../ui/prefs.ts";
+import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
+import { encodeBytes, packBytes } from "../game/ghost.ts";
 import { sfx } from "../audio/sfx.ts";
 import { music } from "../audio/music.ts";
 import { musicTarget } from "../audio/score.ts";
@@ -58,6 +59,11 @@ export type PlayProbe = {
   backend: string;
   /** AudioContext state ("none" before the first gesture), music mode / close-chase layer, notes and SFX played. */
   audio: { state: string; muted: boolean; music: string; layer: boolean; notes: number; sfx: number; rms?: number; peak?: number };
+  /**
+   * Ghosts: steps recorded this round; the raced ghost (its phase, chase steps, record length, catch
+   * time, status); the ghost link of the last catch once packed.
+   */
+  ghost: { recorded: number; on: boolean; phase: string; steps: number; n: number; catchTime: number; status: string; p: [number, number, number] | null; url: string };
 };
 
 declare global {
@@ -75,9 +81,20 @@ function buildResults(game: PlayGame): Results {
     const prev = recordBest(s.chaser, s.difficulty, st.catchTime);
     newBest = prev === null || st.catchTime < prev;
   }
+  const gi = useUi.getState().ghost;
+  const vsGhost = game.ghostSpec && gi ? { time: gi.time, verified: gi.status === "verified" } : null;
+  // Pack this run for a ghost link (async deflate); a new personal best is kept as your best ghost.
+  if (caught && game.recording && game.log.n === r.chaseSteps) {
+    const bytes = encodeBytes(game.log, game.roundFlags), runId = game.runId, t = st.catchTime;
+    void packBytes(bytes).then(code => {
+      if (newBest) saveBestGhost({ c: s.chaser, r: s.runner, d: s.difficulty, s: s.seed, t, g: code });
+      if (game.runId === runId) useUi.setState(u => (u.results ? { results: { ...u.results, ghostCode: code } } : {}));
+    }, () => undefined);
+  }
   return {
     caught, kind: st.catchKind, time: st.catchTime, closest: st.closest, maxChain: st.maxChain, topSpeed: st.topSpeed, falls: st.falls,
     medal: caught ? medal(s.difficulty, st.catchTime) : "", best, newBest, runner: s.runner, chaser: s.chaser, difficulty: s.difficulty,
+    seed: s.seed, ghostCode: null, vsGhost,
   };
 }
 
@@ -91,6 +108,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const lines = useRef(0);
   const beep = useRef(4);
   const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120 });
+  const ghostPhase = useRef("");
   useFrame((_, delta) => {
     game.frame(delta);
     frames.current++;
@@ -133,6 +151,12 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     if (rev & RE_PANIC) { showBubble(S.panicBubble); sfx.chatter(VOICE[who] * 1.25); }
     if (rev & RE_CORNERED) { showBubble(S.corneredBubble); sfx.chatter(VOICE[who] * 1.1); }
     if (rev & RE_GASSED) pushFeed(S.gassedFeed);
+    // The ghost's catch (its own round): a feed line.
+    const gh = game.ghost, gph = gh && game.mode === "round" ? gh.round.phase : "";
+    if (gph !== ghostPhase.current) {
+      if (gph === "caught" && gh && !r.over) pushFeed(`${S.ghost} ${gh.round.stats.catchKind === "yoink" ? "yoinked" : "tagged"} him · ${gh.round.stats.catchTime.toFixed(1)} s`);
+      ghostPhase.current = gph;
+    }
     if (ev & (RV_CAUGHT | RV_ESCAPED)) {
       if (ev & RV_ESCAPED) { showBanner(S.escape); showBubble(LINES.escaped[who]); music.sting("escaped"); sfx.rug(); sfx.meow(true); }
       else {
@@ -168,6 +192,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       sfx.wind(sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
     }
     const mp = music.probe();
+    const ui = useUi.getState();
+    const gr = gh?.round, res = ui.results;
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
       outcome: r.phase === "caught" ? "CAUGHT" : r.phase === "escaped" ? "ESCAPED" : "", catchKind: r.stats.catchKind, catchTime: r.stats.catchTime,
@@ -178,6 +204,11 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       audio: {
         state: audioState(), muted: isMuted(), music: mp.mode, layer: mp.layer, notes: mp.scheduled, sfx: sfx.played(),
         ...(DEV ? { rms: audio.current.rms, peak: audio.current.maxPeak } : {}),
+      },
+      ghost: {
+        recorded: game.log.n, on: !!gh, phase: gr ? gr.phase : "", steps: gr ? gr.chaseSteps : 0, n: gh ? gh.log.n : 0,
+        catchTime: gr ? gr.stats.catchTime : 0, status: ui.ghost?.status ?? "", p: gh ? [game.ghostP.x, game.ghostP.y, game.ghostP.z] : null,
+        url: res?.ghostCode ? ghostUrl(res.chaser, res.runner, res.difficulty, res.time, res.seed, res.ghostCode) : "",
       },
     };
     acc.current += delta;

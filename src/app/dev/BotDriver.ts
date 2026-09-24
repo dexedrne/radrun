@@ -2,14 +2,16 @@
 // test bot from game/bots.ts (follow / yoink = the kinematic follower; chase = the swinging chaser
 // SwingBot on the real player sim, same result as Node). ?bot=swing instead drives the real player sim
 // with the scripted chain-swinger (app/autoplay.ts) - no catch expected; it is for mid-swing
-// screenshots. Params: k (follower speed factor), seed, d (chill|normal|degen), c / r (Radbro ids).
+// screenshots. Params: k (follower speed factor), seed, d (chill|normal|degen), c / r (Radbro ids);
+// rec (with bot=chase): the bot's inputs go through the ghost codec, so a catch gives a ghost link
+// (window.__play.ghost.url) like a player's round.
 // Progress and the outcome are exposed on window.__play (PlayDriver).
 import type { PlayGame } from "../../game/play.ts";
 import { RADBROS, type RadbroId } from "../../game/round.ts";
 import { DIFFICULTIES, type Difficulty } from "../../sim/tuning.ts";
 import { autoplayScript } from "../autoplay.ts";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -24,11 +26,13 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     d: (DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? (q.get("d") as Difficulty) : "chill",
     c,
     r,
+    rec: q.has("rec"),
   };
 }
 
 export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botParams>>): void {
   game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
+  game.recordBot = p.rec;
   game.startRound({ chaser: p.c, runner: p.r, difficulty: p.d, seed: p.seed });
   if (p.kind === "swing") {
     const script = autoplayScript({
@@ -50,5 +54,5 @@ export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botPar
       if (onRope === 30 && game.round.phase === "chase") { w.__frozen = true; game.paused = true; }
     };
   }
-  console.info(`[rug-run] bot=${p.kind} k=${p.k} seed=${p.seed} d=${p.d} c=${p.c} r=${p.r}`);
+  console.info(`[rug-run] bot=${p.kind} k=${p.k} seed=${p.seed} d=${p.d} c=${p.c} r=${p.r}${p.rec ? " rec" : ""}`);
 }

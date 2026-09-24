@@ -27,6 +27,9 @@ PRACTICE on the title = free swinging in the city with your Radbro and George (n
 first-run tips show once each (pause -> Settings -> show tips again).
 
 Challenge links: `?c=<652|4764|2564>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
+Ghost links add `&s=<seed>&g=<packed run>`: that exact round with the challenger's run replayed as a
+translucent ghost, checked on the title ("verified replay" / "unverified"); Share after a catch makes one,
+and your personal best's run is kept for "race your best" (`src/game/ghost.ts`, PLAY.md "Ghost links").
 
 Dev pages (dev and test builds): `?sandbox` free roam (`?autoplay` scripted swinging) · `?tune` live
 sliders incl. the runner difficulty table (save writes `public/levels/tuning.json` and re-bakes) ·

@@ -58,7 +58,7 @@ function findBone(root: Object3D, name: string): Bone | undefined {
   return out;
 }
 
-function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): ActorRig {
+export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): ActorRig {
   const model = cloneSkeleton(src);
   const materials: Material[] = [];
   model.traverse(o => {
@@ -91,7 +91,7 @@ function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): ActorRig {
   };
 }
 
-function applyCmd(pl: AnimPlayer, c: AnimCmd | null): void {
+export function applyCmd(pl: AnimPlayer, c: AnimCmd | null): void {
   if (!c) return;
   if (c.kind === "shot") pl.play(c.clip, { once: !c.hold, hold: c.hold, startAt: c.startAt, fade: c.fade, then: c.then });
   else if (c.kind === "force") pl.force(c.clip, c.fade, c.scale);
