@@ -1,9 +1,9 @@
 {
  "city": "40146ecc",
- "tuning": "374529ac",
- "pack": "b1dee43c",
+ "tuning": "8fc24ef4",
+ "pack": "357baf2a",
  "packBytes": 217050,
- "ms": 3586,
+ "ms": 2601,
  "junctions": 12,
  "candidates": 107,
  "baked": 102,

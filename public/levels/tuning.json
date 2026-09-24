@@ -1,7 +1,7 @@
 {
   "player": {
     "gravity": 25,
-    "speedCap": 28,
+    "speedCap": 20,
     "runSpeed": 9,
     "groundAccel": 60,
     "groundBrake": 40,

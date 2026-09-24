@@ -7,11 +7,15 @@ import { deriveModel } from "../src/world/derive.ts";
 import { DEFAULT_CONFIG } from "../src/world/generate.ts";
 import { CityIndex, type CityModel, type Solid } from "../src/world/cityModel.ts";
 import { createBody, emptyInput, stepBody, EV_ATTACH, EV_AUTORELEASE, EV_BONK, EV_FALL, EV_LAND, type SimWorld } from "../src/sim/player.ts";
-import { PLAYER, type Tuning } from "../src/sim/tuning.ts";
+import fs from "node:fs";
+import path from "node:path";
+import { applyTuningJson, type Tuning } from "../src/sim/tuning.ts";
 import { mulberry32 } from "../src/sim/math.ts";
 
 const trialsArg = process.argv.indexOf("--trials");
 const TRIALS = trialsArg > 0 ? Number(process.argv[trialsArg + 1]) : 40;
+// The player constants the game ships with (PLAYER overridden by public/levels/tuning.json).
+const PLAYER_TUNING = applyTuningJson(JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "..", "public", "levels", "tuning.json"), "utf8"))).player;
 
 /** Two rows of 3 blocks (2 x 2 roofs each) facing across a street of width W running along +x. */
 export function canyon(W: number, seed: number): CityModel {
@@ -87,14 +91,14 @@ const widths = [12, 14, 16];
 const policies: Policy[] = [];
 for (const ahead of [-1, 0, 1, 2, 3, 4]) for (const vyMin of [-3, 0, 2]) policies.push({ ahead, vyMin });
 
-console.log(`canyon probe: ${TRIALS} trials per width x policy, +-2 m lateral, +-10 deg aim noise; pass = >= 13 m/s and < 10% bonks`);
+console.log(`canyon probe (tuning.json: speedCap ${PLAYER_TUNING.speedCap}, releaseBoost ${PLAYER_TUNING.releaseBoost}, reelSpeed ${PLAYER_TUNING.reelSpeed}, ropeScale ${PLAYER_TUNING.ropeScale}): ${TRIALS} trials per width x policy, +-2 m lateral, +-10 deg aim noise; pass = >= 13 m/s and < 10% bonks`);
 for (const W of widths) {
   let best: { pol: Policy; speed: number; bonkRate: number; done: number; falls: number } | null = null;
   const rows: string[] = [];
   for (const pol of policies) {
     let sp = 0, rel = 0, bonk = 0, done = 0, falls = 0;
     for (let i = 0; i < TRIALS; i++) {
-      const r = trial(canyon(W, 100 + i), W, PLAYER, pol, 1000 + i);
+      const r = trial(canyon(W, 100 + i), W, PLAYER_TUNING, pol, 1000 + i);
       sp += r.speed; rel += r.releases; bonk += r.bonks; done += r.done ? 1 : 0; falls += r.falls;
     }
     const speed = sp / TRIALS, bonkRate = rel ? bonk / rel : 0;
