@@ -1,0 +1,670 @@
+{
+ "asset": "george_animations.glb",
+ "generator": "george-3d scripts/build_anims.sh (procedural bpy clips, see README.md)",
+ "fps": 30,
+ "units": "metres / seconds at asset scale 1.0 (George: withers 0.310, top of hips 0.324, nose-rump 0.482; Radbros ~1.7-1.9)",
+ "axes": {
+  "up": "+Y",
+  "forward": "+Z",
+  "left": "+X",
+  "origin": "ground, centred between the 4 paws"
+ },
+ "rootBone": "root",
+ "hipsBone": "spine",
+ "inPlace": true,
+ "rootPolicy": {
+  "default": {
+   "xz": "pin",
+   "y": "keep"
+  },
+  "Jump": {
+   "xz": "pin",
+   "y": "pin"
+  },
+  "note": "the root bone never moves horizontally in any clip (QA: 0.000 mm); it carries only Jump's airborne arc, Happy's hop and Sulk's yaw. Body bob / crouch / sit / lie-down live on the hips bone (spine) and keep the paws on the ground."
+ },
+ "groundSpeeds": {
+  "Walk": 0.3,
+  "Trot": 0.7,
+  "Run": 2.6
+ },
+ "groundSpeedNote": "m/s at asset scale 1.0 and playback rate 1 = the speed the stance paws slide backward. At render scale s: playback rate = speed / (groundSpeed * s).",
+ "slideFreeSpeedBands": {
+  "renderScale": 1.16,
+  "rateClamp": [
+   0.7,
+   1.6
+  ],
+  "bands": {
+   "Walk": [
+    0.244,
+    0.557
+   ],
+   "Trot": [
+    0.568,
+    1.299
+   ],
+   "Run": [
+    2.111,
+    4.826
+   ]
+  },
+  "note": "game speeds (m/s) each clip covers without foot sliding at the spec's scale and rate clamp; the current follow-model thresholds (Walk < 1.2, Trot < 3.5, Run above) and the ~9.5 m/s player run are faster than these - see README 'Game integration'"
+ },
+ "order": [
+  "Idle",
+  "Walk",
+  "Trot",
+  "Run",
+  "Jump",
+  "Leap_Air",
+  "Land",
+  "Sit",
+  "Sit_Idle",
+  "Loaf",
+  "Happy",
+  "Sulk"
+ ],
+ "clips": {
+  "Idle": {
+   "name": "Idle",
+   "mode": "loop",
+   "loop": true,
+   "duration": 4.0,
+   "frames": 120,
+   "keys": 121,
+   "groundSpeed": 0.0,
+   "description": "standing, paws planted: breathing (2 breaths), weight shift, head looks L then R, ear flicks, slow tail swish",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      4.0
+     ]
+    ]
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -0.3,
+    "minLegSurfaceGapMm": 24.13,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Walk": {
+   "name": "Walk",
+   "mode": "loop",
+   "loop": true,
+   "duration": 1.0,
+   "frames": 30,
+   "keys": 31,
+   "groundSpeed": 0.3,
+   "description": "4-beat lateral-sequence walk LH,LF,RH,RF (phases 0, .25, .5, .75), duty 0.62",
+   "locomotion": true,
+   "strideLength": 0.3,
+   "cycleHz": 1.0,
+   "footfalls": {
+    "HL": {
+     "leg": "hind left",
+     "touchdown": 0.0,
+     "liftoff": 0.62,
+     "duty": 0.62,
+     "stanceTravel": 0.186
+    },
+    "FL": {
+     "leg": "front left",
+     "touchdown": 0.25,
+     "liftoff": 0.87,
+     "duty": 0.62,
+     "stanceTravel": 0.186
+    },
+    "HR": {
+     "leg": "hind right",
+     "touchdown": 0.5,
+     "liftoff": 0.12,
+     "duty": 0.62,
+     "stanceTravel": 0.186
+    },
+    "FR": {
+     "leg": "front right",
+     "touchdown": 0.75,
+     "liftoff": 0.37,
+     "duty": 0.62,
+     "stanceTravel": 0.186
+    }
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -1.7,
+    "minLegSurfaceGapMm": 24.45,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Trot": {
+   "name": "Trot",
+   "mode": "loop",
+   "loop": true,
+   "duration": 0.5667,
+   "frames": 17,
+   "keys": 18,
+   "groundSpeed": 0.7,
+   "description": "diagonal trot: LF+RH, then RF+LH (phases 0 / .5), duty 0.46 -> short suspension",
+   "locomotion": true,
+   "strideLength": 0.397,
+   "cycleHz": 1.765,
+   "footfalls": {
+    "FL": {
+     "leg": "front left",
+     "touchdown": 0.0,
+     "liftoff": 0.2607,
+     "duty": 0.46,
+     "stanceTravel": 0.1825
+    },
+    "HR": {
+     "leg": "hind right",
+     "touchdown": 0.0113,
+     "liftoff": 0.272,
+     "duty": 0.46,
+     "stanceTravel": 0.1825
+    },
+    "FR": {
+     "leg": "front right",
+     "touchdown": 0.2833,
+     "liftoff": 0.544,
+     "duty": 0.46,
+     "stanceTravel": 0.1825
+    },
+    "HL": {
+     "leg": "hind left",
+     "touchdown": 0.2947,
+     "liftoff": 0.5553,
+     "duty": 0.46,
+     "stanceTravel": 0.1825
+    }
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -1.9,
+    "minLegSurfaceGapMm": 24.81,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Run": {
+   "name": "Run",
+   "mode": "loop",
+   "loop": true,
+   "duration": 0.4,
+   "frames": 12,
+   "keys": 13,
+   "groundSpeed": 2.6,
+   "description": "half-bound gallop LH .00, RH .06, LF .44, RF .54; duty .25 hind / .23 fore (two flight phases)",
+   "locomotion": true,
+   "strideLength": 1.04,
+   "cycleHz": 2.5,
+   "footfalls": {
+    "HL": {
+     "leg": "hind left",
+     "touchdown": 0.0,
+     "liftoff": 0.1,
+     "duty": 0.25,
+     "stanceTravel": 0.26
+    },
+    "HR": {
+     "leg": "hind right",
+     "touchdown": 0.024,
+     "liftoff": 0.124,
+     "duty": 0.25,
+     "stanceTravel": 0.26
+    },
+    "FL": {
+     "leg": "front left",
+     "touchdown": 0.176,
+     "liftoff": 0.268,
+     "duty": 0.23,
+     "stanceTravel": 0.2392
+    },
+    "FR": {
+     "leg": "front right",
+     "touchdown": 0.216,
+     "liftoff": 0.308,
+     "duty": 0.23,
+     "stanceTravel": 0.2392
+    }
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -2.7,
+    "minLegSurfaceGapMm": 3.09,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Jump": {
+   "name": "Jump",
+   "mode": "once",
+   "loop": false,
+   "duration": 0.8,
+   "frames": 24,
+   "keys": 25,
+   "groundSpeed": 0.0,
+   "description": "crouch + butt-wiggle, spring (spine extends, hind legs push, fore legs reach), airborne tuck, fore paws land first and absorb; root carries the airborne arc only",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      0.2333
+     ],
+     [
+      0.5667,
+      0.8
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      0.2333
+     ],
+     [
+      0.5667,
+      0.8
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      0.3
+     ],
+     [
+      0.6333,
+      0.8
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      0.3
+     ],
+     [
+      0.6333,
+      0.8
+     ]
+    ]
+   },
+   "takeoff": 0.3,
+   "land": 0.5667,
+   "foreLiftoff": 0.2333,
+   "hindTouchdown": 0.6333,
+   "apexTime": 0.4333,
+   "apexHeight": 0.12,
+   "crouch": [
+    0.0,
+    0.2333
+   ],
+   "airborneTuck": [
+    0.3,
+    0.5
+   ],
+   "chainToLeapAir": {
+    "startAt": 0.3,
+    "crossfadeToLeapAirBy": 0.45,
+    "why": "the fore legs start reaching for the ground at ~0.47 s; leave Jump before that when the flight is longer than the clip's own 0.27 s hop"
+   },
+   "rootBone": "root carries the airborne arc (glTF +Y, parabola 0 -> apexHeight -> 0 between takeoff and land); pin root Y when the game drives the flight path itself",
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -3.7,
+    "minLegSurfaceGapMm": 9.74,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0
+   }
+  },
+  "Leap_Air": {
+   "name": "Leap_Air",
+   "mode": "loop",
+   "loop": true,
+   "duration": 1.0,
+   "frames": 30,
+   "keys": 31,
+   "groundSpeed": 0.0,
+   "description": "stretched flying pose held while airborne (fore legs reach, hind legs trail, tail streams), slight flutter",
+   "locomotion": false,
+   "pawContacts": {},
+   "qa": {
+    "plantedPawMaxDeviationMm": 0,
+    "meshMinZMm": 22.1,
+    "minLegSurfaceGapMm": 13.06,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Land": {
+   "name": "Land",
+   "mode": "once",
+   "loop": false,
+   "duration": 0.3667,
+   "frames": 11,
+   "keys": 12,
+   "groundSpeed": 0.0,
+   "description": "fore paws touch at t=0 (under the shoulders), hind paws at 0.067 s, absorb dip, back to standing",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      0.3667
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      0.3667
+     ]
+    ],
+    "HL": [
+     [
+      0.0667,
+      0.3667
+     ]
+    ],
+    "HR": [
+     [
+      0.0667,
+      0.3667
+     ]
+    ]
+   },
+   "foreTouchdown": 0.0,
+   "hindTouchdown": 0.0667,
+   "absorbLowest": 0.13,
+   "note": "starts with the fore paws touching down under the shoulders; ends standing square (~ the rest pose) so it blends into Idle / Walk / Trot",
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -2.6,
+    "minLegSurfaceGapMm": 24.35,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0
+   }
+  },
+  "Sit": {
+   "name": "Sit",
+   "mode": "once",
+   "loop": false,
+   "duration": 0.8,
+   "frames": 24,
+   "keys": 25,
+   "groundSpeed": 0.0,
+   "description": "stand -> sit transition; front paws stay planted, hind paws shuffle forward as the haunches drop, tail wraps",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      0.8
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      0.8
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      0.1
+     ],
+     [
+      0.36,
+      0.8
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      0.14
+     ],
+     [
+      0.4,
+      0.8
+     ]
+    ]
+   },
+   "endsIn": "Sit_Idle frame 0 posture (tail wrapped round his left side)",
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -1.5,
+    "minLegSurfaceGapMm": 23.12,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0
+   }
+  },
+  "Sit_Idle": {
+   "name": "Sit_Idle",
+   "mode": "loop",
+   "loop": true,
+   "duration": 4.0,
+   "frames": 120,
+   "keys": 121,
+   "groundSpeed": 0.0,
+   "description": "upright sit, tail wrapped round his left side; breathing, slow head turns (no blink - texture eyes), tail-tip twitch",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      4.0
+     ]
+    ]
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -1.5,
+    "minLegSurfaceGapMm": 22.56,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Loaf": {
+   "name": "Loaf",
+   "mode": "loop",
+   "loop": true,
+   "duration": 4.0,
+   "frames": 120,
+   "keys": 121,
+   "groundSpeed": 0.0,
+   "description": "bread-loaf lie-down, paws tucked, head low, tail tucked along his left side; slow breathing",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      4.0
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      4.0
+     ]
+    ]
+   },
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -1.5,
+    "minLegSurfaceGapMm": 18.93,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  },
+  "Happy": {
+   "name": "Happy",
+   "mode": "once",
+   "loop": false,
+   "duration": 1.5,
+   "frames": 45,
+   "keys": 46,
+   "groundSpeed": 0.0,
+   "description": "tail snaps straight up and quivers, a small springy hop (all four paws off the ground 0.50-0.70 s), head up at the player; ends standing",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      0.5
+     ],
+     [
+      0.7,
+      1.5
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      0.5
+     ],
+     [
+      0.7,
+      1.5
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      0.5
+     ],
+     [
+      0.7,
+      1.5
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      0.5
+     ],
+     [
+      0.7,
+      1.5
+     ]
+    ]
+   },
+   "hopTakeoff": 0.5,
+   "hopLand": 0.7,
+   "hopHeight": 0.035,
+   "rootBone": "root carries the hop (glTF +Y); keep it (policy y: keep) - he hops in place",
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -0.5,
+    "minLegSurfaceGapMm": 22.3,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0
+   }
+  },
+  "Sulk": {
+   "name": "Sulk",
+   "mode": "loop",
+   "loop": true,
+   "duration": 3.0,
+   "frames": 90,
+   "keys": 91,
+   "groundSpeed": 0.0,
+   "description": "lying low, whole body turned 40 deg to his right on the root (face his root toward the player so he visibly turns away), head low and turned further away, ears flattened back, tail tip thumping (2 thumps / 3 s)",
+   "locomotion": false,
+   "pawContacts": {
+    "FL": [
+     [
+      0.0,
+      3.0
+     ]
+    ],
+    "FR": [
+     [
+      0.0,
+      3.0
+     ]
+    ],
+    "HL": [
+     [
+      0.0,
+      3.0
+     ]
+    ],
+    "HR": [
+     [
+      0.0,
+      3.0
+     ]
+    ]
+   },
+   "rootYawDeg": 40.0,
+   "rootBone": "root carries a constant 40 deg yaw to his RIGHT (clockwise seen from above) so he lies turned away from wherever the game faces him; no root translation",
+   "qa": {
+    "plantedPawMaxDeviationMm": 0.0,
+    "meshMinZMm": -2.4,
+    "minLegSurfaceGapMm": 19.78,
+    "legInLegDepthMm": -0.0,
+    "rootMaxHorizontalOffsetMm": 0.0,
+    "loopFirstLastMeshMm": 0.0
+   }
+  }
+ }
+}

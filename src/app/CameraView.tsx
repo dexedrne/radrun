@@ -8,9 +8,13 @@ import { rigFov, rigUpdate, type SegmentHit } from "../camera/rig.ts";
 import { EV_LAND } from "../sim/player.ts";
 import { FRAME } from "./frame.ts";
 
-export function CameraView({ game }: { game: ViewGame }) {
+/**
+ * `ropeDrop`: how far (m) to lower the camera's follow point while hanging - the real characters hang
+ * from their hand at the body point (errata 1), so their body sits ~1 m below it. Eased in and out.
+ */
+export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: number }) {
   const prefab = usePrefab();
-  const tmp = useMemo(() => ({ m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 } }), []);
+  const tmp = useMemo(() => ({ m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 }, p: { x: 0, y: 0, z: 0 }, drop: 0 }), []);
   const hit: SegmentHit = useMemo(() => {
     const idx = game.world.index;
     return (ax, ay, az, bx, by, bz) => idx.segmentHit(ax, ay, az, bx, by, bz);
@@ -24,7 +28,9 @@ export function CameraView({ game }: { game: ViewGame }) {
       hook = tmp.hook;
     }
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
-    rigUpdate(game.rig, Math.min(delta, 0.1), { p: game.renderP, speed, grounded: b.grounded, hook, landed: (game.frameEvents & EV_LAND) !== 0 }, game.camera, hit);
+    tmp.drop += ((b.ropeHook >= 0 ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
+    tmp.p.x = game.renderP.x; tmp.p.y = game.renderP.y - tmp.drop; tmp.p.z = game.renderP.z;
+    rigUpdate(game.rig, Math.min(delta, 0.1), { p: tmp.p, speed, grounded: b.grounded, hook, landed: (game.frameEvents & EV_LAND) !== 0 }, game.camera, hit);
     const r = game.rig;
     const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;
     if (scripted) {

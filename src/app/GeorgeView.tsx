@@ -1,7 +1,7 @@
 // GeorgeView (spec §10, errata 3 + 10): George's interpolated follow-model output -> his node (-5), plus
-// his animation. Until the real George GLB is delivered (src/app/george.config.ts GEORGE_GLB) he is a
-// small procedural black low-poly cat animated by clip name (sit, idle, walk/trot/run gaits, jump, leap,
-// land, happy, sulk). With GEORGE_GLB set, GeorgeGlb plays his clips by the same names.
+// his animation. With GEORGE_GLB set (src/app/george.config.ts) the delivered George plays his clips by
+// name through an AnimPlayer (root bone pinned per george_clips.json); with it empty he falls back to a
+// small procedural black low-poly cat animated by the same clip names.
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useAssetRuntime } from "react-three-game";
@@ -12,7 +12,8 @@ import {
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { PlayGame } from "../game/play.ts";
 import { AnimPlayer } from "./animPlayer.ts";
-import { GEORGE_GLB } from "./george.config.ts";
+import { GEORGE_GLB, GEORGE_JUMP, GEORGE_ROOT_BONE, GEORGE_SCALE } from "./george.config.ts";
+import type { RootPolicy } from "./animPlayer.ts";
 import { FRAME } from "./frame.ts";
 
 const UP = new Vector3(0, 1, 0);
@@ -135,23 +136,24 @@ function useGeorgeGlb(): { root: Object3D; player: AnimPlayer } | null {
     const root = cloneSkeleton(src);
     root.traverse(o => (o.frustumCulled = false));
     const clips = ((src as unknown as { animations?: AnimationClip[] }).animations ?? []) as AnimationClip[];
-    return { root, player: new AnimPlayer(root, [clips], { fade: 0.15, rootBone: GEORGE_ROOT_BONE }) };
+    // george_clips.json rootPolicy: xz pinned everywhere (no clip moves it); Jump's airborne arc is
+    // pinned too because the follow model flies him along your path.
+    const policy = (name: string): RootPolicy => (name === "Jump" ? { xz: "pin", y: "pin" } : { xz: "pin", y: "keep" });
+    return { root, player: new AnimPlayer(root, [clips], { fade: 0.15, rootBone: GEORGE_ROOT_BONE, policy }) };
   }, [assets]);
   useEffect(() => () => g?.player.dispose(), [g]);
   return g;
 }
 
-/** Root bone the Animator pins for George (george_clips.json names it when the GLB lands). */
-const GEORGE_ROOT_BONE = "root";
-/** Render scale: placeholder is authored at game scale; the GLB scale is tuned when it lands. */
-export const GEORGE_SCALE = 1;
+/** Clips he stands in; entering Sit_Idle from one of these plays the Sit transition first. */
+const STANDING = new Set(["Idle", "Walk", "Trot", "Run", "Land", "Happy"]);
 
 export function GeorgeView({ game }: { game: PlayGame }) {
   const cat = useMemo(makeCat, []);
   const glb = useGeorgeGlb();
   const shadow = useRef<Mesh>(null);
   const tmp = useMemo(() => ({ q: new Quaternion(), yaw: 0, t: 0, clip: "" }), []);
-  useFrame((_, rawDelta) => {
+  useFrame((state, rawDelta) => {
     const g = game.george;
     const on = game.mode === "round";
     const node = glb ? glb.root : cat.root;
@@ -159,7 +161,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     if (shadow.current) shadow.current.visible = on;
     if (!on) return;
     const delta = rawDelta * game.timeScale;
-    tmp.t += delta * (g.clip === "Walk" || g.clip === "Trot" || g.clip === "Run" ? 1 : 1);
+    tmp.t += delta;
     const a = game.round.over ? 1 : game.stepper.alpha;
     const x = g.px + (g.x - g.px) * a, y = g.py + (g.y - g.py) * a, z = g.pz + (g.z - g.pz) * a;
     node.position.set(x, y, z);
@@ -174,13 +176,20 @@ export function GeorgeView({ game }: { game: PlayGame }) {
       tmp.yaw += d * Math.min(1, 10 * rawDelta);
     }
     node.quaternion.setFromAxisAngle(UP, tmp.yaw);
+    // Mid-swing he leaps along your arc ~0.5 s behind you, i.e. right past the camera: hide him there.
+    const c = state.camera.position;
+    const cd = (c.x - x) * (c.x - x) + (c.y - y - 0.3) * (c.y - y - 0.3) + (c.z - z) * (c.z - z);
+    node.visible = cd > 3.2 * 3.2;
     node.scale.setScalar(GEORGE_SCALE);
     if (glb) {
       if (g.clip !== tmp.clip) {
+        const from = tmp.clip;
         tmp.clip = g.clip;
-        const once = g.clip === "Jump" || g.clip === "Land" || g.clip === "Happy";
-        if (once) glb.player.play(g.clip, { once: true, fade: 0.1 });
-        else glb.player.force(g.clip, 0.15, g.rate);
+        const p = glb.player;
+        if (g.clip === "Jump") p.play("Jump", { hold: true, fade: 0.06, startAt: GEORGE_JUMP.startAt });
+        else if (g.clip === "Land" || g.clip === "Happy") p.play(g.clip, { hold: true, fade: 0.08 });
+        else if (g.clip === "Sit_Idle" && STANDING.has(from)) { p.base = "Sit_Idle"; p.play("Sit", { once: true, then: "Sit_Idle", fade: 0.15 }); }
+        else p.force(g.clip, g.clip === "Leap_Air" ? 0.1 : 0.15, g.rate);
       } else glb.player.setTimeScale(g.rate);
       glb.player.update(delta);
     } else poseCat(cat, g.clip, tmp.t, g.rate, g.speed);

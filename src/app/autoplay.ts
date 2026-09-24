@@ -1,11 +1,15 @@
 // ?autoplay: a scripted chain-swinger for smoke screenshots (the canyon-probe policy). Walks from the
 // spawn to its street edge, turns to look down the street, zips onto the ringed balloon, releases once
-// past the hook and re-grabs; after a landing or respawn it starts over.
-import type { Sandbox } from "../game/sandbox.ts";
-import type { InputFrame } from "../sim/player.ts";
-import { rigLook } from "../camera/rig.ts";
+// past the hook and re-grabs; after a landing or respawn it starts over. Also drives ?bot=swing (a
+// real round with the real characters, for mid-swing screenshots).
+import type { Body, InputFrame } from "../sim/player.ts";
+import { rigLook, type Rig } from "../camera/rig.ts";
+import type { CityModel } from "../world/cityModel.ts";
 
-export function autoplayScript(game: Sandbox): (f: InputFrame, i: number) => void {
+/** What the script needs (the sandbox, or a round via ?bot=swing). */
+export type AutoplayTarget = { readonly body: Body; readonly rig: Rig; readonly model: CityModel; readonly stats: { readonly falls: number }; readonly spawnYaw: number };
+
+export function autoplayScript(game: AutoplayTarget): (f: InputFrame, i: number) => void {
   let mode: "walk" | "swing" = "walk";
   let held = false, press = false, cooldown = 0;
   let sx = 0, sz = 0, startYaw = game.rig.yaw;
@@ -14,7 +18,7 @@ export function autoplayScript(game: Sandbox): (f: InputFrame, i: number) => voi
     held = false;
     sx = game.body.p.x;
     sz = game.body.p.z;
-    startYaw = game.model.spawn.yaw;
+    startYaw = game.spawnYaw;
     game.rig.yaw = startYaw;
     game.rig.pitch = 0.25;
     rigLook(game.rig, 0, 0, 0, false);

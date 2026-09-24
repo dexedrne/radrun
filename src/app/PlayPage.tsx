@@ -42,7 +42,7 @@ function Scene({ game }: { game: PlayGame }) {
       <ActorsView game={game} />
       <GeorgeView game={game} />
       <MiladyView game={game} />
-      <CameraView game={game} />
+      <CameraView game={game} ropeDrop={1} />
       <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} />
       <ChaseFx game={game} />
       <ScreenTracker game={game} />

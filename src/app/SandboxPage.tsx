@@ -68,7 +68,7 @@ export default function SandboxPage() {
   }, []);
   useEffect(() => {
     if (!game) return;
-    if (AUTOPLAY) game.input.script = autoplayScript(game);
+    if (AUTOPLAY) game.input.script = autoplayScript({ get body() { return game.body; }, rig: game.rig, model: game.model, stats: game.stats, spawnYaw: game.model.spawn.yaw });
     const el = canvasEl() ?? document.body;
     const detach = attachDom(game.input, el, locked => {
       useUi.setState({ locked });

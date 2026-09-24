@@ -13,6 +13,7 @@ import type { Vec3 } from "../sim/math.ts";
 import { Round, RV_RESPAWN, RV_CAUGHT, RV_ESCAPED, type RadbroId } from "./round.ts";
 import { Bot, type BotOptions } from "./bots.ts";
 import { George } from "../sidekick/george.ts";
+import { GEORGE_SPEEDS } from "../app/george.config.ts";
 
 export type Mode = "title" | "round";
 
@@ -75,7 +76,7 @@ export class PlayGame {
     this.simTuning = { ...tuning };
     this.setup = { chaser: "652", runner: "4764", difficulty: "chill", seed: 1 };
     this.round = this.makeRound(this.setup);
-    this.george = new George(model);
+    this.george = new George(model, GEORGE_SPEEDS);
     this.rig = createRig(this.round.spawn.yaw);
     this.retune();
     this.snap();
@@ -193,13 +194,7 @@ export class PlayGame {
     if ((this.input.towardRunner || this.bot) && round.phase === "chase") rigFace(this.rig, r.x - p.x, r.z - p.z, this.bot ? 4 : 8, delta);
     const n = round.over ? 0 : this.stepper.frame(delta);
     for (let i = 0; i < n && !round.over; i++) this.step();
-    if (round.over) {
-      const g = this.george;
-      g.setBeat(round.phase === "caught" ? "happy" : "sulk");
-      // Keep his one-shot clock running after the sim stopped.
-      if (g.shotT > 0) g.shotT += delta * this.timeScale;
-      if (g.beat === "happy" && g.shotT > 1.6) { g.clip = "Sit_Idle"; g.shotT = 0; }
-    }
+    if (round.over) this.georgeEnd(delta * this.timeScale);
     const a = round.over ? 1 : this.stepper.alpha;
     const pp = round.prevPlayer.p, pr = round.prevRunner;
     this.renderP.x = pp.x + (p.x - pp.x) * a;
@@ -231,6 +226,43 @@ export class PlayGame {
       this.runnerP.z = r.z + ez * t * t * 3.2;
     }
     return n;
+  }
+
+  /**
+   * After the round (the sim no longer steps): George trots over to sit beside you (catch: beside the
+   * waltzing pair, Happy first; escape: Sulk next to you).
+   */
+  private georgeEnd(dt: number): void {
+    const g = this.george, round = this.round;
+    const p = round.player.p, r = this.runnerP;
+    const caught = round.phase === "caught";
+    let dx = r.x - p.x, dz = r.z - p.z;
+    const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+    dx /= dl; dz /= dl;
+    const bx = caught ? (p.x + r.x) / 2 : p.x, bz = caught ? (p.z + r.z) / 2 : p.z;
+    const tx = bx + dz * 1.3, tz = bz - dx * 1.3, ty = p.y - 0.9;
+    g.px = g.x; g.py = g.y; g.pz = g.z;
+    const mx = tx - g.x, mz = tz - g.z;
+    const md = Math.sqrt(mx * mx + mz * mz);
+    if (md > 0.08) {
+      // Run over, slowing to a trot / walk for the last metre.
+      const v = Math.min(4, 0.4 + md * 2);
+      const k = Math.min(1, (v * dt) / md);
+      g.x += mx * k; g.z += mz * k;
+      g.y += (ty - g.y) * Math.min(1, 8 * dt);
+      g.fx = mx / md; g.fz = mz / md;
+      g.sitting = false;
+      g.beat = "";
+      g.shotT = 0;
+      g.gait(v);
+      return;
+    }
+    g.y = ty;
+    g.sitting = true;
+    if (!caught) { g.beat = "sulk"; g.clip = "Sulk"; return; }
+    if (g.beat !== "happy") { g.beat = "happy"; g.clip = "Happy"; g.shotT = 1e-3; }
+    g.shotT += dt;
+    if (g.shotT > 1.6) g.clip = "Sit_Idle";
   }
 
   get ringOnRunner(): boolean {

@@ -33,11 +33,13 @@ export type PlayProbe = {
   catchKind: string;
   catchTime: number;
   ring: number;
+  /** Hook id you hang from, or -1. */
+  rope: number;
   player: [number, number, number];
   runner: { p: [number, number, number]; mode: number; phase: number; edge: number; t: number; m: number; budget: number };
   runnerPhases: number[];
   /** Clips seen on the chaser / runner this round (animation smoke check). */
-  clips: { chaser: string[]; runner: string[] };
+  clips: { chaser: string[]; runner: string[]; george: string[] };
   fps: number;
   frames: number;
   backend: string;
@@ -69,7 +71,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const fps = useRef(60);
   const frames = useRef(0);
   const phases = useRef(new Set<number>());
-  const clips = useRef({ chaser: new Set<string>(), runner: new Set<string>() });
+  const clips = useRef({ chaser: new Set<string>(), runner: new Set<string>(), george: new Set<string>() });
   const lastRun = useRef(-1);
   const lines = useRef(0);
   const beep = useRef(4);
@@ -83,6 +85,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       phases.current.clear();
       clips.current.chaser.clear();
       clips.current.runner.clear();
+      clips.current.george.clear();
       beep.current = 4;
       if (game.mode === "round") { showBubble(S.countdownBubble); sfx.blip(); }
     }
@@ -90,6 +93,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     const ch = rigs.get(game.setup.chaser), rn = rigs.get(who);
     if (ch?.player.current) clips.current.chaser.add(ch.player.current);
     if (rn?.player.current) clips.current.runner.add(rn.player.current);
+    if (game.mode === "round") clips.current.george.add(game.george.clip);
     // Countdown beeps 3-2-1.
     if (game.mode === "round" && r.phase === "countdown") {
       const n = Math.ceil(r.countdown / 120);
@@ -129,9 +133,9 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
       outcome: r.phase === "caught" ? "CAUGHT" : r.phase === "escaped" ? "ESCAPED" : "", catchKind: r.stats.catchKind, catchTime: r.stats.catchTime,
-      ring: b.ringId, player: [b.p.x, b.p.y, b.p.z],
+      ring: b.ringId, rope: b.ropeHook, player: [b.p.x, b.p.y, b.p.z],
       runner: { p: [run.p.x, run.p.y, run.p.z], mode: run.mode, phase: run.pose.phase, edge: run.edge, t: run.t, m: run.band.m, budget: run.band.budget },
-      runnerPhases: [...phases.current], clips: { chaser: [...clips.current.chaser], runner: [...clips.current.runner] },
+      runnerPhases: [...phases.current], clips: { chaser: [...clips.current.chaser], runner: [...clips.current.runner], george: [...clips.current.george] },
       fps: fps.current, frames: frames.current, backend: st.backend,
     };
     acc.current += delta;

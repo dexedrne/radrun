@@ -6,6 +6,9 @@ import type { CityModel } from "../world/cityModel.ts";
 export const GEORGE = {
   cap: 240, // 2 s of 120 Hz snapshots
   delay: 60, // D = 0.5 s
+  // ...but never more than this much path (m) behind you: at 9 m/s the full 0.5 s puts him ~4.5 m back,
+  // right under the 6-8 m chase camera (hidden / out of frame). Slow movement keeps the spec's 0.5 s.
+  maxTrail: 2.6,
   tangentHalf: 6,
   side: 0.9,
   wRate: 1 / 18,
@@ -13,13 +16,18 @@ export const GEORGE = {
   speedSmooth: 1 / 12,
   dt: 1 / 120,
   halfHeight: 0.9,
+  // Gait thresholds from george_clips.json's slide-free bands at render scale 1.16 (Walk 0.24-0.56,
+  // Trot 0.57-1.30, Run 2.11-4.83 m/s). He must keep up with a 9 m/s Radbro, so Run plays far
+  // above the spec's 1.6 clamp (cartoon speed; his paws slide a little past ~4.8 m/s).
   idleBelow: 0.2,
-  walkBelow: 1.2,
-  trotBelow: 3.5,
+  walkBelow: 0.56,
+  trotBelow: 1.7,
   rateMin: 0.7,
-  rateMax: 1.6,
-  jumpFor: 0.35,
-  landFor: 0.25,
+  rateMax: 2.2,
+  runRateMin: 0.6,
+  runRateMax: 4,
+  jumpFor: 0.15,
+  landFor: 0.3,
   happyFor: 1.6,
 } as const;
 
@@ -28,7 +36,7 @@ export type GeorgeClip = "Sit_Idle" | "Idle" | "Walk" | "Trot" | "Run" | "Jump" 
 /** One player snapshot: body point, grounded, on-rope, roof id. */
 export type GeorgeSample = { x: number; y: number; z: number; grounded: boolean; rope: boolean; roofId: number };
 
-/** Ground speed of each locomotion clip in metres per second at rate 1 (placeholder values). */
+/** Ground speed of each locomotion clip in metres per second at rate 1 and the render scale. */
 export type ClipSpeeds = { Walk: number; Trot: number; Run: number };
 
 export class George {
@@ -41,6 +49,8 @@ export class George {
   private readonly br = new Int32Array(GEORGE.cap);
   private head = 0;
   count = 0;
+  /** Age (steps) of the sample he follows this step (<= GEORGE.delay). */
+  age: number = GEORGE.delay;
   // Output (current and previous step, for render interpolation).
   x = 0; y = 0; z = 0;
   px = 0; py = 0; pz = 0;
@@ -58,7 +68,7 @@ export class George {
   beat: "" | "sit" | "happy" | "sulk" = "sit";
   lastGroundX = 0; lastGroundY = 0; lastGroundZ = 0; lastGroundRoof = -1;
 
-  constructor(model: CityModel, speeds: ClipSpeeds = { Walk: 1.0, Trot: 2.6, Run: 6.5 }) {
+  constructor(model: CityModel, speeds: ClipSpeeds = { Walk: 0.348, Trot: 0.812, Run: 3.016 }) {
     this.model = model;
     this.speeds = speeds;
   }
@@ -123,10 +133,19 @@ export class George {
       return;
     }
     this.sitting = false;
-    const si = this.at(GEORGE.delay);
+    // s = the sample D = 0.5 s old, or the first one maxTrail metres of path behind you.
+    let age: number = GEORGE.delay, len = 0;
+    for (let a = 1; a <= GEORGE.delay; a++) {
+      const i0 = this.at(a - 1), i1 = this.at(a);
+      const ex = this.bx[i0] - this.bx[i1], ey = this.by[i0] - this.by[i1], ez = this.bz[i0] - this.bz[i1];
+      len += Math.sqrt(ex * ex + ey * ey + ez * ez);
+      if (len >= GEORGE.maxTrail) { age = a; break; }
+    }
+    this.age = age;
+    const si = this.at(age);
     // Tangent from the samples around s (clamped to what exists), else keep the previous one.
-    const ia = this.at(Math.max(0, GEORGE.delay - GEORGE.tangentHalf));
-    const ib = this.at(Math.min(this.count - 1, GEORGE.delay + GEORGE.tangentHalf));
+    const ia = this.at(Math.max(0, age - GEORGE.tangentHalf));
+    const ib = this.at(Math.min(this.count - 1, age + GEORGE.tangentHalf));
     const dx = this.bx[ia] - this.bx[ib], dz = this.bz[ia] - this.bz[ib];
     const dl = Math.sqrt(dx * dx + dz * dz);
     if (dl >= 0.05) { this.tx = dx / dl; this.tz = dz / dl; }
@@ -184,15 +203,19 @@ export class George {
     if (this.airborne) { this.clip = "Leap_Air"; this.shotT = 0; this.rate = 1; return; }
     if (this.clip === "Land" && this.shotT > 0 && this.shotT < GEORGE.landFor) return;
     this.shotT = 0;
-    const v = this.speed;
-    const pick = (c: GeorgeClip, gs: number) => {
+    this.gait(this.speed);
+  }
+
+  /** Locomotion clip + playback rate for a ground speed (m/s). */
+  gait(v: number): void {
+    const pick = (c: GeorgeClip, gs: number, lo: number, hi: number) => {
       this.clip = c;
       const r = v / gs;
-      this.rate = r < GEORGE.rateMin ? GEORGE.rateMin : r > GEORGE.rateMax ? GEORGE.rateMax : r;
+      this.rate = r < lo ? lo : r > hi ? hi : r;
     };
     if (v < GEORGE.idleBelow) { this.clip = "Idle"; this.rate = 1; }
-    else if (v < GEORGE.walkBelow) pick("Walk", this.speeds.Walk);
-    else if (v < GEORGE.trotBelow) pick("Trot", this.speeds.Trot);
-    else pick("Run", this.speeds.Run);
+    else if (v < GEORGE.walkBelow) pick("Walk", this.speeds.Walk, GEORGE.rateMin, GEORGE.rateMax);
+    else if (v < GEORGE.trotBelow) pick("Trot", this.speeds.Trot, GEORGE.rateMin, GEORGE.rateMax);
+    else pick("Run", this.speeds.Run, GEORGE.runRateMin, GEORGE.runRateMax);
   }
 }

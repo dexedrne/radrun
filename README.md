@@ -3,8 +3,9 @@
 A rooftop chase with balloon swinging, built on [react-three-game](https://prnth.com/react-three-game/).
 Design: `docs/specs/2026-09-23-rug-run-design.md`.
 
-Status: M0-M3 — playable chase with box stand-ins for the Radbros (title, countdown, 90 s chase,
-tag / YOINK, falls, results, retry). Characters, animation, George and the Milady come in M4-M5.
+Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764 or #2564, chase
+the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
+balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo and SFX.
 
 ## Run
 
@@ -26,7 +27,9 @@ Dev pages (dev and test builds): `?sandbox` free roam (`?autoplay` scripted swin
 sliders incl. the runner difficulty table (save writes `public/levels/tuning.json` and re-bakes) ·
 `?editor` / `?editor=decor` PrefabEditor on `city.json` / `decor.json` · `?routeview` junction graph +
 a live runner fleeing your mouse · `?bot=follow|yoink&k=1.3&seed=123&d=chill&c=652&r=4764` plays a round
-with the test bot.
+with the test bot · `?bot=swing&seed=77&c=2564&r=652` drives the real player sim with the scripted
+chain-swinger (it freezes 0.25 s into each swing for screenshots) · `?webgl2` forces the WebGL2 backend ·
+`?milady=<1..3333>` picks her file, `?milady=0` turns her off.
 
 ## Levels
 
@@ -43,9 +46,23 @@ otherwise derived from the roofs by rule. Solids must stay unrotated boxes stand
 - `public/levels/tuning.json` holds the player/camera constants and the Chill/Normal runner table,
   read at startup.
 
+## Characters
+
+`npm run assets -- --radbros <Radbro folder> [--george <George folder>]` builds `public/models/` from the
+owner's delivery files: `radbro<id>.glb` (unlit -> drop sit/lie clips -> resize 1024 -> webp 90 ->
+resample -> draco), `radbro<id>.clips.glb` (skeleton + bought clips), `george.glb`, and writes
+`src/generated/clips.meta.json` (per-clip hips range, root policy, takeoff/land times, rope-hang hand
+height) and `src/generated/george_clips.json`. Re-rigged `game-clips/radbro<id>_character.glb` files
+replace their delivery GLBs. George's switch, render scale and gait speeds are in
+`src/app/george.config.ts` (empty `GEORGE_GLB` = the procedural placeholder cat).
+
+Rooftop decor (signs, AC units, antennas, the Milady's balloon stand tagged `Data {kind: "miladyStand"}`)
+lives in `public/levels/decor.json`, editable in `?editor=decor`.
+
 Tools (print results, never gate the build): `npm run balance` (follower/camper bots per difficulty),
 `npm run probe:canyon` (street-width probe), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run shot`
 (headless mid-swing screenshot of `?autoplay`), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run botshot`
-(headless `?bot` round: outcome vs the Node prediction + screenshots).
+(headless `?bot` round: outcome vs the Node prediction + screenshots; `?bot=swing` URLs save mid-swing
+shots).
 
 Credits: Radbro #652, #4764 and #2564 · dexedrne · built on react-three-game by prnth.
