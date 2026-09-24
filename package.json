@@ -27,7 +27,8 @@
     "assets": "node tools/assets.ts",
     "gen-textures": "node tools/gen-textures.ts",
     "restyle-city": "node tools/restyle-city.ts",
-    "gen-props": "node tools/gen-props.ts"
+    "gen-props": "node tools/gen-props.ts",
+    "og-image": "node tools/og-image.ts"
   },
   "dependencies": {
     "@pixiv/three-vrm": "3.5.5",

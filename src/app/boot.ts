@@ -4,6 +4,7 @@ import { applyTuningJson, type TuningJson } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
 import { PlayGame } from "../game/play.ts";
 import { decodePack } from "../route/trackPack.ts";
+import { applyGeorgeJson } from "./george.config.ts";
 
 
 let game: Sandbox | null = null;
@@ -27,6 +28,7 @@ export function bootGame(): Promise<Sandbox> {
     ]);
     if (!model) throw new Error("levels/city.model.json missing: run npm run gen-city");
     const { player, camera, difficulty } = applyTuningJson(tuningJson, m => console.info(m));
+    applyGeorgeJson(tuningJson?.george, m => console.info(m));
     game = new Sandbox(model, player, camera);
     game.difficulty = difficulty;
     return game;
@@ -51,6 +53,7 @@ export function bootPlay(): Promise<PlayGame> {
     const pack = decodePack(packBuf);
     if (pack.header.city !== model.hash) console.warn(`[rug-run] runner.pack.bin was baked for city ${pack.header.city}, model is ${model.hash}: run npm run level`);
     const { player, camera, difficulty } = applyTuningJson(tuningJson, m => console.info(m));
+    applyGeorgeJson(tuningJson?.george, m => console.info(m));
     return new PlayGame(model, pack, player, camera, difficulty);
   })();
   return play;

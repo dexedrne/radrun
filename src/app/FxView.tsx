@@ -8,6 +8,7 @@ import {
 } from "three";
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
+import { lowQuality } from "./quality.tsx";
 
 const BALLOON_COLORS = ["#ff5a7a", "#ffd23f", "#4fc3f7", "#7cdb6a", "#b388ff", "#ff9f43"];
 const CLUSTER: [number, number, number][] = [[0, 1.25, 0], [0.55, 1.05, 0.25], [-0.45, 1.0, -0.35]];
@@ -62,7 +63,8 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     tmp.t += delta;
     // Reticle ring on snapshot.ringId (the hook the next web press gets).
     const hide = hidePlayer?.() ?? false;
-    if (shadow.current) shadow.current.visible = !hide;
+    const shadowOn = !hide && !lowQuality();
+    if (shadow.current) shadow.current.visible = shadowOn;
     const rm = ring.current;
     if (rm) {
       const id = hide ? -1 : b.ringId;
@@ -93,7 +95,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     }
     // Blob shadow on the ground below (pure groundBelow).
     const sh = shadow.current;
-    if (sh && !hide) {
+    if (sh && shadowOn) {
       const g = game.world.index.groundBelow(p.x, p.z, p.y - 0.9 + 0.05);
       const hgt = p.y - 0.9 - g;
       sh.position.set(p.x, g + 0.03, p.z);

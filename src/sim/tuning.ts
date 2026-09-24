@@ -195,6 +195,8 @@ export type TuningJson = {
   player?: Partial<Record<string, number | boolean>>;
   camera?: Partial<Record<string, number | boolean>>;
   difficulty?: Partial<Record<Difficulty, Partial<Record<string, number>>>>;
+  /** George's follow values + render scale (visual only; app/george.config.ts applies it). */
+  george?: Partial<Record<string, number>>;
 };
 
 /** Merge tuning.json over the PLAYER preset and camera defaults. Unknown keys are ignored (warned). */

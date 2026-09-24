@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import type { RadbroId } from "../game/round.ts";
 import { detectTouch } from "../input/touch.ts";
+import { loadQuality, type Quality } from "./prefs.ts";
 
 export type Hud = {
   speed: number;
@@ -56,6 +57,8 @@ export type UiState = {
   /** Touch controls on (coarse pointer, ?touch, or the first touch on the page). */
   touch: boolean;
   backend: string;
+  /** Graphics quality (pause -> Settings; remembered in localStorage). */
+  quality: Quality;
   hud: Hud;
   screen: Screen;
   paused: boolean;
@@ -79,6 +82,7 @@ export const useUi = create<UiState>(() => ({
   locked: false,
   touch: detectTouch(),
   backend: "",
+  quality: loadQuality(),
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0 },
   screen: "boot",
   paused: false,

@@ -254,6 +254,16 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
         </div>
         {open && (
           <div style={{ marginTop: 12, textAlign: "left", display: "grid", gap: 6, fontSize: 12 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }} data-testid="quality">
+              <span style={{ flex: 1 }}>quality</span>
+              {(["low", "high"] as const).map(q => (
+                <button key={q} onClick={() => set({ quality: q })} data-testid={`quality-${q}`}
+                  style={{ ...btn(false), padding: "5px 12px", fontSize: 12, background: s.quality === q ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: s.quality === q ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
+                  {q === "low" ? "Low" : "High"}
+                </button>
+              ))}
+            </div>
+            {s.quality === "low" && <div style={{ opacity: 0.7, fontSize: 11 }}>Low: sharpness 1x, no shadows or trail, fewer rooftop props (anti-aliasing off after a reload)</div>}
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label>volume {Math.round(s.volume * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.volume} onChange={e => set({ volume: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>

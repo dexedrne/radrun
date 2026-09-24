@@ -12,7 +12,7 @@ import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
 import { CityLook, FOG_COLOR, SkyGradient } from "./cityLook.tsx";
-import { canvasDpr, detectTouch } from "../input/touch.ts";
+import { ANTIALIAS, HIGH_DPR, QualityView, lowQuality } from "./quality.tsx";
 
 export const SKY = FOG_COLOR;
 
@@ -96,15 +96,15 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
 
 /** The one canvas + PrefabRoot. Mounted once per page; children are the runtime systems. */
 const FORCE_WEBGL = new URLSearchParams(location.search).has("webgl2");
-/** Quality default: touch devices cap the pixel ratio at 1.5, phones at 1.25. */
-const DPR = canvasDpr(detectTouch());
+/** Renderer options fixed at creation: the WebGL2 switch and anti-aliasing (off on Low). */
+const GL_CONFIG = { antialias: ANTIALIAS, ...(FORCE_WEBGL ? { forceWebGL: true } : {}) };
 
 export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: React.ReactNode }) {
   return (
     <GameCanvas
       flat
-      dpr={DPR}
-      glConfig={FORCE_WEBGL ? { forceWebGL: true } : undefined}
+      dpr={lowQuality() ? 1 : HIGH_DPR}
+      glConfig={GL_CONFIG}
       onCreated={s => {
         const be = (s.gl as unknown as { backend?: { isWebGPUBackend?: boolean; isWebGLBackend?: boolean } }).backend;
         const name = be?.isWebGPUBackend ? "WebGPU" : be?.isWebGLBackend ? "WebGL2" : "unknown";
@@ -116,6 +116,7 @@ export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: R
       <fog attach="fog" args={[FOG_COLOR, 120, 380]} />
       <SkyGradient />
       <CityLook />
+      <QualityView />
       <PrefabRoot data={prefab}>
         <LoadBridge />
         {children}

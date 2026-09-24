@@ -12,7 +12,10 @@ type Stored = {
   visited?: boolean;
 };
 
-export type Settings = { sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; volume: number };
+/** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
+export type Quality = "low" | "high";
+
+export type Settings = { sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; volume: number; quality: Quality };
 
 function load(): Stored {
   try {
@@ -38,7 +41,14 @@ export function loadSettings(cam: CameraTuning): Settings {
     reducedMotion: s.reducedMotion ?? cam.reducedMotion,
     easyGrab: s.easyGrab ?? cam.easyGrab,
     volume: s.volume ?? 0.8,
+    quality: s.quality === "low" ? "low" : "high",
   };
+}
+
+/** The stored quality (read before the canvas exists). Default High; on touch devices High already
+ * caps the pixel ratio (1.25 on phones, 1.5 on tablets; see input/touch.ts canvasDpr). */
+export function loadQuality(): Quality {
+  return load().settings?.quality === "low" ? "low" : "high";
 }
 export function saveSettings(settings: Settings): void {
   const s = load();

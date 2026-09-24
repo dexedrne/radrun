@@ -2,7 +2,7 @@
 
 A rooftop chase with balloon swinging, built on [react-three-game](https://prnth.com/react-three-game/).
 Design: `docs/specs/2026-09-23-rug-run-design.md`. Quick guide (run, controls, editing, tuning, known
-issues): `PLAY.md`.
+issues): `PLAY.md`. Live: https://radbro-rug-run.vercel.app
 
 Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764 or #2564, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
@@ -55,7 +55,8 @@ resample -> draco), `radbro<id>.clips.glb` (skeleton + bought clips), `george.gl
 `src/generated/clips.meta.json` (per-clip hips range, root policy, takeoff/land times, rope-hang hand
 height) and `src/generated/george_clips.json`. Re-rigged `game-clips/radbro<id>_character.glb` files
 replace their delivery GLBs. George's switch, render scale and gait speeds are in
-`src/app/george.config.ts` (empty `GEORGE_GLB` = the procedural placeholder cat).
+`src/app/george.config.ts` (empty `GEORGE_GLB` = the procedural placeholder cat); his scale and follow
+values can also be tuned in `?tune` / tuning.json's `george` section.
 
 Rooftop decor (signs, the Milady's balloon stand tagged `Data {kind: "miladyStand"}`, and the
 `rooftop-props` group of water towers / AC units / antennas from `npm run gen-props`) lives in

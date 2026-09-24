@@ -29,7 +29,21 @@ export const GEORGE = {
   jumpFor: 0.15,
   landFor: 0.3,
   happyFor: 1.6,
-} as const;
+};
+
+/** The built-in values (GEORGE itself is live: `?tune` and tuning.json's "george" section change it). */
+export const GEORGE_DEFAULTS: Readonly<typeof GEORGE> = Object.freeze({ ...GEORGE });
+
+/** Fields `?tune` shows and tuning.json's "george" section may override. `delay` is in 120 Hz steps. */
+export const GEORGE_TUNABLE = [
+  "maxTrail", "delay", "side", "idleBelow", "walkBelow", "trotBelow", "rateMin", "rateMax", "runRateMin", "runRateMax",
+] as const satisfies readonly (keyof typeof GEORGE)[];
+export type GeorgeTunable = (typeof GEORGE_TUNABLE)[number];
+
+/** Set one tunable, keeping `delay` a whole number of steps inside the snapshot buffer. */
+export function setGeorge(k: GeorgeTunable, v: number): void {
+  GEORGE[k] = k === "delay" ? Math.min(GEORGE.cap - 1, Math.max(1, Math.round(v))) : v;
+}
 
 export type GeorgeClip = "Sit_Idle" | "Idle" | "Walk" | "Trot" | "Run" | "Jump" | "Leap_Air" | "Land" | "Happy" | "Sulk";
 

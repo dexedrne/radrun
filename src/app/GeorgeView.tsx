@@ -12,9 +12,10 @@ import {
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { PlayGame } from "../game/play.ts";
 import { AnimPlayer } from "./animPlayer.ts";
-import { GEORGE_GLB, GEORGE_JUMP, GEORGE_ROOT_BONE, GEORGE_SCALE } from "./george.config.ts";
+import { GEORGE_GLB, GEORGE_JUMP, GEORGE_RENDER, GEORGE_ROOT_BONE } from "./george.config.ts";
 import type { RootPolicy } from "./animPlayer.ts";
 import { FRAME } from "./frame.ts";
+import { lowQuality } from "./quality.tsx";
 
 const UP = new Vector3(0, 1, 0);
 
@@ -158,7 +159,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     const on = game.mode === "round";
     const node = glb ? glb.root : cat.root;
     node.visible = on;
-    if (shadow.current) shadow.current.visible = on;
+    if (shadow.current) shadow.current.visible = on && !lowQuality();
     if (!on) return;
     const delta = rawDelta * game.timeScale;
     tmp.t += delta;
@@ -180,7 +181,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     const c = state.camera.position;
     const cd = (c.x - x) * (c.x - x) + (c.y - y - 0.3) * (c.y - y - 0.3) + (c.z - z) * (c.z - z);
     node.visible = cd > 3.2 * 3.2;
-    node.scale.setScalar(GEORGE_SCALE);
+    node.scale.setScalar(GEORGE_RENDER.scale);
     if (glb) {
       if (g.clip !== tmp.clip) {
         const from = tmp.clip;

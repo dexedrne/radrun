@@ -223,6 +223,7 @@ export default function PlayPage() {
     if (!game) return;
     setSettingsState(s);
     saveSettings(s);
+    if (s.quality !== useUi.getState().quality) useUi.setState({ quality: s.quality });
     applySettings(game.camera, s);
     setVolume(s.volume);
     game.retune();

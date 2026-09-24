@@ -2,6 +2,8 @@
 
 He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) before the rug shows up.
 
+**Play it: https://radbro-rug-run.vercel.app** (desktop with a mouse, or a phone / tablet in landscape).
+
 ## Run it
 
 ```sh
@@ -23,7 +25,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
-| Esc | pause (settings: sensitivity, volume, FOV, invert Y, reduced motion, easy grab) |
+| Esc | pause (Settings: quality, sensitivity, volume, FOV, invert Y, reduced motion, easy grab) |
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
@@ -35,12 +37,17 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | WEB (hold) | web onto the ringed balloon; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
 | JUMP | jump |
 | HIM (hold) | ease the camera toward him |
-| II | pause (Resume / Restart / Settings / Quit) |
+| II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch) |
 
 Touch helps your aim: the cone widens to 85 degrees (desktop 70), balloon picking leans toward where you
 are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and locks landscape where the
 browser allows it). There is no pointer lock, and leaving the tab pauses. On phones the canvas renders at up
 to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOUCH` in `src/sim/tuning.ts`.
+
+**Quality (pause -> Settings).** High is the default everywhere (on touch devices High already caps the
+pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasing off (after a reload),
+no blob shadows, no runner trail, and no rooftop AC units or antennas (the water towers stay). It switches
+immediately and is remembered in the browser (localStorage). Try Low if a phone runs hot or choppy.
 
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
 and gets GASSED when his panic budget runs out. He stops to taunt you when you are over 35 m back.
@@ -50,7 +57,7 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | URL | What |
 |---|---|
 | `?sandbox` | free-roam swinging, no runner (`?sandbox&autoplay` = scripted chain-swinger) |
-| `?tune` | live sliders for player, camera and the Chill/Normal runner table; Save writes `tuning.json` |
+| `?tune` | live sliders for player, camera, the Chill/Normal runner table and George; Save writes `tuning.json` |
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
@@ -112,8 +119,21 @@ The runner is baked with the same player constants, so after changing any `playe
 rates, and commit the regenerated `runner.pack.bin` and `bake.report.json`. `npm run probe:canyon`
 reports chain speed on test canyons with the current `tuning.json`.
 
-George's follow settings are not in `?tune`: edit `GEORGE` in `src/sidekick/george.ts` (trail cap,
-delay, gait thresholds) and `src/app/george.config.ts` (model switch, render scale).
+**George** (visual only, never affects the chase) has his own section in `?tune` and an optional `george`
+section in `tuning.json`, read at startup:
+
+| key | default | effect |
+|---|---|---|
+| `scale` | 1.16 | render scale (withers ~0.36 m); his gait speeds scale with it |
+| `maxTrail` | 2.6 | never more than this much path (m) behind you (keeps him in frame at speed) |
+| `delay` | 60 | he follows where you were this many 120 Hz steps ago (60 = 0.5 s), capped by `maxTrail` |
+| `side` | 0.9 | sideways offset (m) to your left |
+| `idleBelow` / `walkBelow` / `trotBelow` | 0.2 / 0.56 / 1.7 | gait thresholds in m/s (Idle / Walk / Trot, Run above) |
+| `rateMin` / `rateMax` | 0.7 / 2.2 | Walk and Trot playback-rate clamp |
+| `runRateMin` / `runRateMax` | 0.6 / 4 | Run playback-rate clamp (4x = cartoon speed to keep up with you) |
+
+The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch is in
+`src/app/george.config.ts`. Changing George never needs `npm run level`.
 
 ## Placeholder / known issues
 
@@ -123,9 +143,18 @@ delay, gait thresholds) and `src/app/george.config.ts` (model switch, render sca
   (bottom right) on a real GPU.
 - Balance bots never swing. With the 20 m/s cap a good human chain is ~1.7x his speed; play-test
   Normal and adjust `difficulty.normal` (gStar, mMax, panicBudget) if catches come too easily.
-- The Milady loads from jsDelivr with a GitHub raw fallback; some files 404 on jsDelivr (one console
-  error, then the fallback loads her). `?milady=0` turns her off.
+- The Milady loads from GitHub raw (raw.githubusercontent.com) with jsDelivr as the fallback (jsDelivr
+  404'd on some cold files, e.g. #270). `?milady=0` turns her off.
 - SFX are synthesised tones, there is no music.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
 - The production build is ~9 MB (models ~5.8 MB); the budget is not enforced.
+
+## Link previews
+
+`index.html` carries the title, description, theme colour, favicon and the Open Graph / Twitter card
+tags. The image URLs are absolute on https://radbro-rug-run.vercel.app, so change them if the game moves.
+`public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the three
+Radbro portraits; `public/favicon.svg` is drawn by hand. `npm run og-image` (dev server up,
+`RUGRUN_CHROME_PROFILE` set) re-renders `og.jpg` and `apple-touch-icon.png`: `--pick N` takes another
+frozen swing from the `?bot=swing` round, and `--bg <png>` re-composites over a saved frame.

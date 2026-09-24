@@ -1,9 +1,10 @@
 // Pockit Milady cameo (spec §11 + errata 6): she runs the balloon stand (decor.json node tagged
 // Data {kind: "miladyStand"}). Decoration only: never solid, never in the sim, and the game never
 // waits for her.
-//  - N is chosen once per page load; the file is fetched after PLAY from jsDelivr at a pinned Pockit
-//    commit, falling back to raw.githubusercontent (10 s timeout). 404 / timeout / parse error -> an
-//    info log and the stand without a host.
+//  - N is chosen once per page load; the file is fetched after PLAY from raw.githubusercontent at a
+//    pinned Pockit commit, falling back to jsDelivr (10 s timeout for both). jsDelivr went first until
+//    it 404'd on cold files (#270 seen); GitHub raw serves every number with CORS. 404 / timeout / parse
+//    error -> an info log and the stand without a host.
 //  - Parse, unlit swap, retarget and mount only happen on the title, in COUNTDOWN or at RESULTS, never
 //    mid-chase. Idle, Big Wave Hello and Victory Cheer are retargeted from the chaser's clip pack.
 //  - Blinks (only if the file binds "blink"), slow head look-at toward you, head down on an escape.
@@ -32,9 +33,10 @@ const q = new URLSearchParams(location.search);
 const forced = q.has("milady") ? Number(q.get("milady")) : NaN;
 export const MILADY_N = Number.isInteger(forced) && forced >= 0 && forced <= POCKIT_COUNT ? forced : 1 + Math.floor(Math.random() * POCKIT_COUNT);
 
+/** GitHub raw first (reliable for every number), jsDelivr as the fallback. */
 export const miladyUrls = (n: number) => [
-  `https://cdn.jsdelivr.net/gh/prnthh/Pockit@${POCKIT_SHA}/web/${n}.vrm`,
   `https://raw.githubusercontent.com/prnthh/Pockit/${POCKIT_SHA}/web/${n}.vrm`,
+  `https://cdn.jsdelivr.net/gh/prnthh/Pockit@${POCKIT_SHA}/web/${n}.vrm`,
 ];
 
 let fetching: Promise<{ buf: ArrayBuffer; url: string } | null> | null = null;

@@ -19,6 +19,7 @@ import { getBest, recordBest } from "../ui/prefs.ts";
 import { sfx } from "../audio/sfx.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
+import { lowQuality } from "./quality.tsx";
 
 // ---- driver --------------------------------------------------------------------------------------
 
@@ -248,6 +249,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
     const r = game.round, p = game.runnerP, pl = game.renderP;
     const s = game.setup;
     if (game.runId !== tmp.runId) { tmp.runId = game.runId; tmp.trailN = 0; tmp.bagT = -1; }
+    const low = lowQuality();
 
     // His rope: RightHand -> balloon.
     const hookId = inRound && !r.over ? game.runnerRopeHook : -1;
@@ -275,7 +277,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
     // Blob shadow under him.
     const sh = shadow.current;
     if (sh) {
-      sh.visible = inRound;
+      sh.visible = inRound && !low;
       const g = game.index.groundBelow(p.x, p.z, p.y - 0.9 + 0.05);
       sh.position.set(p.x, g + 0.03, p.z);
       const k = 1 / (1 + Math.max(0, p.y - 0.9 - g) * 0.06);
@@ -315,7 +317,8 @@ export function ChaseFx({ game }: { game: PlayGame }) {
     }
     // Runner trail: his last 2 s, sampled at ~40 Hz.
     const tr = trail;
-    tr.mesh.visible = inRound && r.phase === "chase";
+    tr.mesh.visible = inRound && r.phase === "chase" && !low;
+    if (low) tmp.trailN = 0;
     if (tr.mesh.visible) {
       tmp.trailAcc += rawDelta;
       if (tmp.trailAcc >= 0.025) {

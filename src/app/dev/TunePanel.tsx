@@ -1,8 +1,11 @@
-// ?tune (dev/test builds only): live sliders over the sim + camera tuning. Save writes
-// public/levels/tuning.json through the dev server (or downloads it outside `npm run dev`).
+// ?tune (dev/test builds only): live sliders over the sim + camera tuning and George's follow values.
+// Save writes public/levels/tuning.json (incl. a "george" section) through the dev server (or
+// downloads it outside `npm run dev`).
 import { useState } from "react";
 import { CAMERA, DIFFICULTY, PLAYER, tuningToJson, type CameraTuning, type DifficultyParams, type DifficultyTable, type Tuning } from "../../sim/tuning.ts";
 import { saveLevelFile } from "./save.ts";
+import { GEORGE, setGeorge, type GeorgeTunable } from "../../sidekick/george.ts";
+import { GEORGE_RENDER, georgeToJson, resetGeorge, setGeorgeScale } from "../george.config.ts";
 
 type Slider<K> = [K, number, number, number]; // key, min, max, step
 
@@ -23,6 +26,12 @@ const TOGGLES: (keyof CameraTuning)[] = ["invertY", "reducedMotion", "easyGrab"]
 
 /** Anything tunable: the Sandbox and the PlayGame. */
 export type Tunable = { tuning: Tuning; camera: CameraTuning; difficulty: DifficultyTable | null; retune(): void; restart(): void };
+
+// George (visual only): follow distance, side offset, gait thresholds (m/s), playback-rate clamps.
+const GEORGE_SLIDERS: Slider<GeorgeTunable>[] = [
+  ["maxTrail", 0.5, 8, 0.1], ["delay", 6, 200, 1], ["side", 0, 2, 0.05], ["idleBelow", 0, 1, 0.01], ["walkBelow", 0.1, 2, 0.01],
+  ["trotBelow", 0.3, 6, 0.05], ["rateMin", 0.2, 1.5, 0.05], ["rateMax", 1, 5, 0.1], ["runRateMin", 0.2, 1.5, 0.05], ["runRateMax", 1, 8, 0.1],
+];
 
 const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
   ["base", 0.6, 1.4, 0.01], ["gStar", 8, 45, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 1.5, 0.01], ["panicBudget", 0, 60, 0.5],
@@ -46,10 +55,10 @@ export default function TunePanel({ game }: { game: Tunable }) {
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
         <b style={{ flex: 1 }}>?tune</b>
         <button onClick={() => setOpen(!open)}>{open ? "hide" : "show"}</button>
-        <button onClick={() => { Object.assign(game.tuning, PLAYER); Object.assign(game.camera, CAMERA); bump(); }}>defaults</button>
+        <button onClick={() => { Object.assign(game.tuning, PLAYER); Object.assign(game.camera, CAMERA); resetGeorge(); bump(); }}>defaults</button>
         <button onClick={() => game.restart()}>respawn</button>
         <button
-          onClick={async () => setStatus(await saveLevelFile("tuning.json", tuningToJson(game.tuning, game.camera, game.difficulty ?? DIFFICULTY)))}
+          onClick={async () => setStatus(await saveLevelFile("tuning.json", { ...tuningToJson(game.tuning, game.camera, game.difficulty ?? DIFFICULTY), george: georgeToJson() }))}
         >save</button>
       </div>
       {status && <div style={{ whiteSpace: "pre-wrap", opacity: 0.85, marginBottom: 6 }}>{status}</div>}
@@ -70,6 +79,9 @@ export default function TunePanel({ game }: { game: Tunable }) {
               {DIFF_SLIDERS.map(([k, min, max, step]) => row(`${d}.${k}`, game.difficulty![d][k], min, max, step, v => { game.difficulty![d][k] = v; }))}
             </div>
           ))}
+          <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>George (visual only; delay in 120 Hz steps, gaits in m/s)</div>
+          {row("scale", GEORGE_RENDER.scale, 0.6, 2, 0.01, setGeorgeScale)}
+          {GEORGE_SLIDERS.map(([k, min, max, step]) => row(`george.${k}`, GEORGE[k], min, max, step, v => setGeorge(k, v)))}
           <label style={{ display: "block" }}>
             <input type="checkbox" checked={game.tuning.zip} onChange={e => { game.tuning.zip = e.target.checked; bump(); }} /> zip (grounded LMB = jump + grab)
           </label>
