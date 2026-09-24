@@ -334,12 +334,19 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   `sfx.ts` if something is too loud or too quiet.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
-- The production build is ~9 MB (models ~5.8 MB); the budget is not enforced.
+- The production build is ~12.5 MB (models ~5.8 MB, four districts' level files, round 4 art); the 9 MB
+  budget is not enforced.
+- Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
+  objectives (`src/game/campaign.ts`) and the district mechanics (`MECH`, `?tune`) need a human pass.
+  Some Night Market rounds end in seconds (the runner's first baked run bends back toward you).
+- The sky panoramas are mirrored round the horizon (two copies), so a very distinctive cloud shows twice.
+- George's hats float on his head bone's position (no rotation with the head); tweak `HAT_LIFT` in
+  `src/app/GeorgeView.tsx` if one sits too high or low.
 
 ## Link previews
 
 `index.html` carries the title, description, theme colour, favicon and the Open Graph / Twitter card
-tags. The canonical / og:url / image URLs are absolute on https://rugrun.vyvanse.beer (the canonical
+tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on https://rugrun.vyvanse.beer (the canonical
 address; the old vercel.app alias serves the same page), so change them if the game moves. Share and
 challenge / ghost links are built from the address the game was opened on.
 `public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the three
