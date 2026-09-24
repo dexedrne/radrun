@@ -149,7 +149,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
     const inRound = game.mode === "round";
     const waltzW = inRound && r.phase === "caught" ? smooth((game.endT - RESULTS_AFTER.caught) / 0.5) : 0;
     for (const rig of rigs.values()) {
-      const isChaser = inRound && rig.id === s.chaser, isRunner = inRound && rig.id === s.runner;
+      const isChaser = inRound && rig.id === s.chaser, isRunner = inRound && !game.practice && rig.id === s.runner;
       rig.root.visible = isChaser || isRunner;
       if (!rig.root.visible) continue;
       const p = isChaser ? game.renderP : game.runnerP;

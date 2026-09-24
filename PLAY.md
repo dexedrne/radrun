@@ -8,7 +8,7 @@ He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) 
 
 ```sh
 npm ci
-npm run dev        # open http://localhost:4870/  -> pick a Radbro -> Chill / Normal / Degen -> PLAY
+npm run dev        # open http://localhost:4870/  -> pick a Radbro -> Chill / Normal / Degen -> PLAY (or PRACTICE)
 ```
 
 Node 23.6 or newer. A WebGPU browser is best (recent Chrome/Chromium); `?webgl2` forces the WebGL2
@@ -49,10 +49,23 @@ pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasi
 no blob shadows, no runner trail, and no rooftop AC units or antennas (the water towers stay). It switches
 immediately and is remembered in the browser (localStorage). Try Low if a phone runs hot or choppy.
 
+## Practice and tips
+
+**PRACTICE** (title, next to PLAY) drops your Radbro and George on a roof in the real city with no runner,
+no timer and no fall penalty: free swinging to learn the rope. The panel shows speed, the current swing
+chain, best chain, top speed and falls. Hold R (desktop) = back to the start roof; Esc / II = pause ->
+Resume / Back to start / Settings / Back to title.
+
+**First-run tips** pop up under your Radbro (above it on touch) the moment they matter, once each:
+"hold LMB/WEB while a balloon has the yellow ring" (a balloon is ringed), "let go at the bottom of the arc
+to fling forward" (you are on the rope), "chain swings down the streets to go fast" (after your first
+let-go) and "red ring on him = click / tap WEB to YOINK" (the first red ring in a real round). They are
+remembered in the browser; pause -> Settings -> **show tips again** brings them back.
+
+## The chase and difficulties
+
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
 and gets GASSED when his panic budget runs out. He stops to taunt you when you are over 35 m back.
-
-## Difficulties
 
 | | runner | Yoink range | medals (RAD / GOLD / SILVER, s) |
 |---|---|---|---|
@@ -67,7 +80,7 @@ on Degen in about 45 s when it catches him at all (about a quarter of Degen roun
 
 | URL | What |
 |---|---|
-| `?sandbox` | free-roam swinging, no runner (`?sandbox&autoplay` = scripted chain-swinger) |
+| `?sandbox` | the old dev free-roam page with a debug HUD (`?sandbox&autoplay` = scripted chain-swinger); players use PRACTICE |
 | `?tune` | live sliders for player, camera, the Chill/Normal runner table and George; Save writes `tuning.json` |
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout) |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |

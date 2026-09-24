@@ -51,6 +51,12 @@ export type RoundOptions = {
   countdown?: boolean;
   /** Added to the difficulty's Yoink range (touch play: +1 m). */
   yoinkBonus?: number;
+  /**
+   * Practice (title -> PRACTICE): free roam from the seed's usual spawn roof (the city's own spawn is the
+   * Milady's balloon stand), no runner (never stepped, not targetable), no clock, no countdown, falls
+   * respawn without the -3 s. Same setup and rng draws as a real round with that seed.
+   */
+  practice?: boolean;
 };
 
 export const COUNTDOWN_STEPS = 360;
@@ -97,9 +103,10 @@ export class Round {
     this.player = createBody(this.spawn.x, this.spawn.y, this.spawn.z, this.spawn.roofId);
     this.prevPlayer = cloneBody(this.player);
     this.prevRunner.x = this.runner.p.x; this.prevRunner.y = this.runner.p.y; this.prevRunner.z = this.runner.p.z;
-    this.world = { index: this.index, hooks: this.model.hooks, lowestRoof: this.model.lowestRoof, runner: { p: this.runner.p, roofId: -1 } };
-    this.phase = o.countdown === false ? "chase" : "countdown";
-    this.countdown = o.countdown === false ? 0 : COUNTDOWN_STEPS;
+    this.world = { index: this.index, hooks: this.model.hooks, lowestRoof: this.model.lowestRoof, runner: o.practice ? null : { p: this.runner.p, roofId: -1 } };
+    const cd = o.countdown !== false && !o.practice;
+    this.phase = cd ? "countdown" : "chase";
+    this.countdown = cd ? COUNTDOWN_STEPS : 0;
     this.d = chaseDist(this.player.p, this.runner.p);
   }
 
@@ -121,6 +128,7 @@ export class Round {
     }
     if (this.phase !== "chase") return;
     this.chaseSteps++;
+    if (this.opts.practice) { this.stepPractice(inp); return; }
     const w = this.world;
     w.runner!.roofId = r.roofId;
 
@@ -179,6 +187,21 @@ export class Round {
       this.clock = 0;
       this.phase = "escaped";
       this.events |= RV_ESCAPED;
+    }
+  }
+
+  /** Practice step: the player only; a fall respawns on the last safe roof at no cost. */
+  private stepPractice(inp: InputFrame): void {
+    const b = this.player, st = this.stats;
+    stepBody(b, inp, this.tuning, this.world);
+    const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
+    if (sp > st.topSpeed) st.topSpeed = sp;
+    if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
+    if (b.events & EV_FALL) {
+      st.falls++;
+      respawnNear(b, this.model, b.lastSafeRoof, b.lastSafe, ROUND.respawnInset, this.tuning.halfHeight);
+      copyBody(this.prevPlayer, b);
+      this.events |= RV_FALL | RV_RESPAWN;
     }
   }
 

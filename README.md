@@ -22,6 +22,9 @@ Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump ·
 ringed balloon, release to let go (LMB on the ground with a ringed balloon = jump + grab) · red ring on
 him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · Esc pause.
 
+PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
+first-run tips show once each (pause -> Settings -> show tips again).
+
 Challenge links: `?c=<652|4764|2564>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
 
 Dev pages (dev and test builds): `?sandbox` free roam (`?autoplay` scripted swinging) · `?tune` live

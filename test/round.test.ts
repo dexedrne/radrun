@@ -109,3 +109,20 @@ test("timer runs out -> ESCAPED; same seed -> same setup; a round after a round 
   run(8);
   assert.equal(run(42), cold);
 });
+
+test("practice: a round's spawn, no countdown/clock/runner, falls cost nothing, same rng draws as a round", () => {
+  const p = new Round({ model, index, pack, difficulty: "normal", params: tuning.difficulty.normal, tuning: tuning.player, chaser: "652", runner: "4764", seed: 3, practice: true });
+  const real = mk(3);
+  assert.equal(p.phase, "chase");
+  assert.equal(p.world.runner, null);
+  assert.deepEqual(p.spawn, real.spawn);
+  assert.equal(p.rng.s, real.rng.s);
+  const runner0 = p.runner.hash().hex();
+  const inp = emptyInput();
+  inp.moveX = 1; // run off the roof
+  for (let i = 0; i < 1200; i++) p.step(inp);
+  assert.equal(p.phase, "chase");
+  assert.equal(p.clock, ROUND.seconds);
+  assert.ok(p.stats.falls >= 1, `falls ${p.stats.falls}`);
+  assert.equal(p.runner.hash().hex(), runner0);
+});

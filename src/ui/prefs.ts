@@ -10,6 +10,8 @@ type Stored = {
   chaser?: RadbroId;
   difficulty?: Difficulty;
   visited?: boolean;
+  /** First-run tips already shown (ui/hints.ts). */
+  hints?: Record<string, boolean>;
 };
 
 /** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
@@ -61,6 +63,21 @@ export function applySettings(cam: CameraTuning, s: Settings): void {
   cam.fov = s.fov;
   cam.reducedMotion = s.reducedMotion;
   cam.easyGrab = s.easyGrab;
+}
+
+/** First-run tips (ui/hints.ts): seen flags, remembered across visits. */
+export function hintsSeen(): Record<string, boolean> {
+  return { ...(load().hints ?? {}) };
+}
+export function markHintSeen(id: string): void {
+  const s = load();
+  s.hints = { ...(s.hints ?? {}), [id]: true };
+  save(s);
+}
+export function resetHintsSeen(): void {
+  const s = load();
+  delete s.hints;
+  save(s);
 }
 
 export function getBest(chaser: string, d: string): number | null {

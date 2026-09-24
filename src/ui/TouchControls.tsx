@@ -18,7 +18,7 @@ const round = (size: number, extra: React.CSSProperties = {}): React.CSSProperti
   boxShadow: "0 3px 14px rgba(0,0,0,0.35)", ...extra,
 });
 
-export function TouchControls({ input, onPause }: { input: InputLatch; onPause: () => void }) {
+export function TouchControls({ input, onPause, noRunner = false }: { input: InputLatch; onPause: () => void; noRunner?: boolean }) {
   const ring = useUi(s => s.round.ring);
   const base = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
@@ -152,14 +152,14 @@ export function TouchControls({ input, onPause }: { input: InputLatch; onPause: 
         style={round(80, { right: 146, bottom: 22, background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
-      {/* ease the camera toward him while held (Q / RMB on desktop) */}
-      <div data-testid="touch-face"
+      {/* ease the camera toward him while held (Q / RMB on desktop); not in practice (no runner) */}
+      {!noRunner && <div data-testid="touch-face"
         onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchFace = true; }}
         onPointerUp={e => { e.stopPropagation(); input.touchFace = false; }}
         onPointerCancel={() => { input.touchFace = false; }}
         style={round(54, { right: 52, bottom: 150, background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         HIM
-      </div>
+      </div>}
       {/* pause */}
       <div data-testid="touch-pause"
         onPointerDown={e => { stop(e); onPause(); }}

@@ -320,11 +320,13 @@ export class SwingBot {
     return false;
   }
 
-  /** Aim / move helpers (horizontal unit vectors). */
+  /** Aim / move helpers (horizontal unit vectors). A zero aim keeps the last one (never the latch's). */
+  private ax = 1;
+  private az = 0;
   private setAim(inp: InputFrame, x: number, z: number): void {
     const l = Math.sqrt(x * x + z * z);
-    if (l < 1e-9) return;
-    inp.aimX = x / l; inp.aimY = 0; inp.aimZ = z / l;
+    if (l >= 1e-9) { this.ax = x / l; this.az = z / l; }
+    inp.aimX = this.ax; inp.aimY = 0; inp.aimZ = this.az;
   }
   private setMove(inp: InputFrame, x: number, z: number): void {
     const l = Math.sqrt(x * x + z * z);
@@ -367,6 +369,7 @@ export class SwingBot {
     const b = round.player, r = round.runner, P = b.p;
     inp.jumpPressed = false;
     inp.webPressed = false;
+    inp.aimX = this.ax; inp.aimY = 0; inp.aimZ = this.az;
     if (this.cool > 0) this.cool--;
     this.predict(round);
     const T = this.T;

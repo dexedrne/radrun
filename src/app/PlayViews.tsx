@@ -20,6 +20,10 @@ import { sfx } from "../audio/sfx.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
+import { hints } from "../ui/hints.ts";
+
+/** Bot pages (?bot=...) never show first-run tips. */
+const BOT_PAGE = new URLSearchParams(location.search).has("bot");
 
 // ---- driver --------------------------------------------------------------------------------------
 
@@ -88,7 +92,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       clips.current.runner.clear();
       clips.current.george.clear();
       beep.current = 4;
-      if (game.mode === "round") { showBubble(S.countdownBubble); sfx.blip(); }
+      hints.newRun();
+      if (game.mode === "round" && !game.practice) { showBubble(S.countdownBubble); sfx.blip(); }
     }
     phases.current.add(run.pose.phase);
     const ch = rigs.get(game.setup.chaser), rn = rigs.get(who);
@@ -141,14 +146,22 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     };
     acc.current += delta;
     if (acc.current >= 0.1) {
+      const dt = acc.current;
       acc.current = 0;
       const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
       const ring = b.ringId === RING_RUNNER ? "runner" : b.ropeHook >= 0 ? "attached" : b.ringId >= 0 ? "hook" : "none";
+      const rs = r.stats;
       useUi.setState({
         round: {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
+          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls,
         },
+      });
+      // First-run tips (chase / practice only, never on bot pages).
+      hints.tick(dt, {
+        active: !BOT_PAGE && game.mode === "round" && !game.paused && (st.screen === "chase" || st.screen === "practice") && r.phase === "chase",
+        grounded: b.grounded, rope: b.ropeHook >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
       });
     }
   }, FRAME.sim);
@@ -245,7 +258,8 @@ export function ChaseFx({ game }: { game: PlayGame }) {
   useFrame((state, rawDelta) => {
     const delta = rawDelta * game.timeScale;
     tmp.t += delta;
-    const inRound = game.mode === "round";
+    // Practice has no runner: none of his FX (rope, ring, shadow, bag, trail).
+    const inRound = game.mode === "round" && !game.practice;
     const r = game.round, p = game.runnerP, pl = game.renderP;
     const s = game.setup;
     if (game.runId !== tmp.runId) { tmp.runId = game.runId; tmp.trailN = 0; tmp.bagT = -1; }
@@ -408,7 +422,7 @@ export function ScreenTracker({ game }: { game: PlayGame }) {
   useFrame(state => {
     const bubble = document.getElementById("rr-bubble");
     const arrow = document.getElementById("rr-arrow");
-    const inRound = game.mode === "round";
+    const inRound = game.mode === "round" && !game.practice;
     const cam = state.camera;
     const p = game.runnerP;
     v.set(p.x, p.y + 1.3, p.z).project(cam);

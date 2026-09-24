@@ -17,7 +17,7 @@ export type Hud = {
   steps: number;
 };
 
-export type Screen = "boot" | "title" | "loading" | "countdown" | "chase" | "results";
+export type Screen = "boot" | "title" | "loading" | "countdown" | "chase" | "results" | "practice";
 
 export type RoundHud = {
   clock: number;
@@ -30,6 +30,11 @@ export type RoundHud = {
   countdown: number;
   fps: number;
   holdR: number;
+  /** Swing chain now / best this round, top speed (m/s), falls (the practice panel shows these). */
+  chain: number;
+  maxChain: number;
+  topSpeed: number;
+  falls: number;
 };
 
 export type Results = {
@@ -74,6 +79,8 @@ export type UiState = {
   pair: { chaser: RadbroId; runner: RadbroId } | null;
   /** LOADING progress 0..1 and the failed asset, if any. */
   load: { progress: number; error: string | null };
+  /** First-run tip shown right now (ui/hints.ts), or null. */
+  hint: { id: string; text: string } | null;
 };
 
 export const useUi = create<UiState>(() => ({
@@ -86,7 +93,7 @@ export const useUi = create<UiState>(() => ({
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0 },
   screen: "boot",
   paused: false,
-  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0 },
+  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0 },
   results: null,
   feed: [],
   banner: null,
@@ -94,6 +101,7 @@ export const useUi = create<UiState>(() => ({
   fade: 0,
   pair: null,
   load: { progress: 0, error: null },
+  hint: null,
 }));
 
 let feedId = 0;

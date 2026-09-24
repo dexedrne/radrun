@@ -5,6 +5,7 @@ import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
 import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
 import { challengeUrl, type Challenge, type Settings } from "./prefs.ts";
+import { hints } from "./hints.ts";
 
 const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 const btn = (primary = false): React.CSSProperties => ({
@@ -48,7 +49,7 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
 
 export function Title(props: {
   chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  challenge: Challenge; onPlay: () => void; ready: boolean;
+  challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean;
 }) {
   const { chaser, difficulty, challenge } = props;
   const touch = useUi(s => s.touch);
@@ -56,8 +57,14 @@ export function Title(props: {
   const img = compact ? 60 : narrow ? 72 : 124;
   const titlePx = compact ? 36 : narrow ? 46 : 72;
   const playBtn = (
-    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), marginTop: compact ? 0 : 14, fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
+    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: compact ? 18 : 22, padding: compact ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
       {props.ready ? "PLAY" : "loading city…"}
+    </button>
+  );
+  const practiceBtn = (
+    <button onClick={props.onPractice} disabled={!props.ready} title="free swinging in the city: no runner, no timer"
+      style={{ ...btn(false), fontSize: compact ? 13 : 15, padding: compact ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
+      PRACTICE
     </button>
   );
   return (
@@ -101,9 +108,10 @@ export function Title(props: {
               </button>
             ))}
             {compact && playBtn}
+            {compact && practiceBtn}
           </div>
           {!compact && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
-          {!compact && playBtn}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14 }}>{playBtn}{practiceBtn}</div>}
         </div>
         <div style={{ ...panel, marginTop: compact ? 6 : 12, padding: compact ? "6px 12px" : panel.padding, fontSize: compact ? 11 : 12, lineHeight: compact ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }}>
           {touch ? (
@@ -145,7 +153,7 @@ export function Loading({ onRetry, onMenu }: { onRetry: () => void; onMenu: () =
 
 // ---- in-round HUD --------------------------------------------------------------------------------
 
-export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; easyGrab: boolean }) {
+export function RoundHud({ reducedMotion, easyGrab, practice = false }: { reducedMotion: boolean; easyGrab: boolean; practice?: boolean }) {
   const r = useUi(s => s.round);
   const screen = useUi(s => s.screen);
   const feed = useUi(s => s.feed);
@@ -175,12 +183,31 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
         <div style={{ ...box, inset: 0, opacity: speedLines * 0.55, background: "radial-gradient(ellipse at center, transparent 55%, rgba(255,255,255,0.55) 100%)" }} />
       )}
       {fadeA > 0 && <div style={{ ...box, inset: 0, background: `rgba(0,0,0,${(fadeA * 0.8).toFixed(2)})` }} />}
-      {/* timer */}
-      <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: "800 30px ui-monospace, monospace", color: r.clock < 15 ? "#ff4d4d" : "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }} data-testid="timer">
-        {clockText(r.clock)}
-      </div>
+      {/* timer (practice: the mode tag) */}
+      {practice ? (
+        <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: `900 ${touch || narrow ? 16 : 22}px ui-monospace, monospace`, letterSpacing: touch || narrow ? 2 : 4, color: "#fff", textShadow: "3px 3px 0 #ff3d7f, 0 2px 4px rgba(0,0,0,0.6)" }} data-testid="practice-tag">
+          {S.practice}
+        </div>
+      ) : (
+        <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: "800 30px ui-monospace, monospace", color: r.clock < 15 ? "#ff4d4d" : "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }} data-testid="timer">
+          {clockText(r.clock)}
+        </div>
+      )}
+      {/* practice: speed + chain panel */}
+      {practice && (
+        <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }} data-testid="practice-stats">
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
+            <span>{r.speed.toFixed(1)} m/s</span>
+            <span style={{ color: r.chain >= 3 ? "#3ddc84" : "#ffd23f" }}>chain {r.chain}</span>
+          </div>
+          <div style={{ height: 7, background: "rgba(255,255,255,0.15)", borderRadius: 4, marginTop: 6 }}>
+            <div style={{ height: 7, width: `${Math.min(1, r.speed / 20) * 100}%`, background: r.speed > 14 ? "#3ddc84" : "#ffd23f", borderRadius: 4, transition: "width 0.2s" }} />
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.8, marginTop: 6 }}>best chain {r.maxChain} · top {r.topSpeed.toFixed(1)} m/s · falls {r.falls}</div>
+        </div>
+      )}
       {/* distance + heat */}
-      {screen !== "results" && <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }}>
+      {screen !== "results" && !practice && <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
           <span>{r.d.toFixed(0)} m</span>
           <span style={{ color: hot.color }}>{hot.label}</span>
@@ -215,43 +242,66 @@ export function RoundHud({ reducedMotion, easyGrab }: { reducedMotion: boolean; 
         <div style={{ width: 0, height: 0, borderTop: "14px solid transparent", borderBottom: "14px solid transparent", borderLeft: "26px solid #ff3355", filter: "drop-shadow(0 1px 2px #000)" }} />
       </div>
       {/* feed */}
-      <div style={{ ...box, left: touch ? 62 : 12, ...(touch ? { top: 12 } : { bottom: 12 }), maxWidth: touch ? "44vw" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ ...box, left: touch ? 62 : 12, ...(touch ? { top: 12 } : { bottom: 12 }), maxWidth: touch ? "36vw" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
         {feed.filter(f => now - f.t < 5000).map(f => (
           <div key={f.id} style={{ background: "rgba(14,16,30,0.7)", padding: "3px 8px", borderRadius: 5 }}>{f.text}</div>
         ))}
         {hints && (
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
-            {touch
-              ? "left thumb run · drag right to look · hold WEB = swing · red ring = WEB to YOINK"
-              : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
+            {practice
+              ? (touch
+                ? "left thumb run · drag right to look · hold WEB = swing · II = menu"
+                : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · hold R = back to start · Esc = menu`)
+              : touch
+                ? "left thumb run · drag right to look · hold WEB = swing · red ring = WEB to YOINK"
+                : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
           </div>
         )}
       </div>
       {r.holdR > 0 && (
-        <div style={{ ...box, left: "50%", bottom: 40, transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>retry… {Math.round(r.holdR * 100)}%</div>
+        <div style={{ ...box, left: "50%", bottom: 40, transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>{practice ? "back to start…" : "retry…"} {Math.round(r.holdR * 100)}%</div>
       )}
+      <HintPill />
       <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: 12 }), bottom: touch ? 4 : 8, fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
       <RotateHint />
     </>
   );
 }
 
+/** The first-run tip (ui/hints.ts), under the reticle. */
+export function HintPill() {
+  const hint = useUi(s => s.hint);
+  const touch = useUi(s => s.touch);
+  const { compact } = useViewport();
+  if (!hint) return null;
+  // Touch: above the character (the stick and the WEB / JUMP buttons own the bottom of the screen).
+  return (
+    <div style={{ position: "fixed", zIndex: 12, pointerEvents: "none", left: "50%", top: touch ? "24%" : compact ? "70%" : "74%", transform: "translateX(-50%)", maxWidth: touch ? "min(620px, 64vw)" : "min(620px, 86vw)", width: "max-content" }}>
+      <div key={hint.id} data-testid={`hint-${hint.id}`}
+        style={{ background: "rgba(14,16,30,0.86)", borderLeft: `4px solid ${hint.id === "yoink" ? "#ff3355" : "#ffd23f"}`, padding: compact ? "6px 12px" : "9px 16px", borderRadius: 8, font: `700 ${compact ? 13 : 15}px ui-monospace, monospace`, boxShadow: "0 4px 18px rgba(0,0,0,0.4)", textAlign: "center" }}>
+        <span style={{ color: hint.id === "yoink" ? "#ff3355" : "#ffd23f", marginRight: 8, letterSpacing: 2 }}>TIP</span>{hint.text}
+      </div>
+    </div>
+  );
+}
+
 // ---- pause ---------------------------------------------------------------------------------------
 
-export function Pause(props: { onResume: () => void; onRestart: () => void; onQuit: () => void; settings: Settings; setSettings: (s: Settings) => void }) {
+export function Pause(props: { onResume: () => void; onRestart: () => void; onQuit: () => void; settings: Settings; setSettings: (s: Settings) => void; practice?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [tipsReset, setTipsReset] = useState(false);
   const touch = useUi(s => s.touch);
   const s = props.settings;
   const set = (patch: Partial<Settings>) => props.setSettings({ ...s, ...patch });
   return (
     <div style={{ ...scroller, zIndex: 30, background: "rgba(8,10,20,0.55)" }}>
       <div style={{ ...panel, margin: "auto", minWidth: "min(300px, 86vw)", textAlign: "center", boxSizing: "border-box" }} data-testid="pause">
-        <div style={{ font: "900 28px ui-monospace, monospace", letterSpacing: 4 }}>{S.paused}</div>
+        <div style={{ font: "900 28px ui-monospace, monospace", letterSpacing: 4 }}>{props.practice ? S.practice : S.paused}</div>
         <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
           <button style={btn(true)} onClick={props.onResume}>Resume</button>
-          <button style={btn()} onClick={props.onRestart}>Restart</button>
+          <button style={btn()} onClick={props.onRestart}>{props.practice ? "Back to start" : "Restart"}</button>
           <button style={btn()} onClick={() => setOpen(!open)}>Settings</button>
-          <button style={btn()} onClick={props.onQuit}>Quit</button>
+          <button style={btn()} onClick={props.onQuit} data-testid="quit">{props.practice ? "Back to title" : "Quit"}</button>
         </div>
         {open && (
           <div style={{ marginTop: 12, textAlign: "left", display: "grid", gap: 6, fontSize: 12 }}>
@@ -271,6 +321,9 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>
             <label><input type="checkbox" checked={s.reducedMotion} onChange={e => set({ reducedMotion: e.target.checked })} /> reduced motion</label>
             {!touch && <label><input type="checkbox" checked={s.easyGrab} onChange={e => set({ easyGrab: e.target.checked })} /> easy grab (tap Space = jump, hold Space = swing)</label>}
+            <button style={{ ...btn(false), padding: "5px 12px", fontSize: 12 }} data-testid="tips-reset" onClick={() => { hints.reset(); setTipsReset(true); }}>
+              {tipsReset ? "tips will show again" : "show tips again"}
+            </button>
           </div>
         )}
       </div>

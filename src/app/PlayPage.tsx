@@ -1,6 +1,7 @@
 // The game page: TITLE -> LOADING -> COUNTDOWN -> CHASE -> RESULTS over one canvas that is mounted
-// once. Restart / Retry create a fresh Round outside React (nothing remounts). ?bot=... runs the test
-// bot (dev/test builds), ?tune adds sliders.
+// once, plus TITLE -> PRACTICE (free swinging with your Radbro and George, no runner; pause -> Back
+// to title). Restart / Retry create a fresh Round outside React (nothing remounts). ?bot=... runs the
+// test bot (dev/test builds), ?tune adds sliders.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlayGame } from "../game/play.ts";
 import { randomSeed } from "../game/play.ts";
@@ -126,15 +127,15 @@ export default function PlayPage() {
     useUi.setState({ paused: p });
   }, [game]);
 
-  const begin = useCallback((seed: number) => {
+  const begin = useCallback((seed: number, practice = false) => {
     if (!game) return;
     const runner = pickRunner(chaser, challenge.r);
     useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
     void loadPair(chaser, runner).then(ok => {
       if (!ok) return;
       game.paused = false;
-      game.startRound({ chaser, runner, difficulty, seed });
-      useUi.setState({ screen: "countdown" });
+      game.startRound({ chaser, runner, difficulty, seed }, practice);
+      useUi.setState({ screen: practice ? "practice" : "countdown" });
       lockMouse();
     });
   }, [game, chaser, difficulty, challenge]);
@@ -147,12 +148,21 @@ export default function PlayPage() {
     begin(randomSeed());
   }, [begin, chaser, difficulty]);
 
+  const onPractice = useCallback(() => {
+    rememberPicks(chaser, difficulty);
+    unlockAudio();
+    if (isTouch()) enterFullscreen();
+    else canvasEl()?.requestPointerLock();
+    begin(randomSeed(), true);
+  }, [begin, chaser, difficulty]);
+
   const retry = useCallback(() => {
     if (!game || game.mode !== "round") return;
     useUi.setState({ results: null, feed: [], banner: null, bubble: null, paused: false });
     game.paused = false;
-    game.retry(BOT ? (game.setup.seed + 1) >>> 0 : randomSeed());
-    useUi.setState({ screen: "countdown" });
+    // Practice: same seed = the same start roof.
+    game.retry(BOT ? (game.setup.seed + 1) >>> 0 : game.practice ? game.setup.seed : randomSeed());
+    useUi.setState({ screen: game.practice ? "practice" : "countdown" });
     if (!BOT) lockMouse();
   }, [game]);
 
@@ -170,14 +180,14 @@ export default function PlayPage() {
     const detach = attachDom(game.input, el, locked => {
       useUi.setState({ locked });
       const sc = useUi.getState().screen;
-      if (!locked && !BOT && !TUNE && (sc === "countdown" || sc === "chase")) setPaused(true);
+      if (!locked && !BOT && !TUNE && (sc === "countdown" || sc === "chase" || sc === "practice")) setPaused(true);
       if (locked) setPaused(false);
     });
     const kd = (e: KeyboardEvent) => {
       if (e.code !== "KeyR" || e.repeat) return;
       const sc = useUi.getState().screen;
       if (sc === "results") retry();
-      else if (sc === "countdown" || sc === "chase") rHeld.current = performance.now();
+      else if (sc === "countdown" || sc === "chase" || sc === "practice") rHeld.current = performance.now();
     };
     const ku = (e: KeyboardEvent) => {
       if (e.code === "KeyR") { rHeld.current = null; useUi.setState(s => ({ round: { ...s.round, holdR: 0 } })); }
@@ -191,12 +201,12 @@ export default function PlayPage() {
     // A click on the canvas mid-round re-captures the mouse (e.g. a lock request the browser refused).
     const click = () => {
       const sc = useUi.getState().screen;
-      if (!BOT && !isTouch() && (sc === "countdown" || sc === "chase") && document.pointerLockElement !== el) el.requestPointerLock?.();
+      if (!BOT && !isTouch() && (sc === "countdown" || sc === "chase" || sc === "practice") && document.pointerLockElement !== el) el.requestPointerLock?.();
     };
     // Phones: leaving the tab / locking the screen mid-round pauses.
     const vis = () => {
       const sc = useUi.getState().screen;
-      if (document.hidden && !BOT && (sc === "countdown" || sc === "chase")) setPaused(true);
+      if (document.hidden && !BOT && (sc === "countdown" || sc === "chase" || sc === "practice")) setPaused(true);
     };
     document.addEventListener("visibilitychange", vis);
     el.addEventListener("click", click);
@@ -231,16 +241,17 @@ export default function PlayPage() {
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
   if (!game || !settings) return <div style={{ padding: 20 }}>loading…</div>;
-  const inRound = screen === "countdown" || screen === "chase";
+  const practice = screen === "practice";
+  const inRound = screen === "countdown" || screen === "chase" || practice;
   return (
     <>
       <Scene game={game} />
       {(screen === "boot" || screen === "title") && (
-        <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} ready={ready} />
+        <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready} />
       )}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
-      {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} />}
-      {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} />}
+      {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} />}
+      {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} />}
       {paused && inRound && (
         <Pause
@@ -249,6 +260,7 @@ export default function PlayPage() {
           onResume={() => (touch ? setPaused(false) : canvasEl()?.requestPointerLock())}
           onRestart={() => { setPaused(false); retry(); }}
           onQuit={toMenu}
+          practice={practice}
         />
       )}
       {TunePanel && TUNE && (

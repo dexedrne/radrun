@@ -49,6 +49,8 @@ export class PlayGame {
   paused = false;
   /** Touch play: wider aim cone, +1 m Yoink, velocity-biased aim (spec §4 "Touch"). */
   touch = false;
+  /** Practice (title -> PRACTICE): the current round is a runner-less free roam (Round practice). */
+  practice = false;
   bot: Bot | SwingBot | null = null;
   botOptions: BotOptions | null = null;
   /** Bits OR-ed over the steps of the last frame. */
@@ -114,13 +116,14 @@ export class PlayGame {
     return new Round({
       model: this.model, index: this.index, pack: this.pack, difficulty: s.difficulty, params: this.difficulty[s.difficulty],
       tuning: this.simTuning ?? this.tuning, chaser: s.chaser, runner: s.runner, seed: s.seed, countdown: true,
-      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0,
+      yoinkBonus: this.touch ? TOUCH.yoinkBonus : 0, practice: this.practice,
     });
   }
 
-  /** Start a round (PLAY, Retry). Keeps the canvas, prefab and caches. */
-  startRound(s: RoundSetup): void {
+  /** Start a round (PLAY, Retry) or, with practice = true, free roam (PRACTICE). Keeps the canvas, prefab and caches. */
+  startRound(s: RoundSetup, practice = false): void {
     this.setup = s;
+    this.practice = practice;
     this.retune();
     this.round = this.makeRound(s);
     this.mode = "round";
@@ -137,8 +140,9 @@ export class PlayGame {
     const bo = this.botOptions;
     this.bot = bo ? (bo.kind === "swing" ? new SwingBot(this.round, s.seed) : new Bot(this.round, bo)) : null;
     const sp = this.round.spawn, rp = this.round.runner.p;
-    this.george.beat = "sit";
-    this.george.place(sp.x, sp.y, sp.z, sp.roofId, rp.x - sp.x, rp.z - sp.z);
+    this.george.beat = practice ? "" : "sit";
+    if (practice) this.george.place(sp.x, sp.y, sp.z, sp.roofId, -Math.sin(sp.yaw), -Math.cos(sp.yaw));
+    else this.george.place(sp.x, sp.y, sp.z, sp.roofId, rp.x - sp.x, rp.z - sp.z);
     this.snap();
   }
 
@@ -147,14 +151,15 @@ export class PlayGame {
     if (this.mode === "round") this.retry();
   }
 
-  /** Retry: same pair and difficulty, new seed. */
+  /** Retry: same pair and difficulty, new seed (practice: back to the start roof). */
   retry(seed = randomSeed()): void {
-    this.startRound({ ...this.setup, seed });
+    this.startRound({ ...this.setup, seed }, this.practice);
   }
 
   toTitle(): void {
     this.mode = "title";
     this.paused = false;
+    this.practice = false;
     this.bot = null;
   }
 
@@ -191,7 +196,7 @@ export class PlayGame {
     this.frameEvents |= round.player.events;
     this.roundEvents |= round.events;
     this.runnerEvents |= round.runner.events;
-    if (round.events & RV_RESPAWN) {
+    if ((round.events & RV_RESPAWN) && !this.practice) {
       const p = round.player.p, r = round.runner.p;
       rigFace(rig, r.x - p.x, r.z - p.z, Infinity, 0);
     }
@@ -220,7 +225,7 @@ export class PlayGame {
     if (round.over) { this.endReal += delta; this.endT += delta * this.timeScale; }
     // Q / RMB: ease the camera toward him at 8/s; bots always face him.
     const p = round.player.p, r = round.runner.p;
-    if ((this.input.towardRunner || this.bot) && round.phase === "chase") rigFace(this.rig, r.x - p.x, r.z - p.z, this.bot ? 4 : 8, delta);
+    if ((this.input.towardRunner || this.bot) && round.phase === "chase" && !this.practice) rigFace(this.rig, r.x - p.x, r.z - p.z, this.bot ? 4 : 8, delta);
     const n = round.over ? 0 : this.stepper.frame(delta);
     for (let i = 0; i < n && !round.over; i++) this.step();
     if (round.over) this.georgeEnd(delta * this.timeScale);
