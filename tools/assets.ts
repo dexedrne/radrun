@@ -34,7 +34,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "models");
 const GEN = path.join(ROOT, "src", "generated");
 const BIN = path.join(ROOT, "node_modules", ".bin", "gltf-transform");
-const IDS = ["652", "4764", "2564", "723"] as const;
+const IDS = ["652", "4764", "2564", "723", "3171"] as const;
 const DROP = ["Stand_to_Sit_Transition_M", "Chair_Sit_Idle_M", "Sit_Lie_Bed"];
 
 function arg(name: string, env: string): string | null {
