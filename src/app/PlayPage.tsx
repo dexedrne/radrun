@@ -30,6 +30,9 @@ import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
+import { preloadSfx } from "../audio/sfx.ts";
+import { preloadVoices } from "../audio/voice.ts";
+import { preloadTracks } from "../audio/tracks.ts";
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
 import { NightLook } from "./cityLook.tsx";
@@ -68,7 +71,7 @@ async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["so
   if (!dec) return null;
   return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older);
 }
-const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx); setMuted(s.muted); setAudioLow(s.quality === "low"); };
+const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); };
 /** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */
 const AUTOQ_OFF = params.get("autoq") === "0";
 const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" && !s.qualityChosen && !s.qualityAuto;
@@ -101,6 +104,10 @@ function Scene({ game }: { game: PlayGame }) {
 /** LOADING (spec §20 item 4): preload the round pair's GLBs, then mount their nodes. */
 async function loadPair(chaser: RadbroId, runner: RadbroId): Promise<boolean> {
   useUi.setState({ screen: "loading", load: { progress: 0, error: null } });
+  // The round's sounds and voices load alongside (never awaited; the procedural audio covers gaps).
+  preloadSfx();
+  preloadVoices(chaser, runner);
+  preloadTracks(PAGE_DISTRICT);
   const failed = await loadManifest(manifestFor(chaser, runner), f => useUi.setState({ load: { progress: f, error: null } }));
   if (failed) {
     useUi.setState(s => ({ load: { progress: s.load.progress, error: failed } }));

@@ -22,6 +22,9 @@ import { sfx } from "../audio/sfx.ts";
 import { music } from "../audio/music.ts";
 import { musicTarget } from "../audio/score.ts";
 import { audioState, isMuted, outputLevel } from "../audio/engine.ts";
+import { voice } from "../audio/voice.ts";
+import { COUNT_KEYS, tauntKey } from "../audio/catalog.ts";
+import { sampleStats } from "../audio/samples.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
@@ -61,7 +64,11 @@ export type PlayProbe = {
   frames: number;
   backend: string;
   /** AudioContext state ("none" before the first gesture), music mode / close-chase layer, notes and SFX played. */
-  audio: { state: string; muted: boolean; music: string; layer: boolean; notes: number; sfx: number; rms?: number; peak?: number };
+  audio: {
+    state: string; muted: boolean; music: string; layer: boolean; notes: number; sfx: number;
+    /** Sampled music loop playing ("" = procedural or none), voice lines started, sample files decoded / failed. */
+    track: string; voices: number; loaded: number; failed: number; rms?: number; peak?: number;
+  };
   /**
    * Ghosts: steps recorded this round; the raced ghost (its phase, chase steps, record length, catch
    * time, status); the ghost link of the last catch once packed.
@@ -140,7 +147,12 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       clips.current.george.clear();
       beep.current = 4;
       hints.newRun();
-      if (game.mode === "round" && !game.practice) { showBubble(S.countdownBubble); sfx.chatter(VOICE[who]); music.countdown(COUNTDOWN_STEPS / 120); }
+      if (game.mode === "round" && !game.practice) {
+        showBubble(S.countdownBubble);
+        // Voiced: he says it right after GO (the announcer has the countdown).
+        if (!voice.has(who, "countdown")) sfx.chatter(VOICE[who]);
+        music.countdown(COUNTDOWN_STEPS / 120);
+      }
     }
     phases.current.add(run.pose.phase);
     const ch = rigs.get(game.setup.chaser), rn = rigs.get(who);
@@ -150,12 +162,18 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     // Countdown beeps 3-2-1.
     if (game.mode === "round" && r.phase === "countdown") {
       const n = Math.ceil(r.countdown / 120);
-      if (n < beep.current && n > 0) { beep.current = n; sfx.beep(); }
+      if (n < beep.current && n > 0) { beep.current = n; sfx.beep(); voice.announce(COUNT_KEYS[n] ?? "one"); }
     }
     // Events -> strings (§12) + SFX.
     const ev = game.roundEvents, rev = game.runnerEvents, pe = game.frameEvents;
-    if (ev & RV_GO) { useUi.setState({ screen: "chase" }); showBanner(S.go); sfx.beep(true); }
-    if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); }
+    if (ev & RV_GO) {
+      useUi.setState({ screen: "chase" });
+      showBanner(S.go);
+      sfx.beep(true);
+      voice.announce("go");
+      voice.say(who, "countdown", { delay: 0.55, maxWait: 0.6 });
+    }
+    if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); voice.announce("rekt"); }
     const b = r.player;
     const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (r.phase === "chase") {
@@ -170,10 +188,20 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (gusting && !audio.current.gusting) sfx.gust();
       audio.current.gusting = gusting;
     }
-    if (rev & RE_TAUNT) { const t = TAUNTS[who]; showBubble(t[lines.current++ % t.length]); sfx.chatter(VOICE[who]); }
-    if (rev & RE_PANIC) { showBubble(S.panicBubble); sfx.chatter(VOICE[who] * 1.25); }
-    if (rev & RE_CORNERED) { showBubble(S.corneredBubble); sfx.chatter(VOICE[who] * 1.1); }
-    if (rev & RE_GASSED) pushFeed(S.gassedFeed);
+    // Runner lines: voiced when loaded (cooldowns in voice.ts terms), else the chatter blips. Taunts come
+    // from far ahead, so they are quieter with distance.
+    if (rev & RE_TAUNT) {
+      const t = TAUNTS[who], i = lines.current++ % t.length;
+      showBubble(t[i]);
+      if (!voice.say(who, tauntKey(i), { group: "taunt", cooldown: 3.5, gain: Math.max(0.55, Math.min(1, 1.15 - r.d / 80)) })) sfx.chatter(VOICE[who]);
+    }
+    if (rev & RE_PANIC) { showBubble(S.panicBubble); if (!voice.say(who, "panic", { cooldown: 4, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.25); }
+    if (rev & RE_CORNERED) { showBubble(S.corneredBubble); if (!voice.say(who, "cornered", { cooldown: 5, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.1); }
+    if (rev & RE_GASSED) {
+      pushFeed(S.gassedFeed);
+      voice.announce("gassed", { interrupt: false, maxWait: 0.6 });
+      voice.say(who, "gassed", { maxWait: 1.6 });
+    }
     // The ghost's catch (its own round): a feed line.
     const gh = game.ghost, gph = gh && game.mode === "round" ? gh.round.phase : "";
     if (gph !== ghostPhase.current) {
@@ -181,7 +209,15 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       ghostPhase.current = gph;
     }
     if (ev & (RV_CAUGHT | RV_ESCAPED)) {
-      if (ev & RV_ESCAPED) { showBanner(S.escape); showBubble(LINES.escaped[who]); music.sting("escaped"); sfx.rug(); sfx.meow(true); }
+      if (ev & RV_ESCAPED) {
+        showBanner(S.escape);
+        showBubble(LINES.escaped[who]);
+        music.sting("escaped");
+        sfx.rug();
+        sfx.meow(true);
+        voice.announce("rugged");
+        voice.say(who, "escaped", { maxWait: 2.5 });
+      }
       else {
         const yoink = r.stats.catchKind === "yoink";
         showBanner(yoink ? `${S.yoink}!` : "TAGGED!");
@@ -190,11 +226,16 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         music.sting(yoink ? "yoink" : "caught");
         sfx.jingle();
         sfx.meow();
+        // The announcer calls it, he sighs, your Radbro cheers.
+        voice.announce(yoink ? "yoink" : "tagged");
+        voice.say(who, "caught", { maxWait: 2 });
+        voice.say(game.setup.chaser, "win", { maxWait: 4 });
       }
       useUi.setState({ results: buildResults(game) });
     }
     if (game.mode === "round" && r.over && game.endT > RESULTS_AFTER[r.phase === "caught" ? "caught" : "escaped"] && useUi.getState().screen !== "results") {
       useUi.setState({ screen: "results" });
+      if (useUi.getState().results?.newBest) voice.announce("new_best", { interrupt: false, maxWait: 5 });
     }
 
     const st = useUi.getState();
@@ -207,7 +248,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       d: r.d, panic: run.band.panic, gassed: run.band.gassed,
     }, audio.current.layer);
     audio.current.layer = tgt.layer;
-    music.update(tgt, { difficulty: game.setup.difficulty, paused: game.paused });
+    music.update(tgt, { difficulty: game.setup.difficulty, paused: game.paused, district: game.district });
     // Wind while airborne / on the rope (20 Hz).
     audio.current.windAcc += delta;
     if (audio.current.windAcc >= 0.05) {
@@ -231,6 +272,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       fps: fps.current, frames: frames.current, backend: st.backend,
       audio: {
         state: audioState(), muted: isMuted(), music: mp.mode, layer: mp.layer, notes: mp.scheduled, sfx: sfx.played(),
+        track: mp.track, voices: voice.said(), ...sampleStats(),
         ...(DEV ? { rms: audio.current.rms, peak: audio.current.maxPeak } : {}),
       },
       ghost: {
