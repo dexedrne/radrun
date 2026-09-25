@@ -72,7 +72,7 @@ try {
         log.push(`SHOT countdown at wall ${Date.now() - t0} ms`);
       }
       if (last.phase === "chase" && !firstChase) firstChase = Date.now();
-      // ?bot=swing: two shots while the player hangs from a balloon, then stop.
+      // ?bot=swing: shots while the player hangs from a web, then stop.
       const frozen = swing && (await page.evaluate(() => Boolean((window as unknown as { __frozen?: boolean }).__frozen)));
       if (frozen) {
         await sleep(400); // let the paused frame settle (camera, mixers keep rendering)

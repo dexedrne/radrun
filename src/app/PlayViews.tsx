@@ -12,7 +12,10 @@ import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
 import { COUNTDOWN_STEPS, RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK, type RadbroId } from "../game/round.ts";
 import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts";
-import { EV_ATTACH, EV_BONK, EV_DJUMP, EV_JUMP, EV_LAND, EV_POP, EV_RELEASE, EV_ZIP, EV_ZIP_END, RING_RUNNER } from "../sim/player.ts";
+import {
+  EV_ATTACH, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_NOANCHOR, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_SNAP, EV_VAULT, EV_WALLJUMP,
+  EV_WALLRUN, EV_ZIP, EV_ZIP_END, RING_RUNNER,
+} from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
 import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
@@ -53,8 +56,11 @@ export type PlayProbe = {
   catchKind: string;
   catchTime: number;
   ring: number;
-  /** Hook id you hang from, or -1. */
+  /** The solid your web is on, or -1; round 9 wall / ledge mode and parkour count. */
   rope: number;
+  wall: number;
+  ledge: number;
+  parkour: number;
   player: [number, number, number];
   runner: { p: [number, number, number]; mode: number; phase: number; edge: number; t: number; m: number; budget: number };
   runnerPhases: number[];
@@ -186,7 +192,15 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (pe & (EV_RELEASE | EV_ZIP_END)) sfx.fling(sp);
       if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land(-b.landVy);
       if (pe & EV_BONK) sfx.bonk();
-      if (pe & EV_POP) sfx.pop();
+      if (pe & EV_SNAP) sfx.snap();
+      if (pe & EV_WALLRUN) sfx.wallRun();
+      if (pe & EV_WALLJUMP) sfx.wallJump();
+      if (pe & EV_LEDGE) sfx.ledge();
+      if (pe & EV_CLIMB) sfx.climb();
+      if (pe & EV_VAULT) sfx.vault();
+      if (pe & EV_SLIDE) sfx.slide();
+      if (pe & EV_ROLL) sfx.roll();
+      if (pe & EV_NOANCHOR) sfx.noAnchor();
       const g = r.nextGust();
       const gusting = !!g && g.level > 0;
       if (gusting && !audio.current.gusting) sfx.gust();
@@ -271,7 +285,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
       outcome: r.phase === "caught" ? "CAUGHT" : r.phase === "escaped" ? "ESCAPED" : "", catchKind: r.stats.catchKind, catchTime: r.stats.catchTime,
-      ring: b.ringId, rope: b.ropeHook, player: [b.p.x, b.p.y, b.p.z],
+      ring: b.ringId, rope: b.ropeSolid, wall: b.wallMode, ledge: b.ledgeMode, parkour: b.parkour, player: [b.p.x, b.p.y, b.p.z],
       runner: { p: [run.p.x, run.p.y, run.p.z], mode: run.mode, phase: run.pose.phase, edge: run.edge, t: run.t, m: run.band.m, budget: run.band.budget },
       runnerPhases: [...phases.current], clips: { chaser: [...clips.current.chaser], runner: [...clips.current.runner], george: [...clips.current.george] },
       fps: fps.current, frames: frames.current, backend: st.backend,
@@ -298,7 +312,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         audio.current.rms = lv.rms;
         audio.current.maxPeak = Math.max(audio.current.maxPeak, lv.peak);
       }
-      const ring = b.ringId === RING_RUNNER ? "runner" : b.ropeHook >= 0 ? "attached" : b.ringId >= 0 ? "hook" : "none";
+      const ring = b.ringId === RING_RUNNER ? "runner" : b.ropeSolid >= 0 ? "attached" : b.ringId >= 0 ? "hook" : "none";
       const rs = r.stats;
       // Wind (HUD only): push direction relative to the camera (forward = up on screen).
       const g = r.nextGust();
@@ -311,7 +325,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         round: {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
-          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, runnerLow: rs.runnerLow, wind,
+          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, runnerLow: rs.runnerLow, parkour: rs.parkour, wind,
           zip: r.tuning.webZip ? (b.zipOn ? 1 : Math.min(1, b.zipCd / Math.max(1e-6, r.tuning.zipCooldown))) : -1,
         },
       });
@@ -320,8 +334,9 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       // First-run tips (chase / practice only, never on bot pages).
       hints.tick(dt, {
         active: !BOT_PAGE && game.mode === "round" && !game.paused && (st.screen === "chase" || st.screen === "practice") && r.phase === "chase",
-        grounded: b.grounded, rope: b.ropeHook >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
+        grounded: b.grounded, rope: b.ropeSolid >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
         djumped: (tev & EV_DJUMP) !== 0, zipped: (tev & EV_ZIP) !== 0, moves: r.tuning.webZip,
+        wallRan: (tev & EV_WALLRUN) !== 0, kicked: (tev & EV_WALLJUMP) !== 0, slid: (tev & EV_SLIDE) !== 0, speed: Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z),
       });
     }
   }, FRAME.sim);
@@ -425,15 +440,12 @@ export function ChaseFx({ game }: { game: PlayGame }) {
     if (game.runId !== tmp.runId) { tmp.runId = game.runId; tmp.trailN = 0; tmp.bagT = -1; }
     const low = lowQuality();
 
-    // His rope: RightHand -> balloon.
-    const hookId = inRound && !r.over ? game.runnerRopeHook : -1;
+    // His web: RightHand -> his baked building anchor (pack v2).
     const ro = rope.current;
     if (ro) {
-      ro.visible = hookId >= 0;
-      if (hookId >= 0) {
-        const h = game.model.hooks[hookId];
+      ro.visible = inRound && !r.over && game.runnerAnchor(tmp.b);
+      if (ro.visible) {
         if (!handWorld(s.runner, "right", tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
-        tmp.b.set(h.x, h.y, h.z);
         beam(ro, tmp.a, tmp.b);
       }
     }
@@ -550,7 +562,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
   return (
     <>
       <mesh ref={rope} visible={false}>
-        <cylinderGeometry args={[0.04, 0.04, 1, 6]} />
+        <cylinderGeometry args={[0.0175, 0.0175, 1, 6]} />
         <meshBasicMaterial color="#fafafa" />
       </mesh>
       <mesh ref={lasso} visible={false}>

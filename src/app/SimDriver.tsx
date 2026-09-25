@@ -11,7 +11,11 @@ export type Probe = {
   p: [number, number, number];
   v: [number, number, number];
   grounded: boolean;
-  ropeHook: number;
+  /** The rope's anchor solid (-1 = none), wall mode, ledge mode, sliding. */
+  rope: number;
+  wall: number;
+  ledge: number;
+  slide: boolean;
   ringId: number;
   chain: number;
   fps: number;
@@ -38,7 +42,7 @@ export function SimDriver({ game }: { game: Sandbox }) {
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     window.__probe = {
       step: b.step, t: b.t, p: [b.p.x, b.p.y, b.p.z], v: [b.v.x, b.v.y, b.v.z], grounded: b.grounded,
-      ropeHook: b.ropeHook, ringId: b.ringId, chain: b.chainCount, fps: fps.current, frames: frames.current, stats: game.stats,
+      rope: b.ropeSolid, wall: b.wallMode, ledge: b.ledgeMode, slide: b.slideT > 0, ringId: b.ringId, chain: b.chainCount, fps: fps.current, frames: frames.current, stats: game.stats,
       cam: { arm: game.rig.arm, armUsed: game.rig.armUsed, pos: [game.rig.pos.x, game.rig.pos.y, game.rig.pos.z], yaw: game.rig.yaw, pitch: game.rig.pitch },
     };
     uiAcc.current += delta;
@@ -47,8 +51,8 @@ export function SimDriver({ game }: { game: Sandbox }) {
       const st = game.stats;
       useUi.setState({
         hud: {
-          speed, phase: b.ropeHook >= 0 ? "rope" : b.grounded ? "ground" : "air", ring: b.ringId, chain: b.chainCount,
-          topSpeed: st.topSpeed, maxChain: st.maxChain, falls: st.falls, bonks: st.bonks, fps: fps.current, steps: st.steps,
+          speed, phase: b.ropeSolid >= 0 ? "rope" : b.wallMode > 0 ? "wall" : b.ledgeMode > 0 ? "ledge" : b.slideT > 0 ? "slide" : b.grounded ? "ground" : "air", ring: b.ringId, chain: b.chainCount,
+          topSpeed: st.topSpeed, maxChain: st.maxChain, falls: st.falls, bonks: st.bonks, fps: fps.current, steps: st.steps, parkour: st.parkour,
         },
       });
     }

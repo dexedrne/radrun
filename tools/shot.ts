@@ -24,7 +24,7 @@ const browser = await puppeteer.launch({
 });
 const log: string[] = [];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-type P = { step: number; p: number[]; v: number[]; grounded: boolean; ropeHook: number; ringId: number; fps: number; frames: number; stats: Record<string, number> };
+type P = { step: number; p: number[]; v: number[]; grounded: boolean; rope: number; wall: number; ringId: number; fps: number; frames: number; stats: Record<string, number> };
 try {
   const page = await browser.newPage();
   page.on("console", m => log.push(`console.${m.type()}: ${m.text()}`));
@@ -46,13 +46,13 @@ try {
   while (!shot && Date.now() - t0 < 120_000) {
     last = (await page.evaluate(() => (window as unknown as { __probe?: unknown }).__probe ?? null)) as P | null;
     if (last) {
-      if (last.ropeHook >= 0 && attachStep < 0) attachStep = last.step;
-      if (last.ropeHook < 0) attachStep = -1;
+      if (last.rope >= 0 && attachStep < 0) attachStep = last.step;
+      if (last.rope < 0) attachStep = -1;
       // Mid-swing: on the rope for >= 0.25 s of sim time, after the city has had time to stream in.
       if (attachStep >= 0 && last.step - attachStep >= 30 && Date.now() - t0 > 8000) {
         await page.screenshot({ path: out });
         shot = true;
-        log.push(`SHOT at wall ${Date.now() - t0} ms: ${JSON.stringify({ step: last.step, p: last.p.map(v => +v.toFixed(2)), ropeHook: last.ropeHook, ringId: last.ringId, fps: +last.fps.toFixed(1), stats: last.stats, cam: (last as unknown as { cam: unknown }).cam })}`);
+        log.push(`SHOT at wall ${Date.now() - t0} ms: ${JSON.stringify({ step: last.step, p: last.p.map(v => +v.toFixed(2)), rope: last.rope, wall: last.wall, ringId: last.ringId, fps: +last.fps.toFixed(1), stats: last.stats, cam: (last as unknown as { cam: unknown }).cam })}`);
         break;
       }
     }

@@ -1,17 +1,14 @@
-// Every sim constant (spec §5.5) plus the PLAYER / RUNNER / PROTOTYPE presets. Values are literals so
-// the sim stays deterministic; public/levels/tuning.json can override PLAYER fields at startup with
-// more literals (applyTuningJson). Derived constants are literals too (AIM_COS etc.).
-
-export type Targeting = "cone" | "prototype";
+// Every sim constant plus the PLAYER / RUNNER presets. Values are literals so the sim stays deterministic;
+// public/levels/tuning.json can override PLAYER fields at startup with more literals (applyTuningJson).
+// Derived constants are literals too (AIM_COS etc.): the sim never calls trig, angles are stored as cosines.
+// Round 9 (docs/specs/2026-09-25-round9-movement.md §8): building-anchored pendulum swing + parkour keys.
 
 export type Tuning = {
   dt: number;
   gravity: number;
-  /** 0 = no cap (PROTOTYPE). */
+  /** One speed cap (|v|, m/s) for every state; 0 = no cap. Ground speed is still set by runSpeed / carryDecay. */
   speedCap: number;
   runSpeed: number;
-  /** PROTOTYPE: ground velocity is set to move * runSpeed every grounded step (no accel/brake/carry). */
-  instantGround: boolean;
   groundAccel: number;
   groundBrake: number;
   carryDecay: number;
@@ -19,18 +16,17 @@ export type Tuning = {
   jumpSpeed: number;
   coyoteTime: number;
   jumpBuffer: number;
-  targeting: Targeting;
-  aimRadius: number;
+  /** Aim cone (cosine of the half angle) for anchors and Yoink. */
   aimCos: number;
-  hookMinAbove: number;
-  scoreAhead: number;
-  scoreUp: number;
+  /** Ring stickiness: the ringed building's score is this many metres better. */
   hysteresis: number;
-  ropeScale: number;
-  reelSpeed: number;
+  /** Rope steering (m/s^2): only across the swing plane (never along the arc). */
   ropeSteer: number;
+  /** Let go: + releaseBoost along the velocity and + releaseUp (while v.y > -4). */
   releaseBoost: number;
+  releaseUp: number;
   autoRelease: boolean;
+  /** Auto-release (fling) once the body rises above the pivot minus this (m). */
   autoReleaseBelow: number;
   bonk: boolean;
   bonkMinSpeed: number;
@@ -38,20 +34,107 @@ export type Tuning = {
   bonkLock: number;
   halfWidth: number;
   halfHeight: number;
-  /** Web must be held this long before the rope fires (0 = two-button, 0.12 = easy grab / prototype). */
+  /** Web must be held this long before the rope fires (0 = two-button, 0.12 = easy grab). */
   holdDelay: number;
-  /** Grounded web press with a ringed hook = jump + grab. */
+  /** Grounded web press with a ringed anchor = jump + grab. */
   zip: boolean;
   yoink: boolean;
   yoinkRange: number;
-  failBelowLowestRoof: number;
-  /** Double jump: extra jumps while airborne (not on the rope), recharged on landing / rope attach; 0 = off. */
+  /**
+   * @deprecated Round 8 balloon grab range. Unused by the sim; it only exists so the pre-round-9 city lint
+   * (world/derive.ts, WORLD's) still compiles on this branch. INTEGRATE deletes it with Hook.
+   */
+  aimRadius?: number;
+  // ---- anchor search (§2.1) ----
+  /** Rope length limits (m, body -> anchor). */
+  ropeMin: number;
+  ropeMax: number;
+  /** An anchor sits at least this far above the body centre (m). */
+  anchorMinAbove: number;
+  /** Ideal anchor point: anchorAhead + anchorAheadPerSpeed x |v_xz| ahead, anchorUp up. */
+  anchorAhead: number;
+  anchorAheadPerSpeed: number;
+  anchorUp: number;
+  /** Forward = aim + anchorVelBias x velocity direction (full weight at runSpeed). */
+  anchorVelBias: number;
+  /** Score bonuses (m): rim / corner anchors, and a penalty for the building let go of in the last second. */
+  anchorRimBonus: number;
+  anchorAlternate: number;
+  // ---- pendulum (§2.2-2.4) ----
+  /** Physics pivot pushed this far off the face (at most half the body's distance to it). */
+  swingOut: number;
+  /** The arc's bottom stays this far above the floor under the pivot (reel to a shorter rope if needed). */
+  swingFloorClear: number;
+  swingReel: number;
+  /** Gravity factor on the rope. */
+  swingGravity: number;
+  /** Pump (m/s^2) along the swing while below the pivot and descending. */
+  swingPump: number;
+  /** First taut step: speed kept, at most this factor of the speed after the radial cut. */
+  swingKeepSpeed: number;
+  /** Auto-release when past this cosine from straight down, rising, on the forward side. */
+  swingReleaseCos: number;
+  /** A held web re-attaches this long after a release (s). */
+  swingRehook: number;
+  /** Line-of-sight check to the anchor every this many steps (the web snaps when blocked). */
+  losSteps: number;
+  // ---- wall run / run-up / wall jump (§3.2-3.3) ----
+  wallRun: boolean;
+  wallRunReach: number;
+  wallRunMinSpeed: number;
+  wallRunRatio: number;
+  wallRunMinBelowTop: number;
+  wallRunFallMax: number;
+  wallRunTime: number;
+  wallRunSpeed: number;
+  wallRunAccel: number;
+  wallRunGravity: number;
+  wallRunKick: number;
+  wallRunCooldown: number;
+  wallClimbSpeed: number;
+  wallClimbTime: number;
+  wallJumpOut: number;
+  wallJumpUp: number;
+  wallJumpKeep: number;
+  wallJumpGrace: number;
+  // ---- ledge grab + climb (§3.4) ----
+  ledgeGrab: boolean;
+  ledgeLow: number;
+  ledgeHigh: number;
+  ledgeMaxVy: number;
+  ledgeHang: number;
+  ledgeClimbTime: number;
+  ledgeExitSpeed: number;
+  ledgeJumpUp: number;
+  // ---- vault (§3.5) ----
+  vault: boolean;
+  vaultMax: number;
+  vaultLook: number;
+  vaultMinSpeed: number;
+  vaultClear: number;
+  // ---- slide (§3.6; player only) ----
+  slide: boolean;
+  slideMinSpeed: number;
+  slideTime: number;
+  slideDecay: number;
+  slideSteer: number;
+  slideJumpFwd: number;
+  slideBuffer: number;
+  // ---- landing roll / stumble (§3.7) ----
+  rollMinVy: number;
+  rollTime: number;
+  stumbleVy: number;
+  stumbleKeep: number;
+  stumbleLock: number;
+  /** Falling: feet below this height (m above the street) = a fall (§3.9). */
+  failFloor: number;
+  /** Double jump: extra jumps while airborne (not on the rope), recharged on landing / rope attach / wall run / ledge; 0 = off. */
   airJumps: number;
   /** Double jump: v.y = max(v.y, doubleJumpSpeed). */
   doubleJumpSpeed: number;
-  /** Easy grab: an airborne jump press only double-jumps when no balloon is ringed (the same press grabs). */
+  /** Easy grab: an airborne jump press only double-jumps when nothing is ringed (the same press grabs). */
   airJumpNoRing: boolean;
-  /** Web zip (ZIP key): a straight pull to the ringed balloon or a roof ledge under the aim. */
+  /** Web zip (ZIP key): a straight pull to the ringed anchor or a roof ledge under the aim. */
   webZip: boolean;
   /** Pull speed (m/s; the speed cap still applies) and how fast the velocity turns onto the line (1/s). */
   zipSpeed: number;
@@ -65,7 +148,7 @@ export type Tuning = {
   /** Auto-release this close to the anchor (m), or after zipMaxTime s. */
   zipRelease: number;
   zipMaxTime: number;
-  /** Balloon zip release fling: added forward (horizontal) and up, m/s. */
+  /** Facade zip release (too slow for a wall run): added forward (horizontal) and up, m/s. */
   zipFlingFwd: number;
   zipFlingUp: number;
   /** Ledge zip release: onto the roof at this horizontal speed with this hop (m/s). */
@@ -79,7 +162,7 @@ export const MAX_STEPS_PER_FRAME = 30;
 export const AIM_COS = 0.3420201433256687; // cos(70°)
 export const AIM_COS_TOUCH = 0.08715574274765817; // cos(85°), touch
 /**
- * Touch play (spec §4 "Touch"): the wider aim cone above, Yoink range + yoinkBonus m, hook picking
+ * Touch play (spec §4 "Touch"): the wider aim cone above, Yoink range + yoinkBonus m, anchor picking
  * biased toward your velocity (aim_xz + velBias * v_xz/|v_xz|, full weight at runSpeed; applied to
  * the InputFrame's aim, so the sim is unchanged), and right-half drag look = lookScale x the mouse
  * sensitivity per px.
@@ -91,32 +174,25 @@ export const HOLD_DELAY_EASY = 0.12;
 export const PLAYER: Readonly<Tuning> = Object.freeze({
   dt: DT,
   gravity: 25,
-  speedCap: 28,
+  speedCap: 32,
   runSpeed: 9,
-  instantGround: false,
   groundAccel: 60,
   groundBrake: 40,
-  carryDecay: 12,
+  carryDecay: 8,
   airAccel: 6,
   jumpSpeed: 9,
   coyoteTime: 0.1,
   jumpBuffer: 0.1,
-  targeting: "cone",
-  aimRadius: 17,
   aimCos: AIM_COS,
-  hookMinAbove: 1.0,
-  scoreAhead: 7,
-  scoreUp: 9,
-  hysteresis: 3,
-  ropeScale: 0.75,
-  reelSpeed: 6,
-  ropeSteer: 5,
-  releaseBoost: 3,
+  hysteresis: 4,
+  ropeSteer: 4,
+  releaseBoost: 2,
+  releaseUp: 3,
   autoRelease: true,
-  autoReleaseBelow: 1.0,
+  autoReleaseBelow: 2.5,
   bonk: true,
-  bonkMinSpeed: 10,
-  bonkRatio: 0.7,
+  bonkMinSpeed: 14,
+  bonkRatio: 0.85,
   bonkLock: 0.35,
   halfWidth: 0.35,
   halfHeight: 0.9,
@@ -124,7 +200,68 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   zip: true,
   yoink: true,
   yoinkRange: 5,
-  failBelowLowestRoof: 8,
+  ropeMin: 8,
+  ropeMax: 42,
+  anchorMinAbove: 5,
+  anchorAhead: 10,
+  anchorAheadPerSpeed: 0.5,
+  anchorUp: 18,
+  anchorVelBias: 0.6,
+  anchorRimBonus: 2,
+  anchorAlternate: 3,
+  swingOut: 5,
+  swingFloorClear: 6,
+  swingReel: 10,
+  swingGravity: 1.35,
+  swingPump: 5,
+  swingKeepSpeed: 1.6,
+  swingReleaseCos: 0.64,
+  swingRehook: 0.18,
+  losSteps: 12,
+  wallRun: true,
+  wallRunReach: 0.6,
+  wallRunMinSpeed: 5,
+  wallRunRatio: 1,
+  wallRunMinBelowTop: 1.5,
+  wallRunFallMax: -12,
+  wallRunTime: 1.4,
+  wallRunSpeed: 11,
+  wallRunAccel: 10,
+  wallRunGravity: 0.2,
+  wallRunKick: 3,
+  wallRunCooldown: 0.25,
+  wallClimbSpeed: 9,
+  wallClimbTime: 0.6,
+  wallJumpOut: 7,
+  wallJumpUp: 9.5,
+  wallJumpKeep: 0.9,
+  wallJumpGrace: 0.15,
+  ledgeGrab: true,
+  ledgeLow: 0.4,
+  ledgeHigh: 2.3,
+  ledgeMaxVy: 4,
+  ledgeHang: 0.2,
+  ledgeClimbTime: 0.35,
+  ledgeExitSpeed: 6,
+  ledgeJumpUp: 7,
+  vault: true,
+  vaultMax: 1.5,
+  vaultLook: 0.8,
+  vaultMinSpeed: 5,
+  vaultClear: 0.35,
+  slide: true,
+  slideMinSpeed: 6,
+  slideTime: 0.8,
+  slideDecay: 3,
+  slideSteer: 6,
+  slideJumpFwd: 2.5,
+  slideBuffer: 0.25,
+  rollMinVy: -15,
+  rollTime: 0.45,
+  stumbleVy: -24,
+  stumbleKeep: 0.4,
+  stumbleLock: 0.35,
+  failFloor: 2,
   airJumps: 1,
   doubleJumpSpeed: 7.5,
   airJumpNoRing: false,
@@ -143,38 +280,22 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   zipLedgeUp: 4,
 });
 
-/** The player-only moves (double jump + web zip); the runner, the prototype and old ghosts run without them. */
-export const MOVES_OFF = { airJumps: 0, webZip: false } as const satisfies Partial<Tuning>;
+/** The player-only moves (double jump + web zip + slide); the runner and old ghosts run without them. */
+export const MOVES_OFF = { airJumps: 0, webZip: false, slide: false } as const satisfies Partial<Tuning>;
 /** Keys that exist only for those moves (left out of the runner bake's tuning hash while they are off). */
 export const MOVE_KEYS: readonly (keyof Tuning)[] = [
   "airJumps", "doubleJumpSpeed", "airJumpNoRing", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown",
   "zipRelease", "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
+  "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
 ];
+/** Format-2 ghosts (made before round 9): no slide input existed, so slide is off for their replay. */
+export const SLIDE_OFF = { slide: false } as const satisfies Partial<Tuning>;
 
-/** Runner bake preset: no air control, no rope steer, no Yoink, no double jump / web zip. */
+/** Runner bake preset: no air control, no rope steer, no Yoink, no double jump / web zip / slide. */
 export function runnerFrom(player: Readonly<Tuning>): Tuning {
   return { ...player, airAccel: 0, ropeSteer: 0, yoink: false, ...MOVES_OFF };
 }
 export const RUNNER: Readonly<Tuning> = Object.freeze(runnerFrom(PLAYER));
-
-/** Test-only preset that reduces stepBody to the verified 2D prototype (spec §5.6). */
-export const PROTOTYPE: Readonly<Tuning> = Object.freeze({
-  ...PLAYER,
-  speedCap: 0,
-  instantGround: true,
-  airAccel: 0,
-  jumpBuffer: 0,
-  targeting: "prototype",
-  aimRadius: 14,
-  hysteresis: 0,
-  ropeSteer: 0,
-  autoRelease: false,
-  bonk: false,
-  holdDelay: HOLD_DELAY_EASY,
-  zip: false,
-  yoink: false,
-  ...MOVES_OFF,
-});
 
 export type Difficulty = "chill" | "normal" | "degen";
 export const DIFFICULTIES: readonly Difficulty[] = ["chill", "normal", "degen"];
@@ -203,10 +324,8 @@ export const MEDALS = {
  * override them at startup (same file for the page, Node tools and ghost replays, so replays match).
  */
 export const MECH = {
-  /** Share of balloons that are fragile under the pops mutator (integer hash of seed + hook id). */
-  popShare: 0.55,
-  /** Seconds a popped balloon stays gone. */
-  popRespawn: 6,
+  /** Round 9 snapping webs mutator: every web snaps after this long on the rope (s). */
+  snapTime: 1.6,
   /** Wind gust: peak horizontal acceleration (m/s^2), length, ramp and the gap between gusts (s). */
   windMax: 7,
   windGust: 2.4,
@@ -232,12 +351,20 @@ export const ROUND = {
   spawnClearRoute: 16,
 } as const;
 
-/** Fields tuning.json may override (numbers and booleans only; presets/targeting are fixed). */
+/** Fields tuning.json may override (numbers and booleans only; dt / body size are fixed). */
 export const TUNABLE_KEYS = [
   "gravity", "speedCap", "runSpeed", "groundAccel", "groundBrake", "carryDecay", "airAccel", "jumpSpeed",
-  "coyoteTime", "jumpBuffer", "aimRadius", "aimCos", "hookMinAbove", "scoreAhead", "scoreUp", "hysteresis",
-  "ropeScale", "reelSpeed", "ropeSteer", "releaseBoost", "autoRelease", "autoReleaseBelow", "bonk",
-  "bonkMinSpeed", "bonkRatio", "bonkLock", "holdDelay", "zip", "yoinkRange", "failBelowLowestRoof",
+  "coyoteTime", "jumpBuffer", "aimCos", "hysteresis", "ropeSteer", "releaseBoost", "releaseUp", "autoRelease", "autoReleaseBelow", "bonk",
+  "bonkMinSpeed", "bonkRatio", "bonkLock", "holdDelay", "zip", "yoinkRange",
+  "ropeMin", "ropeMax", "anchorMinAbove", "anchorAhead", "anchorAheadPerSpeed", "anchorUp", "anchorVelBias", "anchorRimBonus", "anchorAlternate",
+  "swingOut", "swingFloorClear", "swingReel", "swingGravity", "swingPump", "swingKeepSpeed", "swingReleaseCos", "swingRehook", "losSteps",
+  "wallRun", "wallRunReach", "wallRunMinSpeed", "wallRunRatio", "wallRunMinBelowTop", "wallRunFallMax", "wallRunTime", "wallRunSpeed",
+  "wallRunAccel", "wallRunGravity", "wallRunKick", "wallRunCooldown", "wallClimbSpeed", "wallClimbTime", "wallJumpOut", "wallJumpUp",
+  "wallJumpKeep", "wallJumpGrace",
+  "ledgeGrab", "ledgeLow", "ledgeHigh", "ledgeMaxVy", "ledgeHang", "ledgeClimbTime", "ledgeExitSpeed", "ledgeJumpUp",
+  "vault", "vaultMax", "vaultLook", "vaultMinSpeed", "vaultClear",
+  "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
+  "rollMinVy", "rollTime", "stumbleVy", "stumbleKeep", "stumbleLock", "failFloor",
   "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown", "zipRelease",
   "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
 ] as const satisfies readonly (keyof Tuning)[];
@@ -249,10 +376,17 @@ export type CameraTuning = {
   armGround: number;
   armAir: number;
   armRope: number;
+  /** Arm length while wall-running (round 9). */
+  armWall: number;
   armBlend: number;
   shoulder: number;
+  /** Fraction of the way the look target leans toward the pivot on the rope, capped at ropeBiasMax m. */
   ropeBias: number;
+  ropeBiasMax: number;
   fovBoost: number;
+  /** FOV boost maps speed fovSpeedLo -> fovSpeedHi (m/s) onto 0 -> fovBoost. */
+  fovSpeedLo: number;
+  fovSpeedHi: number;
   fovEase: number;
   reducedMotion: boolean;
   easyGrab: boolean;
@@ -264,11 +398,15 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   invertY: false,
   armGround: 6,
   armAir: 7,
-  armRope: 8,
+  armRope: 9,
+  armWall: 6.5,
   armBlend: 4,
   shoulder: 0.6,
   ropeBias: 0.25,
+  ropeBiasMax: 3,
   fovBoost: 16,
+  fovSpeedLo: 10,
+  fovSpeedHi: 28,
   fovEase: 3,
   reducedMotion: false,
   easyGrab: false,

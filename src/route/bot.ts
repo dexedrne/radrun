@@ -1,13 +1,15 @@
 // Runner bake bot (spec §7): turns an edge plan (roof hops) + integer step parameters into InputFrames
 // for stepBody (RUNNER preset). Resumable and clonable so the bake can sweep one hop's parameter from a
 // checkpoint. Roof legs are straight: run to an approach point 3 m behind the takeoff, then along the
-// hop axis. Alley hop: jump on step `jump`. Street swing: jump on step `jump` (found by the edge rule),
-// web held from jump + 1 with the hop's balloon forced, released on step `release`.
+// hop axis. Alley / climb / wall-run hop: jump on step `jump` (climb: the sim's ledge grab + climb finish
+// it; wall run: the lateral held just off the wall face with a small push into it). Street swing: jump on
+// step `jump` (found by the edge rule), web held from jump + 1 with the link's baked anchor forced,
+// released on step `release`. Vaults over rooftop props happen by themselves on the legs.
 // Pure TS; deterministic (sqrt-only maths, fixed order).
-import { copyBody, createBody, emptyInput, stepBody, EV_FALL, EV_WALL, EV_BONK, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
+import { copyBody, createBody, emptyInput, stepBody, EV_FALL, EV_WALL, EV_BONK, EV_CLIMB, EV_VAULT, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
-import type { Link, Junction } from "./graph.ts";
+import { GRAPH, type Link, type Junction } from "./graph.ts";
 
 export const BOT = {
   approach: 3,
@@ -31,10 +33,12 @@ export const PH_FINAL = 3;
 export const PH_DONE = 4;
 export const PH_FAIL = 5;
 
-/** pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop). */
-export type HopParams = { lat: number; hook: number; jump: number; release: number; pace: number };
+/** pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop); alt: the street swing's anchor option. */
+export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number };
+/** Wall-run hops: the stick's push into the wall (fraction of full). */
+export const WALL_PUSH = 0.3;
 
-export type HopResult = { jumpStep: number; landStep: number; margin: number; landRoof: number };
+export type HopResult = { jumpStep: number; landStep: number; margin: number; landRoof: number; climbed: boolean };
 
 export type EdgePlan = { from: Junction; to: Junction; links: Link[] };
 
@@ -55,6 +59,9 @@ export class EdgeBot {
   ropeDone = false;
   ropeAttached = false;
   autoReleased = false;
+  /** Airborne after a vault on a roof leg (not a takeoff), and the current hop ended with a ledge climb. */
+  vaulting = false;
+  climbed = false;
   fail = "";
   results: HopResult[] = [];
   readonly input: InputFrame = emptyInput();
@@ -63,7 +70,7 @@ export class EdgeBot {
 
   constructor(model: CityModel, world: SimWorld, tuning: Tuning, plan: EdgePlan, params: HopParams[]) {
     this.model = model;
-    this.world = { ...world, forceHook: -1 };
+    this.world = { ...world, forceAnchor: null };
     this.tuning = tuning;
     this.plan = plan;
     this.params = params;
@@ -82,6 +89,8 @@ export class EdgeBot {
     c.ropeDone = this.ropeDone;
     c.ropeAttached = this.ropeAttached;
     c.autoReleased = this.autoReleased;
+    c.vaulting = this.vaulting;
+    c.climbed = this.climbed;
     c.fail = this.fail;
     c.results = this.results.map(r => ({ ...r }));
     return c;
@@ -101,26 +110,16 @@ export class EdgeBot {
     return l.axis === "x" ? this.body.p.z : this.body.p.x;
   }
 
-  /** Default takeoff lateral for the current hop (alley: straight on, clamped; street: nearest hook). */
+  /**
+   * Default takeoff lateral for the current hop: alley / climb / drop straight on (clamped into the span);
+   * street at the span's centre (where its anchor was baked); wall run just off the wall face.
+   */
   chooseLateral(): void {
     const l = this.link;
     const p = this.params[this.hop];
-    const lat = this.lateral();
-    if (l.kind !== "street") {
-      p.lat = Math.min(Math.max(lat, l.lo + BOT.alleyLatInset), l.hi - BOT.alleyLatInset);
-      p.hook = -1;
-    } else {
-      let best = l.hooks[0], bestD = Infinity;
-      for (const id of l.hooks) {
-        const h = this.model.hooks[id];
-        const hl = l.axis === "x" ? h.z : h.x;
-        const d = Math.abs(hl - lat);
-        if (d < bestD) { bestD = d; best = id; }
-      }
-      const h = this.model.hooks[best];
-      p.hook = best;
-      p.lat = l.axis === "x" ? h.z : h.x;
-    }
+    if (l.kind === "street") p.lat = l.swings[Math.min(p.alt, l.swings.length - 1)]?.lat ?? (l.lo + l.hi) / 2;
+    else if (l.kind === "wallrun") p.lat = l.face + l.side * (this.tuning.halfWidth + GRAPH.wallOff);
+    else p.lat = Math.min(Math.max(this.lateral(), l.lo + BOT.alleyLatInset), l.hi - BOT.alleyLatInset);
   }
 
   private setMove(ax: number, az: number, mag: number): void {
@@ -145,7 +144,7 @@ export class EdgeBot {
     inp.webPressed = false;
     inp.webHeld = false;
     inp.aimX = 1; inp.aimY = 0; inp.aimZ = 0;
-    this.world.forceHook = -1;
+    this.world.forceAnchor = null;
     const s = this.step;
 
     if (this.phase === PH_APPROACH) {
@@ -168,12 +167,14 @@ export class EdgeBot {
       if (s === p.jump) inp.jumpPressed = true;
     } else if (this.phase === PH_AIR) {
       const l = this.link, p = this.params[this.hop];
-      this.input.moveX = l.axis === "x" ? l.dir : 0;
-      this.input.moveZ = l.axis === "x" ? 0 : l.dir;
+      // Wall run: a small push into the wall (the face normal is `side` on the lateral axis).
+      const push = l.kind === "wallrun" ? -l.side * WALL_PUSH : 0;
+      this.input.moveX = l.axis === "x" ? l.dir : push;
+      this.input.moveZ = l.axis === "x" ? push : l.dir;
       if (l.kind === "street" && s > p.jump && s < p.release && !this.ropeDone) {
         inp.webHeld = true;
         inp.webPressed = s === p.jump + 1;
-        this.world.forceHook = p.hook;
+        this.world.forceAnchor = l.swings[Math.min(p.alt, l.swings.length - 1)]?.anchor ?? l.anchor;
       }
     } else if (this.phase === PH_FINAL) {
       const j = this.plan.to;
@@ -190,36 +191,52 @@ export class EdgeBot {
     stepBody(b, inp, k, this.world);
     this.step++;
     this.legSteps++;
+    // A vault over a rooftop prop on a leg is airborne but not a takeoff.
+    if (b.events & EV_VAULT) this.vaulting = true;
+    else if (b.grounded) this.vaulting = false;
     if (b.events & EV_FALL) { this.fail = `fell (hop ${this.hop})`; this.phase = PH_FAIL; }
     else if (this.phase === PH_LINE || this.phase === PH_APPROACH) {
-      const walkOff = this.phase === PH_LINE && this.link.kind === "drop" && !b.grounded && wasGrounded;
-      if (!b.grounded && ((b.events & 1) /* EV_JUMP */ || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1 }; }
+      // Drops walk off; a wall-run hop may run off the edge straight onto the wall before its jump step.
+      const walkOff = this.phase === PH_LINE && (this.link.kind === "drop" || this.link.kind === "wallrun") && !b.grounded && wasGrounded && !this.vaulting;
+      if (!b.grounded && ((b.events & 1) /* EV_JUMP */ || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.vaulting = false; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1, climbed: false }; }
+      else if (this.vaulting) { if (this.legSteps > BOT.maxLegSteps) { this.fail = `leg timeout (hop ${this.hop})`; this.phase = PH_FAIL; } }
       else if (!b.grounded && wasGrounded && this.phase === PH_APPROACH) { this.fail = `ran off roof on approach (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (!b.grounded && this.legSteps > 60 && s > this.params[this.hop].jump + 13) { this.fail = `no takeoff (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (this.legSteps > BOT.maxLegSteps) { this.fail = `leg timeout (hop ${this.hop})`; this.phase = PH_FAIL; }
     } else if (this.phase === PH_AIR) {
       this.airSteps++;
-      if (b.ropeHook >= 0) this.ropeAttached = true;
+      if (b.ropeSolid >= 0) this.ropeAttached = true;
       else if (this.ropeAttached && !this.ropeDone) { this.ropeDone = true; this.autoReleased = s < this.params[this.hop].release; }
-      if (b.events & (EV_WALL | EV_BONK)) { this.fail = `wall contact (hop ${this.hop})`; this.phase = PH_FAIL; }
+      if (b.events & EV_CLIMB) this.climbed = true;
+      // Wall contact fails a hop unless it is planned (a wall run or a ledge grab started from it).
+      if ((b.events & (EV_WALL | EV_BONK)) && ((b.events & EV_BONK) || (b.wallMode === 0 && b.ledgeMode === 0))) { this.fail = `wall contact (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (b.grounded) {
         const l = this.link;
         const r = this.results[this.hop];
         r.landStep = s;
         r.landRoof = b.roofId;
+        r.climbed = this.climbed;
         const sol = this.model.solids[b.roofId];
         r.margin = Math.min(b.p.x - sol.x0, sol.x1 - b.p.x, b.p.z - sol.z0, sol.z1 - b.p.z);
+        if (l.kind === "wallrun") {
+          // The roof's edge along the wall is not a drop-off: only the other three edges count.
+          const al = l.axis === "x" ? Math.min(b.p.x - sol.x0, sol.x1 - b.p.x) : Math.min(b.p.z - sol.z0, sol.z1 - b.p.z);
+          const lat = l.axis === "x" ? (l.side > 0 ? sol.z1 - b.p.z : b.p.z - sol.z0) : (l.side > 0 ? sol.x1 - b.p.x : b.p.x - sol.x0);
+          r.margin = Math.min(al, lat);
+        }
         if (b.roofId !== l.to) { this.fail = `landed on roof ${b.roofId} not ${l.to} (hop ${this.hop})`; this.phase = PH_FAIL; }
-        else if (r.margin < BOT.landMargin) { this.fail = `landing margin ${r.margin.toFixed(2)} (hop ${this.hop})`; this.phase = PH_FAIL; }
+        // A ledge climb ends at the same spot just inside the rim: no margin rule for it (a swing, climb or
+        // wall-run hop may finish by grabbing the far rim; a drop still needs the margin).
+        else if (r.margin < BOT.landMargin && !(this.climbed && l.kind !== "drop")) { this.fail = `landing margin ${r.margin.toFixed(2)} (hop ${this.hop})`; this.phase = PH_FAIL; }
         else {
           this.hop++;
           this.legSteps = 0;
-          this.ropeDone = this.ropeAttached = this.autoReleased = false;
+          this.ropeDone = this.ropeAttached = this.autoReleased = this.climbed = false;
           this.phase = this.hop < this.plan.links.length ? PH_APPROACH : PH_FINAL;
         }
       } else if (this.airSteps > BOT.maxAirSteps) { this.fail = `air timeout (hop ${this.hop})`; this.phase = PH_FAIL; }
     } else if (this.phase === PH_FINAL) {
-      if (!b.grounded) { this.fail = "ran off the junction roof"; this.phase = PH_FAIL; }
+      if (!b.grounded && !this.vaulting) { this.fail = "ran off the junction roof"; this.phase = PH_FAIL; }
       else if (this.legSteps > BOT.maxLegSteps) { this.fail = "final leg timeout"; this.phase = PH_FAIL; }
     }
     this.onStep?.(this);
@@ -236,4 +253,4 @@ export class EdgeBot {
   }
 }
 
-export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, hook: -1, jump: -1, release: -1, pace: 100 }));
+export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, jump: -1, release: -1, pace: 100, alt: 0 }));

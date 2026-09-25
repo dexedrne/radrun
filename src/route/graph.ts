@@ -1,30 +1,52 @@
-// Runner junction graph (spec §7, build time): roof hop links from the city adjacency, ~12 junction
-// roofs by seeded farthest-point sampling, and candidate edges (seeded BFS roof paths between
-// junctions). Pure TS; the bake (route/bake.ts) turns candidates into validated tracks.
+// Runner junction graph (spec §7, build time): roof hop links from the city adjacency (+ round 9 wall
+// gaps), ~12 junction roofs by seeded farthest-point sampling, and candidate edges (seeded BFS roof paths
+// between junctions). Pure TS; the bake (route/bake.ts) turns candidates into validated tracks.
+// Round 9 (docs/specs/2026-09-25-round9-movement.md §6.1): street swings carry a baked building anchor
+// (findAnchor from the takeoff point), alley steps up to +3.5 m are climbs (ledge grab), wall gaps are
+// wall-run hops.
 import { mulberry32 } from "../sim/math.ts";
-import type { Adjacency, CityModel, Solid } from "../world/cityModel.ts";
+import { RUNNER, type Tuning } from "../sim/tuning.ts";
+import { CityIndex, type Adjacency, type CityModel, type Solid } from "../world/cityModel.ts";
+import { emptyAnchor, findAnchor, type AnchorHit } from "../world/cityQuery.ts";
 
 export const GRAPH = {
   junctions: 12,
   nearest: 5,
   variants: 3,
   minHops: 3,
-  maxHops: 7,
+  maxHops: 8,
   /** Alley hops need this much overlapping span. */
   alleyMinOverlap: 6,
-  /** Street hooks used for swings must sit this far inside the facing span. */
-  streetHookInset: 1.5,
   /** Round 7: an alley hop down by at least this much is a drop (walk off, fall, land on the lower roof). */
   dropMin: 6,
-  /** Hops that climb more than this can never bake (jump apex / swing energy): not linked at all. */
-  alleyClimbMax: 1.2,
-  streetClimbMax: 4.5,
-  /** Swing balloons must hang at least this far above both roofs (lower street tiers are not the runner's). */
-  swingHookAbove: 2,
+  /** Round 9: alley steps up to alleyHopMax are hops, up to alleyClimbMax climbs (ledge grab); higher = no link. */
+  alleyHopMax: 1.2,
+  alleyClimbMax: 3.5,
+  /** Street swings climb at most this much, and drop at most streetDropMax. */
+  streetClimbMax: 4,
+  streetDropMax: 40,
+  /** Swing takeoff: the body centre this far behind the edge (the bot jumps there). */
+  swingTakeoff: 0.5,
+  /** Wall-run hops: the body side this far off the wall face. */
+  wallOff: 0.2,
+  /** Street swings: at most this many baked anchor options per link (the bake tries them in order). */
+  swingOptions: 10,
 } as const;
 
-/** alley = jump across; street = swing on a street balloon; drop (round 7) = walk off onto a much lower roof. */
-export type HopKind = "alley" | "street" | "drop";
+/**
+ * alley = jump across; climb (round 9) = jump at a higher roof, the sim's ledge grab + climb finish it;
+ * street = web swing across a street on the link's baked building anchor (the spec's "swing"); drop (round 7)
+ * = walk off onto a much lower roof; wallrun (round 9) = run along a wall-gap face into the notch.
+ */
+export type HopKind = "alley" | "climb" | "street" | "drop" | "wallrun";
+
+/**
+ * A wall gap as model.wallGaps lists it (structurally the world builder's WallGap; spec §9.4). Read with
+ * `?? []` so this branch builds without it. INTEGRATE swaps in the imported type.
+ */
+export type WallGapLike = {
+  a: number; b: number; wall: number; axis: "x" | "z"; dir: 1 | -1; edge: number; far: number; face: number; side: 1 | -1;
+};
 
 /** One roof-to-roof hop (axis-aligned). */
 export type Link = {
@@ -41,11 +63,26 @@ export type Link = {
   /** Overlapping lateral span. */
   lo: number;
   hi: number;
-  /** Street: hook ids on the midline inside the span (swing balloons). */
-  hooks: number[];
+  /** Street swing: the baked anchor (from the takeoff point at the span's centre), else null. */
+  anchor: AnchorHit | null;
+  /**
+   * Street swing: the anchors the bake may try, the first = `anchor` (takeoff lateral x forward +-20 deg;
+   * distinct points). The bake keeps the first that gives a release window.
+   */
+  swings: SwingOption[];
+  /** Wall run: the wall solid, its face coordinate on the lateral axis and that face's outward normal sign. */
+  wall: number;
+  face: number;
+  side: 1 | -1;
 };
 
+/** A swing takeoff lateral (on the hop's cross axis) and the anchor findAnchor gives from there. */
+export type SwingOption = { lat: number; anchor: AnchorHit };
+
 export type Junction = { roof: number; x: number; y: number; z: number };
+
+/** cos / sin 20 deg: the swing anchor search's forward variations (literals: the graph is deterministic). */
+const C20 = 0.9396926207859084, S20 = 0.3420201433256687;
 
 export type Candidate = { from: number; to: number; roofs: number[]; links: Link[] };
 
@@ -57,45 +94,89 @@ export type Graph = {
 
 const centre = (s: Solid) => ({ x: (s.x0 + s.x1) / 2, z: (s.z0 + s.z1) / 2 });
 
-function linkFrom(m: CityModel, e: Adjacency, fromId: number): Link {
+function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k: Tuning): Link | null {
   const from = m.solids[fromId];
   const toId = e.a === fromId ? e.b : e.a;
   const to = m.solids[toId];
   const dir: 1 | -1 = e.a === fromId ? 1 : -1;
   const edge = e.axis === "x" ? (dir > 0 ? from.x1 : from.x0) : (dir > 0 ? from.z1 : from.z0);
   const far = e.axis === "x" ? (dir > 0 ? to.x0 : to.x1) : (dir > 0 ? to.z0 : to.z1);
-  const hooks: number[] = [];
+  const dh = to.top - from.top;
+  const base = { from: fromId, to: toId, axis: e.axis, dir, edge, far, lo: e.lo, hi: e.hi, anchor: null, swings: [], wall: -1, face: 0, side: 1 as const };
   if (e.kind === "street") {
-    const low = m.solids[e.a];
-    const mid = (e.axis === "x" ? low.x1 : low.z1) + e.gap / 2;
-    const above = Math.max(from.top, to.top) + GRAPH.swingHookAbove;
-    for (const h of m.hooks) {
-      const along = e.axis === "x" ? h.x : h.z;
-      const lat = e.axis === "x" ? h.z : h.x;
-      if (Math.abs(along - mid) > 0.01 || h.y < above || h.src === "sky") continue;
-      if (lat < e.lo + GRAPH.streetHookInset || lat > e.hi - GRAPH.streetHookInset) continue;
-      hooks.push(h.id);
+    if (dh > GRAPH.streetClimbMax || dh < -GRAPH.streetDropMax) return null;
+    // Baked anchors: findAnchor from takeoff points on the edge (span centre first, then 3 m inside either
+    // end), forward = the hop (then +-20 deg), the ideal point at the tuning's distance ahead and then closer
+    // (mid-street / the takeoff side: a pivot just off the far facade cannot lift him onto its rim). The bake
+    // tries them in order. No anchor at all -> no link.
+    const along = edge - dir * GRAPH.swingTakeoff, mid = (e.lo + e.hi) / 2;
+    const lats = e.hi - e.lo > 6 ? [mid, e.lo + 3, e.hi - 3] : [mid];
+    const gap = Math.abs(far - edge);
+    const aheads = [-1, gap * 0.5, gap * 0.25];
+    const swings: SwingOption[] = [];
+    for (const ahead of aheads) {
+      const kk = ahead < 0 ? k : { ...k, anchorAhead: ahead, anchorAheadPerSpeed: 0 };
+      for (const lat of lats) {
+        for (const [c, sn] of [[1, 0], [C20, S20], [C20, -S20]]) {
+          if (swings.length >= GRAPH.swingOptions) break;
+          const x = e.axis === "x" ? along : lat, z = e.axis === "x" ? lat : along;
+          // forward = the hop direction rotated by +-20 deg about y
+          const hx = e.axis === "x" ? dir : 0, hz = e.axis === "x" ? 0 : dir;
+          const fx = hx * c - hz * sn, fz = hx * sn + hz * c;
+          const a = emptyAnchor();
+          if (!findAnchor(idx, x, from.top + k.halfHeight, z, fx, fz, k.runSpeed, kk, -1, -1, fromId, a)) continue;
+          if (swings.some(o => o.anchor.solid === a.solid && o.anchor.ax === a.ax && o.anchor.ay === a.ay && o.anchor.az === a.az && o.lat === lat)) continue;
+          swings.push({ lat, anchor: a });
+        }
+      }
     }
+    if (!swings.length) return null;
+    return { ...base, kind: "street", anchor: swings[0].anchor, swings };
   }
-  const kind: HopKind = e.kind === "alley" && from.top - to.top >= GRAPH.dropMin ? "drop" : e.kind;
-  return { kind, from: fromId, to: toId, axis: e.axis, dir, edge, far, lo: e.lo, hi: e.hi, hooks };
+  if (dh <= -GRAPH.dropMin) return { ...base, kind: "drop" };
+  if (dh > GRAPH.alleyClimbMax) return null;
+  return { ...base, kind: dh > GRAPH.alleyHopMax ? "climb" : "alley" };
 }
 
-/** Hop links between landable roofs: alleys with enough overlap, streets with a swing balloon. */
-export function buildLinks(m: CityModel): Map<number, Link[]> {
+/** Wall-run links from the model's wall gaps (both directions). */
+function wallLinks(m: CityModel): Link[] {
+  const out: Link[] = [];
+  const gaps = (m as { wallGaps?: WallGapLike[] }).wallGaps ?? [];
+  for (const g of gaps) {
+    const a = m.solids[g.a], b = m.solids[g.b];
+    if (!a || !b || !a.landable || !b.landable) continue;
+    const lo = g.axis === "x" ? Math.max(a.z0, b.z0) : Math.max(a.x0, b.x0);
+    const hi = g.axis === "x" ? Math.min(a.z1, b.z1) : Math.min(a.x1, b.x1);
+    const common = { kind: "wallrun" as const, axis: g.axis, lo, hi, anchor: null, swings: [], wall: g.wall, face: g.face, side: g.side };
+    out.push({ ...common, from: g.a, to: g.b, dir: g.dir, edge: g.edge, far: g.far });
+    out.push({ ...common, from: g.b, to: g.a, dir: g.dir > 0 ? -1 : 1, edge: g.far, far: g.edge });
+  }
+  return out;
+}
+
+/**
+ * Hop links between landable roofs: alleys with enough overlap (hops, climbs, drops), streets with a baked
+ * swing anchor, and wall gaps. `k` = the runner tuning the anchors are searched with.
+ */
+export function buildLinks(m: CityModel, k: Tuning = RUNNER): Map<number, Link[]> {
   const links = new Map<number, Link[]>();
+  const idx = new CityIndex(m);
   for (const s of m.solids) if (s.landable) links.set(s.id, []);
   for (const e of m.adjacency) {
     const a = m.solids[e.a], b = m.solids[e.b];
     if (!a.landable || !b.landable) continue;
     if (e.kind === "alley" && e.hi - e.lo < GRAPH.alleyMinOverlap) continue;
     for (const id of [e.a, e.b]) {
-      const l = linkFrom(m, e, id);
-      if (l.kind === "street" && !l.hooks.length) continue;
-      const climb = m.solids[l.to].top - m.solids[l.from].top;
-      if (climb > (l.kind === "street" ? GRAPH.streetClimbMax : GRAPH.alleyClimbMax)) continue;
-      links.get(id)!.push(l);
+      const l = linkFrom(m, e, id, idx, k);
+      if (l) links.get(id)!.push(l);
     }
+  }
+  // A wall gap's pair hops by wall run (it replaces any street / alley link between the two roofs).
+  for (const l of wallLinks(m)) {
+    const list = links.get(l.from);
+    if (!list) continue;
+    const i = list.findIndex(o => o.to === l.to);
+    if (i >= 0) list[i] = l; else list.push(l);
   }
   for (const list of links.values()) list.sort((p, q) => p.to - q.to);
   return links;
@@ -163,8 +244,8 @@ function bfs(links: Map<number, Link[]>, from: number, to: number, rand: () => n
   return null;
 }
 
-export function buildGraph(m: CityModel, seed = m.config?.seed ?? 7): Graph {
-  const links = buildLinks(m);
+export function buildGraph(m: CityModel, seed = m.config?.seed ?? 7, k: Tuning = RUNNER): Graph {
+  const links = buildLinks(m, k);
   const vert = !!m.config?.vertigo;
   const junctions = vert ? sampleJunctions(m, links, seed, VERTIGO_GRAPH.junctions, VERTIGO_GRAPH.heightW) : sampleJunctions(m, links, seed);
   const variants = vert ? VERTIGO_GRAPH.variants : GRAPH.variants;
@@ -201,7 +282,7 @@ export function buildGraph(m: CityModel, seed = m.config?.seed ?? 7): Graph {
         if (seen.has(key)) continue;
         const ls: Link[] = [];
         for (let i = 0; i < hops; i++) ls.push(links.get(roofs[i])!.find(l => l.to === roofs[i + 1])!);
-        if (!ls.some(l => l.kind === "street")) continue;
+        if (!ls.some(l => l.kind === "street" || l.kind === "wallrun")) continue;
         seen.add(key);
         candidates.push({ from: ia, to: ib, roofs, links: ls });
       }

@@ -1,159 +1,104 @@
-// Plain R3F FX (priority -1): balloon clusters as one InstancedMesh (+ strings), the reticle ring on
-// snapshot.ringId (yellow, green while attached), the rope (and the taut web-zip line), the web-zip
-// ledge marker, and a blob shadow under the player.
+// Plain R3F FX (priority -1), round 9: the reticle on the ringed building anchor (a ring pushed 0.3 m off
+// the face, facing the camera at a constant ~28 px, yellow; green while attached; a short tick along the
+// edge on a rim anchor), the web line from the RightHand (ropeFrom) to the anchor (or the web-zip target),
+// a grey X for a web press with nothing ringed, the web-zip ledge marker, and a blob shadow under the player.
+// No balloons: anchors are the buildings themselves.
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import {
-  BoxGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3,
-} from "three";
+import { DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Vector3 } from "three";
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
-import { emptyZipAim, zipTarget } from "../sim/player.ts";
+import { emptyZipAim, zipTarget, EV_NOANCHOR } from "../sim/player.ts";
 
-const BALLOON_COLORS = ["#ff5a7a", "#ffd23f", "#4fc3f7", "#7cdb6a", "#b388ff", "#ff9f43"];
-const CLUSTER: [number, number, number][] = [[0, 1.25, 0], [0.55, 1.05, 0.25], [-0.45, 1.0, -0.35]];
-/** Round 7 sky hooks (longer grab range): bigger clusters in gold / cream / white, so they read apart. */
-const SKY_COLORS = ["#ffd23f", "#fff3c4", "#ffffff"];
-const SKY_SCALE = 1.6;
-
-function useBalloons(game: ViewGame) {
-  return useMemo(() => {
-    const hooks = game.model.hooks;
-    const balloons = new InstancedMesh(new SphereGeometry(0.42, 12, 10), new MeshStandardMaterial({ roughness: 0.35, metalness: 0 }), hooks.length * CLUSTER.length);
-    const strings = new InstancedMesh(new BoxGeometry(0.03, 1, 0.03), new MeshBasicMaterial({ color: "#f5f5f5" }), hooks.length * CLUSTER.length);
-    const o = new Object3D();
-    const c = new Color();
-    let i = 0;
-    for (const h of hooks) {
-      const sky = h.src === "sky", k = sky ? SKY_SCALE : 1;
-      CLUSTER.forEach(([cx, cy, cz], j) => {
-        const dx = cx * k, dy = 0.45 + (cy - 0.45) * k, dz = cz * k;
-        o.position.set(h.x + dx, h.y + dy, h.z + dz);
-        o.scale.set(k, 1.18 * k, k);
-        o.rotation.set(0, 0, 0);
-        o.updateMatrix();
-        balloons.setMatrixAt(i, o.matrix);
-        balloons.setColorAt(i, c.set(sky ? SKY_COLORS[j] : BALLOON_COLORS[(h.id * 3 + j) % BALLOON_COLORS.length]));
-        // string from the knot (hook point) up to the balloon
-        const len = Math.sqrt(dx * dx + (dy - 0.45) * (dy - 0.45) + dz * dz);
-        o.position.set(h.x + dx / 2, h.y + (dy - 0.45) / 2, h.z + dz / 2);
-        o.scale.set(1, len, 1);
-        o.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), new Vector3(dx, dy - 0.45, dz).normalize());
-        o.updateMatrix();
-        strings.setMatrixAt(i, o.matrix);
-        i++;
-      });
-    }
-    balloons.instanceMatrix.needsUpdate = true;
-    if (balloons.instanceColor) balloons.instanceColor.needsUpdate = true;
-    strings.instanceMatrix.needsUpdate = true;
-    balloons.frustumCulled = false;
-    strings.frustumCulled = false;
-    // Round 4: rest matrices / colours to restore after a pop, and what the last frame showed.
-    const baseB = balloons.instanceMatrix.array.slice();
-    const baseS = strings.instanceMatrix.array.slice();
-    const baseC = balloons.instanceColor ? balloons.instanceColor.array.slice() : null;
-    const shown = new Uint8Array(hooks.length).fill(1);
-    return { balloons, strings, baseB, baseS, baseC, shown, frag: { cur: undefined as Uint8Array | undefined } };
-  }, [game]);
-}
-
-const ZERO = new Matrix4().makeScale(0, 0, 0).elements;
-
-/**
- * Round 4 balloon states (player only): fragile balloons are drawn pale, popped ones are hidden until
- * they grow back. Updates only the instances that changed.
- */
-function syncBalloons(game: ViewGame, bl: ReturnType<typeof useBalloons>): void {
-  const w = game.world, down = w.hookDown, frag = w.fragile;
-  const n = game.model.hooks.length, k = CLUSTER.length;
-  if (frag !== bl.frag.cur && bl.baseC && bl.balloons.instanceColor) {
-    bl.frag.cur = frag;
-    const arr = bl.balloons.instanceColor.array as Float32Array;
-    for (let i = 0; i < n; i++) {
-      const pale = frag !== undefined && frag[i] === 1;
-      for (let j = 0; j < k; j++) {
-        const o = (i * k + j) * 3;
-        for (let c = 0; c < 3; c++) arr[o + c] = pale ? bl.baseC[o + c] * 0.45 + 0.55 : bl.baseC[o + c];
-      }
-    }
-    bl.balloons.instanceColor.needsUpdate = true;
-  }
-  const step = game.body.step;
-  let changed = false;
-  for (let i = 0; i < n; i++) {
-    const vis = down === undefined || down[i] <= step ? 1 : 0;
-    if (vis === bl.shown[i]) continue;
-    bl.shown[i] = vis;
-    changed = true;
-    for (let j = 0; j < k; j++) {
-      const o = (i * k + j) * 16;
-      const mb = bl.balloons.instanceMatrix.array as Float32Array, ms = bl.strings.instanceMatrix.array as Float32Array;
-      for (let e = 0; e < 16; e++) { mb[o + e] = vis ? bl.baseB[o + e] : ZERO[e]; ms[o + e] = vis ? bl.baseS[o + e] : ZERO[e]; }
-    }
-  }
-  if (changed) { bl.balloons.instanceMatrix.needsUpdate = true; bl.strings.instanceMatrix.needsUpdate = true; }
-}
+/** Reticle size on screen (px), the web's thickness (m) and how long the "no anchor" X shows (s). */
+const RETICLE_PX = 28;
+const WEB_THICK = 0.035;
+const NO_ANCHOR_FOR = 0.3;
 
 export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean }) {
-  const bl = useBalloons(game);
-  const { balloons, strings } = bl;
   const ring = useRef<Mesh>(null);
+  const tick = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
   const shadow = useRef<Mesh>(null);
   const ledge = useRef<Mesh>(null);
+  const nope = useRef<Mesh>(null);
   const za = useMemo(emptyZipAim, []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
-  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), t: 0 }), []);
+  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), t: 0, nope: 0 }), []);
 
   useFrame((state, delta) => {
-    syncBalloons(game, bl);
     const b = game.body;
     const p = game.renderP;
-    const hooks = game.model.hooks;
     tmp.t += delta;
-    // Reticle ring on snapshot.ringId (the hook the next web press gets).
     const hide = hidePlayer?.() ?? false;
     const shadowOn = !hide && !lowQuality();
     if (shadow.current) shadow.current.visible = shadowOn;
-    const rm = ring.current;
-    if (rm) {
-      const id = hide ? -1 : b.ringId;
-      rm.visible = id >= 0;
-      if (id >= 0) {
-        const h = hooks[id];
-        rm.position.set(h.x, h.y + 1.0, h.z);
-        rm.quaternion.copy(state.camera.quaternion);
-        const attached = b.ropeHook === id;
-        ringMat.color.set(attached ? "#3ddc84" : "#ffe14d");
-        const s = attached ? 1 : 1 + 0.08 * Math.sin(tmp.t * 8);
-        rm.scale.set(s, s, s);
+    const cam = state.camera;
+    // Constant screen size: world size per pixel at distance d = 2 d tan(fov / 2) / viewport height.
+    const pxWorld = (d: number) => {
+      const fov = cam instanceof PerspectiveCamera ? cam.fov : 60;
+      return (2 * d * Math.tan((fov * Math.PI) / 360)) / Math.max(1, state.size.height);
+    };
+    // Reticle on the ringed building (the anchor the next web press gets; while attached, the rope's).
+    const rm = ring.current, tm = tick.current;
+    const attached = b.ropeSolid >= 0;
+    const on = !hide && (attached || b.ringId >= 0);
+    if (rm) rm.visible = on;
+    if (tm) tm.visible = on && !attached && b.ringRim;
+    if (on && rm) {
+      const a = attached ? b.ropeA : b.ringA;
+      const nx = attached ? 0 : b.ringNx, nz = attached ? 0 : b.ringNz;
+      rm.position.set(a.x + nx * 0.3, a.y + (b.ringRim && !attached ? 0.3 : 0), a.z + nz * 0.3);
+      rm.quaternion.copy(cam.quaternion);
+      ringMat.color.set(attached ? "#3ddc84" : "#ffe14d");
+      const d = cam.position.distanceTo(rm.position);
+      const pulse = attached ? 1 : 1 + 0.08 * Math.sin(tmp.t * 8);
+      const k = (pxWorld(d) * RETICLE_PX) / 2.4 * pulse; // the ring geometry is 2.4 m across
+      rm.scale.set(k, k, k);
+      if (tm && tm.visible) {
+        // A short tick along the rim edge (tangent = (-nz, nx)).
+        tm.position.set(a.x + nx * 0.05, a.y + 0.05, a.z + nz * 0.05);
+        tm.rotation.set(0, Math.atan2(-nx, -nz), 0);
+        const w = pxWorld(d) * RETICLE_PX * 1.6;
+        tm.scale.set(w, Math.max(0.05, w * 0.08), Math.max(0.05, w * 0.08));
       }
     }
-    // Web-zip ledge marker: where ZIP goes when no balloon is ringed (ready, not on a rope / zipping).
+    // A web press with nothing ringed: a small grey X at the aim point for a moment.
+    if (game.frameEvents & EV_NOANCHOR) tmp.nope = NO_ANCHOR_FOR;
+    tmp.nope = Math.max(0, tmp.nope - delta);
+    const nm = nope.current;
+    if (nm) {
+      nm.visible = tmp.nope > 0 && !hide;
+      if (nm.visible) {
+        cam.getWorldDirection(tmp.a);
+        nm.position.copy(cam.position).addScaledVector(tmp.a, 12);
+        nm.quaternion.copy(cam.quaternion);
+        const k = (pxWorld(12) * 20) / 1.2;
+        nm.scale.set(k, k, k);
+      }
+    }
+    // Web-zip ledge marker: where ZIP goes when nothing is ringed (ready, not on a rope / zipping).
     const lm = ledge.current;
     if (lm) {
       const k = game.simTuning, f = game.frameInput;
-      let on = false;
-      if (!hide && k && k.webZip && f && !b.zipOn && b.ropeHook < 0 && b.ringId < 0 && b.zipCd <= 0) {
-        on = zipTarget(b, -1, f.aimX, f.aimZ, k, game.world, za) === 2;
-        if (on) {
+      let show = false;
+      if (!hide && k && k.webZip && f && !b.zipOn && b.ropeSolid < 0 && b.ringId < 0 && b.zipCd <= 0) {
+        show = zipTarget(b, null, f.aimX, f.aimZ, k, game.world, za) === 2;
+        if (show) {
           lm.position.set(za.x, za.y - k.halfHeight + 0.08, za.z);
           const s = 1 + 0.1 * Math.sin(tmp.t * 7);
           lm.scale.set(s, s, s);
         }
       }
-      lm.visible = on;
+      lm.visible = show;
     }
-    // Rope to the hook knot (or the web-zip anchor) from the character's RightHand (ropeFrom), else from
-    // the body point.
+    // The web: from the character's RightHand (ropeFrom), else the body point, to the anchor / zip target.
     const ro = rope.current;
     if (ro) {
-      ro.visible = (b.ropeHook >= 0 || b.zipOn) && !hide;
+      ro.visible = (attached || b.zipOn) && !hide;
       if (ro.visible) {
-        const h = b.zipOn ? b.zipP : hooks[b.ropeHook];
+        const h = b.zipOn ? b.zipP : b.ropeA;
         if (!ropeFrom?.(tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
         const len = tmp.a.distanceTo(tmp.b);
@@ -176,13 +121,23 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
 
   return (
     <>
-      <primitive object={balloons} />
-      <primitive object={strings} />
       <mesh ref={ring} material={ringMat} renderOrder={10} visible={false}>
         <ringGeometry args={[0.95, 1.2, 36]} />
       </mesh>
+      <mesh ref={tick} renderOrder={10} visible={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#ffe14d" transparent opacity={0.9} depthTest={false} />
+      </mesh>
+      <mesh ref={nope} renderOrder={11} visible={false}>
+        <planeGeometry args={[1.2, 0.18]} />
+        <meshBasicMaterial color="#b8bcc6" transparent opacity={0.85} depthTest={false} side={DoubleSide} />
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <planeGeometry args={[1.2, 0.18]} />
+          <meshBasicMaterial color="#b8bcc6" transparent opacity={0.85} depthTest={false} side={DoubleSide} />
+        </mesh>
+      </mesh>
       <mesh ref={rope} visible={false}>
-        <cylinderGeometry args={[0.045, 0.045, 1, 6]} />
+        <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
         <meshBasicMaterial color="#fafafa" />
       </mesh>
       <mesh ref={ledge} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false}>

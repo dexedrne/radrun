@@ -1,5 +1,6 @@
 // Test 8 (round rules) on the committed city + pack: tag radius and |dy| gate, Yoink range and line of
-// sight, fall -> respawn -3 s at the nearest point, timer -> ESCAPED, seeded setup, restart hashing.
+// sight, fall (feet under failFloor, round 9) -> respawn -3 s at the nearest point, timer -> ESCAPED,
+// seeded setup, restart hashing.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -7,7 +8,8 @@ import { decodePack } from "../src/route/trackPack.ts";
 import { applyTuningJson, DT, ROUND, type Difficulty } from "../src/sim/tuning.ts";
 import { Round, type Kinematic } from "../src/game/round.ts";
 import { Bot } from "../src/game/bots.ts";
-import { createBody, emptyInput, pickTarget, RING_RUNNER, type SimWorld } from "../src/sim/player.ts";
+import { createBody, emptyInput, pickRing, RING_RUNNER, type SimWorld } from "../src/sim/player.ts";
+import { emptyAnchor } from "../src/world/cityQuery.ts";
 import { CityIndex, type CityModel } from "../src/world/cityModel.ts";
 
 const lv = (f: string) => new URL(`../public/levels/${f}`, import.meta.url);
@@ -58,15 +60,15 @@ test("Yoink line of sight: a building between the chests blocks the red ring", (
     { id: 2, kind: "roof" as const, landable: true, x0: 3, z0: -6, x1: 9, z1: 6, top: 20 },
   ];
   const m = { ...model, solids, hooks: [], adjacency: [] } as CityModel;
-  const w: SimWorld = { index: new CityIndex(m), hooks: [], lowestRoof: 20, runner: { p: { x: 4, y: 20.9, z: 0 }, roofId: 2 } };
+  const w: SimWorld = { index: new CityIndex(m), runner: { p: { x: 4, y: 20.9, z: 0 }, roofId: 2 } };
   const b = createBody(-1, 20.9, 0, 0);
   const inp = emptyInput();
   inp.aimX = 1; inp.aimZ = 0;
   const k = { ...tuning.player, yoinkRange: 6 };
-  assert.notEqual(pickTarget(b, inp, k, w), RING_RUNNER, "tower in between");
+  assert.notEqual(pickRing(b, inp, k, w, emptyAnchor()), RING_RUNNER, "tower in between");
   w.index = new CityIndex({ ...m, solids: [solids[0], solids[2]].map((s, id) => ({ ...s, id })) });
   w.runner!.roofId = 1;
-  assert.equal(pickTarget(b, inp, k, w), RING_RUNNER, "clear line");
+  assert.equal(pickRing(b, inp, k, w, emptyAnchor()), RING_RUNNER, "clear line");
 });
 
 test("fall: respawn on the last safe roof at the point nearest him, -3 s", () => {
@@ -74,7 +76,7 @@ test("fall: respawn on the last safe roof at the point nearest him, -3 s", () =>
   const inp = emptyInput();
   r.step(inp); // one real step on the spawn roof (last safe = spawn roof)
   const roof = model.solids[r.player.lastSafeRoof];
-  r.player.p.y = model.lowestRoof - 20;
+  r.player.p.y = tuning.player.failFloor; // feet under failFloor = in the street
   r.player.grounded = false;
   const clock = r.clock;
   r.step(inp);

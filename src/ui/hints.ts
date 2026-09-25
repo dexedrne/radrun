@@ -1,16 +1,18 @@
 // First-run tips (round 3): short prompts shown at the moment they matter, once each (remembered in
 // localStorage via prefs; pause -> Settings -> "show tips again" resets them). PlayDriver ticks the
 // engine at 10 Hz with the player's state; the pill is <HintPill/> in screens.tsx.
-//   swing  - a balloon is ringed and you are not on a rope  -> done when you web on
+//   swing  - a building is ringed and you are not on a rope -> done when you web on
 //   fling  - you are on the rope                            -> done when you let go
 //   chain  - airborne after a let-go                        -> done at a 3-swing chain
 //   yoink  - the red ring is on him (real rounds only)      -> done after it has been read
 //   djump  - airborne off the rope (after the fling tip)     -> done at a double jump
-//   zip    - on a roof with a ringed balloon (after fling)   -> done at a web zip
+//   zip    - on a roof with a ringed anchor (after fling)    -> done at a web zip
+//   wallrun - your first wall run (round 9)                 -> done at a wall jump
+//   slide  - running fast on a roof (after the fling tip)    -> done at a slide
 import { hintsSeen, markHintSeen, resetHintsSeen } from "./prefs.ts";
 import { useUi } from "./store.ts";
 
-export type HintId = "swing" | "fling" | "chain" | "yoink" | "djump" | "zip";
+export type HintId = "swing" | "fling" | "chain" | "yoink" | "djump" | "zip" | "wallrun" | "slide";
 
 export type HintInput = {
   /** Chase or practice, not paused, not a bot page. */
@@ -25,24 +27,31 @@ export type HintInput = {
   djumped?: boolean;
   zipped?: boolean;
   moves?: boolean;
+  /** Round 9: a wall run started / a wall jump / a slide since the last tick; speed (m/s) on the ground. */
+  wallRan?: boolean;
+  kicked?: boolean;
+  slid?: boolean;
+  speed?: number;
 };
 
 export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string {
   const web = touch ? "WEB" : easyGrab ? "Space" : "LMB";
   switch (id) {
-    case "swing": return `hold ${web} while a balloon has the yellow ring to web on and swing`;
+    case "swing": return `hold ${web} to web the building ahead (the yellow ring) and swing`;
     case "fling": return `let go of ${web} at the bottom of the arc to fling forward`;
-    case "chain": return "chain swings down the streets to go fast: grab the next balloon before you land";
+    case "chain": return "chain swings down the avenues to go fast: web the next building before you land";
     case "yoink": return touch ? "red ring on him = tap WEB to YOINK" : `red ring on him = ${easyGrab ? "tap Space" : "click"} to YOINK`;
-    case "djump": return touch ? "tap JUMP again in the air to double jump" : easyGrab ? "tap Space in the air (no balloon ringed) to double jump" : "press Space again in the air to double jump";
+    case "djump": return touch ? "tap JUMP again in the air to double jump" : easyGrab ? "tap Space in the air (nothing ringed) to double jump" : "press Space again in the air to double jump";
     case "zip": return touch
-      ? "tap ZIP to web-zip straight to the ringed balloon (or the roof ledge ahead)"
-      : "press E or Shift to web-zip straight to the ringed balloon (or the roof ledge ahead)";
+      ? "tap ZIP to web-zip straight to the ringed building (or the roof ledge ahead)"
+      : "press E or Shift to web-zip straight to the ringed building (or the roof ledge ahead)";
+    case "wallrun": return touch ? "wall run! tap JUMP to kick off the wall" : "wall run! press Space to kick off the wall";
+    case "slide": return touch ? "tap SLIDE while running fast to slide and keep your speed" : "press C while running fast to slide and keep your speed";
   }
 }
 
 /** Seconds a tip stays up at most (it goes as soon as you have done the thing). */
-const MAX_SHOW: Record<HintId, number> = { swing: 9, fling: 6, chain: 7, yoink: 4, djump: 5, zip: 7 };
+const MAX_SHOW: Record<HintId, number> = { swing: 9, fling: 6, chain: 7, yoink: 4, djump: 5, zip: 7, wallrun: 4, slide: 6 };
 
 export class Hints {
   private seen: Record<string, boolean> = {};
@@ -110,17 +119,19 @@ export class Hints {
       this.shown += dt;
       const c = this.cur;
       const done = (c === "swing" && rope) || (c === "fling" && justReleased) || (c === "chain" && s.chain >= 3) || (c === "yoink" && this.shown >= 1.5) ||
-        (c === "djump" && !!s.djumped) || (c === "zip" && !!s.zipped);
+        (c === "djump" && !!s.djumped) || (c === "zip" && !!s.zipped) || (c === "wallrun" && !!s.kicked) || (c === "slide" && !!s.slid);
       // A finished tip hands straight over to the next one below (swing -> fling -> chain).
       if (done || this.shown >= MAX_SHOW[c]) this.finish();
       else return;
     }
     if (this.activeT < 1) return;
-    if (rope && !this.seen.fling) this.show("fling", s);
+    if (s.wallRan && !this.seen.wallrun) this.show("wallrun", s);
+    else if (rope && !this.seen.fling) this.show("fling", s);
     else if (!rope && s.ring === "hook" && !this.seen.swing) this.show("swing", s);
     else if (!rope && !s.grounded && this.released && s.chain < 3 && this.seen.fling && !this.seen.chain) this.show("chain", s);
     else if (s.moves && !rope && !s.grounded && this.seen.fling && !this.seen.djump) this.show("djump", s);
     else if (s.moves && s.grounded && s.ring === "hook" && this.seen.fling && !this.seen.zip) this.show("zip", s);
+    else if (s.moves && s.grounded && (s.speed ?? 0) > 10 && this.seen.fling && !this.seen.slide) this.show("slide", s);
   }
 }
 

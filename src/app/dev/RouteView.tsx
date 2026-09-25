@@ -85,8 +85,9 @@ export default function RouteView() {
         ctx.fillStyle = so.landable ? `hsl(220, 12%, ${22 + (so.top - 24) * 2}%)` : "#39406a";
         ctx.fillRect(X(so.x0), Z(so.z0), (so.x1 - so.x0) * s, (so.z1 - so.z0) * s);
       }
-      ctx.fillStyle = "rgba(255,210,63,0.5)";
-      for (const h of model.hooks) ctx.fillRect(X(h.x) - 1, Z(h.z) - 1, 2, 2);
+      // His baked web anchors (pack v2).
+      ctx.fillStyle = "rgba(255,210,63,0.7)";
+      for (let i = 0; i + 2 < pack.anchors.length; i += 3) ctx.fillRect(X(pack.anchors[i]) - 1.5, Z(pack.anchors[i + 2]) - 1.5, 3, 3);
       ctx.lineWidth = 2;
       for (const e of pack.edges) {
         ctx.strokeStyle = colour(e.score);

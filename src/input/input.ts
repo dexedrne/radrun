@@ -18,6 +18,8 @@ export class InputLatch {
   webEdge = false;
   /** Web zip press (E / Shift, touch ZIP). */
   zipEdge = false;
+  /** Round 9 slide press (C, touch SLIDE). */
+  slideEdge = false;
   /** Touch: the left-thumb stick (x right, y forward, dead zone applied, |stick| <= 1). */
   stickX = 0;
   stickY = 0;
@@ -40,6 +42,7 @@ export class InputLatch {
       if (this.easyGrab) this.webEdge = true;
     }
     if (code === "KeyE" || code === "ShiftLeft" || code === "ShiftRight") this.zipEdge = true;
+    if (code === "KeyC") this.slideEdge = true;
   }
   release(code: string): void {
     this.keys.delete(code);
@@ -72,12 +75,15 @@ export class InputLatch {
   touchZip(): void {
     this.zipEdge = true;
   }
+  touchSlide(): void {
+    this.slideEdge = true;
+  }
   clear(): void {
     this.keys.clear();
     this.stickX = this.stickY = 0;
     this.touchWeb = this.touchFace = false;
     this.lmb = this.rmb = false;
-    this.jumpEdge = this.webEdge = this.zipEdge = false;
+    this.jumpEdge = this.webEdge = this.zipEdge = this.slideEdge = false;
     this.mouseDX = this.mouseDY = 0;
   }
   /** Mouse deltas since the last call (applied to the camera once per frame). */
@@ -104,10 +110,11 @@ export class InputLatch {
    */
   sample(rec: InputRec, yaw: number): InputRec {
     const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
-    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge);
+    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge);
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;
+    this.slideEdge = false;
     this.steps++;
     return rec;
   }
@@ -133,9 +140,11 @@ export class InputLatch {
     f.webPressed = this.webEdge;
     f.webHeld = webHeldNow || this.webEdge;
     f.zipPressed = this.zipEdge;
+    f.slidePressed = this.slideEdge;
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;
+    this.slideEdge = false;
     if (this.script) this.script(f, this.steps);
     this.steps++;
     if (this.record) this.record.push({ ...f });

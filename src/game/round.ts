@@ -1,13 +1,14 @@
 // One chase round (spec §3, §7, §20): seeded setup (start junction, first edge, player spawn), then a
 // fixed-step orchestration: player stepBody (or a bot's kinematic override) -> rubber band + runner ->
 // Yoink / tag / fall / timer checks -> stats. Pure TS outside React; the determinism rule applies.
-import { Fnv1a, Rand, hash01, type Vec3 } from "../sim/math.ts";
+import { Fnv1a, Rand, type Vec3 } from "../sim/math.ts";
 import {
-  chaseDist, cloneBody, copyBody, createBody, hashBody, pickTarget, stepBody, EV_FALL, RING_NONE, RING_RUNNER,
+  chaseDist, cloneBody, copyBody, createBody, hashBody, pickRing, resetMoves, stepBody, EV_FALL, RING_NONE, RING_RUNNER,
   type Body, type InputFrame, type SimWorld,
 } from "../sim/player.ts";
+import { emptyAnchor } from "../world/cityQuery.ts";
 import { DT, MECH, ROUND, type Difficulty, type DifficultyParams, type Tuning } from "../sim/tuning.ts";
-import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_POPS, M_SIXTY, M_WIND } from "./mutators.ts";
+import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_SIXTY, M_SNAP, M_WIND } from "./mutators.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import { sampleEdge, type Pack, type TrackPose } from "../route/trackPack.ts";
 import { Runner } from "../runner/runner.ts";
@@ -39,6 +40,8 @@ export type RoundStats = {
   catchTime: number;
   /** Round 7: the lowest roof top (m) he has stood on this round (Vertigo's "street level" star). */
   runnerLow: number;
+  /** Round 9: parkour moves (wall runs, wall jumps, ledge climbs, vaults, slides) this round. */
+  parkour: number;
 };
 
 export type RoundOptions = {
@@ -131,7 +134,7 @@ export class Round {
   /** Chase distance d this step. */
   d = 0;
   events = 0;
-  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0, runnerLow: Infinity };
+  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0, runnerLow: Infinity, parkour: 0 };
   /** Runner pose before this step (render interpolation). */
   readonly prevRunner: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -167,15 +170,9 @@ export class Round {
     this.player = createBody(this.spawn.x, this.spawn.y, this.spawn.z, this.spawn.roofId);
     this.prevPlayer = cloneBody(this.player);
     this.prevRunner.x = this.runner.p.x; this.prevRunner.y = this.runner.p.y; this.prevRunner.z = this.runner.p.z;
-    this.world = { index: this.index, hooks: this.model.hooks, lowestRoof: this.model.lowestRoof, runner: o.practice ? null : { p: this.runner.p, roofId: -1 } };
-    if (mut & M_POPS) {
-      const n = this.model.hooks.length;
-      const fragile = new Uint8Array(n);
-      for (let i = 0; i < n; i++) fragile[i] = hash01(o.seed, i, 0x70707, 1) < MECH.popShare ? 1 : 0;
-      this.world.fragile = fragile;
-      this.world.hookDown = new Int32Array(n);
-      this.world.popSteps = Math.round(MECH.popRespawn * 120);
-    }
+    this.world = { index: this.index, runner: o.practice ? null : { p: this.runner.p, roofId: -1 } };
+    // Round 9 snapping webs (the old pops bit): every web snaps after MECH.snapTime on the rope.
+    if (mut & M_SNAP) this.world.snapSteps = Math.max(1, Math.round(MECH.snapTime * 120));
     if (mut & M_WIND) {
       this.world.wind = { x: 0, z: 0 };
       this.gusts.push(...windSchedule(o.seed));
@@ -215,12 +212,12 @@ export class Round {
       b.events = 0;
       b.step++;
       b.t += DT;
-      b.ringId = pickTarget(b, inp, this.tuning, w);
+      b.ringId = pickRing(b, inp, this.tuning, w, RING_SCRATCH);
       b.p.x = ov.p.x; b.p.y = ov.p.y; b.p.z = ov.p.z;
       b.v.x = ov.v.x; b.v.y = ov.v.y; b.v.z = ov.v.z;
       b.grounded = ov.grounded;
       b.roofId = ov.roofId;
-      b.ropeHook = -1;
+      b.ropeSolid = -1;
       if (ov.grounded) { b.lastSafeRoof = ov.roofId; b.lastSafe.x = ov.p.x; b.lastSafe.y = ov.p.y; b.lastSafe.z = ov.p.z; }
     } else {
       stepBody(b, inp, this.tuning, w);
@@ -237,6 +234,7 @@ export class Round {
     const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (sp > st.topSpeed) st.topSpeed = sp;
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
+    st.parkour = b.parkour;
     if (this.d < st.closest) st.closest = this.d;
     if (r.roofId >= 0) { const top = this.model.solids[r.roofId].top; if (top < st.runnerLow) st.runnerLow = top; }
 
@@ -281,6 +279,7 @@ export class Round {
     const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (sp > st.topSpeed) st.topSpeed = sp;
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
+    st.parkour = b.parkour;
     if (b.events & EV_FALL) {
       st.falls++;
       respawnNear(b, this.model, b.lastSafeRoof, b.lastSafe, ROUND.respawnInset, this.tuning.halfHeight);
@@ -318,11 +317,11 @@ export class Round {
     hashBody(this.player, h);
     this.runner.hash(h);
     h.f64(this.clock).i32(this.chaseSteps).i32(this.countdown).str(this.phase).i32(this.stats.falls).i32(this.stats.maxChain);
-    const down = this.world.hookDown;
-    if (down !== undefined) for (let i = 0; i < down.length; i++) if (down[i] !== 0) h.i32(i).i32(down[i]);
     return h.hex();
   }
 }
+
+const RING_SCRATCH = emptyAnchor();
 
 /** Respawn a body on `roofId` at the point nearest `near` (xz clamp into the roof inset `inset`). */
 export function respawnNear(b: Body, model: CityModel, roofId: number, near: Vec3, inset: number, halfHeight: number): void {
@@ -333,11 +332,7 @@ export function respawnNear(b: Body, model: CityModel, roofId: number, near: Vec
   b.v.x = b.v.y = b.v.z = 0;
   b.grounded = true;
   b.roofId = s.id;
-  b.ropeHook = -1;
-  b.heldFor = b.coyote = b.jumpBuf = b.bonkT = 0;
-  b.zipOn = false;
-  b.zipT = b.zipCd = 0;
-  b.chainCount = 0;
+  resetMoves(b);
   b.ringId = RING_NONE;
   b.lastSafeRoof = s.id;
   b.lastSafe.x = x; b.lastSafe.y = b.p.y; b.lastSafe.z = z;

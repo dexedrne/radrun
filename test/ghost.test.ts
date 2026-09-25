@@ -56,7 +56,7 @@ test("codec: encode -> decode and pack -> unpack round-trip exactly (runs, yaw w
       else if (u < 0.31) yaw = Math.floor(rand() * YAW_RES); // flicks
       if (rand() < 0.02) fwd = [127, -127, 64, 0, -64, 13][Math.floor(rand() * 6)];
       if (rand() < 0.02) right = Math.floor(rand() * 255) - 127;
-      if (rand() < 0.05) bits = Math.floor(rand() * 16); // B_ZIP (8) included (format 2)
+      if (rand() < 0.05) bits = Math.floor(rand() * 32); // B_ZIP (8) and B_SLIDE (16) included (format 3)
       rec.yaw = yaw; rec.fwd = fwd; rec.right = right; rec.bits = bits;
       log.push(rec);
     }
@@ -135,31 +135,33 @@ test("replay: a recorded player run (latch path) replays to the same final state
 
 test("replay: the swinging bot's catch recorded through the codec verifies; a wrong claim does not", async () => {
   const flags = { touch: false, easy: false };
-  const round = mk(24, "degen", flags);
-  const bot = new SwingBot(round, 24);
-  const f = emptyInput(), rec = emptyRec(), log = new GhostLog();
-  while (!round.over) {
-    bot.next(round, f);
-    recFromFrame(rec, f);
-    buildFrame(f, rec, round.player.v, false, round.tuning.runSpeed);
-    log.push(rec);
-    round.step(f);
-    bot.after(round);
+  // The first seed (from 24) the swinging bot catches him on (balance itself is npm run balance).
+  let seed = 24, round = mk(seed, "chill", flags), log = new GhostLog();
+  for (; seed < 44; seed++) {
+    round = mk(seed, "chill", flags);
+    const bot = new SwingBot(round, seed);
+    const f = emptyInput(), rec = emptyRec();
+    log = new GhostLog();
+    while (!round.over) {
+      bot.next(round, f);
+      recFromFrame(rec, f);
+      buildFrame(f, rec, round.player.v, false, round.tuning.runSpeed);
+      log.push(rec);
+      round.step(f);
+      bot.after(round);
+    }
+    if (round.phase === "caught") break;
   }
-  assert.equal(round.phase, "caught");
+  assert.equal(round.phase, "caught", "the swinging bot catches him on some seed");
   const back = await unpackGhost(await packGhost(log, flags));
   assert.ok(back);
-  const replay = (claimed: number) => {
-    const g = new GhostRun(mk(24, "degen", back.flags), back.log, false);
-    g.advance(20000);
-    return g;
-  };
-  const g = replay(round.stats.catchTime);
+  const g = new GhostRun(mk(seed, "chill", back.flags), back.log, false);
+  g.advance(20000);
   assert.equal(g.round.hash(), round.hash());
   assert.ok(g.verifies(Math.round(round.stats.catchTime * 10) / 10));
   assert.ok(!g.verifies(Math.round(round.stats.catchTime * 10) / 10 + 0.2));
   // Another seed's round: the record no longer catches him on its last step.
-  const other = new GhostRun(mk(25, "degen", flags), back.log, false);
+  const other = new GhostRun(mk(seed + 1, "chill", flags), back.log, false);
   other.advance(20000);
   assert.ok(!other.verifies(round.stats.catchTime));
 });

@@ -1,6 +1,7 @@
 // Test 2 (spec §16): a recorded 60 s InputFrame log replayed under five frame patterns gives an
 // identical final state hash (ringId included) on the committed city. The log includes double jumps
-// (a second Space in the air) and web zips (fixture updated for the moves).
+// (a second Space in the air), web zips and (round 9) slides; the building-anchor swings, wall runs,
+// ledge grabs and vaults happen from the same inputs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -32,6 +33,7 @@ function run(pattern: (i: number) => number, log: InputFrame[] | null): { hash: 
       f.jumpPressed = --jumpIn <= 0 || --djIn === 0;
       if (jumpIn <= 0) { jumpIn = 80 + Math.floor(rand() * 120); djIn = 25 + Math.floor(rand() * 30); }
       f.zipPressed = i % 420 === 210;
+      f.slidePressed = i % 240 === 70;
       f.webPressed = webFor <= 0 && rand() < 0.02;
       if (f.webPressed) webFor = 40 + Math.floor(rand() * 110);
       f.webHeld = webFor-- > 0;
@@ -48,6 +50,7 @@ test("60 s input log replays to the same state hash under five frame patterns", 
   assert.equal(log.length, STEPS);
   assert.ok(rec.sb.stats.swings > 5, `recording should swing (swings=${rec.sb.stats.swings})`);
   assert.ok(log.some(f => f.zipPressed) && log.filter(f => f.jumpPressed).length > 30, "recording presses zip and double jumps");
+  assert.ok(log.some(f => f.slidePressed), "recording presses slide");
   const jit = mulberry32(99);
   const patterns: [string, (i: number) => number][] = [
     ["60 Hz", () => 1 / 60],

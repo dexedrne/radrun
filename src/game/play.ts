@@ -8,7 +8,7 @@ import { TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type T
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { DistrictId } from "../world/districts.ts";
 import type { Pack } from "../route/trackPack.ts";
-import { PHASE_ROPE } from "../route/trackPack.ts";
+import { PHASE_ROPE, packAnchor } from "../route/trackPack.ts";
 import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
@@ -259,7 +259,7 @@ export class PlayGame {
     g.setBeat(round.phase === "countdown" ? "sit" : round.phase === "caught" ? "happy" : round.phase === "escaped" ? "sulk" : "");
     const b = round.player;
     if (round.events & RV_RESPAWN) g.place(b.p.x, b.p.y, b.p.z, b.roofId, -rig.sy, -rig.cy);
-    else g.step({ x: b.p.x, y: b.p.y, z: b.p.z, grounded: b.grounded, rope: b.ropeHook >= 0, roofId: b.roofId });
+    else g.step({ x: b.p.x, y: b.p.y, z: b.p.z, grounded: b.grounded, rope: b.ropeSolid >= 0 || b.wallMode > 0 || b.ledgeMode > 0, roofId: b.roofId });
   }
 
   /** Once per rendered frame: look, fixed steps, interpolation. Returns steps run. */
@@ -364,9 +364,10 @@ export class PlayGame {
     return this.round.player.ringId === RING_RUNNER;
   }
 
-  get runnerRopeHook(): number {
+  /** His web anchor this step (on the rope with a v2 pack) into `out`; false otherwise. */
+  runnerAnchor(out: Vec3): boolean {
     const pose = this.round.runner.pose;
-    return pose.phase === PHASE_ROPE ? pose.ref : -1;
+    return pose.phase === PHASE_ROPE && packAnchor(this.pack, pose.ref, out);
   }
 
   get justEnded(): boolean {
