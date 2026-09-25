@@ -1,3 +1,5 @@
+Working title at the time: Rug Run (now RadRun).
+
 # Rug Run — design spec (v2)
 
 **Status:** approved design, revised after review · **Date:** 2026-09-24

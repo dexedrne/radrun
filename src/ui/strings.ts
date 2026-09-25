@@ -3,7 +3,7 @@ import { MEDALS, type Difficulty } from "../sim/tuning.ts";
 import type { RadbroId } from "../game/round.ts";
 
 export const S = {
-  title: "RUG RUN",
+  title: "RADRUN",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   youChase: "You chase one of the other three",
   countdownBubble: "finders keepers",
@@ -85,5 +85,5 @@ export function clockText(s: number): string {
 }
 
 export function shareText(kind: "tag" | "yoink" | "", runner: string, t: number): string {
-  return `I ${kind === "yoink" ? "yoinked" : "tagged"} #${runner} in ${t.toFixed(1)} s in Rug Run`;
+  return `I ${kind === "yoink" ? "yoinked" : "tagged"} #${runner} in ${t.toFixed(1)} s in RadRun`;
 }

@@ -1,3 +1,5 @@
+Working title at the time: Rug Run (now RadRun).
+
 # Rug Run — round 4: depth (design)
 
 **Date:** 2026-09-24 · **Status:** approved direction, built in this round

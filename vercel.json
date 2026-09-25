@@ -1,5 +1,19 @@
 {
   "framework": "vite",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "rugrun.vyvanse.beer" }],
+      "destination": "https://radrun.vyvanse.beer/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "radbro-rug-run.vercel.app" }],
+      "destination": "https://radrun.vyvanse.beer/:path*",
+      "permanent": true
+    }
+  ]
 }
