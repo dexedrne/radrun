@@ -42,7 +42,7 @@ function run(b: Body, k: Tuning, w: SimWorld, n: number, set: (f: InputFrame, i:
 
 /** Hand-made boxes (ids = order). */
 function boxes(list: Omit<Solid, "id">[]): SimWorld {
-  const model = { solids: list.map((s, id) => ({ ...s, id })), hooks: [], lowestRoof: 0 } as unknown as CityModel;
+  const model = { solids: list.map((s, id) => ({ ...s, id })), lowestRoof: 0 } as unknown as CityModel;
   return { index: new CityIndex(model), runner: null };
 }
 const roof = (x0: number, z0: number, x1: number, z1: number, top: number): Omit<Solid, "id"> => ({ kind: "roof", landable: true, x0, z0, x1, z1, top });
@@ -89,14 +89,15 @@ test("double jump: once per airtime, v.y = max(v.y, doubleJumpSpeed), recharged 
   assert.equal(b.airJumps, 1);
 });
 
-test("double jump, zip and slide are player-only: the runner and moves-off tunings ignore them", () => {
+test("double jump and slide are player-only (the runner and moves-off tunings ignore them); zip only in the runner's baked zip hops", () => {
   for (const [name, k] of [["runner", RUNNER], ["moves off", { ...K, ...MOVES_OFF }]] as [string, Tuning][]) {
     const w = tallWorld();
     const b = createBody(9, 50.9, 9, TALL.south[0]);
     run(b, k, w, 3);
     run(b, k, w, 1, f => { f.jumpPressed = true; });
     run(b, k, w, 30);
-    const ev = run(b, k, w, 1, f => { f.jumpPressed = true; f.zipPressed = true; f.slidePressed = true; });
+    // (the runner's zip key is pressed only by the bake bot, with a forced rim anchor: route.test.ts)
+    const ev = run(b, k, w, 1, f => { f.jumpPressed = true; f.zipPressed = name !== "runner"; f.slidePressed = true; });
     assert.equal(ev & (EV_DJUMP | EV_JUMP | EV_ZIP | EV_WALLJUMP), 0, name);
     assert.equal(b.zipOn, false, name);
     while (!b.grounded) run(b, k, w, 1);

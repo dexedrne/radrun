@@ -37,7 +37,7 @@ const d = ((DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? q.ge
 const round = new Round({ district: districtFromSearch(new URL(url).search), model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false , mutators: (Number(q.get("mu") ?? 0) >>> 0) & 127 });
 const swing = q.get("bot") === "swing";
 const chase = q.get("bot") === "chase";
-const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
+const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true, moves: q.has("moves") } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
 if (!swing) console.log(`node prediction: ${predicted.caught ? "CAUGHT" : "ESCAPED"} (${predicted.kind || "-"}) at chase step ${predicted.steps} (${predicted.time.toFixed(2)} s)`);
 
 const browser = await puppeteer.launch({
@@ -50,7 +50,7 @@ const browser = await puppeteer.launch({
 const log: string[] = [];
 const errors: string[] = [];
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-type P = { screen: string; phase: string; rope: number; player: [number, number, number]; chaseSteps: number; clock: number; d: number; outcome: string; catchKind: string; catchTime: number; ring: number; runner: { phase: number; mode: number }; runnerPhases: number[]; clips?: { chaser: string[]; runner: string[]; george?: string[] }; fps: number; backend: string };
+type P = { screen: string; phase: string; rope: number; wall: number; ledge: number; parkour: number; maxChain?: number; player: [number, number, number]; chaseSteps: number; clock: number; d: number; outcome: string; catchKind: string; catchTime: number; ring: number; runner: { phase: number; mode: number }; runnerPhases: number[]; clips?: { chaser: string[]; runner: string[]; george?: string[] }; fps: number; backend: string };
 try {
   const page = await browser.newPage();
   page.on("console", m => { const t = `console.${m.type()}: ${m.text()}`; log.push(t); if (m.type() === "error") errors.push(t); });
@@ -62,6 +62,9 @@ try {
   let last: P | null = null;
   let firstChase = 0;
   let swingShots = 0, swingShotAt = 0;
+  // Round 9: what the chaser did (wall runs seen, ledges seen, longest swing chain, parkour count), with a shot
+  // of the first wall run and of a swing.
+  const seen = { wall: 0, ledge: 0, rope: 0, chain: 0, parkour: 0, wallShot: false, ropeShot: false };
   while (Date.now() - t0 < 240_000) {
     last = (await page.evaluate(() => (window as unknown as { __play?: unknown }).__play ?? null)) as P | null;
     if (last) {
@@ -72,6 +75,15 @@ try {
         log.push(`SHOT countdown at wall ${Date.now() - t0} ms`);
       }
       if (last.phase === "chase" && !firstChase) firstChase = Date.now();
+      if (last.phase === "chase") {
+        if (last.wall > 0) seen.wall++;
+        if (last.ledge > 0) seen.ledge++;
+        if (last.rope >= 0) seen.rope++;
+        seen.chain = Math.max(seen.chain, last.maxChain ?? 0);
+        seen.parkour = Math.max(seen.parkour, last.parkour);
+        if (last.wall > 0 && !seen.wallShot) { seen.wallShot = true; await page.screenshot({ path: path.join(outDir, "bot-wallrun.png") }); log.push(`SHOT wall run at chase step ${last.chaseSteps} (wall mode ${last.wall})`); }
+        if (last.rope >= 0 && !seen.ropeShot && last.chaseSteps > 360) { seen.ropeShot = true; await page.screenshot({ path: path.join(outDir, "bot-swing.png") }); log.push(`SHOT swing at chase step ${last.chaseSteps} (web on solid ${last.rope})`); }
+      }
       // ?bot=swing: shots while the player hangs from a web, then stop.
       const frozen = swing && (await page.evaluate(() => Boolean((window as unknown as { __frozen?: boolean }).__frozen)));
       if (frozen) {
@@ -113,6 +125,7 @@ try {
   console.log(`browser: ${last?.outcome || "none"} (${last?.catchKind || "-"}) at chase step ${last?.chaseSteps} (${last?.catchTime?.toFixed(2)} s), backend ${last?.backend}, runner phases seen ${JSON.stringify(last?.runnerPhases)}`);
   if (last?.outcome && !swing) console.log(`catch step vs node: ${last.chaseSteps - predicted.steps} (must be within +-1)`);
   console.log(`clips seen: chaser ${JSON.stringify(last?.clips?.chaser)} runner ${JSON.stringify(last?.clips?.runner)} george ${JSON.stringify(last?.clips?.george)}`);
+  console.log(`chaser moves (polled): on the rope ${seen.rope} polls, wall-running ${seen.wall}, on a ledge ${seen.ledge}; best swing chain ${seen.chain}, parkour moves ${seen.parkour}`);
 } catch (e) {
   log.push(`FATAL: ${(e as Error)?.stack ?? e}`);
 } finally {

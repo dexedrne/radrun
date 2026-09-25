@@ -21,10 +21,11 @@ backend. `npm run build && npm run preview` serves the production build on http:
 |---|---|
 | Mouse | look / aim (PLAY captures the mouse; click the canvas if the browser refused) |
 | WASD | run |
-| Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing or a rope grab recharges it) |
-| LMB hold | web onto the balloon with the ring; let go to release (LMB on a roof with a ringed balloon = jump + grab) |
-| E / Shift | **web zip**: a straight, fast pull to the ringed balloon (let go near it with a forward + up fling), or, with no balloon ringed, onto the roof ledge you are aiming at (a cyan marker shows it). 1.5 s cooldown: the thin ring around the reticle fills back up |
-| (sky balloons) | the bigger **gold / cream / white** clusters hang 15-35 m above the roofs over crossings and plazas (the Towers, Vertigo) and can be grabbed from **30 m** (street balloons 17 m): long ropes, big pendulum swings, a re-grab in mid-fall. Street balloons keep the ring when both are in reach |
+| Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing, a rope grab, a wall run or a ledge grab recharges it); on a wall (or just off one) = **wall kick**; hanging on a ledge = climb-jump |
+| LMB hold | **web the building ahead**: the yellow ring sits on a rim, a corner or a facade of the building your aim (and your speed) points at, and glides along it as you turn. Hold to swing, let go at the bottom of the arc to fling forward (hold through the fling to web the next building). LMB on a roof with a ring = jump + web. No ring = nothing tall enough ahead: run, vault, zip or drop off instead |
+| C | **slide** (while running fast; Space out of a slide = slide-jump; press it in the air to slide on landing) |
+| E / Shift | **web zip**: a straight, fast pull to the ringed point (a rim = up and onto that roof; a facade = up to the wall, into a wall run when you are fast), or, with nothing ringed, onto the roof ledge you are aiming at (a cyan marker shows it). 1.5 s cooldown: the thin ring around the reticle fills back up |
+| (by themselves) | **wall run** (hit a facade at an angle while airborne), **run-up** (hit it head-on with the stick into it: ~5 m up the wall, then a ledge grab if the top is in reach), **ledge grab + climb** (a roof edge within reach in front of you), **vault** (a low rooftop box ahead while running), **landing roll** (a hard landing with the stick forward) |
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
@@ -38,16 +39,17 @@ credits (tap to show it), so the whole title fits on one screen.
 
 | | |
 |---|---|
-| Left thumb (anywhere on the left half) | floating stick: run / steer on the rope |
+| Left thumb (anywhere on the left half) | floating stick: run / steer on the rope (sideways only) / push into a wall for a run-up |
 | Drag on the right half | look / aim |
-| WEB (hold) | web onto the ringed balloon; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
-| JUMP | jump; tap again in the air = double jump |
-| ZIP | web zip (ringed balloon, or the roof ledge ahead); dimmed while it recharges |
+| WEB (hold) | web the ringed building; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
+| JUMP | jump; tap again in the air = double jump; on a wall = wall kick |
+| SLIDE | slide (small, left of JUMP) |
+| ZIP | web zip (ringed building, or the roof ledge ahead); dimmed while it recharges |
 | HIM (hold) | ease the camera toward him |
 | II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch and the volumes) |
 | speaker (under II) | mute / unmute |
 
-Touch helps your aim: the cone widens to 85 degrees (desktop 70), balloon picking leans toward where you
+Touch helps your aim: the cone widens to 85 degrees (desktop 70), anchor picking leans toward where you
 are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and locks landscape where the
 browser allows it). There is no pointer lock, and leaving the tab pauses. On phones the canvas renders at up
 to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOUCH` in `src/sim/tuning.ts`.
@@ -75,6 +77,32 @@ its frame time. If the median says it runs below ~40 fps, it switches to Low onc
 Low quality for smoother play — change in Settings". That choice is remembered; it never switches back by
 itself, and once you pick Low or High in Settings it never touches the setting again. `?autoq=0` turns
 it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
+
+## Moving (round 9)
+
+**The swing.** There are no grab points: webs stick to the buildings themselves. Every step the game looks
+for the building face nearest an ideal point about 10 m (+ 0.5 s x your speed) ahead of you and 18 m up,
+at least 5 m above you, 8-42 m away, inside the aim cone and in clear sight; a point on a roof is moved to
+the roof's edge, so the ring is always on a rim, a corner or a wall, never on open sky or the middle of a
+roof. On a low roof with nothing tall nearby there is no ring at all. The rope then works as a real
+pendulum: the pivot sits 5 m off the wall, gravity pulls harder on the rope (x1.35), the speed you had when
+the rope goes taut is kept (up to 1.6x), you gain speed through the bottom of the arc (pump) and none on the
+way up, WASD only curves the swing sideways, and it lets go by itself past about 50 degrees on the far side
+(the fling) or near the pivot's height. The only reel keeps the arc 6 m above the street. A blocked web
+snaps. One speed cap, 32 m/s. A clean chain down an avenue runs about 21-24 m/s.
+
+**Parkour.** Between swings you can wall-run (1.4 s along a facade at 11 m/s, light gravity), kick off a
+wall (Space; alternating between two walls climbs out of an alley), run up a wall head-on (~9 m of reach
+with the ledge grab), grab a ledge and climb it (automatic after 0.2 s; Space = climb-jump, the stick away
+= drop), vault low rooftop boxes (0.8-1.4 m AC units and crates; the 2.2-3.2 m tanks and container stacks
+are climbed), slide (C / SLIDE) and roll out of a hard landing. Everything you see on a roof that is 0.5 m
+or taller is solid. You fall only when you actually reach the street (feet below 2 m): respawn on the last
+roof, -3 s. Every number is a `tuning.json` key with a `?tune` slider (see "tuning.json").
+
+**The thief moves the same way** (the same sim, baked into his tracks): he swings across streets on building
+anchors, wall-runs the notches between roofs, climbs ledges and vaults props. He also **web-zips up** onto
+roofs that are too high to swing or climb to (and across streets where no swing works): the tall canyon
+cities would otherwise only let him run downhill. He never slides, double-jumps or steers in the air.
 
 ## Sound
 
@@ -106,7 +134,8 @@ the LOADING screen (the countdown sounds go first).
   `window.__voiceLog`.
 - **Sound effects:** rope thwip and release whoosh, jump, **double jump** (the jump, a fifth higher),
   **web zip** (a thwip into a whoosh), light / heavy landings by impact, bonk, the YOINK lasso crack, the
-  coin grab, countdown beeps, the "rekt." whistle, balloon pops, wind gusts, the rug swoosh, George's
+  coin grab, countdown beeps, the "rekt." whistle, a web snap, wall runs, wall kicks, vaults, slides and
+  rolls, a soft "no" when you web with nothing ringed, wind gusts, the rug swoosh, George's
   meows and a wind loop that grows with speed in the air. Variations are picked at random with a slight
   pitch spread.
 - **Controls:** the speaker button (title top right; in a round top left, or under II on touch) and **M**
@@ -127,11 +156,12 @@ chain, best chain, top speed and falls. Hold R (desktop) = back to the start roo
 Resume / Back to start / Settings / Back to title.
 
 **First-run tips** pop up under your Radbro (above it on touch) the moment they matter, once each:
-"hold LMB/WEB while a balloon has the yellow ring" (a balloon is ringed), "let go at the bottom of the arc
-to fling forward" (you are on the rope), "chain swings down the streets to go fast" (after your first
-let-go), "red ring on him = click / tap WEB to YOINK" (the first red ring in a real round), then "press
-Space / tap JUMP again in the air to double jump" (airborne) and "press E or Shift / tap ZIP to web-zip"
-(on a roof with a ringed balloon). They are remembered in the browser; pause -> Settings -> **show tips
+"hold LMB/WEB to web the building ahead" (a building is ringed), "let go at the bottom of the arc to fling
+forward" (you are on the rope), "chain swings down the avenues to go fast" (after your first let-go),
+"wall run! press Space / tap JUMP to kick off the wall" (your first wall run), "red ring on him = click /
+tap WEB to YOINK" (the first red ring in a real round), then "press Space / tap JUMP again in the air to
+double jump" (airborne), "press E or Shift / tap ZIP to web-zip" (on a roof with a ring) and "press C / tap
+SLIDE while running fast to slide" (running fast). They are remembered in the browser; pause -> Settings -> **show tips
 again** brings them back.
 
 ## Ghost links
@@ -160,7 +190,11 @@ an older build". `v=3` is the double jump + web zip build: its ghosts record the
 format 2). Ghosts recorded before it (format 1, incl. kept personal bests) replay with both moves off, so
 they still verify; any link older than the current version gets the "older build" note if it does not.
 `v=3` is also the round 7 build (Vertigo, and the sky balloons that re-laid the Towers), so older Towers
-ghosts that no longer verify get the same note.
+ghosts that no longer verify get the same note. `v=4` is round 9: every district was rebuilt (40-230 m
+canyons), webs stick to buildings and the parkour moves arrived, and ghosts record the slide button (ghost
+record format 3). Links older than v4 open with the "made on an older build" note and their ghosts are not
+raced. Bests and kept ghosts from before v4 belong to the old city: the old ghost is dropped, and your first
+catch in the new city is a new best (the results line mentions the old city's time).
 
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
@@ -214,20 +248,42 @@ stand still, cut after 0.5 s when you run on; shorter hard landings keep the Reg
 `clips.meta.json` entries (the character GLBs stay untouched). `?portrait=<id>&clip=Free_Fall&t=1&full&yaw=90`
 (dev / test build) renders one pose on its own.
 
+**Parkour clips (round 9).** Nine one-shot clips in every Radbro's clip pack: `Wall_Run` / `Wall_Run_Mirror`
+(the wall on his left / right; played once, then the run rolled toward the wall), `Wall_Run_Up` (the run-up),
+`Ledge_Grab` (held on its hang frame), `Ledge_Climb` (the mantle; the model's root stays at the rim while the
+clip lifts him), `Vault`, `Slide` (held in the slide), `Land_Roll` and `Wall_Climb` (not used yet). Timings
+come from the clip manifest into `clips.meta.json` (`hangAt`, `slideTo`, `rollFrom`, `standAt`, ...); the
+rules are `RULE` in `src/anim/animMachine.ts` (a missing clip falls back to the procedural pose). The
+runner plays the same clips from his pack phases (wall, ledge) and events (vault, roll).
+
 ## The chase and difficulties
 
-Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
+Falling to the street = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
 and gets GASSED when his panic budget runs out. He stops to taunt you when you are over 35 m back.
 
 | | runner | Yoink range | medals (RAD / GOLD / SILVER, s) |
 |---|---|---|---|
-| **Chill** | jogs (0.9x), sprints to 1.1x, gassed after ~14 s of sprinting, wanders | 6.5 m | 35 / 55 / 75 |
+| **Chill** | jogs (0.9x), sprints to 1.25x, gassed after ~14 s of sprinting, wanders | 6.5 m | 35 / 55 / 75 |
 | **Normal** | sprints up to 1.5x from 40 m out, 30 s panic budget | 5 m | 25 / 40 / 60 |
-| **Degen** | 1.2x base, sprints up to 2x from 50 m out, barely wanders, short taunts | 4 m | 30 / 45 / 65 |
+| **Degen** | 1.1x base, sprints up to 2x from 50 m out, 20 s panic budget, barely wanders, short taunts | 4.5 m | 30 / 45 / 65 |
 
-Tuned against a swinging bot (below): a strong swinger catches him on Normal in about 25-30 s (median),
-on Degen in about 45 s when it catches him at all (about a quarter of Degen rounds he escapes). Every
-district lands in the same bands (see Districts).
+Tuned against a swinging bot that also web-zips back up to him (below): on Normal it catches him in about
+26-38 s (median) in every district; on Degen it catches him in about two thirds of the rounds, after 34-49 s
+(median). He picks his next run away from you and avoids runs that pass close to you (round 9). Round 9
+balance, 200 rounds per row (`npm run balance -- --all`):
+
+| | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) |
+|---|---|---|
+| Downtown | 74 %, 25.8 s | 66 %, 34.3 s (**early**) |
+| Night Market | 85 %, 36.7 s | 56 %, 48.7 s |
+| The Docks | 79 %, 30.2 s | 64 %, 37.8 s (**early**) |
+| The Towers | 57 %, 38.4 s | 70 %, 43.4 s |
+| Vertigo | 87 %, 33.0 s | 83 %, 46.1 s |
+
+Downtown's follower / camper rows are all in band (Normal k 1.0: 0 % caught; k 1.2: median 53.5 s; Chill
+k 1.0: 98 %, 65.8 s; camper 11 %). In the other districts the follower (a bot that replays his exact track
+at his speed) catches him far more often, because his long canyon routes and zips double back past it; those
+rows are info there, as in rounds 6-7, when the districts were only ever tuned on the swinging bot.
 
 ## Districts
 
@@ -235,11 +291,11 @@ Pick the district on the title (a district change reloads the page; Retry never 
 
 | District | URL | Feel |
 |---|---|---|
-| **Downtown** | `/` | the original skyline: wide streets, balloons everywhere |
-| **Night Market** | `?map=market` | dense and narrow (10 m streets, 10 m roofs), many junctions, some street stretches with **no balloons** (route around or carry momentum), purple dusk |
-| **The Docks** | `?map=docks` | low warehouses (12-20 m), wide 15 m streets, long flights over the water |
-| **The Towers** | `?map=towers` | tall roofs (38-52 m) between eight 90-130 m towers, deeper falls, sky balloons over the crossings |
-| **Vertigo** | `?map=vertigo` | round 7: every ring of roofs is a spiral ramp (22 to 86 m, neighbouring rings climbing opposite ways), so next to every gentle step there is a 10-50 m cliff; three needle towers (120-170 m), two plazas, gold sky balloons everywhere. A **descending chase**: he starts on one of his three highest roofs and prefers routes that end lower, dropping off roofs onto much lower ones mid-run; you start at about his height. Open from the start |
+| **Downtown** | `/` | a canyon city: 42-77 m podium roofs on 22 m avenues, 31 towers up to ~200 m, wall-run notches, AC units and crates to vault. Swing the avenues |
+| **Night Market** | `?map=market` | the parkour district: dense, low (12-39 m) rooftops on 12 m streets, lots of props, climbs and wall-run notches, only six 58-80 m towers to web near the plazas (few places to swing) |
+| **The Docks** | `?map=docks` | low sheds (12-23 m) on 18 m streets under crane masts and a few offices: long pendulums over the quay, containers to climb, crates to vault |
+| **The Towers** | `?map=towers` | the deepest canyons: 66-124 m roofs on 24 m avenues between 45 towers up to ~230 m. Long ropes, big swings |
+| **Vertigo** | `?map=vertigo` | round 7: every ring of roofs is a spiral ramp (22 to 89 m, neighbouring rings climbing opposite ways), so next to every gentle step there is a 10-50 m cliff; five 180-211 m needles (round 9, your anchors on the way down), two plazas. A **descending chase**: he starts on one of his three highest roofs and prefers routes that end lower, dropping off roofs onto much lower ones mid-run; you start at about his height. Open from the start |
 
 Each district has its own level files: Downtown in `public/levels/`, the others in
 `public/levels/<market|docks|towers|vertigo>/` (`city.json`, `decor.json`, `city.model.json`, `runner.pack.bin`,
@@ -251,26 +307,29 @@ Each district has its own level files: Downtown in `public/levels/`, the others 
 - `?editor&map=docks` / `?editor=decor&map=docks` edit a district; Save writes that district's files.
 - Best times and kept ghosts are per district; share links carry the district (`&m=docks`).
 - **Per-district chase tweak** (`chase` in `src/world/districts.ts`): the same runner and difficulty table
-  everywhere, nudged per district so the swinging bot gets the same catch times as in Downtown (without
-  it the Night Market fell in ~18 s on Normal and a quarter of its Chill rounds within ~3 s, the Docks
-  and Towers in ~20 s). The Night Market and the Docks start you ~26-30 m behind him (their blocks
-  squeezed the spawn); in the Night Market he sprints earlier and harder (his runs twist, so a swinger
-  cuts corners); the Docks and Towers get a faster sprint, and a shorter Yoink on Degen (3 m) and on
-  Towers Normal (4.5 m). Downtown has no tweak. `npm run balance -- --all --only swing` prints every
+  everywhere, nudged per district so the swinging bot gets the same catch times as in Downtown. Round 9:
+  the Night Market and the Docks still start you ~26-30 m behind him; the Night Market runner is a bit
+  faster on Normal (1.15x) and sprints earlier; the Docks Degen runner is faster (1.3x) but gasses out
+  after 5 s of sprint, with a 3 m Yoink; the Towers runner is slower (0.9x on Normal and Degen, a 5 m Degen
+  Yoink); Vertigo's Normal runner is faster (1.15x) than round 7's, since the bot now zips back up to him.
+  Downtown has no tweak (it is the classic round). `npm run balance -- --all --only swing` prints every
   district.
+- **His route graph (round 9).** Hop kinds between neighbouring roofs (`src/route/graph.ts`): **alley** (a
+  jump, up to +1.2 m), **climb** (+1.2 to +3.5 m: he jumps at the wall and the sim's ledge grab + climb
+  finish it), **drop** (6 m or more down: walked off at a baked pace), **street** (a web swing on a
+  building anchor baked from the takeoff point; the bake tries up to 10 anchor options, then falls back to
+  a zip across), **wallrun** (a wall-run notch between two roofs) and **zip** (a web zip onto the near rim of
+  a roof up to 32 m higher across at most 26 m: the podium blocks differ by 6-30 m, so without it he could
+  only ever run downhill). Vaults over props happen on their own. Each junction-to-junction edge is 3-8
+  hops; `runnerJunctions` / `runnerMaxHops` in a district's config (its `city.json` root) override the 12
+  junctions / 8 hops. The bake keeps each junction's best edges with the fewest zips, then checks the
+  graph (strongly connected, no forced U-turns, press windows, landing margins).
 - **Vertigo's layout and route (round 7).** `generateVertigo` in `src/world/generate.ts` (config
   `vertigo` in its district entry: ring height ranges, climb per street / alley step, needles, plazas,
-  summit mesas); `sky` adds the sky balloons (`chance`, `min`/`max` metres above the tallest roof within
-  `radius`, grab `reach`; the Towers use it too), `lowTierDh` a second, lower balloon tier on streets
-  that cross a big height step. His graph gains a third hop kind, the **drop**: an alley hop down by 6 m
-  or more is walked off at a baked pace (the bake sweeps 20-100 % of his run speed and keeps the middle of
-  the widest run that lands >= 1.5 m inside the lower roof with no wall contact; at least 8 points wide).
-  Climbs he can never make (alley > 1.2 m, street > 4.5 m) are not linked at all. In Vertigo the graph
-  also picks junctions spread out in height, tries drop-first routes and keeps edges with a drop first
-  (14 junctions, 61 edges, 21 drop hops, falls up to ~30 m). Its chase tweak: `startHigh`, `down`
-  (prefers edges that end lower), `spawnBelow` (spawn on a roof about his height, at least 0.8 x the spawn
-  distance from him and 16 m clear of his first edge's route) and a slower runner that also slows down
-  more for a chaser who got lost (`mMin`), with a 4 m Normal Yoink (numbers in the tweak's comment).
+  summit mesas). In Vertigo the graph also picks junctions spread out in height, tries drop-first routes
+  and keeps edges with a drop first. Its chase tweak: `startHigh`, `down` (prefers edges that end lower),
+  `spawnBelow` (spawn on a roof about his height, at least 0.8 x the spawn distance from him and 16 m
+  clear of his first edge's route).
 
 ## Mechanics and mutators (round 4)
 
@@ -279,7 +338,7 @@ round options, part of ghost links and (where they touch the sim) the round hash
 
 | Mutator | What happens | Tell |
 |---|---|---|
-| **Popping balloons** | about 55 % of balloons (seeded per round) pop when your rope leaves them and grow back after 6 s | fragile balloons are pale; a pop sound |
+| **Snapping webs** | every web snaps after 1.6 s on the rope (`MECH.snapTime`; no release boost): chain fast | a snap sound |
 | **Wind** | every 9-16 s a 2.4 s gust (8 directions, up to 7 m/s²) pushes you while airborne or swinging | HUD arrow ~1 s before the gust (yellow GUST), fills while it blows (blue WIND); a whoosh |
 | **Low gravity** | your gravity x0.65: floaty jumps, long swings | - |
 | **No YOINK** | no lasso: touch him | - |
@@ -287,31 +346,32 @@ round options, part of ghost links and (where they touch the sim) the round hash
 | **60 seconds** | a 60 s clock | the timer |
 | **Night** | visual: dark sky, close fog, dimmed lights | - |
 
-Free play starts with each district's defaults: **the Docks have wind, the Towers have popping balloons**
-(the Night Market's balloon-free streets are part of its layout). Every other mutator appears as a toggle
+Free play starts with each district's defaults: **the Docks have wind** (the Night Market's few anchors are
+part of its layout). Every other mutator appears as a toggle
 on the title once you have caught him in a campaign level that uses it. Campaign levels set their own
 mutators.
 Values live in `MECH` (`src/sim/tuning.ts`), overridable in `tuning.json` under `"mechanics"` and with the
-`?tune` sliders. Bots: `&mu=<bits>` (pops 1, wind 2, lowgrav 4, noyoink 8, onelife 16, sixty 32, night 64).
+`?tune` sliders. Bots: `&mu=<bits>` (snap 1, wind 2, lowgrav 4, noyoink 8, onelife 16, sixty 32, night 64).
 
 ## Campaign (round 4)
 
 **CAMPAIGN** on the title: 15 levels, 3 per district, each with a difficulty, mutators and three
 objectives (a star each; the first is always "catch him"). The others mix: under N s, no falls, finish
-with a YOINK, chain N swings, a close call (under N s left), and in Vertigo "catch him before he reaches
-street level" (before he has stood on a roof below N m). The round HUD lists the level's objectives
+with a YOINK, chain N swings, N parkour moves (wall runs, wall kicks, ledge climbs, vaults, slides; round 9),
+and in Vertigo "catch him before he reaches street level" (before he has stood on a roof below N m). The round HUD lists the level's objectives
 live (crossed out once lost, ticked once met), and the results show which you got plus NEW stars.
 
 | # | Level | District | Difficulty | Mutators |
 |---|---|---|---|---|
-| 1-3 | First Pour, Rush Hour, Pop Quiz | Downtown | chill, normal, normal | -, -, pops |
+| 1-3 | First Pour, Rush Hour, Snap Quiz | Downtown | chill, normal, normal | -, -, snap |
 | 4-6 | Neon Alleys, Hands Only, Lights Out | Night Market | chill, normal, normal | -, no YOINK, night |
 | 7-9 | Sea Breeze, Moon Jump, Last Call | Docks | normal | wind; wind + low gravity; wind + 60 s |
-| 10-12 | Altitude, High Winds, Rugpull | Towers | normal, normal, **degen** | pops; pops + wind; pops + wind + one life |
-| 13-15 | Top Floor, Free Fall, Street Level | Vertigo | chill, normal, **degen** | -, -, pops |
+| 10-12 | Altitude, High Winds, Rugpull | Towers | normal, normal, **degen** | snap; snap + wind; snap + wind + one life |
+| 13-15 | Top Floor, Free Fall, Street Level | Vertigo | chill, normal, **degen** | -, -, snap |
 
 Vertigo's stars: Top Floor = no falls + chain 5; Free Fall = before street level (45 m) + chain 5; Street
-Level = before street level (40 m) + no falls. (Level 10 was called "Vertigo" before round 7.)
+Level = before street level (40 m) + no falls. (Level 10 was called "Vertigo" before round 7.) Round 9:
+Neon Alleys asks for 6 parkour moves (instead of a time) and Last Call for 4 (instead of the close call).
 
 Unlocks: the next level once you catch him in the previous one; a district in free play once you catch him
 in its first level (Downtown and Vertigo are open from the start; `ALWAYS_OPEN` in `src/game/campaign.ts`); a mutator toggle once you catch him in a level using it; **Degen** in free play at 12
@@ -349,7 +409,7 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout); `&map=<id>` for another district |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
-| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`). `&snap` freezes 0.12 s into each chaser jump / release; `&snap=freefall,sky,runnerff` (any subset) freezes once in the chaser's free fall, on a sky-balloon swing and in the runner's free fall (`window.__unfreeze()` resumes) |
+| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`). `&snap` freezes 0.12 s into each chaser jump / release; `&snap=freefall,sky,runnerff` (any subset) freezes once in the chaser's free fall, on a long swing from a tower anchor 30+ m up (`sky`) and in the runner's free fall (`window.__unfreeze()` resumes) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`; `&clip=Free_Fall&full` any clip, whole body); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
 | `?hats` | George's three campaign hats on his head across his clips (one row per hat, 3/4 close-ups; `&yaw=` camera angle, `&lift=` / `&fwd=` try other offsets than `HAT_LIFT` / `HAT_FWD` in `src/app/hats.ts`) |
 
@@ -360,9 +420,13 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
 
 1. `npm run dev`, open `?editor` (city) or `?editor=decor`.
 2. Move, resize, add or delete boxes. In `city.json`, the `Data {kind}` tag decides gameplay: `roof`
-   (landable), `tower` (solid, not landable), `hook` (an extra balloon; auto balloons within 3 m make
-   way). Everything else about balloons is derived from the roofs. Keep boxes unrotated and standing on
-   the ground.
+   (landable), `tower` (solid, not landable), `prop` (a solid rooftop box inside a roof: 0.8-1.4 m to
+   vault, 2.2-3.2 m to climb, at least 2.5 m inside the edges). Web anchors come from the buildings at run
+   time (old `hook` nodes are ignored with a warning). Keep boxes unrotated and standing on the ground.
+   `npm run level` lints the round 9 rules: every street-facing roof edge has something 12 m taller within
+   34 m to web (G1; a warning in the Night Market and Vertigo), roofs at least 12 x 12 m with alley steps
+   that are a hop, a climb or a drop (G2), props (G3), wall-run notches (G4), heights 10-140 m for roofs
+   and up to 230 m for towers (G6).
 3. Save. Under `npm run dev` Save writes the file and, for `city.json`, runs `npm run level` for you
    (new sim model + a fresh runner bake). Outside the dev server Save downloads the file: copy it into
    the district's level dir (`public/levels/` or `public/levels/<id>/`) and run `npm run level -- --map <id>`.
@@ -382,9 +446,11 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
   tiles per metre. Windows keep their size on any building. The facade tiles are 16 x 24 m (8 bays of
   2 m, 8 floors of 3 m) = repeat `0.0625, 0.041667`; streets repeat every 42 m (one block pitch).
   Textures are in `public/textures/` (`npm run gen-textures` regenerates them).
-- **Rooftop props** (water towers, AC units, antennas) are the `rooftop-props` group in `decor.json`,
-  never solid. `npm run gen-props` re-places them (clear of the runner's baked path; run it after
-  `npm run level` if the layout changed); hand edits to other decor nodes are kept.
+- **Solid rooftop props** (round 9: AC units, crates and vents to vault, tanks and container stacks to
+  climb) are `prop` solids in `city.json` (low quality never hides them). The **decor** props (antennas, small
+  vents, water towers on tower tops) are the `rooftop-props` group in `decor.json`, never solid.
+  `npm run gen-props` re-places those (clear of the runner's baked path; run it after `npm run level` if the
+  layout changed); hand edits to other decor nodes are kept.
 - `npm run restyle-city` re-applies the look from `src/world/toPrefab.ts` (materials table, facade
   rule, roof caps) to `city.json` without touching gameplay geometry.
 - The sky gradient and fog colour are `SKY_COLORS` in `src/app/cityLook.tsx`.
@@ -400,36 +466,41 @@ he speeds up by 2.5 %/m), `mMin` / `mMax` (slowest / fastest rate), `panicBudget
 before GASSED), `airMin` / `airMax` (rate clamp while airborne), `sigma` (branch noise: higher = dumber
 choices), `yoinkRange` (m), `taunt` (seconds he stops to taunt when you are far back).
 
-Swing defaults (changed from the spec's 28 m/s cap):
+Round 9 movement keys (all in `?tune`; the full list with ranges is the spec's §8,
+`docs/specs/2026-09-25-round9-movement.md`):
 
-| key | value | effect |
-|---|---|---|
-| `speedCap` | 20 | hard speed limit; a clean chain settles here (~16 m/s along the street vs his ~9.5) |
-| `releaseBoost` | 3 | kick on release; **the runner's own street swings need it** (1.5 broke 105 of 107 bake edges) |
-| `reelSpeed` | 6 | how fast the rope reels in; lower = swings fall short into the canyon |
-| `ropeScale` | 0.75 | rope reels to this fraction of its length; this is what builds chain speed |
-| `ropeSteer` | 5 | steering force while on the rope |
+| group | keys (default) |
+|---|---|
+| speed | `speedCap` 32 (one cap for every state), `carryDecay` 8, `releaseBoost` 2, `releaseUp` 3, `autoReleaseBelow` 2.5, `ropeSteer` 4 (sideways only), `hysteresis` 4, `bonkMinSpeed` 14, `bonkRatio` 0.85 |
+| anchor search | `ropeMin` 8, `ropeMax` 42, `anchorMinAbove` 5, `anchorAhead` 10, `anchorAheadPerSpeed` 0.5, `anchorUp` 18, `anchorVelBias` 0.6, `anchorRimBonus` 2, `anchorAlternate` 3 |
+| pendulum | `swingOut` 5, `swingFloorClear` 6, `swingReel` 10, `swingGravity` 1.35, `swingPump` 5, `swingKeepSpeed` 1.6, `swingReleaseCos` 0.64 (about 50 degrees), `swingRehook` 0.18, `losSteps` 12 |
+| wall | `wallRun`, `wallRunReach` 0.6, `wallRunMinSpeed` 5, `wallRunRatio` 1, `wallRunMinBelowTop` 1.5, `wallRunFallMax` -12, `wallRunTime` 1.4, `wallRunSpeed` 11, `wallRunAccel` 10, `wallRunGravity` 0.2, `wallRunKick` 3, `wallRunCooldown` 0.25, `wallClimbSpeed` 9, `wallClimbTime` 0.6, `wallJumpOut` 7, `wallJumpUp` 9.5, `wallJumpKeep` 0.9, `wallJumpGrace` 0.15 |
+| ledge | `ledgeGrab`, `ledgeLow` 0.4, `ledgeHigh` 2.3, `ledgeMaxVy` 4, `ledgeHang` 0.2, `ledgeClimbTime` 0.35, `ledgeExitSpeed` 6, `ledgeJumpUp` 7 |
+| vault / slide / landing | `vault`, `vaultMax` 1.5, `vaultLook` 0.8, `vaultMinSpeed` 5, `vaultClear` 0.35 · `slide`, `slideMinSpeed` 6, `slideTime` 0.8, `slideDecay` 3, `slideSteer` 6, `slideJumpFwd` 2.5, `slideBuffer` 0.25 · `rollMinVy` -15, `rollTime` 0.45, `stumbleVy` -24, `stumbleKeep` 0.4, `stumbleLock` 0.35, `failFloor` 2 |
+| camera / mechanics | `ropeBiasMax` 3, `armRope` 9, `armWall` 6.5, `fovSpeedLo` 10, `fovSpeedHi` 28 · `snapTime` 1.6 |
 
-Double jump + web zip (player only; the runner bake and old ghosts run with them off, so these never need
-a re-bake): `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.5: v.y = max(v.y, this)), `webZip`,
-`zipSpeed` (26 m/s, but the speed cap wins), `zipPull` (how fast the velocity turns onto the line),
-`zipRange` / `zipRise` / `zipDrop` (ledge search along the aim, how far above / below you), `zipCooldown`
-(1.5 s), `zipRelease` / `zipMaxTime` (auto-release distance / time), `zipFlingFwd` / `zipFlingUp`
-(balloon release fling), `zipLedgeSpeed` / `zipLedgeUp` (the hop onto the roof). All in `?tune`.
+Double jump, slide and web zip: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.5), `webZip`,
+`zipSpeed` (26 m/s), `zipPull` (how fast the velocity turns onto the line), `zipRange` / `zipRise` /
+`zipDrop` (ledge search along the aim, how far above / below you), `zipCooldown` (1.5 s), `zipRelease` /
+`zipMaxTime` (auto-release distance / time), `zipFlingFwd` / `zipFlingUp` (facade release fling),
+`zipLedgeSpeed` / `zipLedgeUp` (the hop onto the roof). **The runner zips too** (his zip-up hops), so the
+zip keys are part of his bake; the double jump and slide keys are not (tuning them never needs a re-bake).
 
 The runner is baked with the same player constants, so after changing any other `player` value run
 `npm run level` (the dev-server Save does it), then `npm run balance` to see the catch rates, and commit
 the regenerated `runner.pack.bin` and `bake.report.json`.
 
 `npm run balance` plays 200 seeded rounds per row with three kinds of bot: the follower (runs his trail
-at k x his speed, never swings), the camper, and the **swinging chaser** (`SwingBot` in
-`src/game/bots.ts`: the real player sim, chain-swinging down the streets at ~16 m/s, letting go past
-each balloon near the bottom of the arc, cutting over to him and Yoinking after a ~0.1-0.2 s reaction).
-Targets: Normal swinger median 25-40 s, Degen swinger median ~45-70 s with some escapes, the old
-follower targets for Normal/Chill. The `swing+moves` rows are the same bot also double-jumping off drops
-and web-zipping at him from the roofs (info: Downtown Normal median ~20 s vs ~28 s, Degen ~38 s vs ~45 s;
-the runner table was left alone). `--set normal.gStar=36` tries a value, `--only swing` runs just those
-rows, `--n 500` more seeds, `--map market` / `--all` another / every district (with its chase tweak).
+at k x his speed, never swings; round 9: at his speed at each point of his track, not the edge average,
+since his zips and runs now share an edge), the camper, and the **swinging chaser** (`SwingBot` in
+`src/game/bots.ts`: the real player sim, chain-swinging down the streets on building anchors, letting the
+fling carry it, cutting over to him and Yoinking after a ~0.1-0.2 s reaction; round 9: with the double
+jump, slide and web zip, which it uses to climb back onto the roofs when he is above it). Targets: Normal
+swinger median 25-40 s, Degen swinger 50-95 % caught with a median of 40-70 s (every district), and the
+follower / camper targets for Normal / Chill (Downtown; the other districts print them as info, as since
+round 6). The `swing, no zip` rows are the classic swinger without the moves (info: in the new cities it
+rarely gets back up to him). `--set normal.gStar=36` tries a value, `--only swing` runs just those rows,
+`--n 500` more seeds, `--map market` / `--all` another / every district (with its chase tweak).
 `npm run probe:canyon`
 reports chain speed on test canyons with the current `tuning.json`.
 
@@ -468,17 +539,23 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   `src/audio/tracks.ts`, `voice.ts` and the gains in `sfx.ts`.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
-- The production build is ~23 MB (models ~6.6 MB incl. four Radbros, 7.9 MB of audio, five districts' level
-  files, round 4 art; Vertigo's runner pack is 401 KB); the 9 MB budget is not enforced. The audio is only
-  fetched once a round starts (about 3 MB per round).
-- Round 7 re-baked the Towers (sky balloons renumbered its balloons; his runs are the same), so Towers ghost
-  links made before it show as "unverified". Vertigo is tuned against the swinging bot, which is all or
-  nothing there: when a street line crosses his route it swings in fast (his drops cost him horizontal
-  speed), otherwise it gets lost under the cliffs. Swing bot, 600 seeds: Chill 98 % caught (median 9 s),
-  Normal 73 % (27 s, in the 25-40 s band; Downtown 93 % / 27 s), Degen 67 % (32 s; the Degen band wants
-  40-70 s, Downtown 73 % / 46 s). Runner tuning only trades catch rate for median here (tried: speed,
-  sprint, sprint budget, rubber band, Yoink, taunts, spawn distance, start roofs), so Degen stays below its
-  band on the bot. A human pass decides whether Vertigo's runner is too soft or too hard.
+- The production build is ~24 MB (models ~7.1 MB incl. four Radbros and their round 9 parkour clips, 7.9 MB
+  of audio, five districts' level files, round 4 art; runner packs 180-380 KB each); the 9 MB budget is not
+  enforced. The audio is only fetched once a round starts (about 3 MB per round).
+- **Round 9 (the rebuilt cities) needs a human pass**: the swing, the parkour and every balance number
+  were only tested against bots and headless screenshots (in `?tune`: the swing / wall / ledge / slide keys,
+  the difficulty table, then a district's `chase` tweak). On Downtown and Docks Degen the zipping swing bot
+  still catches him too early (median 34-38 s vs the 40-70 s band); runner speed, sprint budget, Yoink and
+  spawn distance only traded catch rate for median there.
+- **His route leans on zips:** cross-street pendulums rarely work for him (the tall anchors near a street
+  crossing are towers down the street, so his swing plane runs diagonally into the walls), so where a swing
+  does not bake he web-zips across, and he zips up every podium that is too high to climb. Downtown's kept
+  runs have 18 swings, 10 wall runs and 54 zips; the Towers 9 swings and 78 zips; the Night Market and
+  Vertigo swing more. More swinging for him needs anchors past the far edge of a crossing (a tower behind
+  the roof he lands on) or runs along the avenues below the roofs.
+- The camera can end up against a facade when a wall run starts with the aim pointing into the wall (seen
+  in a headless shot); with the wall on your right the shoulder offset now moves to the left.
+- Vertigo keeps its round 7 notes: a descending chase tuned on the bot, big height range, drop hops.
 - Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
   objectives (`src/game/campaign.ts`; the time stars were re-set in round 6 so the bot needs a good run
   for them) and the district mechanics (`MECH`, `?tune`) need a human pass.

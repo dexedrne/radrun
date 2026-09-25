@@ -105,8 +105,10 @@ type ClipMeta = {
   takeoffAt?: number;
   apexAt?: number;
   landAt?: number;
-  /** Rope_Hang_Idle: RightHand height above the feet (errata 1). */
+  /** Rope_Hang_Idle: RightHand height above the feet (errata 1). Ledge_Grab: the hands' height on the hang frame. */
   handHeight?: number;
+  /** Round 9 parkour clips (manifest): hang frame, slide hold, stand-up, roll window, mantle-over, feet-off. */
+  hangAt?: number; slideFrom?: number; slideTo?: number; standAt?: number; rollFrom?: number; lowAt?: number; overAt?: number; feetOffGroundAt?: number;
 };
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -218,7 +220,21 @@ const POLICY: Record<string, { loop: boolean; xz: "keep" | "pin"; y: "keep" | "p
   // hips' height (the crouch drops them ~30 cm with the feet planted).
   Free_Fall: { loop: true, xz: "pin", y: "pin" },
   Big_Land: { loop: false, xz: "pin", y: "keep" },
+  // Round 9 parkour (game-clips/round9/README.md): all one-shots; the hang / climb / slide / roll keep the
+  // hips' height (the ledge climb is re-based so its last frame stands at the rim).
+  Wall_Run_Up: { loop: false, xz: "pin", y: "pin" },
+  Wall_Run: { loop: false, xz: "pin", y: "pin" },
+  Wall_Run_Mirror: { loop: false, xz: "pin", y: "pin" },
+  Wall_Climb: { loop: false, xz: "pin", y: "pin" },
+  Ledge_Grab: { loop: false, xz: "pin", y: "keep" },
+  Ledge_Climb: { loop: false, xz: "pin", y: "keep" },
+  Vault: { loop: false, xz: "pin", y: "pin" },
+  Slide: { loop: false, xz: "pin", y: "keep" },
+  Land_Roll: { loop: false, xz: "pin", y: "keep" },
 };
+
+/** Round 9: key times / heights the clip manifest measures for the parkour clips (copied into the meta). */
+const MANIFEST_TIMES = ["apexAt", "hangAt", "slideFrom", "slideTo", "standAt", "rollFrom", "lowAt", "overAt", "feetOffGroundAt"] as const;
 
 const PACKS_ONLY = process.argv.includes("--packs-only");
 
@@ -230,12 +246,15 @@ async function radbros(dir: string) {
   const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> =
     (ONLY || PACKS_ONLY) && fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
   const notes: string[] = [];
-  const entry = (name: string, m: Omit<ClipMeta, "loop" | "rootPolicy">, man: Record<string, { takeoffAt?: number; landAt?: number; rightHandMean?: number[] }>): ClipMeta => {
+  type ManClip = { takeoffAt?: number; landAt?: number; rightHandMean?: number[]; handHeight?: number } & Partial<Record<(typeof MANIFEST_TIMES)[number], number>>;
+  const entry = (name: string, m: Omit<ClipMeta, "loop" | "rootPolicy">, man: Record<string, ManClip>): ClipMeta => {
     const pol = POLICY[name] ?? { loop: true, xz: "pin", y: "keep" };
     const c: ClipMeta = { ...m, loop: pol.loop, rootPolicy: { xz: pol.xz, y: pol.y } };
     if (man[name]?.takeoffAt !== undefined) c.takeoffAt = man[name].takeoffAt;
     if (man[name]?.landAt !== undefined) c.landAt = man[name].landAt;
     if (name === "Rope_Hang_Idle" && man[name]?.rightHandMean) c.handHeight = r3(man[name].rightHandMean![1]);
+    if (name === "Ledge_Grab" && man[name]?.handHeight !== undefined) c.handHeight = man[name].handHeight;
+    for (const key of MANIFEST_TIMES) if (typeof man[name]?.[key] === "number") c[key] = man[name][key];
     return c;
   };
   if (PACKS_ONLY) {

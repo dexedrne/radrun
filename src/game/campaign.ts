@@ -14,7 +14,9 @@ export type Objective =
   | { kind: "chain"; n: number }
   | { kind: "closeCall"; s: number }
   /** Round 7 (Vertigo): catch him before he has stood on a roof below y m ("street level"). */
-  | { kind: "above"; y: number };
+  | { kind: "above"; y: number }
+  /** Round 9: at least n parkour moves (wall runs, wall jumps, ledge climbs, vaults, slides) in the round. */
+  | { kind: "parkour"; n: number };
 
 export type Level = {
   /** 1-based, stable (stored progress keys on it). */
@@ -31,20 +33,22 @@ const catchIt: Objective = { kind: "catch" };
 
 // Round 6: time objectives re-checked against the swinging balance bot per level (with its district tweak
 // and mutators): each "under N s" star now takes a good run rather than any catch (the bot gets it in
-// ~60-85 % of rounds, ~30 % on the Degen finale).
+// ~60-85 % of rounds, ~30 % on the Degen finale). Round 9: re-set against the zipping swing bot on the new
+// cities (100 seeds per level; where it catches in fewer rounds than that, the star takes about 9 in 10 of
+// its catches); L4 and L9 swap a time / close-call star for parkour moves.
 export const LEVELS: readonly Level[] = [
   { n: 1, name: "First Pour", map: "downtown", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 30 }, { kind: "noFalls" }], blurb: "He swiped your bag. Learn the ropes." },
-  { n: 2, name: "Rush Hour", map: "downtown", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "under", s: 50 }, { kind: "chain", n: 4 }], blurb: "Normal speed. Chain your swings down the streets." },
-  { n: 3, name: "Snap Quiz", map: "downtown", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "Webs snap after 1.6 s. Keep them short." },
-  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 25 }, { kind: "noFalls" }], blurb: "Low roofs, few anchors. Vault, climb and wall-kick." },
-  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 65 }], blurb: "No lasso tonight. You have to touch him." },
-  { n: 6, name: "Lights Out", map: "market", difficulty: "normal", mutators: M_NIGHT, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 45 }], blurb: "The market after dark." },
-  { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 55 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
+  { n: 2, name: "Rush Hour", map: "downtown", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "under", s: 60 }, { kind: "chain", n: 4 }], blurb: "Normal speed. Chain your swings down the avenues." },
+  { n: 3, name: "Snap Quiz", map: "downtown", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 65 }], blurb: "Webs snap after 1.6 s. Keep them short." },
+  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "parkour", n: 6 }, { kind: "noFalls" }], blurb: "Low roofs, few anchors. Vault, climb and wall-kick." },
+  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 80 }], blurb: "No lasso tonight. You have to touch him." },
+  { n: 6, name: "Lights Out", map: "market", difficulty: "normal", mutators: M_NIGHT, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "The market after dark." },
+  { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 65 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
   { n: 8, name: "Moon Jump", map: "docks", difficulty: "normal", mutators: M_WIND | M_LOWGRAV, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "yoink" }], blurb: "Low gravity, long flights, same wind." },
-  { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 40 }, { kind: "closeCall", s: 10 }], blurb: "Sixty seconds on the clock." },
+  { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 45 }, { kind: "parkour", n: 4 }], blurb: "Sixty seconds on the clock." },
   { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, snapping webs." },
   { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_SNAP | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Snapping webs and wind at altitude." },
-  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_SNAP | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 40 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
+  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_SNAP | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 32 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
   // Round 7: Vertigo, the descending chase (swing bot, 300 seeds: L13 catch 97 % / no falls 94 % / chain 5 63 %;
   // L14 72 % / above 45 m 37 % / chain 5 71 %; L15 62 % / above 40 m 27 % / no falls 40 %).
   { n: 13, name: "Top Floor", map: "vertigo", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "noFalls" }, { kind: "chain", n: 5 }], blurb: "He starts at the top of the spiral. Step off the cliffs after him." },
@@ -62,6 +66,7 @@ export function objectiveText(o: Objective): string {
     case "chain": return `chain ${o.n} swings in a row`;
     case "closeCall": return `catch him with under ${o.s} s left`;
     case "above": return `catch him before he reaches street level (below ${o.y} m)`;
+    case "parkour": return `catch him with ${o.n}+ parkour moves (wall runs, kicks, climbs, vaults, slides)`;
   }
 }
 
@@ -78,6 +83,7 @@ export function evaluate(level: Level, phase: RoundPhase, stats: RoundStats, clo
       case "chain": return stats.maxChain >= o.n;
       case "closeCall": return clockLeft < o.s;
       case "above": return stats.runnerLow >= o.y;
+      case "parkour": return stats.parkour >= o.n;
     }
   };
   return [one(level.goals[0]), one(level.goals[1]), one(level.goals[2])];

@@ -8,6 +8,8 @@ const KEY = "rugrun.v1";
 type Stored = {
   settings?: Partial<Settings>;
   bests?: Record<string, number>;
+  /** The link version each best was set on (missing = before round 9's v4: an "old city" best). */
+  bestsV?: Record<string, number>;
   chaser?: RadbroId;
   difficulty?: Difficulty;
   visited?: boolean;
@@ -18,8 +20,8 @@ type Stored = {
 };
 
 /** A kept run: the round (chaser, runner, difficulty, seed), its catch time and the packed record. */
-/** mu = the round's mutator bits (round 4; missing = 0). */
-export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; t: number; g: string; mu?: number };
+/** mu = the round's mutator bits (round 4; missing = 0); v = the link version it was made on (missing = before v4). */
+export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; t: number; g: string; mu?: number; v?: number };
 
 /** Low = pixel ratio 1, no anti-aliasing (after a reload), no blob shadows / runner trail, fewer rooftop props. */
 export type Quality = "low" | "high";
@@ -106,17 +108,27 @@ export function resetHintsSeen(): void {
 export const bestKey = (chaser: string, d: string, mu = 0): string =>
   (PAGE_DISTRICT === "downtown" ? `${chaser}:${d}` : `${chaser}:${d}:${PAGE_DISTRICT}`) + (mu ? `:m${mu}` : "");
 
+/** A best set on this city (link version); an older city's best (round 9 rebuilt every district) is not. */
+const currentBest = (s: Stored, key: string): number | null => {
+  const b = s.bests?.[key];
+  return typeof b === "number" && (s.bestsV?.[key] ?? 3) >= LINK_VERSION ? b : null;
+};
 export function getBest(chaser: string, d: string, mu = 0): number | null {
-  const b = load().bests?.[bestKey(chaser, d, mu)];
-  return typeof b === "number" ? b : null;
+  return currentBest(load(), bestKey(chaser, d, mu));
 }
-/** Records a catch time; returns the previous best (null if none). */
+/** A best from before the current city (listed as "old city"), or null. */
+export function getOldBest(chaser: string, d: string, mu = 0): number | null {
+  const s = load(), key = bestKey(chaser, d, mu), b = s.bests?.[key];
+  return typeof b === "number" && currentBest(s, key) === null ? b : null;
+}
+/** Records a catch time; returns the previous best on this city (null if none). */
 export function recordBest(chaser: string, d: string, t: number, mu = 0): number | null {
   const s = load();
   const key = bestKey(chaser, d, mu);
-  const prev = s.bests?.[key] ?? null;
+  const prev = currentBest(s, key);
   if (prev === null || t < prev) {
     s.bests = { ...(s.bests ?? {}), [key]: t };
+    s.bestsV = { ...(s.bestsV ?? {}), [key]: LINK_VERSION };
     save(s);
   }
   return prev;
@@ -171,10 +183,11 @@ export function readChallenge(search: string): Challenge {
  * mutators (mu=); a link without v is a v1 link = Downtown, no mutators. v=3 (one bump for round 7): the
  * double jump + web zip (the ghost record says which ruleset it replays with: format 1 = without them),
  * the Vertigo district and the sky anchors over the Towers (older Towers ghosts drift and show the
- * "made on an older build" note). Round 9 (building anchors, parkour, ghost format 3) bumps it to 4 at
- * integration, together with the new cities.
+ * "made on an older build" note). v=4 (round 9): the rebuilt 40-230 m cities, building-anchored swings,
+ * parkour and ghost format 3 (older links open with the "made on an older build" note; their ghosts are not
+ * raced). Bests and kept ghosts from before v4 count as the old city's.
  */
-export const LINK_VERSION = 3;
+export const LINK_VERSION = 4;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
 const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");
@@ -194,18 +207,18 @@ export function ghostUrl(chaser: string, runner: string, d: string, t: number, s
   return u.toString();
 }
 
-/** Your kept personal-best run for a chaser x difficulty, if any. */
+/** Your kept personal-best run for a chaser x difficulty, if any (runs from an older city are dropped). */
 export function getBestGhost(chaser: string, d: string, mu = 0): StoredGhost | null {
   const g = load().ghosts?.[bestKey(chaser, d, mu)];
-  return g && typeof g.g === "string" && typeof g.s === "number" && typeof g.t === "number" ? g : null;
+  return g && typeof g.g === "string" && typeof g.s === "number" && typeof g.t === "number" && (g.v ?? 3) >= LINK_VERSION ? g : null;
 }
 /** Keep a run as the personal-best ghost (only if it is still the best for its chaser x difficulty). */
 export function saveBestGhost(g: StoredGhost): void {
   const s = load();
   const key = bestKey(g.c, g.d, g.mu ?? 0);
-  const best = s.bests?.[key];
-  if (typeof best === "number" && g.t > best + 1e-9) return;
-  s.ghosts = { ...(s.ghosts ?? {}), [key]: g };
+  const best = currentBest(s, key);
+  if (best !== null && g.t > best + 1e-9) return;
+  s.ghosts = { ...(s.ghosts ?? {}), [key]: { ...g, v: LINK_VERSION } };
   save(s);
 }
 

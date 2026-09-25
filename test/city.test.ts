@@ -63,7 +63,7 @@ test("no balloons: the model has no hooks and a 'hook' node in city.json is igno
     },
   });
   const { model, warnings } = modelFromCityPrefab(city);
-  assert.deepEqual(model.hooks, []);
+  assert.equal("hooks" in model, false);
   assert.ok(warnings.some(w => w.includes("old-balloon") && w.includes("hook")), warnings.join("; "));
   assert.equal(model.hash, modelFromCityPrefab(read("city.json")).model.hash, "a hook node changes nothing");
 });

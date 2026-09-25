@@ -132,19 +132,15 @@ export function deriveWallGaps(solids: Solid[], adjacency: Adjacency[]): WallGap
   return out;
 }
 
-export function modelHash(m: Pick<CityModel, "solids" | "hooks">): string {
+export function modelHash(m: Pick<CityModel, "solids">): string {
   const h = new Fnv1a();
   for (const s of m.solids) h.i32(s.id).str(s.kind).i32(s.landable ? 1 : 0).f64(s.x0).f64(s.z0).f64(s.x1).f64(s.z1).f64(s.top);
-  for (const k of m.hooks) {
-    h.i32(k.id).f64(k.x).f64(k.y).f64(k.z);
-    if (k.reach !== undefined) h.f64(k.reach);
-  }
   return h.hex();
 }
 
 const q = (v: number) => Math.round(v * 1000) / 1000;
 
-/** Solids (ids reassigned in order) -> the full CityModel. Round 9: `hooks` is always []. */
+/** Solids (ids reassigned in order) -> the full CityModel. */
 export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
   const solids = input.map((s, id) => ({ ...s, id }));
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
@@ -201,7 +197,6 @@ export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
     bounds: { x0, z0, x1, z1 },
     lowestRoof,
     solids,
-    hooks: [],
     adjacency,
     wallGaps,
     junctionCandidates,
@@ -353,8 +348,9 @@ export function lintModel(m: CityModel): LintResult {
   }
   if ((cfg.wallGapChance ?? 0) > 0 && !gaps.length) warnings.push("G4: wallGapChance > 0 but no wall gaps");
 
-  // G5: no balloons.
-  if (m.hooks.length) errors.push(`G5: ${m.hooks.length} hooks (balloons were removed in round 9)`);
+  // G5: no balloons (a pre-round-9 model file may still carry a hooks list).
+  const legacyHooks = (m as { hooks?: unknown[] }).hooks?.length ?? 0;
+  if (legacyHooks) errors.push(`G5: ${legacyHooks} hooks (balloons were removed in round 9)`);
 
   // G7.
   if (m.junctionCandidates.length < RULES.junctions) errors.push(`G7: only ${m.junctionCandidates.length} junction candidates (< ${RULES.junctions})`);
@@ -385,7 +381,6 @@ export function lintModel(m: CityModel): LintResult {
       towers: towers.length,
       props: props.length,
       wallGaps: gaps.length,
-      hooks: m.hooks.length,
       adjacency: m.adjacency.length,
       junctionCandidates: m.junctionCandidates.length,
       alleyHops: hops,

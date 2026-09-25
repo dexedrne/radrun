@@ -94,15 +94,16 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       towers: 6, towerMin: 55, towerMax: 90, towerSpread: 55, coverFix: false, coverWarn: true,
       wallGapChance: 0.3, props: 2.5, propClimb: 0.4, minRoof: 10, skylineCount: 60,
     },
-    // Round 6: the dense blocks squeezed the spawn to ~17-20 m behind him (catches in 3 s), and his twisty
-    // baked runs (crow-flies ~10 % shorter than Downtown's, ~1.8 corners per run) let a swinger cut
-    // corners: a longer head start, and he sprints earlier and harder here (npm run balance -- --all).
+    // Round 6: the dense blocks squeezed the spawn, and his twisty runs let a swinger cut corners: a longer
+    // head start, and he sprints earlier and harder here. Round 9 (the zipping swing bot, npm run balance --
+    // --map market): a little faster on Normal; the Degen / Chill deltas keep round 6's runner against the
+    // round 9 table (degen base 1.1, Yoink 4.5; chill mMax 1.25).
     chase: {
       spawnMin: 26, spawnOther: 0,
       add: {
-        chill: { gStar: 20, base: 0.1, mMax: 0.5, airMax: 0.5 },
-        normal: { gStar: 20, base: 0.1, mMax: 0.5, airMax: 0.5 },
-        degen: { gStar: 20, mMax: 0.5, airMax: 0.5 },
+        chill: { gStar: 20, base: 0.1, mMax: 0.35, airMax: 0.35 },
+        normal: { gStar: 20, base: 0.15, mMax: 0.5, airMax: 0.5 },
+        degen: { gStar: 20, base: 0.1, mMax: 0.5, airMax: 0.5, yoinkRange: -0.5, panicBudget: 10 },
       },
     },
     look: {
@@ -125,13 +126,15 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       wallGapChance: 0, props: 1.5, propClimb: 0.45, propSet: "docks", skylineCount: 44,
     },
     // Round 6: a longer head start (the wide blocks squeezed the spawn to ~24 m), a faster sprint and a
-    // 3 m Degen Yoink.
+    // 3 m Degen Yoink. Round 9: Degen runs faster (1.3x) and gasses out after 5 s of sprint; the zipping
+    // swing bot still catches him early here (median ~35 s, under the 40 s band; a longer head start only
+    // made it earlier).
     chase: {
       spawnMin: 26, spawnOther: 0,
       add: {
-        chill: { base: 0.1, mMax: 0.25, airMax: 0.25 },
+        chill: { base: 0.1, mMax: 0.1, airMax: 0.1 },
         normal: { gStar: 20, mMax: 0.5, airMax: 0.5 },
-        degen: { yoinkRange: -1, mMax: 0.4, airMax: 0.4, panicBudget: -10 },
+        degen: { base: 0.2, yoinkRange: -1.5, mMax: 0.4, airMax: 0.4, panicBudget: -15 },
       },
     },
     look: {
@@ -152,12 +155,14 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       roofMin: 70, roofMax: 120, towers: 12, towerMin: 160, towerMax: 230, towerSpread: 70,
       wallGapChance: 0.25, skylineCount: 64,
     },
-    // Round 6: a faster sprint, a 4.5 m Normal and 3 m Degen Yoink.
+    // Round 9 (the zipping swing bot on the 66-124 m canyons, npm run balance -- --map towers): a slower
+    // runner than Downtown's (Normal 0.9x, sprinting to 1.7x, 4.5 m Yoink; Degen 0.9x with a 5 m Yoink and a
+    // 10 s panic budget, so he gasses out and the long chases end in a catch).
     chase: {
       add: {
-        chill: { base: 0.1 },
-        normal: { yoinkRange: -0.5, mMax: 0.5, airMax: 0.5 },
-        degen: { yoinkRange: -1, gStar: 10, mMax: 0.25, airMax: 0.25 },
+        chill: { base: 0.1, mMax: -0.15, airMax: -0.15 },
+        normal: { base: -0.1, yoinkRange: -0.5, mMax: 0.2, airMax: 0.2 },
+        degen: { base: -0.2, yoinkRange: 0.5, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
       },
     },
     look: {
@@ -183,18 +188,16 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       },
     },
     // Descending chase: he starts on one of his 3 highest junctions and prefers edges that end lower; you
-    // spawn at about his height, away from his first edge (game/round.ts playerSpawn). The swinging bot
-    // intercepts fast here when a street line crosses his route (drops cost him horizontal speed) and gets
-    // lost under cliffs otherwise, so runner tuning trades catch rate against the median: a slower
-    // runner that waits for a lost chaser (mMin) with a shorter Normal Yoink. Swing bot, 600 seeds (npm run
-    // balance -- --map vertigo --only swing): chill 98 % median 9.0 s, normal 73 % 26.9 s, degen 67 % 32.3 s
-    // (Downtown 98 % 11.3 s / 93 % 26.6 s / 73 % 45.8 s).
+    // spawn at about his height, away from his first edge (game/round.ts playerSpawn). Round 7 made him
+    // slower here (the classic swinger got lost under the cliffs); round 9's swing bot zips back up to him,
+    // so Normal is faster again (1.15x) and Degen a little faster than round 7's (npm run balance -- --map
+    // vertigo --only swing). He still waits for a lost chaser (mMin) and has a 4 m Normal Yoink.
     chase: {
       startHigh: 3, down: 0.6, spawnBelow: 5, spawnMin: 24,
       add: {
-        chill: { base: -0.2 },
-        normal: { base: -0.15, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
-        degen: { base: -0.25, mMin: -0.4, gStar: 15, mMax: -0.4, airMax: -0.4, panicBudget: -10, yoinkRange: 0.5 },
+        chill: { base: -0.2, mMax: -0.15, airMax: -0.15 },
+        normal: { base: 0.15, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
+        degen: { base: -0.05, mMin: -0.4, gStar: 15, mMax: -0.4, airMax: -0.4 },
       },
     },
     look: {

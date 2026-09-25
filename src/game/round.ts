@@ -359,7 +359,7 @@ export function playerSpawn(model: CityModel, pack: Pack, junction: number, firs
     const track: TrackPose[] = [];
     for (let t = 0; t <= e.duration; t += 0.25) track.push(sampleEdge(e, t, { x: 0, y: 0, z: 0, phase: 0, ref: -1 }));
     for (const s of model.solids) {
-      if (!s.landable || s.id === jr || s.top < jt - 6 || s.top > jt + 24) continue;
+      if (s.kind !== "roof" || s.id === jr || s.top < jt - 6 || s.top > jt + 24) continue;
       const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
       const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
       if (Math.hypot(cx - j.x, cz - j.z) < dist * 0.8) continue;
@@ -377,7 +377,7 @@ export function playerSpawn(model: CityModel, pack: Pack, junction: number, firs
     for (const a of model.adjacency) if (a.a === jr || a.b === jr) adjacent.add(a.a === jr ? a.b : a.a);
     for (const s of model.solids) {
       const other = s.id;
-      if (!s.landable || other === jr) continue;
+      if (s.kind !== "roof" || other === jr) continue; // (never a rooftop prop: G3)
       const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
       const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
       const dq = Math.sqrt((cx - qx) * (cx - qx) + (cz - qz) * (cz - qz));

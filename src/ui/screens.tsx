@@ -414,11 +414,11 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
             {practice
               ? (touch
-                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · II = menu"
-                : `WASD run · Space jump (x2 in the air) · ${easyGrab ? "hold Space" : "hold LMB"} = web · E/Shift zip · hold R = back to start · Esc = menu`)
+                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · SLIDE = slide · II = menu"
+                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · C slide · E/Shift zip · hold R = back to start · Esc = menu`)
               : touch
-                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · red ring = WEB to YOINK"
-                : `WASD run · Space jump (x2 in the air) · ${easyGrab ? "hold Space" : "hold LMB"} = web · E/Shift zip · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
+                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · SLIDE = slide · red ring = WEB to YOINK"
+                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · C slide · E/Shift zip · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
           </div>
         )}
       </div>
@@ -538,7 +538,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
             <div style={{ font: `900 ${big}px ui-monospace, monospace`, letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
             <div style={{ marginTop: 8, display: "inline-block", padding: "4px 14px", borderRadius: 20, fontWeight: 900, color: "#111", background: MEDAL_COLOR[r.medal] }}>{r.medal}</div>
             <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
-              {r.newBest ? (r.best === null ? "first catch - personal best" : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}
+              {r.newBest ? (r.best === null ? (r.oldBest != null ? `first catch in the new city - best (old city ${r.oldBest.toFixed(1)} s)` : "first catch - personal best") : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}
             </div>
           </>
         ) : (

@@ -108,6 +108,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
     takeoffAt: n => meta[n]?.takeoffAt ?? 0,
     apexAt: n => meta[n]?.apexAt ?? (jump?.duration ?? 1.875) * 0.43,
     landAt: n => meta[n]?.landAt ?? (jump?.duration ?? 1.875) * 0.6,
+    at: (n, key) => { const v = (meta[n] as Record<string, unknown> | undefined)?.[key]; return typeof v === "number" ? v : undefined; },
   });
   return {
     id, root, model, player, machine, materials, hand_: handHeight(id),
@@ -281,12 +282,14 @@ export function ActorsView({ game }: { game: PlayGame }) {
       else if (r.phase === "caught") beat = waltzW > 0 ? "waltz" : isChaser ? "cheer" : "flop";
       else if (r.phase === "escaped") beat = isRunner ? "rug" : "fish";
       else if (isRunner && run.mode === RM_TAUNT) beat = "taunt";
+      // Wall run side: the face normal points to his right = the wall is on his left (Wall_Run), else Wall_Run_Mirror.
+      const wallSide = nx * -Math.cos(rig.yaw) + nz * Math.sin(rig.yaw) > 0 ? 1 : -1;
       applyCmd(rig.player, rig.machine.step({
         dt: delta, grounded: grounded || beat === "idle", rope: anchor !== null || zip, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
         landVy: isChaser ? b.landVy : 0, panic: isRunner && run.band.panic && !run.band.gassed, beat,
         // Round 7 free fall: air under the feet (the view reads the sim's index between steps).
         clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
-        wall, ledge, slide,
+        wall, ledge, slide, wallSide,
       }));
 
       // Facing (slerp 12 rad/s toward velocity; scripted beats face the other one).
@@ -327,8 +330,10 @@ export function ActorsView({ game }: { game: PlayGame }) {
       } else {
         // Wall run: rolled so the feet run on the wall; run-up: pitched back (feet on the wall); slide:
         // pitched back a little. Smoothed so the pose eases in and out.
+        // (a bought parkour clip poses the body itself: no roll / pitch while it plays)
         let wantRoll = 0, wantPitch = 0;
-        if (wall === 1 && (nx || nz)) {
+        if (rig.machine.posed) { /* the clip owns the pose */ }
+        else if (wall === 1 && (nx || nz)) {
           const rx = -Math.cos(rig.yaw), rz = Math.sin(rig.yaw); // the model's right (it faces +z at yaw 0)
           wantRoll = (nx * rx + nz * rz > 0 ? 1 : -1) * POSE.wallRoll;
         } else if (wall === 2) wantPitch = POSE.runUpPitch;
@@ -338,6 +343,12 @@ export function ActorsView({ game }: { game: PlayGame }) {
         rig.pitch += (wantPitch - rig.pitch) * kk;
         tmp.qPose.setFromEuler(tmp.eu.set(rig.pitch, 0, rig.roll, "YXZ"));
         tmp.q.multiplyQuaternions(tmp.qYaw, tmp.qPose);
+      }
+      // Ledge_Climb: the root stays at the rim for the whole climb and the clip lifts the body (its last frame
+      // stands at the root).
+      if (ledge >= 2 && rig.machine.special === "mantle") {
+        const sol = game.model.solids[isChaser ? b.ledgeSolid : run.pose.ref];
+        if (sol) ty = sol.top - p.y;
       }
       const hanging = anchor !== null || ledge === 1;
       rig.ropeW += ((hanging ? 1 : 0) - rig.ropeW) * Math.min(1, (hanging ? 6 : 10) * rawDelta);

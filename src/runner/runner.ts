@@ -38,6 +38,14 @@ export const RUNNER_RULES = {
   backW: 2,
   corneredScore: -0.5,
   corneredBelow: 10,
+  /**
+   * Integration (round 9): a branch whose first passLook s of track come within passNear m of the player
+   * (horizontal) scores up to passW worse (his long canyon routes could double back through the chaser).
+   */
+  passW: 2,
+  passNear: 14,
+  passLook: 3,
+  passStep: 0.25,
 } as const;
 
 export class Runner {
@@ -129,6 +137,15 @@ export class Runner {
     const dx = end.x - player.x, dy = end.y - player.y, dz = end.z - player.z;
     const far = Math.min(Math.sqrt(dx * dx + dy * dy + dz * dz), R.farCap) / R.farCap;
     let s = R.awayW * (e.exitX * ax + e.exitZ * az) + R.farW * far;
+    // Running back past the chaser: the closest horizontal approach over the first passLook s of the edge.
+    let near = Infinity;
+    for (let t = R.passStep; t <= R.passLook && t <= e.duration; t += R.passStep) {
+      sampleEdge(e, t, this.ahead);
+      const qx = this.ahead.x - player.x, qz = this.ahead.z - player.z;
+      const q = Math.sqrt(qx * qx + qz * qz);
+      if (q < near) near = q;
+    }
+    if (near < R.passNear) s -= R.passW * (1 - near / R.passNear);
     if (this.picks[0] === ei || this.picks[1] === ei) s -= R.recentW;
     if (e.to === this.prevJunction) s -= R.backW;
     if (this.down > 0) {

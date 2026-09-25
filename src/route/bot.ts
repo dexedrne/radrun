@@ -4,9 +4,11 @@
 // hop axis. Alley / climb / wall-run hop: jump on step `jump` (climb: the sim's ledge grab + climb finish
 // it; wall run: the lateral held just off the wall face with a small push into it). Street swing: jump on
 // step `jump` (found by the edge rule), web held from jump + 1 with the link's baked anchor forced,
-// released on step `release`. Vaults over rooftop props happen by themselves on the legs.
+// released on step `release`. Zip hop (integration): the zip key on step `jump` with the link's rim anchor
+// forced (the sim's ledge zip pulls him up and launches him onto the roof). Vaults over rooftop props happen
+// by themselves on the legs.
 // Pure TS; deterministic (sqrt-only maths, fixed order).
-import { copyBody, createBody, emptyInput, stepBody, EV_FALL, EV_WALL, EV_BONK, EV_CLIMB, EV_VAULT, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
+import { copyBody, createBody, emptyInput, stepBody, EV_FALL, EV_WALL, EV_BONK, EV_CLIMB, EV_VAULT, EV_ZIP, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
 import { GRAPH, type Link, type Junction } from "./graph.ts";
@@ -33,8 +35,14 @@ export const PH_FINAL = 3;
 export const PH_DONE = 4;
 export const PH_FAIL = 5;
 
-/** pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop); alt: the street swing's anchor option. */
-export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number };
+/**
+ * pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop); alt: the street swing's anchor
+ * option; zip: a street hop taken as a zip across onto the far rim (its fallback when no swing bakes).
+ */
+export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number; zip: boolean };
+
+/** The hop is a zip (a zip link, or a street hop on its zip fallback). */
+export const zipHop = (l: Link, p: HopParams): boolean => l.kind === "zip" || (l.kind === "street" && p.zip);
 /** Wall-run hops: the stick's push into the wall (fraction of full). */
 export const WALL_PUSH = 0.3;
 
@@ -117,7 +125,8 @@ export class EdgeBot {
   chooseLateral(): void {
     const l = this.link;
     const p = this.params[this.hop];
-    if (l.kind === "street") p.lat = l.swings[Math.min(p.alt, l.swings.length - 1)]?.lat ?? (l.lo + l.hi) / 2;
+    if (zipHop(l, p)) p.lat = l.axis === "x" ? l.rim!.az : l.rim!.ax;
+    else if (l.kind === "street") p.lat = l.swings[Math.min(p.alt, l.swings.length - 1)]?.lat ?? (l.lo + l.hi) / 2;
     else if (l.kind === "wallrun") p.lat = l.face + l.side * (this.tuning.halfWidth + GRAPH.wallOff);
     else p.lat = Math.min(Math.max(this.lateral(), l.lo + BOT.alleyLatInset), l.hi - BOT.alleyLatInset);
   }
@@ -131,7 +140,7 @@ export class EdgeBot {
 
   /** True when the street-swing jump rule fires on the next step (line phase, near the edge). */
   swingJumpDue(): boolean {
-    if (this.phase !== PH_LINE || this.link.kind !== "street") return false;
+    if (this.phase !== PH_LINE || this.link.kind !== "street" || this.params[this.hop].zip) return false;
     const l = this.link;
     return (this.along() - l.edge) * l.dir >= -BOT.swingJumpBefore;
   }
@@ -141,6 +150,7 @@ export class EdgeBot {
     if (this.phase >= PH_DONE) return;
     const b = this.body, inp = this.input, k = this.tuning;
     inp.jumpPressed = false;
+    inp.zipPressed = false;
     inp.webPressed = false;
     inp.webHeld = false;
     inp.aimX = 1; inp.aimY = 0; inp.aimZ = 0;
@@ -164,14 +174,16 @@ export class EdgeBot {
       const c = Math.min(Math.max(err * 1.5, -0.6), 0.6);
       const mag = l.kind === "drop" ? p.pace / 100 : 1;
       if (l.axis === "x") this.setMove(l.dir, c, mag); else this.setMove(c, l.dir, mag);
-      if (s === p.jump) inp.jumpPressed = true;
+      if (s === p.jump) {
+        if (zipHop(l, p)) { inp.zipPressed = true; this.world.forceAnchor = l.rim; } else inp.jumpPressed = true;
+      }
     } else if (this.phase === PH_AIR) {
       const l = this.link, p = this.params[this.hop];
       // Wall run: a small push into the wall (the face normal is `side` on the lateral axis).
       const push = l.kind === "wallrun" ? -l.side * WALL_PUSH : 0;
       this.input.moveX = l.axis === "x" ? l.dir : push;
       this.input.moveZ = l.axis === "x" ? push : l.dir;
-      if (l.kind === "street" && s > p.jump && s < p.release && !this.ropeDone) {
+      if (l.kind === "street" && !p.zip && s > p.jump && s < p.release && !this.ropeDone) {
         inp.webHeld = true;
         inp.webPressed = s === p.jump + 1;
         this.world.forceAnchor = l.swings[Math.min(p.alt, l.swings.length - 1)]?.anchor ?? l.anchor;
@@ -198,7 +210,7 @@ export class EdgeBot {
     else if (this.phase === PH_LINE || this.phase === PH_APPROACH) {
       // Drops walk off; a wall-run hop may run off the edge straight onto the wall before its jump step.
       const walkOff = this.phase === PH_LINE && (this.link.kind === "drop" || this.link.kind === "wallrun") && !b.grounded && wasGrounded && !this.vaulting;
-      if (!b.grounded && ((b.events & 1) /* EV_JUMP */ || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.vaulting = false; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1, climbed: false }; }
+      if (!b.grounded && ((b.events & (1 /* EV_JUMP */ | EV_ZIP)) || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.vaulting = false; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1, climbed: false }; }
       else if (this.vaulting) { if (this.legSteps > BOT.maxLegSteps) { this.fail = `leg timeout (hop ${this.hop})`; this.phase = PH_FAIL; } }
       else if (!b.grounded && wasGrounded && this.phase === PH_APPROACH) { this.fail = `ran off roof on approach (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (!b.grounded && this.legSteps > 60 && s > this.params[this.hop].jump + 13) { this.fail = `no takeoff (hop ${this.hop})`; this.phase = PH_FAIL; }
@@ -253,4 +265,4 @@ export class EdgeBot {
   }
 }
 
-export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, jump: -1, release: -1, pace: 100, alt: 0 }));
+export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, jump: -1, release: -1, pace: 100, alt: 0, zip: false }));

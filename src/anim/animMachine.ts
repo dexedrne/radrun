@@ -15,7 +15,12 @@
 // feet-first superhero crouch (t = 0 is ground contact), cut short when he runs on. Without the clips
 // the apex hold / landing crouch stay.
 //
-// Round 9 parkour (spec §7), procedural fallbacks from the owned clips until bought clips arrive: wall run =
+// Round 9 parkour (spec §7). The bought clips (game-clips/round9, all one-shots): wall run = Wall_Run (wall on
+// his left) / Wall_Run_Mirror (right) once, then Run_02 rolled toward the wall; run-up = Wall_Run_Up over the
+// run-up's time; ledge grab = Ledge_Grab held on its hang frame; ledge climb = Ledge_Climb up to its stand frame
+// over the climb's time (the view keeps the root at the rim); vault = Vault from its takeoff; slide = Slide held
+// in the slide; landing roll = Land_Roll from its roll over the roll's time. While one plays, `posed` is set
+// and the view drops its procedural roll / pitch. Without a clip the procedural fallbacks stay: wall run =
 // Run_02 at speed / 9 (the view rolls the root toward the wall; run-up: pitched back), wall jump / vault =
 // Regular_Jump from takeoff at 1.3 / 1.6 x into the apex hold, ledge hang = Rope_Hang_Idle, ledge climb =
 // Regular_Jump takeoff -> apex at 2.2 x, slide = Big_Land frozen at its deepest crouch (the view pitches the
@@ -61,6 +66,8 @@ export type AnimInput = {
   wall?: number;
   ledge?: number;
   slide?: boolean;
+  /** Round 9 wall run: 1 = the wall is on his left, -1 = on his right (picks Wall_Run / Wall_Run_Mirror). */
+  wallSide?: number;
 };
 
 export type AnimCmd =
@@ -69,8 +76,14 @@ export type AnimCmd =
   /** One-shot; `freezeAt` pauses it on that clip time (a hold until the next command). */
   | { kind: "shot"; clip: string; fade: number; startAt: number; hold: boolean; then: string; freezeAt?: number; rate?: number };
 
-/** Clip timings (clips.meta.json): Regular_Jump's takeoff / apex / land, seconds into the clip. */
-export type ClipInfo = { has(name: string): boolean; takeoffAt(name: string): number; apexAt(name: string): number; landAt(name: string): number };
+/**
+ * Clip timings (clips.meta.json): Regular_Jump's takeoff / apex / land, seconds into the clip; `at` = any
+ * other measured key (duration, hangAt, slideTo, standAt, rollFrom; round 9), undefined when missing.
+ */
+export type ClipInfo = {
+  has(name: string): boolean; takeoffAt(name: string): number; apexAt(name: string): number; landAt(name: string): number;
+  at?(name: string, key: string): number | undefined;
+};
 
 export const CLIP = {
   idle: "Idle",
@@ -93,6 +106,15 @@ export const CLIP = {
   /** Round 7: upright airborne loop for long drops, and the big feet-first landing after one. */
   freefall: "Free_Fall",
   bigLand: "Big_Land",
+  /** Round 9 parkour clips (one-shots). */
+  wallRunUp: "Wall_Run_Up",
+  wallRunL: "Wall_Run",
+  wallRunR: "Wall_Run_Mirror",
+  ledgeGrab: "Ledge_Grab",
+  ledgeClimb: "Ledge_Climb",
+  vault: "Vault",
+  slide: "Slide",
+  landRoll: "Land_Roll",
 } as const;
 
 const RULE = {
@@ -132,6 +154,15 @@ const RULE = {
   climbRate: 2.2,
   slideFreeze: 0.3,
   rollFor: 0.35,
+  /**
+   * Round 9 clips, timed to the sim's defaults: the run-up (wallClimbTime), the ledge climb (ledgeClimbTime), the
+   * roll (rollTime); the grab starts this far before its hang frame (ledgeHang); the vault's playback rate.
+   */
+  runUpFor: 0.6,
+  climbFor: 0.35,
+  rollClipFor: 0.45,
+  grabLead: 0.2,
+  vaultClipRate: 1.4,
 } as const;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -150,6 +181,10 @@ export class AnimMachine {
   beat: Beat = "";
   /** Round 9: the special pose a Big_Land / jump shot is standing in for ("slide", "roll", "climb"), and the last ledge mode. */
   special = "";
+  /** Round 9: the special shot is a bought parkour clip (see `posed`). */
+  private pz = false;
+  /** Round 9: the current special shot's cut time (s, 0 = none). */
+  private cutAt = 0;
   private ledge = 0;
   private base = "";
 
@@ -198,7 +233,32 @@ export class AnimMachine {
     this.shot = clip;
     this.shotT = 0;
     this.clip = clip;
+    this.pz = false;
+    this.cutAt = 0;
     return { kind: "shot", clip, fade, startAt, hold, then };
+  }
+
+  /** Round 9: a bought parkour clip owns the pose right now (the view drops its procedural roll / pitch). */
+  get posed(): boolean {
+    return this.pz && this.special !== "";
+  }
+
+  private at(name: string, key: string): number | undefined {
+    return this.clips.at?.(name, key);
+  }
+
+  /**
+   * Round 9: a bought parkour clip as a special shot (null when the pack lacks it: the caller's fallback runs).
+   * rate / freezeAt / cutAt as given; `posed` is set while it plays.
+   */
+  private parkour(name: string, special: string, o: { then?: string; startAt?: number; fade?: number; hold?: boolean; rate?: number; freezeAt?: number; cutAt?: number }): AnimCmd | null {
+    if (!this.clips.has(name)) return null;
+    const cmd = this.startShot(name, o.then ?? "", o.startAt ?? 0, o.fade ?? 0.08, o.hold ?? false);
+    if (!cmd || cmd.kind !== "shot") return cmd;
+    this.special = special;
+    this.pz = true;
+    this.cutAt = o.cutAt ?? 0;
+    return { ...cmd, ...(o.rate !== undefined && o.rate !== 1 ? { rate: o.rate } : {}), ...(o.freezeAt !== undefined ? { freezeAt: o.freezeAt } : {}) };
   }
 
   /**
@@ -231,6 +291,7 @@ export class AnimMachine {
     this.ff = true;
     this.ffT = 0;
     this.shot = "";
+    this.special = "";
     this.clip = this.base = clip;
     return { kind: "force", clip, fade: RULE.ffFade, scale: 1 };
   }
@@ -262,8 +323,19 @@ export class AnimMachine {
     }
   }
 
-  /** Big_Land (or the landing crouch) as a special pose: frozen (slide) or cut after a moment (roll). */
+  /** Slide / landing roll: the bought clip (Slide held in the slide, Land_Roll over the roll), else Big_Land. */
   private crouch(kind: "slide" | "roll", loco: string): AnimCmd | null {
+    if (kind === "slide") {
+      const to = this.at(CLIP.slide, "slideTo");
+      const c = this.parkour(CLIP.slide, "slide", { hold: true, fade: 0.06, ...(to !== undefined ? { freezeAt: to } : {}) });
+      if (c) return c;
+    } else {
+      const from = this.at(CLIP.landRoll, "rollFrom") ?? 0, stand = this.at(CLIP.landRoll, "standAt");
+      const c = this.parkour(CLIP.landRoll, "roll", {
+        then: loco, startAt: from, fade: 0.05, cutAt: RULE.rollClipFor, ...(stand !== undefined ? { rate: (stand - from) / RULE.rollClipFor } : {}),
+      });
+      if (c) return c;
+    }
     const big = this.clips.has(CLIP.bigLand);
     const clip = big ? CLIP.bigLand : this.clips.has(CLIP.land) ? CLIP.land : "";
     if (!clip) return null;
@@ -304,8 +376,18 @@ export class AnimMachine {
     // stumble / roll / land > slide > jump).
     if (ev & A_BONK) return air ? this.air(RULE.airFade) : this.toLoco(i, 0.1);
     if (ev & A_ATTACH) { this.base = loco; this.special = ""; return this.startShot(CLIP.grab, this.pick(CLIP.hang), 0, 0.1); }
-    if ((ev & A_LEDGE) || (ledge === 1 && ledgeWas !== 1)) { this.shot = ""; this.special = ""; const c = this.pick(CLIP.hang); this.clip = this.base = c; return c ? { kind: "force", clip: c, fade: 0.1, scale: 1 } : null; }
+    if ((ev & A_LEDGE) || (ledge === 1 && ledgeWas !== 1)) {
+      // Ledge_Grab from just before its hang frame, held there (clamped on its last frame).
+      const hang = this.at(CLIP.ledgeGrab, "hangAt") ?? 0;
+      const g = this.parkour(CLIP.ledgeGrab, "grab", { hold: true, startAt: Math.max(0, hang - RULE.grabLead) });
+      if (g) return g;
+      this.shot = ""; this.special = ""; const c = this.pick(CLIP.hang); this.clip = this.base = c; return c ? { kind: "force", clip: c, fade: 0.1, scale: 1 } : null;
+    }
     if (ledge >= 2 && ledgeWas < 2) {
+      // Ledge_Climb up to its stand frame over the climb's time (the view holds the root at the rim).
+      const stand = this.at(CLIP.ledgeClimb, "standAt");
+      const m = stand !== undefined ? this.parkour(CLIP.ledgeClimb, "mantle", { hold: true, fade: 0.06, rate: stand / RULE.climbFor, freezeAt: stand }) : null;
+      if (m) return m;
       // Climb: the jump's takeoff -> apex, quick, while the root follows the sim path.
       const cmd = this.air(0.08, true, RULE.climbRate);
       this.special = "climb";
@@ -313,9 +395,30 @@ export class AnimMachine {
     }
     if (ev & A_CLIMB) return i.grounded ? this.toLoco(i, 0.12) : this.air(0.06, true, RULE.wallJumpRate);
     if (ev & A_WALLJUMP) return this.air(0.06, true, RULE.wallJumpRate);
-    if ((ev & A_WALLRUN) && wall) { this.shot = ""; this.special = ""; this.clip = this.base = loco; return loco ? { kind: "force", clip: loco, fade: 0.1, scale } : null; }
+    if ((ev & A_WALLRUN) && wall) {
+      // Run-up: Wall_Run_Up over the run-up's time, held on its last frame; wall run: Wall_Run (wall on his
+      // left) / Wall_Run_Mirror once, then the rolled run.
+      if (wall === 2) {
+        const d = this.at(CLIP.wallRunUp, "duration");
+        const c = this.parkour(CLIP.wallRunUp, "runup", { hold: true, ...(d !== undefined ? { rate: d / RULE.runUpFor } : {}) });
+        if (c) return c;
+      } else {
+        const name = (i.wallSide ?? 1) < 0 ? CLIP.wallRunR : CLIP.wallRunL;
+        const c = this.parkour(name, "wallrun", { then: loco, cutAt: this.at(name, "duration") ?? 0.5 });
+        if (c) return c;
+      }
+      this.shot = ""; this.special = ""; this.clip = this.base = loco; return loco ? { kind: "force", clip: loco, fade: 0.1, scale } : null;
+    }
     if ((ev & A_RELEASE) && air) return this.air(RULE.airFade);
-    if (ev & A_VAULT) return this.air(0.06, true, RULE.vaultRate);
+    if (ev & A_VAULT) {
+      // Vault from its takeoff frame; it runs through its own landing, then back to the run.
+      const t0 = this.clips.takeoffAt(CLIP.vault), land = this.clips.landAt(CLIP.vault);
+      const v = this.parkour(CLIP.vault, "vault", { then: loco, startAt: t0, fade: 0.06, rate: RULE.vaultClipRate, cutAt: Math.max(0.2, (land - t0) / RULE.vaultClipRate + 0.1) });
+      if (v) return v;
+      return this.air(0.06, true, RULE.vaultRate);
+    }
+    // The vault clip lands by itself (its landing crouch), so a landing never cuts it short.
+    if ((ev & A_LAND) && i.grounded && this.special === "vault" && this.shotT < this.cutAt) return null;
     if ((ev & A_BIGLAND) && i.grounded && this.clips.has(CLIP.bigLand)) { this.base = loco; this.special = ""; return this.startShot(CLIP.bigLand, loco, 0, RULE.bigFade); }
     if ((ev & A_ROLL) && i.grounded) { this.base = loco; return this.crouch("roll", loco); }
     if ((ev & A_LAND) && i.grounded) {
@@ -330,8 +433,10 @@ export class AnimMachine {
     if (((ev & A_SLIDE) || (i.slide && this.special !== "slide")) && i.grounded && i.slide) return this.crouch("slide", loco);
     if ((ev & A_DJUMP) && air) return this.air(0.06, true, RULE.djumpRate);
     if ((ev & A_JUMP) && air) return this.air(0.08, true);
-    // Wall / ledge states own the pose while they last (the run clip / the hang).
+    // Wall / ledge states own the pose while they last (the run clip / the hang); a bought clip plays out first.
     if (wall || ledge === 1) {
+      const sp = this.special;
+      if ((sp === "grab" && ledge === 1) || (sp === "runup" && wall === 2) || (sp === "wallrun" && wall === 1 && this.shotT < this.cutAt)) return null;
       if (this.clip !== loco || this.shot) { this.shot = ""; this.special = ""; this.clip = this.base = loco; return loco ? { kind: "force", clip: loco, fade: 0.12, scale } : null; }
       if (wall) return { kind: "base", clip: loco, fade: 0.2, scale };
       return null;
@@ -349,8 +454,11 @@ export class AnimMachine {
       const sp = this.special;
       const cut =
         (sp === "slide" && (!i.slide || !i.grounded)) ||
-        (sp === "roll" && (!i.grounded || this.shotT > RULE.rollFor)) ||
-        (sp === "climb" && !air && !ledge) ||
+        (sp === "roll" && (!i.grounded || this.shotT > (this.cutAt || RULE.rollFor))) ||
+        ((sp === "climb" || sp === "mantle") && !air && !ledge) ||
+        (sp === "mantle" && air) ||
+        ((sp === "runup" || sp === "wallrun" || sp === "grab") && !wall && !ledge) ||
+        (sp === "vault" && this.shotT > this.cutAt) ||
         (sp === "" && s === CLIP.jump && !air) ||
         (sp === "" && s === CLIP.land && (!i.grounded || this.shotT > RULE.landFor)) ||
         (sp === "" && s === CLIP.bigLand && (!i.grounded || this.shotT > RULE.bigFor || (this.shotT > RULE.bigMove && i.speed > RULE.walkAbove))) ||

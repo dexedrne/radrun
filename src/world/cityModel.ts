@@ -24,15 +24,6 @@ export type Solid = {
   node?: string;
 };
 
-/** @deprecated Round 9: balloons are gone; `model.hooks` is always []. Deleted at integration. */
-export type Hook = {
-  id: number; x: number; y: number; z: number;
-  /** "sky" (round 7): a high balloon cluster over an intersection / plaza, grabbable from further away. */
-  src: "street" | "intersection" | "manual" | "sky";
-  /** Grab range override (m; sky hooks). Missing = the tuning's aimRadius. */
-  reach?: number;
-};
-
 export type Adjacency = {
   a: number;
   b: number;
@@ -70,6 +61,12 @@ export type WallGap = {
 
 export type CityConfig = {
   seed: number;
+  /**
+   * Integration (round 9): the thief's route graph for this district (route/graph.ts): junction count and the
+   * most roof hops per junction-to-junction edge. Missing = GRAPH.junctions / GRAPH.maxHops.
+   */
+  runnerJunctions?: number;
+  runnerMaxHops?: number;
   blocksX: number;
   blocksZ: number;
   block: number;
@@ -165,11 +162,9 @@ export type CityModel = {
   bounds: { x0: number; z0: number; x1: number; z1: number };
   lowestRoof: number;
   solids: Solid[];
-  /** @deprecated Always [] since round 9 (no balloons); deleted at integration. */
-  hooks: Hook[];
   adjacency: Adjacency[];
-  /** Round 9 wall-run notches (lint G4). Optional this round; required after integration. */
-  wallGaps?: WallGap[];
+  /** Round 9 wall-run notches (lint G4; the thief's wall-run hops). */
+  wallGaps: WallGap[];
   /** Non-boundary landable roofs (runner junction candidates, M2; never props). */
   junctionCandidates: number[];
   spawn: { roofId: number; x: number; y: number; z: number; yaw: number };
@@ -185,7 +180,6 @@ export const GRID = 16;
 export class CityIndex {
   readonly model: CityModel;
   readonly solids: Solid[];
-  readonly hooks: Hook[];
   readonly gx0: number;
   readonly gz0: number;
   readonly nx: number;
@@ -200,7 +194,6 @@ export class CityIndex {
   constructor(model: CityModel) {
     this.model = model;
     this.solids = model.solids;
-    this.hooks = model.hooks;
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const s of model.solids) {
       x0 = Math.min(x0, s.x0); z0 = Math.min(z0, s.z0); x1 = Math.max(x1, s.x1); z1 = Math.max(z1, s.z1);

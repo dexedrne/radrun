@@ -8,7 +8,7 @@
 // the chaser's airborne jumps / rope releases (window.__frozen, __frozenWhy = "jump" | "release") so a
 // screenshot catches the airborne pose; resume through window.__unfreeze. Round 7: snap=freefall,sky,
 // runnerff (any subset) instead freezes once each: the chaser 0.45 s into his Free_Fall loop, 0.35 s
-// into a swing on a sky hook, the runner 0.45 s into his free fall.
+// into a swing (sky: on a tower anchor), the runner 0.45 s into his free fall.
 // Progress and the outcome are exposed on window.__play (PlayDriver).
 import type { PlayGame } from "../../game/play.ts";
 import { RADBROS, type RadbroId } from "../../game/round.ts";
@@ -18,7 +18,7 @@ import { autoplayScript } from "../autoplay.ts";
 import { PHASE_AIR } from "../../route/trackPack.ts";
 import { rigs } from "../ActorsView.tsx";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean; snapKinds: string[]; mu: number } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; moves: boolean; snap: boolean; snapKinds: string[]; mu: number } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -34,6 +34,8 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     c,
     r,
     rec: q.has("rec"),
+    /** Round 9: `&moves` = the chase bot also double-jumps, slides and web-zips (the balance rows' bot). */
+    moves: q.has("moves"),
     snap: q.has("snap"),
     snapKinds: (q.get("snap") ?? "").split(",").filter(Boolean),
     /** Round 4 mutator bits (&mu=); default = none (predictions in tools/botshot use the same). */
@@ -42,7 +44,7 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
 }
 
 export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botParams>>): void {
-  game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
+  game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true, moves: p.moves } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
   game.recordBot = p.rec;
   game.startRound({ chaser: p.c, runner: p.r, difficulty: p.d, seed: p.seed, mutators: p.mu });
   if (p.kind === "swing") {

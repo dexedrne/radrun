@@ -59,7 +59,7 @@ test("Yoink line of sight: a building between the chests blocks the red ring", (
     { id: 1, kind: "tower" as const, landable: false, x0: 1, z0: -6, x1: 2, z1: 6, top: 60 },
     { id: 2, kind: "roof" as const, landable: true, x0: 3, z0: -6, x1: 9, z1: 6, top: 20 },
   ];
-  const m = { ...model, solids, hooks: [], adjacency: [] } as CityModel;
+  const m = { ...model, solids, adjacency: [], wallGaps: [] } as CityModel;
   const w: SimWorld = { index: new CityIndex(m), runner: { p: { x: 4, y: 20.9, z: 0 }, roofId: 2 } };
   const b = createBody(-1, 20.9, 0, 0);
   const inp = emptyInput();

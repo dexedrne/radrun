@@ -16,6 +16,8 @@ export type ClipMeta = {
   apexAt?: number;
   landAt?: number;
   handHeight?: number;
+  /** Round 9 parkour clips: hang frame, slide hold, stand-up, roll window, mantle-over, feet-off (seconds). */
+  hangAt?: number; slideFrom?: number; slideTo?: number; standAt?: number; rollFrom?: number; lowAt?: number; overAt?: number; feetOffGroundAt?: number;
 };
 export type CharacterMeta = { clipPack: boolean; clips: Record<string, ClipMeta> };
 

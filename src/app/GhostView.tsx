@@ -108,6 +108,7 @@ export function GhostView({ game }: { game: PlayGame }) {
       dt: rawDelta * game.timeScale, grounded: b.grounded || g.done, rope: hook >= 0, speed, vy, events: ev, landVy: b.landVy, panic: false, beat,
       clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
       wall: g.done ? 0 : b.wallMode, ledge: g.done ? 0 : Math.min(2, b.ledgeMode), slide: !g.done && b.slideT > 0 && b.grounded,
+      wallSide: b.wallNx * -Math.cos(rig.yaw) + b.wallNz * Math.sin(rig.yaw) > 0 ? 1 : -1,
     }));
 
     const faceTo = (x: number, z: number, rate: number) => {

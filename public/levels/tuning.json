@@ -126,13 +126,13 @@
       "base": 0.9,
       "gStar": 20,
       "mMin": 0.7,
-      "mMax": 1.1,
+      "mMax": 1.25,
       "panicBudget": 14,
       "sigma": 0.6,
       "yoinkRange": 6.5,
       "taunt": 1.8,
       "airMin": 0.9,
-      "airMax": 1.1
+      "airMax": 1.25
     },
     "normal": {
       "base": 1,
@@ -147,13 +147,13 @@
       "airMax": 1.5
     },
     "degen": {
-      "base": 1.2,
+      "base": 1.1,
       "gStar": 50,
       "mMin": 0.85,
       "mMax": 2,
-      "panicBudget": 30,
+      "panicBudget": 20,
       "sigma": 0.08,
-      "yoinkRange": 4,
+      "yoinkRange": 4.5,
       "taunt": 0.9,
       "airMin": 0.9,
       "airMax": 2

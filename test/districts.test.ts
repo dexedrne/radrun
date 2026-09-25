@@ -37,7 +37,7 @@ for (const id of DISTRICT_IDS) {
     const m = model(id);
     const lint = lintModel(m);
     assert.deepEqual(lint.errors, [], `${id}: lint errors`);
-    assert.deepEqual(m.hooks, [], "no balloons");
+    assert.equal("hooks" in m, false, "no balloons");
     assert.ok(m.junctionCandidates.length >= RULES.junctions);
     const roofs = m.solids.filter(s => s.kind === "roof").map(s => s.top);
     assert.ok(Math.min(...roofs) >= RULES.landMin && Math.max(...roofs) <= RULES.landMax);

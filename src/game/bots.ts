@@ -54,16 +54,27 @@ export class Bot {
     this.tx = jn.x; this.ty = jn.y; this.tz = jn.z; this.tRoof = jn.roof;
   }
 
-  /** Record the runner's pose into the trail (call once per step, after round.step). */
+  /**
+   * Record the runner's pose into the trail (call once per step, after round.step). Round 9: each point keeps
+   * his speed along the baked track right there (m per s of baked time: the step's move over the baked time it
+   * took, DT x rate x base), not the edge's average: zips (26 m/s) and runs (9 m/s) now share an edge, and a
+   * follower at the average speed would gain on every run.
+   */
   private record(round: Round): void {
     const r = round.runner;
     const last = this.trail[this.trail.length - 1];
+    let speed = r.edgeSpeed;
     if (last) {
       const dx = r.p.x - last.x, dy = r.p.y - last.y, dz = r.p.z - last.z;
-      if (dx * dx + dy * dy + dz * dz < 1e-8) return;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < 1e-8) return;
+      const bt = DT * r.rate * r.params.base;
+      if (r.mode === RM_EDGE && bt > 1e-9 && this.lastStep === round.chaseSteps - 1) speed = Math.sqrt(d2) / bt;
     }
-    this.trail.push({ x: r.p.x, y: r.p.y, z: r.p.z, grounded: r.pose.phase === PHASE_GROUND, phase: r.pose.phase, roofId: r.roofId, speed: r.edgeSpeed });
+    this.lastStep = round.chaseSteps;
+    this.trail.push({ x: r.p.x, y: r.p.y, z: r.p.z, grounded: r.pose.phase === PHASE_GROUND, phase: r.pose.phase, roofId: r.roofId, speed });
   }
+  private lastStep = -2;
 
   /** Fill the input (aim, web) and the kinematic override for the next round step. */
   next(round: Round, inp: InputFrame): Kinematic {
@@ -187,6 +198,8 @@ export const SWING = {
   climbTo: 3,
   /** Steps without web after a release. */
   cooldown: 6,
+  /** Round 9 (moves): climb-zip toward him when he is above and his predicted spot is within this (horizontal m). */
+  climbReach: 40,
   /** Red ring -> click reaction, steps (uniform). */
   reactMin: 12,
   reactMax: 24,
@@ -330,7 +343,7 @@ export class SwingBot {
   }
 
   /**
-   * Grounded running with (mx, mz): at the roof edge hop an alley, zip onto a ringed balloon over a
+   * Grounded running with (mx, mz): at the roof edge hop an alley, jump-web onto a ringed building anchor over a
    * street (aim ax, az) or jump, and slide along a wall side (towers) instead of running into it.
    */
   private ground(round: Round, inp: InputFrame, mx: number, mz: number, ax: number, az: number, alongX: number, alongZ: number): boolean {
@@ -510,7 +523,7 @@ export class SwingBot {
       const lx = al === 0 ? 0 : lat, lz = al === 0 ? lat : 0;
       this.setAim(inp, dx, dz);
       if (b.grounded) {
-        // Run to the street edge a little ahead, then zip onto a lane balloon (or hop an alley).
+        // Run to the street edge a little ahead, then jump-web onto a building anchor (or hop an alley).
         const side = sign(L.c - pl);
         const tlat = L.c - side * (SWING.laneHalf - 0.2);
         const mx = al === 0 ? dx * 5 : tlat - P.x, mz = al === 0 ? tlat - P.z : dz * 5;
@@ -534,6 +547,9 @@ export class SwingBot {
         if (!held && this.vertigo) this.steerLand(round, inp);
       }
     }
+    // Round 9 (moves): he is up on the roofs and a ledge toward him is in zip reach - let go now, zip next step.
+    const climb = this.moves && this.climbZip(round, inp);
+    if (climb) held = false;
     if (this.held && !held && b.ropeSolid >= 0) {
       this.cool = SWING.cooldown;
       this.relAhead = SWING.releaseAhead + SWING.releaseNoise * (this.rng.next() * 2 - 1);
@@ -544,11 +560,36 @@ export class SwingBot {
     inp.zipPressed = false;
     inp.slidePressed = false;
     if (this.moves) this.useMoves(round, inp, d, held);
+    if (climb) { inp.zipPressed = b.ropeSolid < 0; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false; this.setAim(inp, this.zx, this.zz); }
     // YOINK: a red ring held for the reaction time -> click.
     if (this.ring(round, inp) === RING_RUNNER) {
       if (++this.red >= this.react) { inp.webPressed = true; inp.webHeld = true; }
     } else this.red = 0;
     return null;
+  }
+
+  /** Round 9 climb-zip aim (horizontal). */
+  private zx = 1;
+  private zz = 0;
+
+  /**
+   * Round 9 (moves): airborne or swinging while he is more than climbTo m above - the ledge zip toward his
+   * predicted spot (a ringed rim of a roof, else a roof ledge under the aim) when it lands higher than you are.
+   */
+  private climbZip(round: Round, inp: InputFrame): boolean {
+    const b = round.player, P = b.p, T = this.T;
+    if (b.grounded || b.zipOn || b.zipCd > 0 || b.ledgeMode > 0 || T.y <= P.y + SWING.climbTo) return false;
+    const tx = T.x - P.x, tz = T.z - P.z, tl = Math.sqrt(tx * tx + tz * tz);
+    if (tl < 1e-6 || tl > SWING.climbReach) return false;
+    const ax = inp.aimX, az = inp.aimZ;
+    inp.aimX = tx / tl; inp.aimZ = tz / tl;
+    this.anc.solid = -1;
+    const ring = pickRing(b, inp, round.tuning, round.world, this.anc);
+    const k = zipTarget(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimZ, round.tuning, round.world, this.za);
+    inp.aimX = ax; inp.aimZ = az;
+    if (k !== 2 || this.za.y < P.y + 1) return false;
+    this.zx = tx / tl; this.zz = tz / tl;
+    return true;
   }
 
   /**

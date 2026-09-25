@@ -6,7 +6,7 @@
 // in the hot path.
 import { Fnv1a, type Vec3 } from "./math.ts";
 import type { Tuning } from "./tuning.ts";
-import type { CityIndex, Hook } from "../world/cityModel.ts";
+import type { CityIndex } from "../world/cityModel.ts";
 import { anchorVisible, copyAnchor, emptyAnchor, emptyFace, faceCoord, findAnchor, ledgeAt, obstacleAhead, wallProbe, type AnchorHit, type FaceHit } from "../world/cityQuery.ts";
 
 export const RING_NONE = -1;
@@ -158,8 +158,6 @@ export type Body = {
 /** What stepBody needs from the world. */
 export type SimWorld = {
   index: CityIndex;
-  /** @deprecated round 8 balloons: never read by the sim (the pre-round-9 picker below only). INTEGRATE deletes it. */
-  hooks?: readonly Hook[];
   /** @deprecated unused since round 9 (falls = feet below failFloor). */
   lowestRoof?: number;
   /** Runner body point + the roof he stands on (-1 airborne), or null (sandbox). */
@@ -383,36 +381,6 @@ export function pickRing(b: Body, inp: InputFrame, k: Tuning, w: SimWorld, out: 
   const last = b.relT < ALTERNATE_FOR ? b.lastRope : -1;
   const ring = b.ringId >= 0 ? b.ringId : -1;
   return findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out) ? out.solid : RING_NONE;
-}
-
-/**
- * @deprecated Round 8 balloon picker (street / sky balloons). The sim never calls it; it is kept only so
- * the pre-round-9 world tests on this branch still compile and run. INTEGRATE deletes it with Hook.
- */
-export function pickTarget(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): number {
-  const p = b.p, hooks = w.hooks ?? [];
-  let ax = inp.aimX, az = inp.aimZ;
-  const al = Math.sqrt(ax * ax + az * az);
-  if (al > 1e-9) { ax /= al; az /= al; } else { ax = 0; az = 0; }
-  const reach = k.aimRadius ?? 17;
-  const cx = p.x + ax * 7, cy = p.y + 9, cz = p.z + az * 7;
-  let best = RING_NONE, bestS = Infinity;
-  for (let i = 0; i < hooks.length; i++) {
-    const h = hooks[i];
-    const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;
-    if (dy < 1) continue;
-    if (dx * dx + dy * dy + dz * dz > (h.reach !== undefined ? h.reach * h.reach : reach * reach)) continue;
-    const hl = Math.sqrt(dx * dx + dz * dz);
-    if (hl > 1e-6 && dx * ax + dz * az < k.aimCos * hl) continue;
-    const sx = h.x - cx, sy = h.y - cy, sz = h.z - cz;
-    let s = Math.sqrt(sx * sx + sy * sy + sz * sz);
-    if (h.reach !== undefined) s += 4;
-    if (s >= bestS) continue;
-    if (w.index.segmentBlocked(p.x, p.y, p.z, h.x, h.y, h.z)) continue;
-    best = i;
-    bestS = s;
-  }
-  return best;
 }
 
 // ---- web zip target ------------------------------------------------------------------------------

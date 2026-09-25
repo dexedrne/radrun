@@ -14,7 +14,7 @@ const {
 const { M_SNAP, M_WIND, M_LOWGRAV, M_SIXTY } = await import("../src/game/mutators.ts");
 const { districtFromSearch } = await import("../src/world/districts.ts");
 
-const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number; runnerLow: number }> = {}) =>
+const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number; runnerLow: number; parkour: number }> = {}) =>
   ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, runnerLow: 60, parkour: 0, ...o });
 
 test("campaign: 15 levels, 45 stars, stable numbering, every district and mutator used", () => {
@@ -38,10 +38,13 @@ test("campaign: star evaluation", () => {
   const l3 = LEVELS[2]; // yoink
   assert.equal(evaluate(l3, "caught", stats({ catchKind: "yoink" }), 40)[1], true);
   assert.equal(evaluate(l3, "caught", stats({ catchKind: "tag" }), 40)[1], false);
-  const l9 = LEVELS[8]; // close call: under 10 s left
+  const l9 = LEVELS[8]; // round 9: 4 parkour moves (was a close call)
   assert.equal(l9.mutators, M_WIND | M_SIXTY);
-  assert.equal(evaluate(l9, "caught", stats({ catchTime: 55 }), 5)[2], true);
-  assert.equal(evaluate(l9, "caught", stats({ catchTime: 20 }), 40)[2], false);
+  assert.deepEqual(l9.goals[2], { kind: "parkour", n: 4 });
+  assert.equal(evaluate(l9, "caught", stats({ parkour: 4 }), 40)[2], true);
+  assert.equal(evaluate(l9, "caught", stats({ parkour: 3 }), 40)[2], false);
+  assert.equal(evaluate(l9, "escaped", stats({ parkour: 9 }), 0)[2], false, "every objective needs the catch");
+  assert.deepEqual(LEVELS[3].goals[1], { kind: "parkour", n: 6 }, "L4 Neon Alleys: 6 parkour moves");
   // Round 7 Vertigo: "street level" = caught before he stood on a roof below y m.
   const l14 = LEVELS[13];
   assert.equal(l14.map, "vertigo");
@@ -101,20 +104,21 @@ test("campaign: progress storage round-trips and survives junk / blocked storage
   assert.deepEqual(loadProgress(blocked), emptyProgress());
 });
 
-test("links: v3 links carry version, district and mutators; unversioned links are older Downtown links", () => {
-  // v3 = the double jump + web zip build (v2 links still read the same; their ghosts replay without the moves).
-  assert.equal(LINK_VERSION, 3);
+test("links: v4 links carry version, district and mutators; unversioned links are older Downtown links", () => {
+  // v4 = round 9 (the rebuilt cities, building-anchored swings, parkour); v3 = the double jump + web zip build
+  // (older links still read the same and open with the "older build" note).
+  assert.equal(LINK_VERSION, 4);
   const url = ghostUrl("652", "4764", "normal", 41.26, 777, "abcdEFGH_-12", M_WIND | M_SIXTY);
   const q = new URL(url).search;
   assert.equal(districtFromSearch(q), "docks");
   const c = readChallenge(q);
-  assert.equal(c.v, 3);
+  assert.equal(c.v, 4);
   assert.equal(c.mu, M_WIND | M_SIXTY);
   assert.equal(c.s, 777);
   assert.equal(c.t, 41.3);
   assert.equal(c.g, "abcdEFGH_-12");
   const plain = readChallenge(new URL(challengeUrl("652", "4764", "chill", 30)).search);
-  assert.equal(plain.v, 3);
+  assert.equal(plain.v, 4);
   assert.equal(plain.mu, 0);
   // A pre-round-4 link: no v, no m, no mu -> v1, Downtown, no mutators.
   const old = "?c=652&r=4764&d=normal&s=5&t=40.0&g=abcdEFGH_-12";

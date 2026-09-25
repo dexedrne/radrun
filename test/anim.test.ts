@@ -4,7 +4,7 @@
 // clips (Run_and_Jump, Fall_1, Leap_of_Faith) and Roll_Dodge are never commanded.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { A_ATTACH, A_BONK, A_DJUMP, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type AnimInput } from "../src/anim/animMachine.ts";
+import { A_ATTACH, A_BONK, A_CLIMB, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLRUN, AnimMachine, CLIP, type AnimCmd, type AnimInput } from "../src/anim/animMachine.ts";
 import CLIP_META from "../src/generated/clips.meta.json" with { type: "json" };
 
 const ALL = ["Idle", "Casual_Walk", "Run_02", "Lean_Forward_Sprint", "Regular_Jump", "Regular_Jump_Land", "Run_and_Jump", "Fall_1",
@@ -158,4 +158,65 @@ test("double jump: Regular_Jump again from its takeoff frame at 1.4x into the ap
   // A web zip reads as a grab (A_ATTACH with rope on) and its end as a release into the apex hold.
   assert.equal(m.step(frame({ grounded: false, rope: true, events: A_ATTACH }))?.clip, "Grab_Bar_and_Swing_Forward");
   assert.equal(m.step(frame({ grounded: false, vy: 5, events: A_RELEASE }))?.clip, "Regular_Jump");
+});
+
+test("round 9 parkour clips: side-picked wall run then the run, run-up, held grab, mantle, vault, slide, roll; fallbacks without them", () => {
+  const PK = ["Wall_Run_Up", "Wall_Run", "Wall_Run_Mirror", "Ledge_Grab", "Ledge_Climb", "Vault", "Slide", "Land_Roll"];
+  const meta = (CLIP_META as unknown as Record<string, { clips: Record<string, Record<string, number>> }>)["652"].clips;
+  for (const n of PK) assert.ok(meta[n], `#652 ${n} in clips.meta.json`);
+  const at = (n: string, k: string) => (typeof meta[n]?.[k] === "number" ? meta[n][k] : undefined);
+  const mk = (has: string[]) => new AnimMachine({ has: n => has.includes(n), takeoffAt: n => at(n, "takeoffAt") ?? T.takeoffAt, apexAt: () => T.apexAt, landAt: n => at(n, "landAt") ?? T.landAt, at });
+  const m = mk([...ALL, ...PK]);
+  for (let i = 0; i < 5; i++) m.step(frame({}));
+  // Wall run, wall on his right: the mirrored clip once (posed), then the run once it is over.
+  const w = m.step(frame({ grounded: false, wall: 1, wallSide: -1, events: A_WALLRUN, speed: 11 }));
+  assert.equal(w?.clip, "Wall_Run_Mirror");
+  assert.ok(m.posed);
+  let back: AnimCmd | null = null;
+  for (let i = 0; i < 60 && !back; i++) back = m.step(frame({ grounded: false, wall: 1, wallSide: -1, speed: 11 }));
+  assert.equal(back?.clip, "Run_02");
+  assert.equal(m.posed, false);
+  assert.equal(mk([...ALL, ...PK]).step(frame({ grounded: false, wall: 1, wallSide: 1, events: A_WALLRUN, speed: 11 }))?.clip, "Wall_Run");
+  // Run-up: Wall_Run_Up over 0.6 s, held while it lasts; then the ledge grab from just before its hang frame, held.
+  const u = m.step(frame({ grounded: false, wall: 2, events: A_WALLRUN, speed: 0, vy: 9 })) as { clip: string; rate?: number; hold: boolean };
+  assert.equal(u.clip, "Wall_Run_Up");
+  assert.ok(u.hold && Math.abs(u.rate! - at("Wall_Run_Up", "duration")! / 0.6) < 1e-9);
+  for (let i = 0; i < 20; i++) assert.equal(m.step(frame({ grounded: false, wall: 2, speed: 0, vy: 9 })), null);
+  const g = m.step(frame({ grounded: false, ledge: 1, events: A_LEDGE, speed: 0 })) as { clip: string; startAt: number; hold: boolean };
+  assert.equal(g.clip, "Ledge_Grab");
+  assert.ok(g.hold && Math.abs(g.startAt - (at("Ledge_Grab", "hangAt")! - 0.2)) < 1e-9);
+  for (let i = 0; i < 12; i++) assert.equal(m.step(frame({ grounded: false, ledge: 1, speed: 0 })), null);
+  // Mantle: Ledge_Climb up to its stand frame in 0.35 s; the climb's end -> the run.
+  const c = m.step(frame({ grounded: false, ledge: 2, speed: 0 })) as { clip: string; rate?: number; freezeAt?: number };
+  assert.equal(c.clip, "Ledge_Climb");
+  assert.equal(m.special, "mantle");
+  assert.ok(Math.abs(c.rate! - at("Ledge_Climb", "standAt")! / 0.35) < 1e-9 && c.freezeAt === at("Ledge_Climb", "standAt"));
+  for (let i = 0; i < 20; i++) m.step(frame({ grounded: false, ledge: 2, speed: 0 }));
+  assert.equal(m.step(frame({ events: A_CLIMB | A_LAND, speed: 6 }))?.clip, "Run_02");
+  assert.equal(m.posed, false);
+  // Vault from its takeoff frame; its own landing is never cut by the landing event.
+  for (let i = 0; i < 5; i++) m.step(frame({}));
+  const v = m.step(frame({ grounded: false, vy: 8, events: A_VAULT })) as { clip: string; startAt: number };
+  assert.equal(v.clip, "Vault");
+  assert.equal(v.startAt, at("Vault", "takeoffAt"));
+  for (let i = 0; i < 20; i++) m.step(frame({ grounded: false, vy: 8 - i }));
+  assert.equal(m.step(frame({ events: A_LAND, landVy: -5 })), null, "the vault lands by itself");
+  let run: AnimCmd | null = null;
+  for (let i = 0; i < 90 && !run; i++) run = m.step(frame({}));
+  assert.equal(run?.clip, "Run_02");
+  // Slide: held at slideTo while sliding; landing roll from rollFrom over 0.45 s.
+  const sl = m.step(frame({ slide: true, events: A_SLIDE, speed: 10 })) as { clip: string; freezeAt?: number };
+  assert.equal(sl.clip, "Slide");
+  assert.equal(sl.freezeAt, at("Slide", "slideTo"));
+  assert.equal(m.step(frame({ speed: 9 }))?.clip, "Run_02");
+  const r = m.step(frame({ events: A_LAND | A_ROLL, landVy: -18, speed: 10 })) as { clip: string; startAt: number };
+  assert.equal(r.clip, "Land_Roll");
+  assert.equal(r.startAt, at("Land_Roll", "rollFrom"));
+  // Without the clips: the procedural fallbacks (the run for the wall run, the hang for the grab, Big_Land-free crouch).
+  const f = mk(ALL);
+  for (let i = 0; i < 5; i++) f.step(frame({}));
+  assert.equal(f.step(frame({ grounded: false, wall: 1, wallSide: -1, events: A_WALLRUN, speed: 11 }))?.clip, "Run_02");
+  assert.equal(f.posed, false);
+  assert.equal(f.step(frame({ grounded: false, ledge: 1, events: A_LEDGE, speed: 0 }))?.clip, "Rope_Hang_Idle");
+  assert.equal(f.step(frame({ grounded: false, vy: 8, events: A_VAULT }))?.clip, "Regular_Jump");
 });

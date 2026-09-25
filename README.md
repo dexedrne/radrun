@@ -1,6 +1,6 @@
 # RadRun
 
-A rooftop chase with balloon swinging, built on [react-three-game](https://prnth.com/react-three-game/).
+A rooftop chase with pendulum web swinging and parkour through 40-230 m canyon cities, built on [react-three-game](https://prnth.com/react-three-game/).
 Design: `docs/specs/2026-09-23-rug-run-design.md`. Quick guide (run, controls, editing, tuning, known
 issues): `PLAY.md`. Live: https://radrun.vyvanse.beer (the old https://rugrun.vyvanse.beer and
 https://radbro-rug-run.vercel.app addresses redirect there, query strings included, so old challenge / ghost
@@ -22,8 +22,12 @@ npm run build:test   # build keeping the dev pages and ?bot (preview deployments
 ```
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump (again in the air = double
-jump) · hold LMB to web onto the ringed balloon, release to let go (LMB on the ground with a ringed balloon
-= jump + grab) · E / Shift web-zip to the ringed balloon or the roof ledge ahead · red ring on him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · M mute · Esc pause.
+jump; on a wall = wall kick) · hold LMB to web the building ahead (the ring sits on a rim, corner or
+facade), let go at the bottom of the arc to fling (LMB on a roof with a ring = jump + web) · C slide ·
+E / Shift web-zip to the ringed building or the roof ledge ahead · wall runs, run-ups, ledge grabs +
+climbs, vaults and landing rolls happen by themselves · red ring on him + LMB = YOINK · Q / RMB ease the
+camera toward him · R retry (hold 1 s mid-round) · M mute · Esc pause. Round 9 (webs on buildings, a
+real pendulum, parkour, the taller cities): `docs/specs/2026-09-25-round9-movement.md`, PLAY.md "Moving".
 
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
@@ -47,14 +51,18 @@ chain-swinger (it freezes 0.25 s into each swing for screenshots) · `?webgl2` f
 ## Levels
 
 `public/levels/city.json` is the hand-editable source of truth for the city (an r3g prefab of unit
-boxes). Nodes tagged `Data {kind}` drive gameplay: `roof` (landable), `tower` (solid, not landable),
-`hook` (an extra balloon at the node's position; auto balloons within 3 m give way). Balloons are
-otherwise derived from the roofs by rule. Solids must stay unrotated boxes standing on the ground.
+boxes). Nodes tagged `Data {kind}` drive gameplay: `roof` (landable), `tower` (solid, not landable) and
+`prop` (a solid rooftop box you vault or climb, inside a roof). Web anchors are found on the buildings at
+run time (there are no grab points to place; old `hook` nodes are ignored with a warning). Solids must
+stay unrotated boxes standing on the ground; `npm run level` lints the round 9 rules (anchor coverage,
+runnable roofs, props, wall-run notches, heights).
 
 - `npm run gen-city -- [--seed 7] [--street 14] [--force]` writes the first `city.json` (never overwrites
   it without `--force`), seeds `decor.json` / `tuning.json` if missing, then runs `level`.
 - `npm run level` (alias `bake`): `city.json` -> `city.model.json` (the sim model, lint printed) -> the
-  runner bake -> `runner.pack.bin` (his recorded tracks) + `bake.report.json`. Commit all four files.
+  runner bake -> `runner.pack.bin` (his recorded tracks: swings on baked building anchors, zips up,
+  wall runs, climbs, drops) + `bake.report.json`. Commit all four files. `--all` does every district,
+  `--no-bake` only derives + lints.
   Saving `city.json` or `tuning.json` from the dev pages under `npm run dev` runs this automatically.
 - `public/levels/tuning.json` holds the player/camera constants and the Chill/Normal/Degen runner
   table, read at startup.
@@ -65,7 +73,7 @@ otherwise derived from the roofs by rule. Solids must stay unrotated boxes stand
 owner's delivery files: `radbro<id>.glb` (unlit -> drop sit/lie clips -> resize 1024 -> webp 90 ->
 resample -> draco), `radbro<id>.clips.glb` (skeleton + bought clips), `george.glb`, and writes
 `src/generated/clips.meta.json` (per-clip hips range, root policy, takeoff/land times, rope-hang hand
-height) and `src/generated/george_clips.json`. Re-rigged `game-clips/radbro<id>_character.glb` files
+height, the round 9 parkour clips' key times) and `src/generated/george_clips.json`. Re-rigged `game-clips/radbro<id>_character.glb` files
 replace their delivery GLBs. George's switch, render scale and gait speeds are in
 `src/app/george.config.ts` (empty `GEORGE_GLB` = the procedural placeholder cat); his scale and follow
 values can also be tuned in `?tune` / tuning.json's `george` section.

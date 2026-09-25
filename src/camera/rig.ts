@@ -22,12 +22,14 @@ export type Rig = {
   target: Vec3;
   /** Distance actually used after collision (fade the local character below 2 m). */
   armUsed: number;
+  /** Over-the-shoulder side: +1 right, -1 left (eased; a wall run on the right flips it off the wall). */
+  side: number;
 };
 
 export function createRig(yaw: number, pitch = 0.12): Rig {
   const r: Rig = {
     yaw, pitch, sy: 0, cy: 1, fwd: { x: 0, y: 0, z: -1 }, arm: 6, fov: 62, kickT: 0,
-    pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6,
+    pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6, side: 1,
   };
   rigLook(r, 0, 0, 0, false);
   return r;
@@ -67,8 +69,10 @@ export type RigInput = {
   /** The swing pivot while on the rope, else null. */
   hook: Vec3 | null;
   landed: boolean;
-  /** Round 9: wall-running (the arm uses armWall). */
+  /** Round 9: wall-running (the arm uses armWall) and that wall's outward normal (the shoulder stays off it). */
   wall?: boolean;
+  wallNx?: number;
+  wallNz?: number;
 };
 
 /** segmentHit(a, b) -> parametric t in [0,1] of the first solid hit, or -1. */
@@ -90,7 +94,11 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   // Over-the-shoulder: the look target and the arm both shift 0.6 m to the right, so the view
   // direction is exactly the aim (forward) and the character sits left of the reticle.
   const rx = r.cy, rz = -r.sy; // right vector (horizontal)
-  const bx = tx + rx * cam.shoulder, bz = tz + rz * cam.shoulder;
+  // Wall run with the wall on the right: the shoulder moves to the left (the 0.6 m offset would put the
+  // look target inside the facade and the arm's collision would pull the camera into it).
+  const sideWant = s.wall && rx * (s.wallNx ?? 0) + rz * (s.wallNz ?? 0) < -0.2 ? -1 : 1;
+  r.side += (sideWant - r.side) * Math.min(1, 8 * dt);
+  const bx = tx + rx * cam.shoulder * r.side, bz = tz + rz * cam.shoulder * r.side;
   r.target.x = bx; r.target.y = ty; r.target.z = bz;
   let dx = -r.fwd.x * r.arm, dy = -r.fwd.y * r.arm, dz = -r.fwd.z * r.arm;
   let used = r.arm;

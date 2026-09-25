@@ -17,9 +17,9 @@ import { TALL, tallModel, tallWorld } from "./helpers.ts";
 function boxWorld(): SimWorld {
   const model = {
     solids: [{ id: 0, kind: "roof", landable: true, x0: 0, z0: 0, x1: 12, z1: 12, top: 30 }],
-    hooks: [], lowestRoof: 30,
+    lowestRoof: 30,
   } as unknown as CityModel;
-  return { index: new CityIndex(model), hooks: [], lowestRoof: -1e9, runner: null };
+  return { index: new CityIndex(model), runner: null };
 }
 
 test("28 m/s into every face and corner never embeds the body", () => {
@@ -101,7 +101,7 @@ test("anchors: always a point on a building (rim / corner / facade), high enough
 });
 
 test("anchors: nothing tall nearby = no ring; a web press then does nothing but the 'no anchor' event", () => {
-  const model = { solids: [{ id: 0, kind: "roof", landable: true, x0: 0, z0: 0, x1: 30, z1: 30, top: 40 }], hooks: [], lowestRoof: 40 } as unknown as CityModel;
+  const model = { solids: [{ id: 0, kind: "roof", landable: true, x0: 0, z0: 0, x1: 30, z1: 30, top: 40 }], lowestRoof: 40 } as unknown as CityModel;
   const w: SimWorld = { index: new CityIndex(model), runner: null };
   const b = createBody(15, 40.9, 15, 0);
   const inp = { ...emptyInput(), aimX: 1, aimZ: 0 };

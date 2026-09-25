@@ -18,7 +18,7 @@ import {
 } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
-import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
+import { getBest, getOldBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
 import { encodeBytes, packBytes } from "../game/ghost.ts";
 import { AutoQuality } from "./autoQuality.ts";
 import { sfx } from "../audio/sfx.ts";
@@ -75,6 +75,8 @@ export type PlayProbe = {
   wall: number;
   ledge: number;
   parkour: number;
+  /** Longest swing chain this round. */
+  maxChain: number;
   player: [number, number, number];
   runner: { p: [number, number, number]; mode: number; phase: number; edge: number; t: number; m: number; budget: number };
   runnerPhases: number[];
@@ -109,6 +111,7 @@ function buildResults(game: PlayGame): Results {
   const mu = s.mutators ?? 0;
   const caught = r.phase === "caught";
   const best = getBest(s.chaser, s.difficulty, mu);
+  const oldBest = best === null ? getOldBest(s.chaser, s.difficulty, mu) : null;
   let newBest = false;
   if (caught) {
     const prev = recordBest(s.chaser, s.difficulty, st.catchTime, mu);
@@ -137,7 +140,7 @@ function buildResults(game: PlayGame): Results {
   }
   return {
     caught, kind: st.catchKind, time: st.catchTime, closest: st.closest, maxChain: st.maxChain, topSpeed: st.topSpeed, falls: st.falls,
-    medal: caught ? medal(s.difficulty, st.catchTime) : "", best, newBest, runner: s.runner, chaser: s.chaser, difficulty: s.difficulty,
+    medal: caught ? medal(s.difficulty, st.catchTime) : "", best, oldBest, newBest, runner: s.runner, chaser: s.chaser, difficulty: s.difficulty,
     seed: s.seed, ghostCode: null, vsGhost, mutators: mu, campaign,
   };
 }
@@ -300,7 +303,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     window.__play = {
       screen: st.screen, phase: r.phase, runId: game.runId, chaseSteps: r.chaseSteps, clock: r.clock, d: r.d,
       outcome: r.phase === "caught" ? "CAUGHT" : r.phase === "escaped" ? "ESCAPED" : "", catchKind: r.stats.catchKind, catchTime: r.stats.catchTime,
-      ring: b.ringId, rope: b.ropeSolid, wall: b.wallMode, ledge: b.ledgeMode, parkour: b.parkour, player: [b.p.x, b.p.y, b.p.z],
+      ring: b.ringId, rope: b.ropeSolid, wall: b.wallMode, ledge: b.ledgeMode, parkour: b.parkour, maxChain: r.stats.maxChain, player: [b.p.x, b.p.y, b.p.z],
       runner: { p: [run.p.x, run.p.y, run.p.z], mode: run.mode, phase: run.pose.phase, edge: run.edge, t: run.t, m: run.band.m, budget: run.band.budget },
       runnerPhases: [...phases.current], clips: { chaser: [...clips.current.chaser], runner: [...clips.current.runner], george: [...clips.current.george] },
       fps: fps.current, frames: frames.current, backend: st.backend,

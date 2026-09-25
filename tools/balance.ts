@@ -1,7 +1,7 @@
 // npm run balance -- [--n 200] [--set chill.gStar=18 ...] [--only swing] [--map market | --all]
 // Balance bots (spec §16 test 9, printed, never a build gate): follower rounds at k x the pack's
 // along-path speed x base, the camper, and the swinging chaser (game/bots.ts SwingBot: the real player
-// sim, chain-swinging down the streets), over seeds 1..n with the difficulty table from
+// sim, chain-swinging down the streets; round 9: with the moves, zipping back up onto the roofs), over seeds 1..n with the difficulty table from
 // public/levels/tuning.json (plus --set overrides). Prints catch rate and catch-time quantiles (of the
 // caught rounds) next to the targets.
 import fs from "node:fs";
@@ -42,14 +42,15 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
     { label: "chill  follow k=1.0", d: "chill", bot: { kind: "follow", k: 1.0, yoink: true }, target: ">=90% caught, median 60-75 s", check: (c, m) => c >= 0.9 * n && m >= 60 && m <= 75 },
     { label: "normal camper", d: "normal", bot: { kind: "camper", k: 1.0, yoink: true }, target: "<25% caught", check: c => c < 0.25 * n },
     { label: "chill  follow k=1.3 (browser bot)", d: "chill", bot: { kind: "follow", k: 1.3, yoink: false }, target: "(info)", check: () => true },
-    // The swinging chaser (real player sim; round 3): what a strong human swinger gets.
-    { label: "chill  swing", d: "chill", bot: { kind: "swing", k: 1, yoink: true }, target: "(info: forgiving)", check: () => true },
-    { label: "normal swing", d: "normal", bot: { kind: "swing", k: 1, yoink: true }, target: "median 25-40 s", check: (c, m) => c > 0 && m >= 25 && m <= 40 },
-    { label: "degen  swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true }, target: "median ~45-70 s, some escapes", check: (c, m) => c < 0.95 * n && c >= 0.5 * n && m >= 40 && m <= 70 },
-    // The same swinger also double-jumping and web-zipping at him (info: the moves must not trivialise it).
-    { label: "chill  swing+moves", d: "chill", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info)", check: () => true },
-    { label: "normal swing+moves", d: "normal", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: median >= 20 s)", check: (c, m) => c > 0 && m >= 20 },
-    { label: "degen  swing+moves", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: median >= 35 s)", check: (c, m) => c > 0 && m >= 35 },
+    // The swinging chaser (real player sim; round 3): what a strong human swinger gets. Round 9: with the full
+    // moveset (double jump, slide and the web zip it climbs back onto the roofs with - he zips up the tall
+    // podiums too), since every player has them; the classic swinger without them is info only.
+    { label: "chill  swing", d: "chill", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: forgiving)", check: () => true },
+    { label: "normal swing", d: "normal", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "median 25-40 s", check: (c, m) => c > 0 && m >= 25 && m <= 40 },
+    { label: "degen  swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "50-95% caught, median 40-70 s", check: (c, m) => c < 0.95 * n && c >= 0.5 * n && m >= 40 && m <= 70 },
+    { label: "chill  swing, no zip", d: "chill", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
+    { label: "normal swing, no zip", d: "normal", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
+    { label: "degen  swing, no zip", d: "degen", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
   ];
   return cfgs.filter(c => !only || c.label.includes(only)).map(c => {
     const r = runConfig(model, index, pack, tuning, table, c.d, c.bot, n, 1, 0, district);

@@ -40,11 +40,6 @@ export type Tuning = {
   zip: boolean;
   yoink: boolean;
   yoinkRange: number;
-  /**
-   * @deprecated Round 8 balloon grab range. Unused by the sim; it only exists so the pre-round-9 city lint
-   * (world/derive.ts, WORLD's) still compiles on this branch. INTEGRATE deletes it with Hook.
-   */
-  aimRadius?: number;
   // ---- anchor search (§2.1) ----
   /** Rope length limits (m, body -> anchor). */
   ropeMin: number;
@@ -291,10 +286,17 @@ export const MOVE_KEYS: readonly (keyof Tuning)[] = [
 /** Format-2 ghosts (made before round 9): no slide input existed, so slide is off for their replay. */
 export const SLIDE_OFF = { slide: false } as const satisfies Partial<Tuning>;
 
-/** Runner bake preset: no air control, no rope steer, no Yoink, no double jump / web zip / slide. */
+/**
+ * Runner bake preset: no air control, no rope steer, no Yoink, no double jump / slide. Web zip stays on: his
+ * baked zip-up hops (route/graph.ts) press it with a forced rim anchor, and nothing else ever does.
+ */
 export function runnerFrom(player: Readonly<Tuning>): Tuning {
-  return { ...player, airAccel: 0, ropeSteer: 0, yoink: false, ...MOVES_OFF };
+  return { ...player, airAccel: 0, ropeSteer: 0, yoink: false, airJumps: 0, slide: false, webZip: true };
 }
+/** Player-only keys the runner never uses (double jump + slide): left out of the bake's tuning hash. */
+export const RUNNER_UNUSED_KEYS: readonly (keyof Tuning)[] = [
+  "airJumps", "doubleJumpSpeed", "airJumpNoRing", "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
+];
 export const RUNNER: Readonly<Tuning> = Object.freeze(runnerFrom(PLAYER));
 
 export type Difficulty = "chill" | "normal" | "degen";

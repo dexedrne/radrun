@@ -7,13 +7,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { decodePack, encodePack, PACK_VERSION, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, packAnchor, sampleEdge, type PackEdgeHeader } from "../src/route/trackPack.ts";
 import { bake, bakeEdge, BAKE, jumpHop, recordEdge, tuningHash, type BakeReport } from "../src/route/bake.ts";
-import { buildGraph, buildLinks, forcedUTurns, stronglyConnected, GRAPH, type WallGapLike } from "../src/route/graph.ts";
+import { buildGraph, buildLinks, forcedUTurns, stronglyConnected, GRAPH } from "../src/route/graph.ts";
 import type { AnchorHit } from "../src/world/cityQuery.ts";
 import { EdgeBot, newParams, PH_DONE } from "../src/route/bot.ts";
 import { applyTuningJson, runnerFrom } from "../src/sim/tuning.ts";
 import { Runner, RE_DEPART, RE_TAUNT, RM_TURN, RM_EDGE } from "../src/runner/runner.ts";
 import { Rand } from "../src/sim/math.ts";
-import { CityIndex, type CityModel, type Solid } from "../src/world/cityModel.ts";
+import { CityIndex, type CityModel, type Solid, type WallGap } from "../src/world/cityModel.ts";
 import { deriveModel } from "../src/world/derive.ts";
 import { DEFAULT_CONFIG } from "../src/world/generate.ts";
 import { TALL, tallBlocks, tallModel } from "./helpers.ts";
@@ -89,30 +89,34 @@ const RUN = runnerFrom(tuning.player);
 const roofBox = (x0: number, z0: number, x1: number, z1: number, top: number) => ({ kind: "roof" as const, landable: true, x0, z0, x1, z1, top });
 
 test("links: street swings carry a baked building anchor (none = no link); +1.2..3.5 m alley steps are climbs; wall gaps link both ways", () => {
+  // The world's deriveModel lists tallModel()'s notch as a wall gap (a wall-run hop), so its avenue gives few
+  // swings; tallBlocks() adds a block city with a tower in every block.
   const m = tallModel();
-  const links = buildLinks(m, RUN);
-  const idx = new CityIndex(m);
   let swings = 0;
-  for (const list of links.values()) for (const l of list) {
-    if (l.kind !== "street") continue;
-    swings++;
-    const a = l.anchor!;
-    assert.ok(a && a.solid >= 0, "a baked anchor");
-    const s = m.solids[a.solid];
-    assert.ok(a.ay <= s.top && (a.ax === s.x0 || a.ax === s.x1 || a.az === s.z0 || a.az === s.z1), "on a building");
-    assert.ok(idx.solids[a.solid].top - m.solids[l.from].top >= RUN.anchorMinAbove - RUN.halfHeight, "taller than the takeoff roof");
+  for (const city of [m, tallBlocks()]) {
+    const idx = new CityIndex(city);
+    for (const list of buildLinks(city, RUN).values()) for (const l of list) {
+      if (l.kind !== "street") continue;
+      swings++;
+      const a = l.anchor!;
+      assert.ok(a && a.solid >= 0, "a baked anchor");
+      const s = city.solids[a.solid];
+      assert.ok(a.ay <= s.top && (a.ax === s.x0 || a.ax === s.x1 || a.az === s.z0 || a.az === s.z1), "on a building");
+      assert.ok(idx.solids[a.solid].top - city.solids[l.from].top >= RUN.anchorMinAbove - RUN.halfHeight, "taller than the takeoff roof");
+    }
   }
-  assert.ok(swings >= 2, `${swings} swing links across the avenue`);
-  // Steps: +1 m alley hop, +2.5 m climb, +4 m nothing, -8 m drop.
-  const pair = (tb: number) => deriveModel({ ...DEFAULT_CONFIG, autoHooks: false }, [roofBox(0, 0, 12, 12, 20), roofBox(16, 0, 28, 12, tb)] as Solid[]);
+  assert.ok(swings >= 2, `${swings} swing links across the avenues`);
+  // Steps: +1 m alley hop, +2.5 m climb, +4..+32 m zip up, higher nothing, -8 m drop.
+  const pair = (tb: number) => deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 12, 12, 20), roofBox(16, 0, 28, 12, tb)] as Solid[]);
   const kind = (tb: number) => buildLinks(pair(tb), RUN).get(0)!.find(l => l.to === 1)?.kind;
   assert.equal(kind(21), "alley");
   assert.equal(kind(22.5), "climb");
-  assert.equal(kind(24), undefined, "a 4 m step is never a link");
+  assert.equal(kind(24), "zip", "a 4 m step is a zip up");
+  assert.equal(kind(20 + GRAPH.zipUpMax + 1), undefined, "past zipUpMax: no link");
   assert.equal(kind(12), "drop");
   assert.equal(GRAPH.alleyClimbMax, 3.5);
   // Wall gap: a -> b and b -> a along the wall face (model.wallGaps, read structurally).
-  const gm = { ...m, wallGaps: [{ a: TALL.gapA, b: TALL.gapB, wall: TALL.gapWall, axis: "x", dir: 1, edge: 155, far: 164, face: 12, side: 1 }] as WallGapLike[] } as CityModel;
+  const gm = { ...m, wallGaps: [{ a: TALL.gapA, b: TALL.gapB, wall: TALL.gapWall, axis: "x", dir: 1, edge: 155, far: 164, face: 12, side: 1 }] as WallGap[] } as CityModel;
   const gl = buildLinks(gm, RUN);
   const ab = gl.get(TALL.gapA)!.find(l => l.to === TALL.gapB), ba = gl.get(TALL.gapB)!.find(l => l.to === TALL.gapA);
   assert.equal(ab?.kind, "wallrun");
@@ -123,7 +127,7 @@ test("links: street swings carry a baked building anchor (none = no link); +1.2.
 
 test("runner hops: he climbs a +2.5 m alley step by ledge grab and wall-runs a wall gap", () => {
   // Climb: a pair of roofs across a 4 m alley, the far one 2.5 m higher.
-  const pm = deriveModel({ ...DEFAULT_CONFIG, autoHooks: false }, [roofBox(0, 0, 12, 12, 20), roofBox(16, 0, 28, 12, 22.5)] as Solid[]);
+  const pm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 12, 12, 20), roofBox(16, 0, 28, 12, 22.5)] as Solid[]);
   const link = buildLinks(pm, RUN).get(0)!.find(l => l.to === 1)!;
   assert.equal(link.kind, "climb");
   const world = { index: new CityIndex(pm), runner: null };
@@ -139,7 +143,7 @@ test("runner hops: he climbs a +2.5 m alley step by ledge grab and wall-runs a w
   assert.ok(ok >= BAKE.alleyWindow, `climb window ${ok} steps`);
   assert.ok(ledge > 0, "some takeoffs climb by the ledge");
   // Wall run: along wall w's +z face across the 9 m notch from roof a to roof b.
-  const m = { ...tallModel(), wallGaps: [{ a: TALL.gapA, b: TALL.gapB, wall: TALL.gapWall, axis: "x", dir: 1, edge: 155, far: 164, face: 12, side: 1 }] as WallGapLike[] } as CityModel;
+  const m = { ...tallModel(), wallGaps: [{ a: TALL.gapA, b: TALL.gapB, wall: TALL.gapWall, axis: "x", dir: 1, edge: 155, far: 164, face: 12, side: 1 }] as WallGap[] } as CityModel;
   const wl = buildLinks(m, RUN).get(TALL.gapA)!.find(l => l.to === TALL.gapB)!;
   const a = m.solids[TALL.gapA], b = m.solids[TALL.gapB];
   const w2 = { index: new CityIndex(m), runner: null };
@@ -155,6 +159,35 @@ test("runner hops: he climbs a +2.5 m alley step by ledge grab and wall-runs a w
   }
   assert.ok(wok >= BAKE.alleyWindow, `wall-run hop window ${wok} steps`);
   assert.ok(walls > 0, "he wall-runs the notch");
+});
+
+test("zip hops: he zips from the edge up to a roof 14 m higher across a street, launched onto it clear of the rim", () => {
+  const pm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 34)] as Solid[]);
+  const link = buildLinks(pm, RUN).get(0)!.find(l => l.to === 1)!;
+  assert.equal(link.kind, "zip");
+  assert.ok(link.rim && link.rim.solid === 1 && link.rim.ax === 34 && link.rim.ay === 34 && link.rim.nx === -1, "the near rim of the higher roof");
+  const world = { index: new CityIndex(pm), runner: null };
+  let ok = 0, zipped = 0;
+  for (let j = 0; j < 120; j++) {
+    const params = newParams(1);
+    const bot = new EdgeBot(pm, world, RUN, { from: { roof: 0, x: 4, y: 20.9, z: 7 }, to: { roof: 1, x: 42, y: 34.9, z: 7 }, links: [link] }, params);
+    params[0].jump = j;
+    bot.onStep = bb => { if (bb.body.zipOn) zipped++; };
+    bot.runToEnd();
+    if (bot.phase === PH_DONE) { ok++; assert.ok(bot.results[0].margin >= 1.5); }
+  }
+  assert.ok(ok >= BAKE.alleyWindow, `zip window ${ok} steps`);
+  assert.ok(zipped > 0);
+  // A street swing that cannot bake falls back to the same zip across (reported as a zip hop).
+  const flat = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 21)] as Solid[]);
+  const sl = buildLinks(flat, RUN).get(0)!.find(l => l.to === 1)!;
+  assert.equal(sl.kind, "street");
+  assert.equal(sl.swings.length, 0, "nothing tall to web");
+  const fw = { index: new CityIndex(flat), runner: null };
+  const js = [{ roof: 0, x: 4, y: 20.9, z: 7 }, { roof: 1, x: 42, y: 21.9, z: 7 }];
+  const r = bakeEdge(flat, fw, RUN, js, { from: 0, to: 1, roofs: [0, 1], links: [sl] }).report;
+  assert.ok(r.ok, r.reason);
+  assert.equal(r.hops[0].kind, "zip");
 });
 
 test("bake: swing edges on a tall synthetic city record rope samples that index the pack v2 anchor table; deterministic", () => {

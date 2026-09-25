@@ -3,12 +3,12 @@
 // run the graph checks and record 60 Hz tracks into runner.pack.bin. Failing candidates are dropped
 // (never fail the build); the graph checks are reported for test 5.
 import { Fnv1a } from "../sim/math.ts";
-import { MOVE_KEYS, runnerFrom, type Tuning } from "../sim/tuning.ts";
-import { EV_ATTACH, EV_JUMP, EV_LAND, EV_RELEASE, EV_ROLL, EV_VAULT, EV_WALLJUMP, type SimWorld } from "../sim/player.ts";
+import { RUNNER_UNUSED_KEYS, runnerFrom, type Tuning } from "../sim/tuning.ts";
+import { EV_ATTACH, EV_JUMP, EV_LAND, EV_RELEASE, EV_ROLL, EV_VAULT, EV_WALLJUMP, EV_ZIP, EV_ZIP_END, type SimWorld } from "../sim/player.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { AnchorHit } from "../world/cityQuery.ts";
 import { buildGraph, forcedUTurns, stronglyConnected, type Candidate, type HopKind, type Junction } from "./graph.ts";
-import { EdgeBot, newParams, PH_DONE, PH_FAIL, PH_LINE, type HopParams } from "./bot.ts";
+import { EdgeBot, newParams, zipHop, PH_DONE, PH_FAIL, PH_LINE, type HopParams } from "./bot.ts";
 import {
   encodePack, packHash, EVT_ATTACH, EVT_LAND, EVT_RELEASE, EVT_ROLL, EVT_TAKEOFF, EVT_VAULT, PACK_VERSION, PHASE_AIR, PHASE_GROUND,
   PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, SAMPLE_STRIDE, type PackEdgeHeader, type PackHeader,
@@ -35,7 +35,7 @@ export const BAKE = {
 export type HopReport = { kind: string; from: number; to: number; window: number; windowMs: number; param: number; margin: number; climbed?: boolean };
 
 /** Hops whose takeoff step is swept with the alley window (jump-step hops). */
-export const jumpHop = (k: HopKind | string): boolean => k === "alley" || k === "climb" || k === "wallrun";
+export const jumpHop = (k: HopKind | string): boolean => k === "alley" || k === "climb" || k === "wallrun" || k === "zip";
 const windowOf = (k: string): number => (jumpHop(k) ? BAKE.alleyWindow : k === "drop" ? BAKE.dropWindow : BAKE.swingWindow);
 export type EdgeReport = {
   from: number; to: number; roofs: number[]; ok: boolean; reason: string; hops: HopReport[];
@@ -66,10 +66,11 @@ export type Baked = { cand: Candidate; params: HopParams[]; report: EdgeReport }
 
 export function tuningHash(t: Tuning): string {
   const h = new Fnv1a();
-  // The player-only moves are off for the runner: leave their keys out so older bakes hash the same.
-  const movesOff = t.airJumps === 0 && !t.webZip;
+  // The player-only moves (double jump, slide) are off for the runner: leave their keys out, so tuning them
+  // never stales a pack. Web zip is his (zip-up hops): its keys count.
+  const movesOff = t.airJumps === 0 && !t.slide;
   for (const k of Object.keys(t).sort()) {
-    if (movesOff && (MOVE_KEYS as readonly string[]).includes(k)) continue;
+    if (movesOff && (RUNNER_UNUSED_KEYS as readonly string[]).includes(k)) continue;
     const v = (t as Record<string, unknown>)[k];
     h.str(k);
     if (typeof v === "number") h.f64(v); else h.str(String(v));
@@ -90,6 +91,29 @@ function longestRun(ok: boolean[]): [number, number] | null {
   return best;
 }
 
+/** A street hop's zip fallback from checkpoint `start`: sweep the zip step like a jump hop. */
+function zipSweep(start: EdgeBot, h: number): { bot: EdgeBot; window: number; param: number } | null {
+  const b = start.clone();
+  b.params[h].zip = true;
+  b.params[h].lat = NaN;
+  while (b.phase !== PH_LINE && b.phase < PH_DONE) b.tick();
+  if (b.phase >= PH_DONE) return null;
+  const s0 = b.step;
+  const ok: boolean[] = [];
+  for (let j = 0; j < BAKE.alleySweep; j++) {
+    const c = b.clone();
+    c.params[h].jump = s0 + j;
+    c.runHop();
+    ok.push(c.phase !== PH_FAIL && c.hop > h);
+  }
+  const run = longestRun(ok);
+  const window = run ? run[1] - run[0] + 1 : 0;
+  if (!run || window < BAKE.alleyWindow) return null;
+  const param = s0 + ((run[0] + run[1]) >> 1);
+  b.params[h].jump = param;
+  return { bot: b, window, param };
+}
+
 /** Bake one candidate edge. Returns the chosen params or a failure reason. */
 export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junctions: Junction[], cand: Candidate): Baked {
   const plan = { from: junctions[cand.from], to: junctions[cand.to], links: cand.links };
@@ -102,7 +126,7 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
   bot.onStep = onStep;
   for (let h = 0; h < cand.links.length; h++) {
     const link = cand.links[h];
-    let window = 0, param = -1;
+    let window = 0, param = -1, zipped = false;
     if (link.kind === "drop") {
       // Walk off at a swept pace (no jump); ok = lands on the target roof >= 1.5 m inside, no wall contact.
       while (bot.phase !== PH_LINE && bot.phase < PH_DONE) bot.tick();
@@ -140,7 +164,7 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
       // release step; the first option with a long enough window wins.
       const start = bot.clone();
       let best: { bot: EdgeBot; run: [number, number]; J: number } | null = null;
-      for (let alt = 0; alt < Math.max(1, link.swings.length) && !best; alt++) {
+      for (let alt = 0; alt < link.swings.length && !best; alt++) {
         const b = alt === 0 ? bot : start.clone();
         b.params[h].alt = alt;
         b.params[h].lat = NaN;
@@ -163,19 +187,26 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
         window = Math.max(window, w);
         if (run && w >= BAKE.swingWindow) best = { bot: b, run, J };
       }
-      if (!best) { report.reason = `swing hop ${h} window ${window} steps`; report.hops.push({ kind: "street", from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param: -1, margin: 0 }); return { cand, params, report }; }
-      if (best.bot !== bot) { bot = best.bot; bot.onStep = onStep; }
-      const { run, J } = best;
-      window = run[1] - run[0] + 1;
-      const off = Math.min(run[1] - run[0], Math.max(24, Math.floor((run[1] - run[0] + 1) / 4)));
-      param = J + 2 + run[0] + off;
-      bot.params[h].release = param;
+      if (best) {
+        if (best.bot !== bot) { bot = best.bot; bot.onStep = onStep; }
+        const { run, J } = best;
+        window = run[1] - run[0] + 1;
+        const off = Math.min(run[1] - run[0], Math.max(24, Math.floor((run[1] - run[0] + 1) / 4)));
+        param = J + 2 + run[0] + off;
+        bot.params[h].release = param;
+      } else {
+        // No swing bakes: zip across onto the far rim instead (swept like a jump hop).
+        const zb = link.rim ? zipSweep(start, h) : null;
+        if (!zb) { report.reason = `swing hop ${h} window ${window} steps`; report.hops.push({ kind: "street", from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param: -1, margin: 0 }); return { cand, params, report }; }
+        bot = zb.bot; bot.onStep = onStep;
+        window = zb.window; param = zb.param; zipped = true;
+      }
     }
     bot.runHop();
     if (bot.phase === PH_FAIL || bot.hop <= h) { report.reason = bot.fail || `hop ${h} failed on replay`; return { cand, params, report }; }
     const r = bot.results[h];
     report.hops.push({
-      kind: link.kind, from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param, margin: Math.round(r.margin * 100) / 100,
+      kind: zipped ? "zip" : link.kind, from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param, margin: Math.round(r.margin * 100) / 100,
       ...(r.climbed && link.kind !== "drop" ? { climbed: true } : {}),
     });
   }
@@ -211,18 +242,19 @@ export function recordEdge(model: CityModel, world: SimWorld, runner: Tuning, ju
   let rope = -1;
   bot.onStep = bb => {
     const body = bb.body;
-    if (body.events & EV_ATTACH) {
+    if (body.events & (EV_ATTACH | EV_ZIP)) {
       const hi = Math.min(bb.hop, bb.plan.links.length - 1), l = bb.plan.links[hi];
-      const a = l.swings[Math.min(bb.params[hi].alt, l.swings.length - 1)]?.anchor ?? l.anchor;
+      const a = zipHop(l, bb.params[hi]) ? l.rim : l.swings[Math.min(bb.params[hi].alt, l.swings.length - 1)]?.anchor ?? l.anchor;
       rope = a ? anchorIndex(a) : -1;
     }
-    const phase = body.ropeSolid >= 0 ? PHASE_ROPE : body.ledgeMode > 0 ? PHASE_LEDGE : body.wallMode > 0 ? PHASE_WALL : body.grounded ? PHASE_GROUND : PHASE_AIR;
+    // A zip is recorded as a rope phase on its rim anchor (the view draws the web line and the hang pose).
+    const phase = body.ropeSolid >= 0 || body.zipOn ? PHASE_ROPE : body.ledgeMode > 0 ? PHASE_LEDGE : body.wallMode > 0 ? PHASE_WALL : body.grounded ? PHASE_GROUND : PHASE_AIR;
     const ref = phase === PHASE_ROPE ? rope : phase === PHASE_LEDGE ? body.ledgeSolid : phase === PHASE_WALL ? body.wallSolid : phase === PHASE_GROUND ? body.roofId : -1;
     states.push([body.p.x, body.p.y, body.p.z, phase, ref]);
     const i = states.length - 1;
     if (body.events & (EV_JUMP | EV_WALLJUMP)) events.push(i, EVT_TAKEOFF, 0);
-    if (body.events & EV_ATTACH) events.push(i, EVT_ATTACH, rope);
-    if (body.events & EV_RELEASE) events.push(i, EVT_RELEASE, 0);
+    if (body.events & (EV_ATTACH | EV_ZIP)) events.push(i, EVT_ATTACH, rope);
+    if (body.events & (EV_RELEASE | EV_ZIP_END)) events.push(i, EVT_RELEASE, 0);
     if (body.events & EV_LAND) events.push(i, EVT_LAND, body.roofId);
     if (body.events & EV_VAULT) events.push(i, EVT_VAULT, 0);
     if (body.events & EV_ROLL) events.push(i, EVT_ROLL, 0);
@@ -303,7 +335,9 @@ export function bake(model: CityModel, player: Tuning, log: (m: string) => void 
   const long = (b: Baked) => (b.report.seconds > 10 ? 1 : 0);
   // Round 7 Vertigo: edges with a drop first (his route should mix swings with big falls).
   const dropFirst = model.config?.vertigo ? (b: Baked) => (b.cand.links.some(l => l.kind === "drop") ? 0 : 1) : () => 0;
-  const byScore = (a: Baked, b: Baked) => dropFirst(a) - dropFirst(b) || long(a) - long(b) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
+  // Integration: fewer zips first (zips are how he climbs the tall podiums; swings and parkour are the show).
+  const zips = (b: Baked) => Math.min(3, b.report.hops.filter(h => h.kind === "zip").length);
+  const byScore = (a: Baked, b: Baked) => dropFirst(a) - dropFirst(b) || long(a) - long(b) || zips(a) - zips(b) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
   let kept: Baked[] = [];
   // Greedy spread: after the best edge, each pick maximises the smallest exit-direction difference to
   // the edges already picked (so a junction never offers only one way out), distinct destinations.

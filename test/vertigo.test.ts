@@ -41,7 +41,7 @@ function pairModel(ta: number, tb: number): CityModel {
 function runDrop(model: CityModel, pace: number): EdgeBot {
   const [a, b] = model.solids;
   const link = buildLinks(model).get(0)!.find(l => l.to === 1)!;
-  const world: SimWorld = { index: new CityIndex(model), hooks: model.hooks, lowestRoof: model.lowestRoof, runner: null };
+  const world: SimWorld = { index: new CityIndex(model), runner: null };
   const params = newParams(1);
   params[0].pace = pace;
   const bot = new EdgeBot(model, world, runnerFrom(player), {
@@ -51,12 +51,12 @@ function runDrop(model: CityModel, pace: number): EdgeBot {
   return bot;
 }
 
-test("drop hops: an alley >= 6 m down links as a drop, the climb back is not linked", () => {
+test("drop hops: an alley >= 6 m down links as a drop, the climb back is a zip", () => {
   const m = pairModel(40, 20);
   const links = buildLinks(m);
   const down = links.get(0)!.find(l => l.to === 1);
   assert.equal(down?.kind, "drop");
-  assert.equal(links.get(1)!.some(l => l.to === 0), false, "20 m climb is never a link");
+  assert.equal(links.get(1)!.find(l => l.to === 0)?.kind, "zip", "the 20 m climb back is a zip up (never a jump)");
   // Small steps stay alley hops both ways (1 m), a 3 m step down is an alley hop (jump), not a drop.
   assert.equal(buildLinks(pairModel(21, 20)).get(0)!.find(l => l.to === 1)?.kind, "alley");
   assert.equal(buildLinks(pairModel(21, 20)).get(1)!.find(l => l.to === 0)?.kind, "alley");
@@ -85,7 +85,7 @@ test("drop hops: the walk-off pace window lands >= 1.5 m inside with no wall con
 
 test("Vertigo city: the spiral keeps its range, five 150-220 m needles, no balloons, G2 alley steps", () => {
   const model = vertigoModel();
-  assert.deepEqual(model.hooks, []);
+  assert.equal("hooks" in model, false);
   const roofs = model.solids.filter(s => s.kind === "roof").map(s => s.top);
   assert.ok(Math.min(...roofs) <= 25 && Math.max(...roofs) >= 85, `roofs ${Math.min(...roofs)}-${Math.max(...roofs)} m`);
   const needles = model.solids.filter(s => s.kind === "tower");

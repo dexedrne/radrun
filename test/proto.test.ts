@@ -16,7 +16,7 @@ function world(): { w: SimWorld; anchor: AnchorHit } {
     { id: 0, kind: "roof", landable: true, x0: -30, z0: -10, x1: 0, z1: 10, top: 30 },
     { id: 1, kind: "tower", landable: false, x0: 15, z0: 40, x1: 16, z1: 41, top: 70 },
   ];
-  const model = { solids, hooks: [], lowestRoof: 30 } as unknown as CityModel;
+  const model = { solids, lowestRoof: 30 } as unknown as CityModel;
   const a = emptyAnchor();
   // Visual anchor on the needle's face toward the arc (clear line of sight), physics pivot 16 ahead / 18 up / 6 to the side.
   a.solid = 1; a.ax = 15.5; a.ay = 60; a.az = 40; a.px = 15.5; a.py = 48.9; a.pz = 6; a.nx = 0; a.nz = -1; a.rim = true;
