@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useUi } from "./store.ts";
 import { btn, panel, scroller, useViewport } from "./screens.tsx";
+import { safe } from "./safe.ts";
 import { HATS, LEVELS, TOTAL_STARS, hatUnlocked, levelUnlocked, loadProgress, objectiveText, saveProgress, starCount, type Hat, type Level, type Objective, type Progress } from "../game/campaign.ts";
 import { mutNames } from "../game/mutators.ts";
 import { DISTRICTS, DISTRICT_IDS } from "../world/districts.ts";
@@ -26,12 +27,12 @@ export function CampaignScreen(props: { onStart: (n: number) => void; onBack: ()
   const cell = compact ? 11 : 13;
   return (
     <div style={{ ...scroller, background: "rgba(8,10,22,0.45)" }} data-testid="campaign-screen">
-      <div style={{ ...panel, margin: "auto", width: "min(860px, 96vw)", boxSizing: "border-box", padding: compact ? "8px 10px" : "16px 20px" }}>
+      <div style={{ ...panel, margin: "auto", width: "min(860px, calc(100% - 12px))", boxSizing: "border-box", padding: compact ? "8px 10px" : "16px 20px" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           <div style={{ font: `900 ${compact ? 20 : 28}px ui-monospace, monospace`, letterSpacing: 3 }}>CAMPAIGN</div>
           <div style={{ fontWeight: 800, color: GOLD }} data-testid="campaign-stars">{total}/{TOTAL_STARS} ★</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: compact ? `repeat(${DISTRICT_IDS.length}, 1fr)` : "repeat(auto-fit, minmax(150px, 1fr))", gap: compact ? 6 : 10, marginTop: compact ? 6 : 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? `repeat(${DISTRICT_IDS.length}, minmax(0, 1fr))` : "repeat(auto-fit, minmax(150px, 1fr))", gap: compact ? 6 : 10, marginTop: compact ? 6 : 12 }}>
           {DISTRICT_IDS.map(id => (
             <div key={id}>
               <div style={{ fontSize: cell, fontWeight: 800, opacity: 0.85, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{DISTRICTS[id].name}</div>
@@ -115,7 +116,7 @@ export function CampaignHud() {
   if (!level) return null;
   const h = { elapsed: r.elapsed, falls: r.falls, maxChain: r.maxChain, clock: r.clock, runnerLow: r.runnerLow };
   return (
-    <div style={{ position: "fixed", zIndex: 10, pointerEvents: "none", left: 12, top: touch ? 112 : 58, ...panel, padding: "6px 10px", fontSize: compact ? 11 : 12 }} data-testid="campaign-hud">
+    <div style={{ position: "fixed", zIndex: 10, pointerEvents: "none", left: safe("left", 12), top: safe("top", touch ? 112 : 58), ...panel, padding: "6px 10px", fontSize: compact ? 11 : 12 }} data-testid="campaign-hud">
       <div style={{ fontWeight: 900, marginBottom: 2 }}>{level.n}. {level.name}</div>
       {level.goals.map((o, i) => {
         const st = live(o, h);

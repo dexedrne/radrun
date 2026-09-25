@@ -7,8 +7,11 @@ import { useEffect, useRef } from "react";
 import type { InputLatch } from "../input/input.ts";
 import { TOUCH } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
+import { safe } from "./safe.ts";
 
 const STICK_R = 56;
+/** The stick's resting spot and every button sit inside the safe area (notch side, home indicator). */
+const STICK_LEFT = safe("left", 88), STICK_BOTTOM = safe("bottom", 34);
 
 type Track = { stick: number; ox: number; oy: number; look: number; lx: number; ly: number; web: number; wx: number; wy: number };
 
@@ -42,7 +45,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
     const s = t.current;
     if (!on) {
       b.style.opacity = "0.35";
-      b.style.left = "88px"; b.style.top = "auto"; b.style.bottom = "34px";
+      b.style.left = STICK_LEFT; b.style.top = "auto"; b.style.bottom = STICK_BOTTOM;
       k.style.transform = "translate(0px, 0px)";
       return;
     }
@@ -133,7 +136,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
     >
       {/* floating stick (resting ghost bottom-left until a thumb lands) */}
       <div ref={base} style={{
-        position: "absolute", left: 88, bottom: 34, width: STICK_R * 2, height: STICK_R * 2, borderRadius: STICK_R, opacity: 0.35,
+        position: "absolute", left: STICK_LEFT, bottom: STICK_BOTTOM, width: STICK_R * 2, height: STICK_R * 2, borderRadius: STICK_R, opacity: 0.35,
         background: "rgba(14,16,30,0.35)", border: "2px solid rgba(255,255,255,0.5)", pointerEvents: "none",
       }}>
         <div ref={knob} style={{
@@ -144,7 +147,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
       {/* WEB (hold) */}
       <div ref={webBtn} data-testid="touch-web"
         onPointerDown={webDown} onPointerMove={webMove} onPointerUp={webUp} onPointerCancel={webUp}
-        style={round(104, { right: 26, bottom: 30, background: yoink ? "rgba(255,51,85,0.85)" : hooked ? "rgba(61,220,132,0.75)" : "rgba(255,61,127,0.62)" })}>
+        style={round(104, { right: safe("right", 26), bottom: safe("bottom", 30), background: yoink ? "rgba(255,51,85,0.85)" : hooked ? "rgba(61,220,132,0.75)" : "rgba(255,61,127,0.62)" })}>
         {yoink ? "YOINK" : "WEB"}
       </div>
       {/* JUMP */}
@@ -152,7 +155,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); input.touchJump(); press(jumpBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); press(jumpBtn.current, false); }}
         onPointerCancel={() => press(jumpBtn.current, false)}
-        style={round(80, { right: 146, bottom: 22, background: "rgba(14,16,30,0.5)" })}>
+        style={round(80, { right: safe("right", 146), bottom: safe("bottom", 22), background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
       {/* ZIP: web-zip to the ringed balloon / the roof ahead; dimmed while it recharges */}
@@ -160,7 +163,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); input.touchZip(); press(zipBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); press(zipBtn.current, false); }}
         onPointerCancel={() => press(zipBtn.current, false)}
-        style={round(64, { right: 148, bottom: 114, background: zip > 0 ? "rgba(14,16,30,0.35)" : "rgba(40,150,190,0.62)", opacity: zip > 0 ? 0.5 : 1 })}>
+        style={round(64, { right: safe("right", 148), bottom: safe("bottom", 114), background: zip > 0 ? "rgba(14,16,30,0.35)" : "rgba(40,150,190,0.62)", opacity: zip > 0 ? 0.5 : 1 })}>
         ZIP
       </div>}
       {/* ease the camera toward him while held (Q / RMB on desktop); not in practice (no runner) */}
@@ -168,13 +171,13 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchFace = true; }}
         onPointerUp={e => { e.stopPropagation(); input.touchFace = false; }}
         onPointerCancel={() => { input.touchFace = false; }}
-        style={round(54, { right: 52, bottom: 150, background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
+        style={round(54, { right: safe("right", 52), bottom: safe("bottom", 150), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         HIM
       </div>}
       {/* pause */}
       <div data-testid="touch-pause"
         onPointerDown={e => { stop(e); onPause(); }}
-        style={round(44, { left: 10, top: 10, background: "rgba(14,16,30,0.55)", fontSize: 14, border: "1px solid rgba(255,255,255,0.4)" })}>
+        style={round(44, { left: safe("left", 10), top: safe("top", 10), background: "rgba(14,16,30,0.55)", fontSize: 14, border: "1px solid rgba(255,255,255,0.4)" })}>
         II
       </div>
     </div>
