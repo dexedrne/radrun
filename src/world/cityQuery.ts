@@ -60,14 +60,15 @@ export function faceCoord(s: Solid, nx: number, nz: number): number {
 
 /**
  * §2.1 search. (x, y, z) body centre; (fx, fz) unit forward; speed = |v_xz|; ringSolid = hysteresis;
- * lastSolid (-1 = none) = the building let go of in the last 1.0 s; skipRoof = the roof stood on (-1 airborne).
+ * lastSolid (-1 = none) = the building let go of in the last 1.0 s; skipRoof = the roof stood on (-1 airborne);
+ * cone = the aim cone's cosine (k.aimCos; round 10's falling fallback passes k.aimCosFall).
  * For each solid in ropeMax, Q = the closest point of its box to the ideal point (roof interior -> the rim, a
  * point inside the box -> the nearest side face), filtered by height, rope length, aim cone and a clear line.
  * Fills out (pivot included, §2.2), returns false when nothing qualifies. Allocation-free.
  */
 export function findAnchor(
   idx: CityIndex, x: number, y: number, z: number, fx: number, fz: number, speed: number,
-  k: Tuning, ringSolid: number, lastSolid: number, skipRoof: number, out: AnchorHit,
+  k: Tuning, ringSolid: number, lastSolid: number, skipRoof: number, out: AnchorHit, cone: number = k.aimCos,
 ): boolean {
   const ahead = k.anchorAhead + k.anchorAheadPerSpeed * speed;
   const sx = x + fx * ahead, sy = y + k.anchorUp, sz = z + fz * ahead;
@@ -103,7 +104,7 @@ export function findAnchor(
     const d2 = dx * dx + dy * dy + dz * dz;
     if (d2 < rMin2 || d2 > rMax2) continue;
     const hl = Math.sqrt(dx * dx + dz * dz);
-    if (hl >= CONE_FREE && dx * fx + dz * fz < k.aimCos * hl) continue;
+    if (hl >= CONE_FREE && dx * fx + dz * fz < cone * hl) continue;
     const ex = qx - sx, ey = qy - sy, ez = qz - sz;
     let sc = Math.sqrt(ex * ex + ey * ey + ez * ez);
     if (rim) sc -= k.anchorRimBonus;
@@ -123,10 +124,17 @@ export function findAnchor(
     out.solid = s.id; out.ax = qx; out.ay = qy; out.az = qz; out.nx = nx; out.nz = nz; out.rim = rim; out.score = sc;
   }
   if (out.solid < 0) return false;
-  // Pivot: pushed off the face by min(swingOut, half the body's horizontal distance to the face), at least
-  // half of swingOut (from a wall run on that face the swing then carries you off the wall, not along it).
+  // Pivot (round 10): pushed off the face into the open air in front of it (a ray along the normal just under
+  // the anchor): swingOutFree of that gap (0.5 = the middle of the street), at least swingOutMin but never past
+  // the middle and never further out than the body, at most swingOut. A web to a side building then swings
+  // you down the street (the arc crosses toward its middle), not into that building's wall; from a wall run
+  // on that face it carries you swingOutMin off it.
+  const ox = out.ax + out.nx * 0.05, oy = out.ay - 1, oz = out.az + out.nz * 0.05, reach = 2 * k.swingOut;
+  const t = idx.segmentHit(ox, oy, oz, ox + out.nx * reach, oy, oz + out.nz * reach, out.solid, -1);
+  const free = t >= 0 ? t * reach : reach;
+  // ...and never further out than you are (a plaza or the city's edge must not pull you out over the open).
   const dist = (x - out.ax) * out.nx + (z - out.az) * out.nz;
-  const off = Math.min(k.swingOut, Math.max(0.5 * (dist > 0 ? dist : 0), 0.5 * k.swingOut));
+  const off = Math.min(k.swingOut, Math.max(Math.min(k.swingOutMin, 0.5 * free), Math.min(k.swingOutFree * free, dist > k.swingOutMin ? dist : k.swingOutMin)));
   out.px = out.ax + out.nx * off;
   out.py = out.ay;
   out.pz = out.az + out.nz * off;

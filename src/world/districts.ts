@@ -78,6 +78,9 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     sky: "sky/downtown.webp",
     config: DEFAULT_CONFIG,
     look: DOWNTOWN_LOOK,
+    // Round 10: the cleaner swing (swing heading, open-air pivots, the fall cone) caught him too early: a faster
+    // runner (Normal 1.2x sprinting to 1.7x, Degen 1.3x) and a 4 m Degen Yoink (npm run balance -- --only swing).
+    chase: { add: { normal: { base: 0.2, mMax: 0.2, airMax: 0.2 }, degen: { base: 0.2, yoinkRange: -0.5 } } },
   },
   market: {
     id: "market",
@@ -103,7 +106,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       add: {
         chill: { gStar: 20, base: 0.1, mMax: 0.35, airMax: 0.35 },
         normal: { gStar: 20, base: 0.15, mMax: 0.5, airMax: 0.5 },
-        degen: { gStar: 20, base: 0.1, mMax: 0.5, airMax: 0.5, yoinkRange: -0.5, panicBudget: 10 },
+        degen: { gStar: 20, base: 0.2, mMax: 0.5, airMax: 0.5, yoinkRange: -1, panicBudget: 10 },
       },
     },
     look: {
@@ -128,13 +131,14 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // Round 6: a longer head start (the wide blocks squeezed the spawn to ~24 m), a faster sprint and a
     // 3 m Degen Yoink. Round 9: Degen runs faster (1.3x) and gasses out after 5 s of sprint; the zipping
     // swing bot still catches him early here (median ~35 s, under the 40 s band; a longer head start only
-    // made it earlier).
+    // made it earlier). Round 10 (his routes swing instead of zipping): Normal 0.9x sprinting to 1.7x; Degen
+    // 1.4x with the table's 4.5 m Yoink and a 15 s panic budget.
     chase: {
       spawnMin: 26, spawnOther: 0,
       add: {
-        chill: { base: 0.1, mMax: 0.1, airMax: 0.1 },
-        normal: { gStar: 20, mMax: 0.5, airMax: 0.5 },
-        degen: { base: 0.2, yoinkRange: -1.5, mMax: 0.4, airMax: 0.4, panicBudget: -15 },
+        chill: { base: -0.05, yoinkRange: 0.5 },
+        normal: { gStar: 20, base: -0.1, mMax: 0.2, airMax: 0.2 },
+        degen: { base: 0.3, mMax: 0.4, airMax: 0.4, panicBudget: -5 },
       },
     },
     look: {
@@ -156,13 +160,14 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       wallGapChance: 0.25, skylineCount: 64,
     },
     // Round 9 (the zipping swing bot on the 66-124 m canyons, npm run balance -- --map towers): a slower
-    // runner than Downtown's (Normal 0.9x, sprinting to 1.7x, 4.5 m Yoink; Degen 0.9x with a 5 m Yoink and a
-    // 10 s panic budget, so he gasses out and the long chases end in a catch).
+    // runner than Downtown's (Degen 0.9x with a 5 m Yoink and a 10 s panic budget, so he gasses out and the
+    // long chases end in a catch). Round 10 (the cleaner swing, his swing-first routes): Normal 0.85x,
+    // sprinting to 1.6x, the classic 5 m Yoink; Degen 1.15x with the table's 4.5 m Yoink.
     chase: {
       add: {
-        chill: { base: 0.1, mMax: -0.15, airMax: -0.15 },
-        normal: { base: -0.1, yoinkRange: -0.5, mMax: 0.2, airMax: 0.2 },
-        degen: { base: -0.2, yoinkRange: 0.5, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
+        chill: { base: -0.1, mMax: -0.15, airMax: -0.15, yoinkRange: 0.5 },
+        normal: { base: -0.15, mMax: 0.1, airMax: 0.1 },
+        degen: { base: 0.05, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
       },
     },
     look: {
@@ -191,13 +196,15 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // spawn at about his height, away from his first edge (game/round.ts playerSpawn). Round 7 made him
     // slower here (the classic swinger got lost under the cliffs); round 9's swing bot zips back up to him,
     // so Normal is faster again (1.15x) and Degen a little faster than round 7's (npm run balance -- --map
-    // vertigo --only swing). He still waits for a lost chaser (mMin) and has a 4 m Normal Yoink.
+    // vertigo --only swing). He still waits for a lost chaser (mMin) and has a 4 m Normal Yoink. Round 10 (the
+    // cleaner swing): Normal 1.25x; Chill no longer caught in the first seconds (1.1x, sprints from 40 m,
+    // wanders less); Degen 1.15x with a 2.5 m Yoink and a longer panic budget.
     chase: {
       startHigh: 3, down: 0.6, spawnBelow: 5, spawnMin: 24,
       add: {
-        chill: { base: -0.2, mMax: -0.15, airMax: -0.15 },
-        normal: { base: 0.15, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
-        degen: { base: -0.05, mMin: -0.4, gStar: 15, mMax: -0.4, airMax: -0.4 },
+        chill: { base: 0.2, gStar: 20, sigma: -0.4 },
+        normal: { base: 0.25, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
+        degen: { base: 0.05, mMin: -0.4, gStar: 15, mMax: -0.3, airMax: -0.3, panicBudget: 15, yoinkRange: -2 },
       },
     },
     look: {

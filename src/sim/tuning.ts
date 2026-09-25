@@ -18,10 +18,18 @@ export type Tuning = {
   jumpBuffer: number;
   /** Aim cone (cosine of the half angle) for anchors and Yoink. */
   aimCos: number;
+  /** Round 10: falling with nothing in the aim cone, anchors are searched in this wider cone (cosine; >= aimCos = off). */
+  aimCosFall: number;
   /** Ring stickiness: the ringed building's score is this many metres better. */
   hysteresis: number;
   /** Rope steering (m/s^2): only across the swing plane (never along the arc). */
   ropeSteer: number;
+  /**
+   * Swing heading (round 10, 1/s): on the rope the horizontal velocity turns toward the stick's direction at
+   * this rate, speed kept (the sideways part of the swing dies out: a swing goes where you push, it does not
+   * drift into the walls). 0 = a free pendulum (round 9).
+   */
+  swingAlign: number;
   /** Let go: + releaseBoost along the velocity and + releaseUp (while v.y > -4). */
   releaseBoost: number;
   releaseUp: number;
@@ -56,8 +64,14 @@ export type Tuning = {
   anchorRimBonus: number;
   anchorAlternate: number;
   // ---- pendulum (§2.2-2.4) ----
-  /** Physics pivot pushed this far off the face (at most half the body's distance to it). */
+  /**
+   * Physics pivot pushed off the face into the open air in front of it: swingOutFree x that gap (0.5 = the
+   * middle of the street), at least swingOutMin (never past the middle), at most swingOut (m). Round 10: a web
+   * to a side building swings you down the middle of the street, not into its wall (round 9: 2.5-5 m off).
+   */
   swingOut: number;
+  swingOutFree: number;
+  swingOutMin: number;
   /** The arc's bottom stays this far above the floor under the pivot (reel to a shorter rope if needed). */
   swingFloorClear: number;
   swingReel: number;
@@ -88,6 +102,8 @@ export type Tuning = {
   wallRunCooldown: number;
   wallClimbSpeed: number;
   wallClimbTime: number;
+  /** Run-up keeps momentum: it starts at max(wallClimbSpeed, wallClimbKeep x the speed you hit the wall at), easing down under light gravity. */
+  wallClimbKeep: number;
   wallJumpOut: number;
   wallJumpUp: number;
   wallJumpKeep: number;
@@ -179,8 +195,10 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   coyoteTime: 0.1,
   jumpBuffer: 0.1,
   aimCos: AIM_COS,
+  aimCosFall: -0.2,
   hysteresis: 4,
   ropeSteer: 4,
+  swingAlign: 2.5,
   releaseBoost: 2,
   releaseUp: 3,
   autoRelease: true,
@@ -200,11 +218,13 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   anchorMinAbove: 5,
   anchorAhead: 10,
   anchorAheadPerSpeed: 0.5,
-  anchorUp: 18,
+  anchorUp: 24,
   anchorVelBias: 0.6,
   anchorRimBonus: 2,
   anchorAlternate: 3,
-  swingOut: 5,
+  swingOut: 12,
+  swingOutFree: 0.5,
+  swingOutMin: 4,
   swingFloorClear: 6,
   swingReel: 10,
   swingGravity: 1.35,
@@ -227,6 +247,7 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   wallRunCooldown: 0.25,
   wallClimbSpeed: 9,
   wallClimbTime: 0.6,
+  wallClimbKeep: 0.55,
   wallJumpOut: 7,
   wallJumpUp: 9.5,
   wallJumpKeep: 0.9,
@@ -356,12 +377,12 @@ export const ROUND = {
 /** Fields tuning.json may override (numbers and booleans only; dt / body size are fixed). */
 export const TUNABLE_KEYS = [
   "gravity", "speedCap", "runSpeed", "groundAccel", "groundBrake", "carryDecay", "airAccel", "jumpSpeed",
-  "coyoteTime", "jumpBuffer", "aimCos", "hysteresis", "ropeSteer", "releaseBoost", "releaseUp", "autoRelease", "autoReleaseBelow", "bonk",
+  "coyoteTime", "jumpBuffer", "aimCos", "aimCosFall", "hysteresis", "ropeSteer", "swingAlign", "releaseBoost", "releaseUp", "autoRelease", "autoReleaseBelow", "bonk",
   "bonkMinSpeed", "bonkRatio", "bonkLock", "holdDelay", "zip", "yoinkRange",
   "ropeMin", "ropeMax", "anchorMinAbove", "anchorAhead", "anchorAheadPerSpeed", "anchorUp", "anchorVelBias", "anchorRimBonus", "anchorAlternate",
-  "swingOut", "swingFloorClear", "swingReel", "swingGravity", "swingPump", "swingKeepSpeed", "swingReleaseCos", "swingRehook", "losSteps",
+  "swingOut", "swingOutFree", "swingOutMin", "swingFloorClear", "swingReel", "swingGravity", "swingPump", "swingKeepSpeed", "swingReleaseCos", "swingRehook", "losSteps",
   "wallRun", "wallRunReach", "wallRunMinSpeed", "wallRunRatio", "wallRunMinBelowTop", "wallRunFallMax", "wallRunTime", "wallRunSpeed",
-  "wallRunAccel", "wallRunGravity", "wallRunKick", "wallRunCooldown", "wallClimbSpeed", "wallClimbTime", "wallJumpOut", "wallJumpUp",
+  "wallRunAccel", "wallRunGravity", "wallRunKick", "wallRunCooldown", "wallClimbSpeed", "wallClimbTime", "wallClimbKeep", "wallJumpOut", "wallJumpUp",
   "wallJumpKeep", "wallJumpGrace",
   "ledgeGrab", "ledgeLow", "ledgeHigh", "ledgeMaxVy", "ledgeHang", "ledgeClimbTime", "ledgeExitSpeed", "ledgeJumpUp",
   "vault", "vaultMax", "vaultLook", "vaultMinSpeed", "vaultClear",
@@ -392,6 +413,9 @@ export type CameraTuning = {
   fovEase: number;
   reducedMotion: boolean;
   easyGrab: boolean;
+  /** Round 10: next to a facade (wall run, and nearWallFor s after leaving one) the look point sits this far (m) off it. */
+  wallAway: number;
+  nearWallFor: number;
 };
 
 export const CAMERA: Readonly<CameraTuning> = Object.freeze({
@@ -412,6 +436,8 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   fovEase: 3,
   reducedMotion: false,
   easyGrab: false,
+  wallAway: 1.2,
+  nearWallFor: 0.7,
 });
 
 export type TuningJson = {

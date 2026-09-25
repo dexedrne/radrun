@@ -88,7 +88,7 @@ test("runner dwell: taunt only when d > 35; head turn starts exactly 36 steps be
 const RUN = runnerFrom(tuning.player);
 const roofBox = (x0: number, z0: number, x1: number, z1: number, top: number) => ({ kind: "roof" as const, landable: true, x0, z0, x1, z1, top });
 
-test("links: street swings carry a baked building anchor (none = no link); +1.2..3.5 m alley steps are climbs; wall gaps link both ways", () => {
+test("links: street swings carry a baked building anchor (none = no link); +1.2..9 m alley steps are climbs; wall gaps link both ways", () => {
   // The world's deriveModel lists tallModel()'s notch as a wall gap (a wall-run hop), so its avenue gives few
   // swings; tallBlocks() adds a block city with a tower in every block.
   const m = tallModel();
@@ -106,15 +106,19 @@ test("links: street swings carry a baked building anchor (none = no link); +1.2.
     }
   }
   assert.ok(swings >= 2, `${swings} swing links across the avenues`);
-  // Steps: +1 m alley hop, +2.5 m climb, +4..+32 m zip up, higher nothing, -8 m drop.
+  // Steps: +1 m alley hop, +2.5 m and +6 m climbs (round 10: the run-up + ledge grab), +10..+32 m zip up, higher
+  // nothing, -8 m drop. A climb above climbJumpMax keeps the zip onto the rim as its fallback.
   const pair = (tb: number) => deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 12, 12, 20), roofBox(16, 0, 28, 12, tb)] as Solid[]);
   const kind = (tb: number) => buildLinks(pair(tb), RUN).get(0)!.find(l => l.to === 1)?.kind;
   assert.equal(kind(21), "alley");
   assert.equal(kind(22.5), "climb");
-  assert.equal(kind(24), "zip", "a 4 m step is a zip up");
+  assert.equal(kind(26), "climb", "a 6 m step is a run-up climb");
+  assert.ok(buildLinks(pair(26), RUN).get(0)!.find(l => l.to === 1)?.rim, "with a zip fallback");
+  assert.equal(buildLinks(pair(22.5), RUN).get(0)!.find(l => l.to === 1)?.rim, null, "a low climb has none");
+  assert.equal(kind(30), "zip", "a 10 m step is a zip up");
   assert.equal(kind(20 + GRAPH.zipUpMax + 1), undefined, "past zipUpMax: no link");
   assert.equal(kind(12), "drop");
-  assert.equal(GRAPH.alleyClimbMax, 3.5);
+  assert.equal(GRAPH.alleyClimbMax, 9);
   // Wall gap: a -> b and b -> a along the wall face (model.wallGaps, read structurally).
   const gm = { ...m, wallGaps: [{ a: TALL.gapA, b: TALL.gapB, wall: TALL.gapWall, axis: "x", dir: 1, edge: 155, far: 164, face: 12, side: 1 }] as WallGap[] } as CityModel;
   const gl = buildLinks(gm, RUN);
@@ -161,16 +165,18 @@ test("runner hops: he climbs a +2.5 m alley step by ledge grab and wall-runs a w
   assert.ok(walls > 0, "he wall-runs the notch");
 });
 
-test("zip hops: he zips from the edge up to a roof 14 m higher across a street, launched onto it clear of the rim", () => {
-  const pm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 34)] as Solid[]);
+test("zip hops: he zips from the edge up to a roof 20 m higher across a street, launched onto it clear of the rim", () => {
+  // (round 10: up to streetClimbMax = 16 m higher a street hop tries a swing first)
+  const pm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 40)] as Solid[]);
   const link = buildLinks(pm, RUN).get(0)!.find(l => l.to === 1)!;
   assert.equal(link.kind, "zip");
-  assert.ok(link.rim && link.rim.solid === 1 && link.rim.ax === 34 && link.rim.ay === 34 && link.rim.nx === -1, "the near rim of the higher roof");
+  assert.ok(GRAPH.streetClimbMax < 20);
+  assert.ok(link.rim && link.rim.solid === 1 && link.rim.ax === 34 && link.rim.ay === 40 && link.rim.nx === -1, "the near rim of the higher roof");
   const world = { index: new CityIndex(pm), runner: null };
   let ok = 0, zipped = 0;
   for (let j = 0; j < 120; j++) {
     const params = newParams(1);
-    const bot = new EdgeBot(pm, world, RUN, { from: { roof: 0, x: 4, y: 20.9, z: 7 }, to: { roof: 1, x: 42, y: 34.9, z: 7 }, links: [link] }, params);
+    const bot = new EdgeBot(pm, world, RUN, { from: { roof: 0, x: 4, y: 20.9, z: 7 }, to: { roof: 1, x: 42, y: 40.9, z: 7 }, links: [link] }, params);
     params[0].jump = j;
     bot.onStep = bb => { if (bb.body.zipOn) zipped++; };
     bot.runToEnd();

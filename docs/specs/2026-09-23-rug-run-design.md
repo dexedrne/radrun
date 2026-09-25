@@ -20,7 +20,7 @@ self-contained.
 | Radbro #652, #4764, #2564 | owner's rigged GLBs, `delivery/radbro{652,4764,2564}_animations.glb` (**never** the `final/` set) | processed by `tools/assets` → `public/models/` |
 | Owned clips | `radbro{652,4764}_fishing.glb`, `radbro{652,4764}_waltz.glb` (delivery set) | folded into per-character clip packs |
 | George | owner's cat asset: `george_animations.glb` + `george_clips.json` | processed by `tools/assets` → `public/models/` |
-| Milady prototype | `VrmModel.tsx`, `loadVrm.ts`, `retarget.ts` (Meshy→VRM humanoid retarget with A→T rest alignment) | `src/app/VrmModel.tsx`, `src/vrm/` |
+| Milady prototype | `VrmModel.tsx`, `loadVrm.ts`, `retarget.ts` (Radbro→VRM humanoid retarget with A→T rest alignment) | `src/app/VrmModel.tsx`, `src/vrm/` |
 | Bag, rug, balloons | procedural geometry — no asset files | — |
 
 ## 1. Pitch
@@ -41,7 +41,7 @@ styling).
 
 | Character | Source | Role |
 |---|---|---|
-| Radbro #652 | owner's rigged Meshy GLB (24-bone rig, Meshy bone names `Hips > Spine02 > Spine01 > Spine > neck`, A-pose) | playable / runner |
+| Radbro #652 | owner's rigged GLB (24-bone auto-rig, bone names `Hips > Spine02 > Spine01 > Spine > neck`, A-pose) | playable / runner |
 | Radbro #4764 | same rig layout, different bind pose (Hips ≈ 110°, RightHand ≈ 40°) | playable / runner |
 | Radbro #2564 (GHOST) | same pipeline: tin-foil hat + kufi, aviators, ghost-white, "RAD RESPONSE" vest | playable / runner |
 | George | owner's black cat: quadruped, Blender cat skeleton, scripted clips | player's sidekick (§10) |
@@ -411,11 +411,11 @@ face their velocity (slerp 12 rad/s).
 hand holds the rope; #4764's katana is baked across his back); re-parented to the chaser's LeftHand
 on a catch.
 
-**Clips to buy: 10 Meshy preset clips × 3 Radbros = 90 credits** (3 credits each), each retargeted
-onto **every** rig in Meshy — the bind poses differ, so sharing clips across characters twists
+**Clips to buy: 10 preset clips × 3 Radbros = 90 credits** (3 credits each), each retargeted
+onto **every** rig in the rigging service — the bind poses differ, so sharing clips across characters twists
 joints. Check each preview for forward root motion before buying.
 
-| # | Clip | Meshy preset id |
+| # | Clip | preset id |
 |---|---|---|
 | 1 | Rope Hang Idle | 477 |
 | 2 | Grab Bar and Swing Forward | 495 |
@@ -429,7 +429,7 @@ joints. Check each preview for forward root motion before buying.
 | 10 | Falling Down | 366 |
 
 Owned on all three: Casual_Walk, Run_02, Lean_Forward_Sprint (Regular_Jump kept as a fallback pose).
-Fishing_Cast and Waltz are owned for #652/#4764; for #2564 they are made with Meshy text-to-motion
+Fishing_Cast and Waltz are owned for #652/#4764; for #2564 they are made with text-to-motion
 (~10 credits each, reusing the prompts that produced the originals). Optional wave 2 (+27 credits for
 all three): Catching Breath (31, gassed dwell), Sliding Stumble (519, bonk), Wave for Help (291,
 cornered). **Cut fallback** (15 credits for all three): Rope Hang Idle, Grab Bar and Swing Forward,
@@ -514,7 +514,7 @@ Disallow.
   data for it (checked at runtime).
 - Reactions are body clips: countdown → Big Wave Hello; idle → Idle with slow bone look-at at the
   player; catch → Victory Cheer; escape → Idle with head down. Clips are retargeted at runtime
-  (~50-100 ms) from #652's clip pack onto her normalized humanoid bones using the Meshy→VRM bone map
+  (~50-100 ms) from #652's clip pack onto her normalized humanoid bones using the Radbro→VRM bone map
   with A-pose → T-pose rest alignment, spine folding (3 source spine bones → 2) and a hips-height
   scale (the prototype's `retarget.ts`).
 
@@ -772,7 +772,7 @@ Radbro as a guest skin after a re-rig.
 **Cut order if time runs short:** touch (already stretch) → SFX and runner trail → catch slow-mo,
 countdown dolly and rug cinematic (fade to results instead) → neck glance and bag hand-off polish →
 Milady cameo → George's follow model (George appears only at countdown and results) → decor prefab
-and editor page → half the Meshy clips (the cut list, §9) → Chill tuning (ship Normal only, with a
+and editor page → half the bought clips (the cut list, §9) → Chill tuning (ship Normal only, with a
 wider Yoink).
 
 **Never cut:** the pure fixed-step sim and its tests, bake validation and graph checks, the rubber
@@ -791,7 +791,7 @@ band with flinch and panic budget, away-branching at junctions, Yoink, and fall 
 | Bakes brittle to generator changes | failing edges discarded automatically; the build fails only on the test-5 checks; ≥ 400 ms windows keep margin |
 | Reach margin in this city | aimRadius 17 from the body centre, reach lint in test 4, held LMB retries every step |
 | Real-GPU/Safari/WebGL2 performance unmeasured (two 61k-tri skinned Radbros + George + a 39k-tri Milady) | measure at M1; ≤ 20 draws + ~8 for the Milady; shadow maps off; dpr [1, 1.5]; fall back to the ~30k-tri simplified Radbros; the Milady is cuttable |
-| Meshy clips don't fit (wind-ups, root motion, hand pose, bind poses) | buy on M4 day 1, inspect hips range, `startAt` + root policy, cut-list substitutes |
+| Bought clips don't fit (wind-ups, root motion, hand pose, bind poses) | buy on M4 day 1, inspect hips range, `startAt` + root policy, cut-list substitutes |
 | George's follow model looks wrong (clipping, sliding) | delayed player path is collision-free by construction; ground clamp; speed-matched playback; cuttable to countdown/results only |
 | Simplified collision (box vs ground-rooted AABBs, no rope wrap) | accepted; LOS check at attach + solids lint |
 | Engine is 0.0.x from one author; licence unresolved | exact pins; ~70% pure TS; engine layer ≈ 14 files (≈ 2.5-day port); licence asked on M0 day 1, required before launch |
@@ -801,7 +801,7 @@ band with flinch and panic budget, away-branching at junctions, Yoink, and fall 
 | Pointer-lock quirks (Safari, iframes, Esc) | pause on lock loss + click-to-resume overlay |
 | Privacy leak | handle-only everywhere; dexedrne commit identity; local paths only in the untracked plan; review before every push |
 
-## 19. Credits (Meshy)
+## 19. Credits (3D service)
 
 | Item | Credits |
 |---|---|

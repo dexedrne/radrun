@@ -380,7 +380,11 @@ export function pickRing(b: Body, inp: InputFrame, k: Tuning, w: SimWorld, out: 
   if (fl < 1e-9) return RING_NONE;
   const last = b.relT < ALTERNATE_FOR ? b.lastRope : -1;
   const ring = b.ringId >= 0 ? b.ringId : -1;
-  return findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out) ? out.solid : RING_NONE;
+  if (findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out)) return out.solid;
+  // Round 10: falling with nothing in the aim cone (the end of an avenue, a crossing): the wider fall cone.
+  if (!b.grounded && b.v.y < 0 && k.aimCosFall < k.aimCos &&
+    findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, -1, out, k.aimCosFall)) return out.solid;
+  return RING_NONE;
 }
 
 // ---- web zip target ------------------------------------------------------------------------------
@@ -599,9 +603,13 @@ function startSlide(b: Body, k: Tuning): void {
   b.events |= EV_SLIDE;
 }
 
-/** Flush against the face of `solid` with outward normal (nx, nz); mode 1 = wall run, 2 = run-up. */
-function startWall(b: Body, k: Tuning, w: SimWorld, solid: number, nx: number, nz: number, mode: number): void {
+/**
+ * Flush against the face of `solid` with outward normal (nx, nz); mode 1 = wall run, 2 = run-up (hitSpeed = the
+ * horizontal speed it hit the wall at: round 10's run-up keeps momentum, a swing into a facade runs up it fast).
+ */
+function startWall(b: Body, k: Tuning, w: SimWorld, solid: number, nx: number, nz: number, mode: number, hitSpeed = 0): void {
   const s = w.index.solids[solid], p = b.p, v = b.v;
+  const hit = mode === WALL_UP ? k.wallClimbKeep * hitSpeed : 0;
   const f = faceCoord(s, nx, nz);
   if (nx !== 0) p.x = f + nx * k.halfWidth; else p.z = f + nz * k.halfWidth;
   const vn = v.x * nx + v.z * nz;
@@ -616,7 +624,7 @@ function startWall(b: Body, k: Tuning, w: SimWorld, solid: number, nx: number, n
   b.touchWall = solid; b.touchT = 0; b.touchNx = nx; b.touchNz = nz;
   b.airJumps = k.airJumps;
   b.slideT = 0;
-  if (mode === WALL_UP) { v.x = 0; v.z = 0; v.y = k.wallClimbSpeed; } else if (v.y < k.wallRunKick) v.y = k.wallRunKick;
+  if (mode === WALL_UP) { v.x = 0; v.z = 0; v.y = Math.max(k.wallClimbSpeed, hit, v.y); } else if (v.y < k.wallRunKick) v.y = k.wallRunKick;
   b.parkour++;
   b.events |= EV_WALLRUN;
 }
@@ -888,7 +896,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     if (b.wallT >= k.wallRunTime) endWall(b, 2);
   } else if (b.wallMode === WALL_UP) {
     b.wallT += dt;
-    v.x = 0; v.z = 0; v.y = k.wallClimbSpeed;
+    // Up the wall at the entry speed, easing down under wall-run gravity to wallClimbSpeed (round 10).
+    v.x = 0; v.z = 0; v.y = Math.max(k.wallClimbSpeed, v.y - k.gravity * k.wallRunGravity * dt);
     // Time up: it ends like a wall run, still rising (a ledge grab can follow on the way up: ~9 m reach).
     if (b.wallT >= k.wallClimbTime) endWall(b, 0);
   } else if (!b.grounded) {
@@ -918,6 +927,19 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
             const a = (mx * sx + mz * sz) * k.ropeSteer * dt;
             v.x += sx * a; v.y += sy * a; v.z += sz * a;
           }
+        }
+      }
+      // Round 10 swing heading: the horizontal velocity turns toward the stick (speed kept), so the sideways
+      // swing of a web to a side building dies out instead of carrying you into a wall.
+      const sl = mx * mx + mz * mz;
+      if (k.swingAlign > 0 && sl > 0.09) {
+        const hsv = Math.sqrt(v.x * v.x + v.z * v.z), il = 1 / Math.sqrt(sl);
+        const hx = mx * il, hz = mz * il, al = v.x * hx + v.z * hz;
+        if (hsv > 1 && al > 0) {
+          const f = Math.max(0, 1 - k.swingAlign * dt);
+          let ax = hx * al + (v.x - hx * al) * f, az = hz * al + (v.z - hz * al) * f;
+          const nl = Math.sqrt(ax * ax + az * az);
+          if (nl > 1e-6) { ax *= hsv / nl; az *= hsv / nl; v.x = ax; v.z = az; }
         }
       }
     } else if (k.airAccel > 0 && (mx !== 0 || mz !== 0)) {
@@ -966,11 +988,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         }
       }
     }
-    // Line check every losSteps steps (and the snapping-webs mutator): the web snaps, no boost.
+    // Line check every losSteps steps (and the snapping-webs mutator): the web snaps, no boost. Round 10: the
+    // physics rope (body -> pivot) is checked, not the drawn line to the rim, so a podium corner between you
+    // and a tower's rim no longer snaps a swing that clears it.
     const los = k.losSteps >= 1 ? Math.floor(k.losSteps) : 1;
-    const A2 = b.ropeA;
     if ((w.snapSteps !== undefined && b.ropeSteps >= w.snapSteps) ||
-      (b.ropeSteps % los === 0 && !anchorVisible(idx, p.x, p.y, p.z, A2.x, A2.y, A2.z, b.ropeSolid, -1))) {
+      (b.ropeSteps % los === 0 && !anchorVisible(idx, p.x, p.y, p.z, P.x, P.y, P.z, b.ropeSolid, -1))) {
       release(b, k, false);
       b.events |= EV_SNAP;
     } else if (k.autoRelease) {
@@ -1081,9 +1104,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       const vi0 = -(v0x * cnx + v0z * cnz), vi = vi0 > 0 ? vi0 : 0;
       const hs0 = Math.sqrt(v0x * v0x + v0z * v0z);
       const mIn = -(mx * cnx + mz * cnz);
-      if (b.ropeSolid < 0 && tryLedge(b, k, w, mx, mz, false)) { /* grabbed */ }
+      // Round 10: a swing into a facade with its rim in reach lets go and grabs the ledge (then climbs it).
+      if (tryLedge(b, k, w, mx, mz, false)) { if (b.ropeSolid >= 0) release(b, k, false); }
       else if (k.wallRun && vi > va * 1.5 && hs0 >= 6 && mIn > 0.7 && s.top - feet >= k.wallRunMinBelowTop &&
-        !(contact === b.lastWall && b.lastWallT < k.wallRunCooldown)) startWall(b, k, w, contact, cnx, cnz, WALL_UP);
+        !(contact === b.lastWall && b.lastWallT < k.wallRunCooldown)) startWall(b, k, w, contact, cnx, cnz, WALL_UP, hs0);
       // Swinging into a facade (W9): any real along-face speed becomes a wall run (the rope is let go).
       else if (wallRunOk(b, k, contact, cnx, cnz, s.top, v0x, v0z, feet, b.ropeSolid >= 0 ? 0 : k.wallRunRatio)) startWall(b, k, w, contact, cnx, cnz, WALL_RUN);
       else if (k.bonk && vi > k.bonkMinSpeed && vi > k.bonkRatio * hs0 && mIn <= 0.7) {

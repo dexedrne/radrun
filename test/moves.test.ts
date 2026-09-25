@@ -113,12 +113,14 @@ test("web zip to a ringed rim: pulled up under the speed cap, launched onto that
   b.grounded = false; b.p.x = 28; b.p.y = 52; b.p.z = 30; b.roofId = -1;
   const a = emptyAnchor();
   const inp = aimX(emptyInput(), 0.2, 1);
-  const ring = pickRing(b, inp, K, w, a);
+  // (the anchor search's ideal point at round 9's 18 m up: this spot rings the 62 m roof's rim)
+  const KR = { ...K, anchorUp: 18 };
+  const ring = pickRing(b, inp, KR, w, a);
   assert.ok(ring === 7 && a.rim, `ringed the rim of the 62 m roof (${ring}, rim ${a.rim})`);
   const za = emptyZipAim();
-  assert.equal(zipTarget(b, a, inp.aimX, inp.aimZ, K, w, za), 2, "a rim of a landable roof = a ledge zip");
+  assert.equal(zipTarget(b, a, inp.aimX, inp.aimZ, KR, w, za), 2, "a rim of a landable roof = a ledge zip");
   assert.equal(za.roof, 7);
-  assert.ok(run(b, K, w, 1, f => { aimX(f, 0.2, 1); f.zipPressed = true; }) & EV_ZIP);
+  assert.ok(run(b, KR, w, 1, f => { aimX(f, 0.2, 1); f.zipPressed = true; }) & EV_ZIP);
   let steps = 0, maxSp = 0;
   while (!(b.grounded && !b.zipOn) && steps++ < 600) {
     run(b, K, w, 1);

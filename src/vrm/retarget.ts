@@ -1,13 +1,13 @@
 /**
- * Retarget humanoid clips from a plain glTF rig (Meshy / Mixamo naming) onto a
+ * Retarget humanoid clips from a plain glTF rig (Radbro auto-rig / Mixamo naming) onto a
  * VRM's *normalized* humanoid bones, by baking world-space rotation deltas.
  *
  * Why baked instead of the per-track three-vrm example (loadMixamoAnimation):
- *  - that example assumes the source rest pose is a T-pose. The Radbro (Meshy)
+ *  - that example assumes the source rest pose is a T-pose. The Radbro (auto-rig)
  *    rig rests in an A-pose (upper arms ~60deg down), so its arms would come out
  *    ~60deg too high on a T-posed VRM. Here each limb bone's rest is re-aimed at
  *    the VRM's rest direction first (swing-only correction).
- *  - source/target hierarchies differ (Meshy has 3 spine bones, the Pockit VRMs
+ *  - source/target hierarchies differ (the Radbro rig has 3 spine bones, the Pockit VRMs
  *    have spine+chest, no upperChest). Deltas are computed in world space and
  *    re-parented to the nearest *mapped* VRM ancestor, so a skipped bone's
  *    rotation is folded into its child instead of being lost.
@@ -31,8 +31,8 @@ import { VRMHumanBoneParentMap, type VRM, type VRMHumanBoneName } from "@pixiv/t
 
 export type RigMap = Partial<Record<string, VRMHumanBoneName>>;
 
-/** Meshy auto-rig (Radbro delivery GLBs): Hips > Spine02 > Spine01 > Spine > neck > Head. */
-export const MESHY_RIG: RigMap = {
+/** Radbro auto-rig (delivery GLBs): Hips > Spine02 > Spine01 > Spine > neck > Head. */
+export const RADBRO_RIG: RigMap = {
   Hips: "hips",
   Spine02: "spine",
   Spine01: "chest",

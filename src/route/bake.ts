@@ -127,6 +127,7 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
   for (let h = 0; h < cand.links.length; h++) {
     const link = cand.links[h];
     let window = 0, param = -1, zipped = false;
+    const hopStart = link.kind === "climb" && link.rim ? bot.clone() : null;
     if (link.kind === "drop") {
       // Walk off at a swept pace (no jump); ok = lands on the target roof >= 1.5 m inside, no wall contact.
       while (bot.phase !== PH_LINE && bot.phase < PH_DONE) bot.tick();
@@ -144,21 +145,48 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
       param = BAKE.dropPaceMin + ((run[0] + run[1]) >> 1);
       bot.params[h].pace = param;
     } else if (jumpHop(link.kind)) {
-      while (bot.phase !== PH_LINE && bot.phase < PH_DONE) bot.tick();
-      if (bot.phase >= PH_DONE) { report.reason = bot.fail || "approach failed"; return { cand, params, report }; }
-      const s0 = bot.step;
-      const ok: boolean[] = [];
-      for (let j = 0; j < BAKE.alleySweep; j++) {
-        const c = bot.clone();
-        c.params[h].jump = s0 + j;
-        c.runHop();
-        ok.push(c.phase !== PH_FAIL && c.hop > h);
+      // Round 10: the takeoff lateral he arrives at first, then the span's middle and 3 m inside either end (a
+      // prop in the landing zone, or an arrival off a swing at the span's side); the first long-enough window wins.
+      const start = bot.clone();
+      const lats = [NaN];
+      if (link.kind !== "wallrun") {
+        lats.push((link.lo + link.hi) / 2);
+        if (link.hi - link.lo > 8) lats.push(link.lo + 3, link.hi - 3);
       }
-      const run = longestRun(ok);
-      window = run ? run[1] - run[0] + 1 : 0;
-      if (!run || window < BAKE.alleyWindow) { report.reason = `${link.kind} hop ${h} window ${window} steps`; report.hops.push({ kind: link.kind, from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param: -1, margin: 0 }); return { cand, params, report }; }
-      param = s0 + ((run[0] + run[1]) >> 1);
-      bot.params[h].jump = param;
+      let best: { bot: EdgeBot; run: [number, number]; s0: number } | null = null, reached = false, why = "";
+      for (let li = 0; li < lats.length && !best; li++) {
+        const b = li === 0 ? bot : start.clone();
+        b.params[h].lat = lats[li];
+        while (b.phase !== PH_LINE && b.phase < PH_DONE) b.tick();
+        if (b.phase >= PH_DONE) { if (li === 0) why = b.fail || "approach failed"; continue; }
+        reached = true;
+        const s0 = b.step;
+        const ok: boolean[] = [];
+        for (let j = 0; j < BAKE.alleySweep; j++) {
+          const c = b.clone();
+          c.params[h].jump = s0 + j;
+          c.runHop();
+          ok.push(c.phase !== PH_FAIL && c.hop > h);
+        }
+        const run = longestRun(ok);
+        const w = run ? run[1] - run[0] + 1 : 0;
+        window = Math.max(window, w);
+        if (run && w >= BAKE.alleyWindow) best = { bot: b, run, s0 };
+      }
+      // Round 10: a tall climb that does not bake (no run-up + ledge window) zips onto the rim instead.
+      const zb = !best && hopStart ? zipSweep(hopStart, h) : null;
+      if (best) {
+        if (best.bot !== bot) { bot = best.bot; bot.onStep = onStep; }
+        window = best.run[1] - best.run[0] + 1;
+        param = best.s0 + ((best.run[0] + best.run[1]) >> 1);
+        bot.params[h].jump = param;
+      } else if (zb) {
+        bot = zb.bot; bot.onStep = onStep;
+        window = zb.window; param = zb.param; zipped = true;
+      } else {
+        if (!reached) { report.reason = why; return { cand, params, report }; }
+        report.reason = `${link.kind} hop ${h} window ${window} steps`; report.hops.push({ kind: link.kind, from: link.from, to: link.to, window, windowMs: Math.round(window * 1000 / 120), param: -1, margin: 0 }); return { cand, params, report };
+      }
     } else {
       // Street swing: each baked anchor option in turn (its takeoff lateral, jump at the edge), sweeping the
       // release step; the first option with a long enough window wins.
@@ -336,8 +364,10 @@ export function bake(model: CityModel, player: Tuning, log: (m: string) => void 
   // Round 7 Vertigo: edges with a drop first (his route should mix swings with big falls).
   const dropFirst = model.config?.vertigo ? (b: Baked) => (b.cand.links.some(l => l.kind === "drop") ? 0 : 1) : () => 0;
   // Integration: fewer zips first (zips are how he climbs the tall podiums; swings and parkour are the show).
+  // Round 10: then more web swings (the pendulum is the show he puts on).
   const zips = (b: Baked) => Math.min(3, b.report.hops.filter(h => h.kind === "zip").length);
-  const byScore = (a: Baked, b: Baked) => dropFirst(a) - dropFirst(b) || long(a) - long(b) || zips(a) - zips(b) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
+  const swings = (b: Baked) => Math.min(3, b.report.hops.filter(h => h.kind === "street").length);
+  const byScore = (a: Baked, b: Baked) => dropFirst(a) - dropFirst(b) || long(a) - long(b) || zips(a) - zips(b) || swings(b) - swings(a) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
   let kept: Baked[] = [];
   // Greedy spread: after the best edge, each pick maximises the smallest exit-direction difference to
   // the edges already picked (so a junction never offers only one way out), distinct destinations.

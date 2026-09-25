@@ -160,7 +160,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
   const glbRest = useMemo(() => (glb && headBone ? headRestInverse(glb.root, headBone) : null), [glb, headBone]);
   const catRest = useMemo(() => headRestInverse(cat.root, cat.head), [cat]);
   const shadow = useRef<Mesh>(null);
-  const tmp = useMemo(() => ({ q: new Quaternion(), yaw: 0, t: 0, clip: "", wasOn: false, hat: "none" }), []);
+  const tmp = useMemo(() => ({ q: new Quaternion(), c: new Vector3(), yaw: 0, t: 0, clip: "", wasOn: false, hat: "none" }), []);
   useFrame((state, rawDelta) => {
     const g = game.george;
     const on = game.mode === "round";
@@ -192,7 +192,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     }
     node.quaternion.setFromAxisAngle(UP, tmp.yaw);
     // Mid-swing he leaps along your arc ~0.5 s behind you, i.e. right past the camera: hide him there.
-    const c = state.camera.position;
+    const c = state.camera.getWorldPosition(tmp.c); // world: the camera sits under the prefab node
     const cd = (c.x - x) * (c.x - x) + (c.y - y - 0.3) * (c.y - y - 0.3) + (c.z - z) * (c.z - z);
     node.visible = cd > 3.2 * 3.2;
     node.scale.setScalar(GEORGE_RENDER.scale);

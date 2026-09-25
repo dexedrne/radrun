@@ -24,12 +24,16 @@ export type Rig = {
   armUsed: number;
   /** Over-the-shoulder side: +1 right, -1 left (eased; a wall run on the right flips it off the wall). */
   side: number;
+  /** Round 10: how far (m, eased) the look point sits off the facade beside you, and that facade's normal. */
+  wallOff: number;
+  wallNx: number;
+  wallNz: number;
 };
 
 export function createRig(yaw: number, pitch = 0.12): Rig {
   const r: Rig = {
     yaw, pitch, sy: 0, cy: 1, fwd: { x: 0, y: 0, z: -1 }, arm: 6, fov: 62, kickT: 0,
-    pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6, side: 1,
+    pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6, side: 1, wallOff: 0, wallNx: 0, wallNz: 0,
   };
   rigLook(r, 0, 0, 0, false);
   return r;
@@ -73,6 +77,11 @@ export type RigInput = {
   wall?: boolean;
   wallNx?: number;
   wallNz?: number;
+  /**
+   * Round 10: a facade right beside you (wall-running, or just off one: webbing off a wall run), its outward
+   * normal in wallNx / wallNz. The look point eases wallAway m off it, the shoulder stays on the open side.
+   */
+  nearWall?: boolean;
 };
 
 /** segmentHit(a, b) -> parametric t in [0,1] of the first solid hit, or -1. */
@@ -85,6 +94,14 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
 
   // Target = chest; on the rope lean ropeBias of the way toward the pivot, at most ropeBiasMax m (W10).
   let tx = s.p.x, ty = s.p.y + 0.3, tz = s.p.z;
+  // Round 10: next to a facade the look point eases off it, so the arm behind has room (webbing off a wall
+  // run used to pull the camera into the Radbro's hair, or behind the wall).
+  const nearWall = (s.wall || s.nearWall) === true;
+  r.wallOff += ((nearWall ? cam.wallAway : 0) - r.wallOff) * Math.min(1, 6 * dt);
+  if (r.wallOff > 1e-3) {
+    if (nearWall) { r.wallNx = s.wallNx ?? 0; r.wallNz = s.wallNz ?? 0; }
+    tx += r.wallNx * r.wallOff; tz += r.wallNz * r.wallOff;
+  }
   if (s.hook) {
     const hx = s.hook.x - tx, hy = s.hook.y - ty, hz = s.hook.z - tz;
     const hl = Math.sqrt(hx * hx + hy * hy + hz * hz);
@@ -96,17 +113,26 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   const rx = r.cy, rz = -r.sy; // right vector (horizontal)
   // Wall run with the wall on the right: the shoulder moves to the left (the 0.6 m offset would put the
   // look target inside the facade and the arm's collision would pull the camera into it).
-  const sideWant = s.wall && rx * (s.wallNx ?? 0) + rz * (s.wallNz ?? 0) < -0.2 ? -1 : 1;
+  const sideWant = nearWall && rx * (s.wallNx ?? 0) + rz * (s.wallNz ?? 0) < -0.2 ? -1 : 1;
   r.side += (sideWant - r.side) * Math.min(1, 8 * dt);
-  const bx = tx + rx * cam.shoulder * r.side, bz = tz + rz * cam.shoulder * r.side;
+  // The shoulder offset never reaches into a facade (it is pulled in to 0.3 m short of one).
+  let sh = cam.shoulder * r.side;
+  if (hit && (sh > 1e-3 || sh < -1e-3)) {
+    const t = hit(tx, ty, tz, tx + rx * sh * 1.6, ty, tz + rz * sh * 1.6);
+    if (t >= 0) {
+      const room = t * 1.6 * (sh < 0 ? -sh : sh) - 0.3;
+      sh = room <= 0 ? 0 : sh * Math.min(1, room / (sh < 0 ? -sh : sh));
+    }
+  }
+  const bx = tx + rx * sh, bz = tz + rz * sh;
   r.target.x = bx; r.target.y = ty; r.target.z = bz;
   let dx = -r.fwd.x * r.arm, dy = -r.fwd.y * r.arm, dz = -r.fwd.z * r.arm;
   let used = r.arm;
   if (hit) {
-    const t = hit(tx, ty, tz, bx + dx, ty + dy, bz + dz);
+    // From the (clear) look point back along the arm: the camera stops 0.3 m short of the first facade.
+    const t = hit(bx, ty, bz, bx + dx, ty + dy, bz + dz);
     if (t >= 0) {
-      const full = Math.sqrt((bx + dx - tx) ** 2 + dy * dy + (bz + dz - tz) ** 2);
-      const want = Math.max(1.5, t * full - 0.3);
+      const want = Math.max(0.6, t * r.arm - 0.3);
       const f = want / r.arm;
       dx *= f; dy *= f; dz *= f;
       used = want;

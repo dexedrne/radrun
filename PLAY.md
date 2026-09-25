@@ -78,31 +78,42 @@ Low quality for smoother play — change in Settings". That choice is remembered
 itself, and once you pick Low or High in Settings it never touches the setting again. `?autoq=0` turns
 it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
 
-## Moving (round 9)
+## Moving (rounds 9-10)
 
 **The swing.** There are no grab points: webs stick to the buildings themselves. Every step the game looks
-for the building face nearest an ideal point about 10 m (+ 0.5 s x your speed) ahead of you and 18 m up,
+for the building face nearest an ideal point about 10 m (+ 0.5 s x your speed) ahead of you and 24 m up,
 at least 5 m above you, 8-42 m away, inside the aim cone and in clear sight; a point on a roof is moved to
 the roof's edge, so the ring is always on a rim, a corner or a wall, never on open sky or the middle of a
-roof. On a low roof with nothing tall nearby there is no ring at all. The rope then works as a real
-pendulum: the pivot sits 5 m off the wall, gravity pulls harder on the rope (x1.35), the speed you had when
-the rope goes taut is kept (up to 1.6x), you gain speed through the bottom of the arc (pump) and none on the
-way up, WASD only curves the swing sideways, and it lets go by itself past about 50 degrees on the far side
-(the fling) or near the pivot's height. The only reel keeps the arc 6 m above the street. A blocked web
-snaps. One speed cap, 32 m/s. A clean chain down an avenue runs about 21-24 m/s.
+roof. On a low roof with nothing tall nearby there is no ring at all; falling with nothing in the cone, the
+search widens to about 100 degrees either side (round 10), so a crossing or the end of an avenue is not a
+drop to the street. The rope then works as a real pendulum around a pivot out in the street's open air
+(round 10: half-way across to the facing building, at most as far out as you are, 4-12 m off the wall), so a
+web to a side building swings you down the street instead of into its wall. Gravity pulls harder on the
+rope (x1.35), the speed you had when the rope goes taut is kept (up to 1.6x), you gain speed through the
+bottom of the arc (pump) and none on the way up, and **the swing goes where you push the stick** (round 10:
+its sideways drift dies out in about 0.4 s, speed kept). It lets go by itself past about 50 degrees on the
+far side (the fling) or near the pivot's height. The only reel keeps the arc 6 m above the street. A web
+snaps only when the rope itself (you to the pivot) is blocked. One speed cap, 32 m/s. A chain down an
+avenue from a roof edge runs about 22 m/s, ~25 m and 1 s per swing, sinking ~3 m per swing (round 9: 14 m/s,
+11 m per swing, 1 swing in 7 into a wall).
 
 **Parkour.** Between swings you can wall-run (1.4 s along a facade at 11 m/s, light gravity), kick off a
 wall (Space; alternating between two walls climbs out of an alley), run up a wall head-on (~9 m of reach
-with the ledge grab), grab a ledge and climb it (automatic after 0.2 s; Space = climb-jump, the stick away
-= drop), vault low rooftop boxes (0.8-1.4 m AC units and crates; the 2.2-3.2 m tanks and container stacks
+with the ledge grab; round 10: it keeps your momentum, so a swing into a facade at 25 m/s runs up it at
+14 m/s, ~12 m, instead of stopping dead), grab a ledge and climb it (automatic after 0.2 s; Space =
+climb-jump, the stick away = drop; round 10: a swing into a rim in reach lets go and grabs it), vault low
+rooftop boxes (0.8-1.4 m AC units and crates; the 2.2-3.2 m tanks and container stacks
 are climbed), slide (C / SLIDE) and roll out of a hard landing. Everything you see on a roof that is 0.5 m
 or taller is solid. You fall only when you actually reach the street (feet below 2 m): respawn on the last
 roof, -3 s. Every number is a `tuning.json` key with a `?tune` slider (see "tuning.json").
 
 **The thief moves the same way** (the same sim, baked into his tracks): he swings across streets on building
-anchors, wall-runs the notches between roofs, climbs ledges and vaults props. He also **web-zips up** onto
-roofs that are too high to swing or climb to (and across streets where no swing works): the tall canyon
-cities would otherwise only let him run downhill. He never slides, double-jumps or steers in the air.
+anchors (round 10: a pendulum with its pivot over the middle of the street, tried first), wall-runs the
+notches between roofs, runs up walls and climbs ledges (steps up to 9 m), and vaults props. He **web-zips**
+only where nothing else works: onto roofs too high to swing or climb to, and across streets with nothing
+tall to web. Round 10 hop mix (kept routes): Downtown 52 % swings / 14 % zips (round 9: 17 / 50), Night
+Market 42 / 25, Docks 57 / 2, Towers 27 / 32 (6 / 54), Vertigo 32 / 25. He never slides, double-jumps or
+steers in the air.
 
 ## Sound
 
@@ -268,22 +279,25 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 | **Degen** | 1.1x base, sprints up to 2x from 50 m out, 20 s panic budget, barely wanders, short taunts | 4.5 m | 30 / 45 / 65 |
 
 Tuned against a swinging bot that also web-zips back up to him (below): on Normal it catches him in about
-26-38 s (median) in every district; on Degen it catches him in about two thirds of the rounds, after 34-49 s
-(median). He picks his next run away from you and avoids runs that pass close to you (round 9). Round 9
-balance, 200 rounds per row (`npm run balance -- --all`):
+29-39 s (median) in every district; on Degen it catches him in half to four fifths of the rounds, after
+40-50 s (median). He picks his next run away from you and avoids runs that pass close to you (round 9).
+Round 10 balance, 200 rounds per row (`npm run balance -- --all`), all in band:
 
-| | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) |
-|---|---|---|
-| Downtown | 74 %, 25.8 s | 66 %, 34.3 s (**early**) |
-| Night Market | 85 %, 36.7 s | 56 %, 48.7 s |
-| The Docks | 79 %, 30.2 s | 64 %, 37.8 s (**early**) |
-| The Towers | 57 %, 38.4 s | 70 %, 43.4 s |
-| Vertigo | 87 %, 33.0 s | 83 %, 46.1 s |
+| | Chill swing (info) | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) | Normal swing, no zip (info) |
+|---|---|---|---|---|
+| Downtown | 94 %, 15.1 s | 71 %, 29.2 s | 56 %, 40.5 s | 76 %, 20.9 s |
+| Night Market | 99 %, 11.1 s | 89 %, 35.5 s | 62 %, 49.9 s | 63 %, 51.4 s |
+| The Docks | ~86 %, ~25 s | 53 %, 38.4 s | 50 %, 44.2 s | 62 %, 35.0 s |
+| The Towers | ~85 %, ~20 s | 60 %, 39.3 s | 53 %, 44.9 s | 60 %, 30.9 s |
+| Vertigo | 100 %, 17.9 s | 91 %, 30.0 s | 83 %, 43.5 s | 51 %, 22.0 s |
 
-Downtown's follower / camper rows are all in band (Normal k 1.0: 0 % caught; k 1.2: median 53.5 s; Chill
-k 1.0: 98 %, 65.8 s; camper 11 %). In the other districts the follower (a bot that replays his exact track
-at his speed) catches him far more often, because his long canyon routes and zips double back past it; those
-rows are info there, as in rounds 6-7, when the districts were only ever tuned on the swinging bot.
+**The swing carries the chase now** (round 10): without the web zip the same bot catches him in 51-76 % of
+Normal rounds (round 9: 14-48 %), and campaign level 1 (First Pour, Chill) in 92 % (round 9: 37 %).
+
+The follower rows (a bot that replays his exact track at his speed) are info in every district since round
+10: his swing-first routes are longer, and a follower glued to his track outlasts his panic budget
+(Downtown Normal k 1.0 now catches him in ~45 % of rounds, late: median ~50 s). The camper stays under 25 %
+everywhere.
 
 ## Districts
 
@@ -307,23 +321,26 @@ Each district has its own level files: Downtown in `public/levels/`, the others 
 - `?editor&map=docks` / `?editor=decor&map=docks` edit a district; Save writes that district's files.
 - Best times and kept ghosts are per district; share links carry the district (`&m=docks`).
 - **Per-district chase tweak** (`chase` in `src/world/districts.ts`): the same runner and difficulty table
-  everywhere, nudged per district so the swinging bot gets the same catch times as in Downtown. Round 9:
+  everywhere, nudged per district so the swinging bot gets the same catch times as in Downtown. Round 10:
+  every district was re-tuned for the cleaner swing (Downtown got its first tweak: Normal 1.2x, Degen 1.3x
+  with a 4 m Yoink); the values and why are in the comments above each `chase`. Round 9:
   the Night Market and the Docks still start you ~26-30 m behind him; the Night Market runner is a bit
   faster on Normal (1.15x) and sprints earlier; the Docks Degen runner is faster (1.3x) but gasses out
   after 5 s of sprint, with a 3 m Yoink; the Towers runner is slower (0.9x on Normal and Degen, a 5 m Degen
   Yoink); Vertigo's Normal runner is faster (1.15x) than round 7's, since the bot now zips back up to him.
-  Downtown has no tweak (it is the classic round). `npm run balance -- --all --only swing` prints every
-  district.
-- **His route graph (round 9).** Hop kinds between neighbouring roofs (`src/route/graph.ts`): **alley** (a
-  jump, up to +1.2 m), **climb** (+1.2 to +3.5 m: he jumps at the wall and the sim's ledge grab + climb
-  finish it), **drop** (6 m or more down: walked off at a baked pace), **street** (a web swing on a
-  building anchor baked from the takeoff point; the bake tries up to 10 anchor options, then falls back to
-  a zip across), **wallrun** (a wall-run notch between two roofs) and **zip** (a web zip onto the near rim of
-  a roof up to 32 m higher across at most 26 m: the podium blocks differ by 6-30 m, so without it he could
-  only ever run downhill). Vaults over props happen on their own. Each junction-to-junction edge is 3-8
-  hops; `runnerJunctions` / `runnerMaxHops` in a district's config (its `city.json` root) override the 12
-  junctions / 8 hops. The bake keeps each junction's best edges with the fewest zips, then checks the
-  graph (strongly connected, no forced U-turns, press windows, landing margins).
+  Downtown had no tweak until round 10. `npm run balance -- --all --only swing` prints every district.
+- **His route graph (rounds 9-10).** Hop kinds between neighbouring roofs (`src/route/graph.ts`): **alley**
+  (a jump, up to +1.2 m), **climb** (+1.2 to +9 m, round 10: he jumps at the wall and the sim's run-up,
+  ledge grab and climb finish it; above +3.5 m a climb that does not bake falls back to a zip onto the rim),
+  **drop** (6 m or more down: walked off at a baked pace), **street** (up to +16 m, round 10: a web swing on
+  a building anchor; the bake first tries the anchors with the pivot over the middle of the street, then the
+  anchors baked from the takeoff point, then falls back to a zip across), **wallrun** (a wall-run notch
+  between two roofs) and **zip** (a web zip onto the near rim of a roof up to 32 m higher across at most
+  26 m). Vaults over props happen on their own. Jump hops try the takeoff lateral he arrives at, then the
+  span's middle and both ends (round 10). Each junction-to-junction edge is 3-8 hops; `runnerJunctions` /
+  `runnerMaxHops` in a district's config (its `city.json` root) override the 12 junctions / 8 hops. The
+  bake keeps each junction's best edges with the fewest zips and then the most swings, then checks the graph
+  (strongly connected, no forced U-turns, press windows, landing margins).
 - **Vertigo's layout and route (round 7).** `generateVertigo` in `src/world/generate.ts` (config
   `vertigo` in its district entry: ring height ranges, climb per street / alley step, needles, plazas,
   summit mesas). In Vertigo the graph also picks junctions spread out in height, tries drop-first routes
@@ -471,13 +488,13 @@ Round 9 movement keys (all in `?tune`; the full list with ranges is the spec's �
 
 | group | keys (default) |
 |---|---|
-| speed | `speedCap` 32 (one cap for every state), `carryDecay` 8, `releaseBoost` 2, `releaseUp` 3, `autoReleaseBelow` 2.5, `ropeSteer` 4 (sideways only), `hysteresis` 4, `bonkMinSpeed` 14, `bonkRatio` 0.85 |
-| anchor search | `ropeMin` 8, `ropeMax` 42, `anchorMinAbove` 5, `anchorAhead` 10, `anchorAheadPerSpeed` 0.5, `anchorUp` 18, `anchorVelBias` 0.6, `anchorRimBonus` 2, `anchorAlternate` 3 |
-| pendulum | `swingOut` 5, `swingFloorClear` 6, `swingReel` 10, `swingGravity` 1.35, `swingPump` 5, `swingKeepSpeed` 1.6, `swingReleaseCos` 0.64 (about 50 degrees), `swingRehook` 0.18, `losSteps` 12 |
-| wall | `wallRun`, `wallRunReach` 0.6, `wallRunMinSpeed` 5, `wallRunRatio` 1, `wallRunMinBelowTop` 1.5, `wallRunFallMax` -12, `wallRunTime` 1.4, `wallRunSpeed` 11, `wallRunAccel` 10, `wallRunGravity` 0.2, `wallRunKick` 3, `wallRunCooldown` 0.25, `wallClimbSpeed` 9, `wallClimbTime` 0.6, `wallJumpOut` 7, `wallJumpUp` 9.5, `wallJumpKeep` 0.9, `wallJumpGrace` 0.15 |
+| speed | `speedCap` 32 (one cap for every state), `carryDecay` 8, `releaseBoost` 2, `releaseUp` 3, `autoReleaseBelow` 2.5, `ropeSteer` 4 (sideways only), `swingAlign` 2.5 (round 10: 1/s the swing turns toward the stick; 0 = a free pendulum), `hysteresis` 4, `bonkMinSpeed` 14, `bonkRatio` 0.85 |
+| anchor search | `ropeMin` 8, `ropeMax` 42, `anchorMinAbove` 5, `anchorAhead` 10, `anchorAheadPerSpeed` 0.5, `anchorUp` 24 (round 9: 18), `anchorVelBias` 0.6, `anchorRimBonus` 2, `anchorAlternate` 3, `aimCosFall` -0.2 (round 10: the falling fallback cone, about 100 degrees; >= `aimCos` = off) |
+| pendulum | `swingOut` 12 / `swingOutFree` 0.5 / `swingOutMin` 4 (round 10: the pivot sits `swingOutFree` of the open air in front of the face out, at most as far out as you, within 4-12 m; round 9: 5 m), `swingFloorClear` 6, `swingReel` 10, `swingGravity` 1.35, `swingPump` 5, `swingKeepSpeed` 1.6, `swingReleaseCos` 0.64 (about 50 degrees), `swingRehook` 0.18, `losSteps` 12 |
+| wall | `wallRun`, `wallRunReach` 0.6, `wallRunMinSpeed` 5, `wallRunRatio` 1, `wallRunMinBelowTop` 1.5, `wallRunFallMax` -12, `wallRunTime` 1.4, `wallRunSpeed` 11, `wallRunAccel` 10, `wallRunGravity` 0.2, `wallRunKick` 3, `wallRunCooldown` 0.25, `wallClimbSpeed` 9, `wallClimbTime` 0.6, `wallClimbKeep` 0.55 (round 10: the run-up starts at this fraction of the speed you hit the wall at), `wallJumpOut` 7, `wallJumpUp` 9.5, `wallJumpKeep` 0.9, `wallJumpGrace` 0.15 |
 | ledge | `ledgeGrab`, `ledgeLow` 0.4, `ledgeHigh` 2.3, `ledgeMaxVy` 4, `ledgeHang` 0.2, `ledgeClimbTime` 0.35, `ledgeExitSpeed` 6, `ledgeJumpUp` 7 |
 | vault / slide / landing | `vault`, `vaultMax` 1.5, `vaultLook` 0.8, `vaultMinSpeed` 5, `vaultClear` 0.35 · `slide`, `slideMinSpeed` 6, `slideTime` 0.8, `slideDecay` 3, `slideSteer` 6, `slideJumpFwd` 2.5, `slideBuffer` 0.25 · `rollMinVy` -15, `rollTime` 0.45, `stumbleVy` -24, `stumbleKeep` 0.4, `stumbleLock` 0.35, `failFloor` 2 |
-| camera / mechanics | `ropeBiasMax` 3, `armRope` 9, `armWall` 6.5, `fovSpeedLo` 10, `fovSpeedHi` 28 · `snapTime` 1.6 |
+| camera / mechanics | `ropeBiasMax` 3, `armRope` 9, `armWall` 6.5, `fovSpeedLo` 10, `fovSpeedHi` 28, `wallAway` 1.2 / `nearWallFor` 0.7 (round 10: on a wall run and 0.7 s after leaving a wall the camera's look point sits 1.2 m off it, so webbing off a wall run keeps the Radbro in frame) · `snapTime` 1.6 |
 
 Double jump, slide and web zip: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.5), `webZip`,
 `zipSpeed` (26 m/s), `zipPull` (how fast the velocity turns onto the line), `zipRange` / `zipRise` /
@@ -542,19 +559,17 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 - The production build is ~24 MB (models ~7.1 MB incl. four Radbros and their round 9 parkour clips, 7.9 MB
   of audio, five districts' level files, round 4 art; runner packs 180-380 KB each); the 9 MB budget is not
   enforced. The audio is only fetched once a round starts (about 3 MB per round).
-- **Round 9 (the rebuilt cities) needs a human pass**: the swing, the parkour and every balance number
-  were only tested against bots and headless screenshots (in `?tune`: the swing / wall / ledge / slide keys,
-  the difficulty table, then a district's `chase` tweak). On Downtown and Docks Degen the zipping swing bot
-  still catches him too early (median 34-38 s vs the 40-70 s band); runner speed, sprint budget, Yoink and
-  spawn distance only traded catch rate for median there.
-- **His route leans on zips:** cross-street pendulums rarely work for him (the tall anchors near a street
-  crossing are towers down the street, so his swing plane runs diagonally into the walls), so where a swing
-  does not bake he web-zips across, and he zips up every podium that is too high to climb. Downtown's kept
-  runs have 18 swings, 10 wall runs and 54 zips; the Towers 9 swings and 78 zips; the Night Market and
-  Vertigo swing more. More swinging for him needs anchors past the far edge of a crossing (a tower behind
-  the roof he lands on) or runs along the avenues below the roofs.
+- **Rounds 9-10 need a human pass**: the swing, the parkour and every balance number were only tested
+  against bots and headless screenshots (in `?tune`: `swingAlign`, `anchorUp`, `swingOut*`, the wall / ledge
+  keys, the difficulty table, then a district's `chase` tweak). The balance medians swing by 5-10 s with small
+  sim changes (the bot catches early or not at all), so re-run `npm run balance -- --all` after any tuning.
+- **Chains still sink** about 3 m per swing (from a roof edge, ~35 m below the takeoff after 10 s), so the
+  way back up to him is a run-up, a tall anchor or the zip. A probe that swings in one fixed direction from
+  every street-facing roof edge ends in the street in ~21-34 % of its runs, all of them past the city's edge.
+- **The Towers still lean on zips** (32 % of his hops): its podium blocks differ by 6-30 m and few towers
+  stand where a crossing pendulum needs one. The Docks, Downtown and the Night Market are mostly swings.
 - The camera can end up against a facade when a wall run starts with the aim pointing into the wall (seen
-  in a headless shot); with the wall on your right the shoulder offset now moves to the left.
+  in a headless shot); round 10 eases the look point 1.2 m off the wall and keeps the shoulder out of it.
 - Vertigo keeps its round 7 notes: a descending chase tuned on the bot, big height range, drop hops.
 - Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
   objectives (`src/game/campaign.ts`; the time stars were re-set in round 6 so the bot needs a good run

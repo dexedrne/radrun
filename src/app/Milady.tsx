@@ -19,7 +19,7 @@ import type { VRM } from "@pixiv/three-vrm";
 import type { PlayGame } from "../game/play.ts";
 import type { RadbroId } from "../game/round.ts";
 import { parseVrm } from "../vrm/loadVrm.ts";
-import { MESHY_RIG, retargetClip } from "../vrm/retarget.ts";
+import { RADBRO_RIG, retargetClip } from "../vrm/retarget.ts";
 import { clipsPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
@@ -173,7 +173,7 @@ export function MiladyView({ game }: { game: PlayGame }) {
         h.curName = "";
         h.clips.clear();
         for (const c of (pack as unknown as { animations: AnimationClip[] }).animations) {
-          if ((CLIPS as readonly string[]).includes(c.name)) h.clips.set(c.name, retargetClip(c, pack, h.vrm, MESHY_RIG, { inPlace: true, alignRestPose: true }));
+          if ((CLIPS as readonly string[]).includes(c.name)) h.clips.set(c.name, retargetClip(c, pack, h.vrm, RADBRO_RIG, { inPlace: true, alignRestPose: true }));
         }
         h.chaser = chaser;
         console.info(`[milady] retargeted ${h.clips.size} clips from #${chaser} in ${Math.round(performance.now() - t0)} ms`);

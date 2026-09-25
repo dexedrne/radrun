@@ -37,12 +37,12 @@ export const PH_FAIL = 5;
 
 /**
  * pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop); alt: the street swing's anchor
- * option; zip: a street hop taken as a zip across onto the far rim (its fallback when no swing bakes).
+ * option; zip: a street hop (or a tall climb) taken as a zip onto the far rim (its fallback when no swing / climb bakes).
  */
 export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number; zip: boolean };
 
-/** The hop is a zip (a zip link, or a street hop on its zip fallback). */
-export const zipHop = (l: Link, p: HopParams): boolean => l.kind === "zip" || (l.kind === "street" && p.zip);
+/** The hop is a zip (a zip link, or a street hop / tall climb on its zip fallback). */
+export const zipHop = (l: Link, p: HopParams): boolean => l.kind === "zip" || ((l.kind === "street" || l.kind === "climb") && p.zip);
 /** Wall-run hops: the stick's push into the wall (fraction of full). */
 export const WALL_PUSH = 0.3;
 

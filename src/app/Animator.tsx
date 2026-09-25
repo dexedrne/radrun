@@ -22,7 +22,7 @@
  * Clip libraries: extra GLBs whose clips are merged by name. Tracks bind by bone
  * name (PropertyBinding), so a clip-only GLB (skeleton nodes + animations, no mesh)
  * made for the SAME rig plays on the presets model. Clips do not transfer between
- * the two Radbros: their Meshy rigs have different rest frames (Hips differs ~110deg).
+ * the two Radbros: their auto-rigs have different rest frames (Hips differs ~110deg).
  */
 import { useFrame } from "@react-three/fiber";
 import { FRAME } from "./frame.ts";

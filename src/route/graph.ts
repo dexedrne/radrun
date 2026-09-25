@@ -19,11 +19,19 @@ export const GRAPH = {
   alleyMinOverlap: 6,
   /** Round 7: an alley hop down by at least this much is a drop (walk off, fall, land on the lower roof). */
   dropMin: 6,
-  /** Round 9: alley steps up to alleyHopMax are hops, up to alleyClimbMax climbs (ledge grab); higher = no link. */
+  /**
+   * Round 9: alley steps up to alleyHopMax are hops, up to alleyClimbMax climbs (a jump at the wall, the sim's
+   * run-up + ledge grab + climb); higher = a zip. Round 10: climbs reach 9 m (the run-up), and a climb above
+   * climbJumpMax that does not bake falls back to a zip onto the rim.
+   */
   alleyHopMax: 1.2,
-  alleyClimbMax: 3.5,
-  /** Street swings climb at most this much, and drop at most streetDropMax. */
-  streetClimbMax: 4,
+  alleyClimbMax: 9,
+  climbJumpMax: 3.5,
+  /**
+   * Street swings climb at most this much (round 10: 16 m - the fling, or a swing into the far facade that runs
+   * up it and climbs the ledge; a street hop that does not bake falls back to a zip), and drop at most streetDropMax.
+   */
+  streetClimbMax: 16,
   streetDropMax: 40,
   /** Swing takeoff: the body centre this far behind the edge (the bot jumps there). */
   swingTakeoff: 0.5,
@@ -46,6 +54,16 @@ export const GRAPH = {
   swingBeyond: 8,
   swingBeyondUp: 26,
   swingBeyondRope: 50,
+  /**
+   * Round 10 crossing pendulums: each anchor also gets an option with its pivot over the middle of the street
+   * (a clean arc across at about the takeoff height, landing on the far roof) when the anchor is at least
+   * midPivotUp above the takeoff roof and at most midPivotReach m (horizontal) from that pivot. Tried first.
+   */
+  midPivotUp: 12,
+  midPivotReach: 18,
+  midOptions: 6,
+  /** The tall-anchor search for them: this high over the street's middle. */
+  midSearchUp: 34,
 } as const;
 
 /**
@@ -74,8 +92,8 @@ export type Link = {
   /** Street swing: the baked anchor (from the takeoff point at the span's centre); zip: the rim point; else null. */
   anchor: AnchorHit | null;
   /**
-   * Street / zip: the near rim of `to` at the span's centre (a zip's target). A street hop whose swing options
-   * all fail to bake falls back to a zip across onto it (the bake reports that hop as "zip").
+   * Street / zip / tall climb: the near rim of `to` at the span's centre (a zip's target). A street hop whose
+   * swing options all fail to bake (or a tall climb that fails) falls back to a zip onto it (reported as "zip").
    */
   rim: AnchorHit | null;
   /**
@@ -136,10 +154,14 @@ function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k:
     const lats = e.hi - e.lo > 6 ? [mid, e.lo + 3, e.hi - 3] : [mid];
     // Integration: first past the far edge and higher (a crossing pendulum wants its pivot over or beyond the
     // far roof: a tower behind it), then the tuning's point, then mid-street / the takeoff side.
-    const aheads = [gap + GRAPH.swingBeyond, -1, gap * 0.5, gap * 0.25];
+    // Round 10: then a tall anchor above the street's middle (for the mid-street pivots below).
+    const aheads = [gap + GRAPH.swingBeyond, -2, -1, gap * 0.5, gap * 0.25];
     const swings: SwingOption[] = [];
     for (const ahead of aheads) {
-      const kk = ahead < 0 ? k : ahead > gap ? { ...k, anchorAhead: ahead, anchorAheadPerSpeed: 0, anchorUp: GRAPH.swingBeyondUp, ropeMax: GRAPH.swingBeyondRope } : { ...k, anchorAhead: ahead, anchorAheadPerSpeed: 0 };
+      const kk = ahead === -1 ? k
+        : ahead === -2 ? { ...k, anchorAhead: gap * 0.5, anchorAheadPerSpeed: 0, anchorUp: GRAPH.midSearchUp, ropeMax: GRAPH.swingBeyondRope }
+        : ahead > gap ? { ...k, anchorAhead: ahead, anchorAheadPerSpeed: 0, anchorUp: GRAPH.swingBeyondUp, ropeMax: GRAPH.swingBeyondRope }
+        : { ...k, anchorAhead: ahead, anchorAheadPerSpeed: 0 };
       for (const lat of lats) {
         for (const [c, sn] of [[1, 0], [C20, S20], [C20, -S20]]) {
           if (swings.length >= GRAPH.swingOptions) break;
@@ -161,11 +183,32 @@ function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k:
         }
       }
     }
+    // Round 10: the same anchors with the pivot over the middle of the street go first.
+    const midA = (edge + far) / 2;
+    const mids: SwingOption[] = [];
+    for (const o of swings) {
+      if (mids.length >= GRAPH.midOptions) break;
+      const a = o.anchor;
+      if (a.ay < from.top + GRAPH.midPivotUp) continue;
+      // Pivot straight ahead of the takeoff (its lateral clamped into the span), over the street's middle.
+      const alat = e.axis === "x" ? a.az : a.ax;
+      const lat = Math.min(Math.max(alat, e.lo + GRAPH.swingLatInset), e.hi - GRAPH.swingLatInset);
+      const m = { ...a };
+      if (e.axis === "x") { m.px = midA; m.pz = lat; } else { m.pz = midA; m.px = lat; }
+      const hx = m.px - a.ax, hz = m.pz - a.az;
+      if (hx * hx + hz * hz > GRAPH.midPivotReach * GRAPH.midPivotReach) continue;
+      if (idx.segmentBlocked(a.ax + a.nx * 0.05, a.ay - 0.5, a.az + a.nz * 0.05, m.px, m.py - 0.5, m.pz, a.solid, -1)) continue;
+      if (mids.some(q => q.anchor.px === m.px && q.anchor.pz === m.pz && q.anchor.ay === m.ay)) continue;
+      mids.push({ lat, anchor: m });
+    }
+    swings.unshift(...mids);
     if (!swings.length && !zipOk) return null;
     return { ...base, kind: "street", anchor: swings[0]?.anchor ?? null, rim: zipOk ? rim : null, swings };
   }
   if (dh <= -GRAPH.dropMin) return { ...base, kind: "drop" };
-  return { ...base, kind: dh > GRAPH.alleyHopMax ? "climb" : "alley" };
+  // Round 10: a tall climb (run-up + ledge) keeps the zip onto the rim as its fallback.
+  if (dh > GRAPH.alleyHopMax) return { ...base, kind: "climb", rim: dh > GRAPH.climbJumpMax && zipOk ? rim : null };
+  return { ...base, kind: "alley" };
 }
 
 /** Wall-run links from the model's wall gaps (both directions). */
@@ -240,10 +283,12 @@ export function sampleJunctions(m: CityModel, links: Map<number, Link[]>, seed: 
     if (bestD <= 0) break;
     chosen.push(best);
   }
+  // Snapped to the pack's centimetres, so a track's recorded end and the decoded junctions agree exactly.
+  const cm = (v: number) => Math.round(v * 100) / 100;
   return chosen.map(roof => {
     const s = m.solids[roof];
     const c = centre(s);
-    return { roof, x: c.x, y: s.top + 0.9, z: c.z };
+    return { roof, x: cm(c.x), y: cm(s.top + 0.9), z: cm(c.z) };
   });
 }
 

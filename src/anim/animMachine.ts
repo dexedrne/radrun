@@ -5,7 +5,7 @@
 // Airborne = one upright pose: a jump plays Regular_Jump from its takeoff frame and freezes on its apex
 // (arms up, knees tucked) until he lands or grabs a rope; a rope release, a bonk or walking off an edge
 // crossfade straight into that apex hold. Hard landings play Regular_Jump's landing crouch
-// (CLIP.land, the same clip with the hips' height kept) for a moment. The Meshy airborne clips all read
+// (CLIP.land, the same clip with the hips' height kept) for a moment. The bought airborne clips all read
 // as dives (Run_and_Jump = front flip, Fall_1 = belly-down skydive, Leap_of_Faith = swan dive), so
 // they are only cut-list fallbacks now.
 //

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, LatheGeometry, Mesh, MeshBasicMaterial,
-  PlaneGeometry, SRGBColorSpace, Vector2, Vector3,
+  PlaneGeometry, Quaternion, SRGBColorSpace, Vector2, Vector3,
 } from "three";
 import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
@@ -438,7 +438,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ff3355", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
   const tmp = useMemo(() => ({
     a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), t: 0, trailN: 0, trailHead: 0, trailAcc: 0,
-    hand: new Vector3(), from: new Vector3(), bagT: -1, runId: -1,
+    hand: new Vector3(), from: new Vector3(), camP: new Vector3(), camQ: new Quaternion(), bagT: -1, runId: -1,
   }), []);
 
   const beam = (m: Mesh, a: Vector3, b: Vector3) => {
@@ -473,7 +473,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
       rm.visible = inRound && r.phase === "chase" && r.player.ringId === RING_RUNNER;
       if (rm.visible) {
         rm.position.set(p.x, p.y + 0.1, p.z);
-        rm.quaternion.copy(state.camera.quaternion);
+        rm.quaternion.copy(state.camera.getWorldQuaternion(tmp.camQ)); // world: the camera sits under the prefab node
         const k = 1.1 + 0.1 * Math.sin(tmp.t * 14);
         rm.scale.set(k, k, k);
       }
@@ -534,7 +534,7 @@ export function ChaseFx({ game }: { game: PlayGame }) {
         tmp.trailN = Math.min(TRAIL_N, tmp.trailN + 1);
       }
       // Build newest -> oldest, only samples younger than 2 s.
-      const cam = state.camera.position;
+      const cam = state.camera.getWorldPosition(tmp.camP);
       let n = 0;
       for (let j = 0; j < tmp.trailN; j++) {
         const i = (tmp.trailHead - 1 - j + TRAIL_N) % TRAIL_N;

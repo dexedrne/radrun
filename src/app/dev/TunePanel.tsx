@@ -20,18 +20,18 @@ const PLAYER_GROUPS: [string, Slider<keyof Tuning>[]][] = [
   ["anchor search", [
     ["ropeMin", 4, 15, 0.25], ["ropeMax", 20, 60, 0.5], ["anchorMinAbove", 2, 12, 0.25], ["anchorAhead", 0, 25, 0.5],
     ["anchorAheadPerSpeed", 0, 1.5, 0.05], ["anchorUp", 6, 35, 0.5], ["anchorVelBias", 0, 1.5, 0.05], ["anchorRimBonus", 0, 8, 0.25],
-    ["anchorAlternate", 0, 8, 0.25], ["hysteresis", 0, 8, 0.25], ["aimCos", 0, 0.9, 0.01],
+    ["anchorAlternate", 0, 8, 0.25], ["hysteresis", 0, 8, 0.25], ["aimCos", 0, 0.9, 0.01], ["aimCosFall", -1, 0.9, 0.01],
   ]],
   ["pendulum", [
-    ["swingOut", 0, 10, 0.25], ["swingFloorClear", 2, 15, 0.25], ["swingReel", 0, 25, 0.5], ["swingGravity", 1, 2.5, 0.05],
+    ["swingOut", 0, 20, 0.25], ["swingOutFree", 0, 1, 0.05], ["swingOutMin", 0, 10, 0.25], ["swingFloorClear", 2, 15, 0.25], ["swingReel", 0, 25, 0.5], ["swingGravity", 1, 2.5, 0.05],
     ["swingPump", 0, 15, 0.25], ["swingKeepSpeed", 1, 2.5, 0.05], ["swingReleaseCos", 0.2, 1, 0.01], ["swingRehook", 0, 0.5, 0.01],
-    ["releaseBoost", 0, 8, 0.25], ["releaseUp", 0, 8, 0.25], ["autoReleaseBelow", 0, 6, 0.1], ["ropeSteer", 0, 15, 0.25], ["losSteps", 1, 60, 1],
+    ["releaseBoost", 0, 8, 0.25], ["releaseUp", 0, 8, 0.25], ["autoReleaseBelow", 0, 6, 0.1], ["ropeSteer", 0, 15, 0.25], ["swingAlign", 0, 10, 0.25], ["losSteps", 1, 60, 1],
   ]],
   ["wall run / wall jump", [
     ["wallRunReach", 0.2, 1.5, 0.05], ["wallRunMinSpeed", 2, 12, 0.25], ["wallRunRatio", 0.3, 3, 0.05], ["wallRunMinBelowTop", 0, 4, 0.1],
     ["wallRunFallMax", -25, 0, 0.5], ["wallRunTime", 0.3, 3, 0.05], ["wallRunSpeed", 6, 20, 0.25], ["wallRunAccel", 0, 30, 0.5],
     ["wallRunGravity", 0, 1, 0.05], ["wallRunKick", 0, 8, 0.25], ["wallRunCooldown", 0, 1, 0.05], ["wallClimbSpeed", 4, 15, 0.25],
-    ["wallClimbTime", 0.2, 1.5, 0.05], ["wallJumpOut", 2, 14, 0.25], ["wallJumpUp", 4, 15, 0.25], ["wallJumpKeep", 0, 1.2, 0.05],
+    ["wallClimbTime", 0.2, 1.5, 0.05], ["wallClimbKeep", 0, 1, 0.05], ["wallJumpOut", 2, 14, 0.25], ["wallJumpUp", 4, 15, 0.25], ["wallJumpKeep", 0, 1.2, 0.05],
     ["wallJumpGrace", 0, 0.4, 0.01],
   ]],
   ["ledge", [
@@ -56,6 +56,7 @@ const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
   ["fov", 55, 75, 1], ["sensitivity", 0.0005, 0.006, 0.0001], ["armGround", 3, 10, 0.25], ["armAir", 3, 12, 0.25],
   ["armRope", 3, 14, 0.25], ["armWall", 3, 12, 0.25], ["armBlend", 0.5, 10, 0.5], ["shoulder", 0, 1.5, 0.05], ["ropeBias", 0, 0.6, 0.05],
   ["ropeBiasMax", 0, 8, 0.25], ["fovBoost", 0, 25, 1], ["fovSpeedLo", 0, 20, 0.5], ["fovSpeedHi", 10, 45, 0.5], ["fovEase", 0.5, 10, 0.5],
+  ["wallAway", 0, 3, 0.1], ["nearWallFor", 0, 2, 0.05],
 ];
 const TOGGLES: (keyof CameraTuning)[] = ["invertY", "reducedMotion", "easyGrab"];
 

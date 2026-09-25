@@ -25,7 +25,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const nope = useRef<Mesh>(null);
   const za = useMemo(emptyZipAim, []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
-  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), t: 0, nope: 0 }), []);
+  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0 }), []);
 
   useFrame((state, delta) => {
     const b = game.body;
@@ -35,6 +35,9 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     const shadowOn = !hide && !lowQuality();
     if (shadow.current) shadow.current.visible = shadowOn;
     const cam = state.camera;
+    // World pose: the engine's camera sits in a group under the prefab 'camera' node (CameraView moves the
+    // node, not the camera), so cam.position / cam.quaternion are local and stay near the origin.
+    const camP = cam.getWorldPosition(tmp.cp), camQ = cam.getWorldQuaternion(tmp.cq);
     // Constant screen size: world size per pixel at distance d = 2 d tan(fov / 2) / viewport height.
     const pxWorld = (d: number) => {
       const fov = cam instanceof PerspectiveCamera ? cam.fov : 60;
@@ -50,9 +53,9 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       const a = attached ? b.ropeA : b.ringA;
       const nx = attached ? 0 : b.ringNx, nz = attached ? 0 : b.ringNz;
       rm.position.set(a.x + nx * 0.3, a.y + (b.ringRim && !attached ? 0.3 : 0), a.z + nz * 0.3);
-      rm.quaternion.copy(cam.quaternion);
+      rm.quaternion.copy(camQ);
       ringMat.color.set(attached ? "#3ddc84" : "#ffe14d");
-      const d = cam.position.distanceTo(rm.position);
+      const d = camP.distanceTo(rm.position);
       const pulse = attached ? 1 : 1 + 0.08 * Math.sin(tmp.t * 8);
       const k = (pxWorld(d) * RETICLE_PX) / 2.4 * pulse; // the ring geometry is 2.4 m across
       rm.scale.set(k, k, k);
@@ -72,8 +75,8 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       nm.visible = tmp.nope > 0 && !hide;
       if (nm.visible) {
         cam.getWorldDirection(tmp.a);
-        nm.position.copy(cam.position).addScaledVector(tmp.a, 12);
-        nm.quaternion.copy(cam.quaternion);
+        nm.position.copy(camP).addScaledVector(tmp.a, 12);
+        nm.quaternion.copy(camQ);
         const k = (pxWorld(12) * 20) / 1.2;
         nm.scale.set(k, k, k);
       }

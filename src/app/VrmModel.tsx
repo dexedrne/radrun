@@ -6,7 +6,7 @@
  * Prefab usage:
  *   vrm: { type: "VrmModel", properties: {
  *     url: "https://raw.githubusercontent.com/prnthh/Pockit/main/web/1.vrm",
- *     clipLibrary: "models/radbro652.clips.glb", rig: "meshy", clip: "Casual_Walk",
+ *     clipLibrary: "models/radbro652.clips.glb", rig: "radbro", clip: "Casual_Walk",
  *     expression: "joy", look: "shipped" } }
  *
  * Code usage:
@@ -41,20 +41,20 @@ import {
   type ComponentViewProps,
 } from "react-three-game";
 import { loadVrm } from "../vrm/loadVrm.ts";
-import { MESHY_RIG, MIXAMO_RIG, retargetClip } from "../vrm/retarget.ts";
+import { RADBRO_RIG, MIXAMO_RIG, retargetClip } from "../vrm/retarget.ts";
 
 export type VrmModelProperties = {
   url?: string;
   /** Expression held on this node ("" = none). VRM0 preset names are accepted. */
   expression?: string;
   expressionWeight?: number;
-  /** GLB whose clips (authored on a Meshy or Mixamo rig) are retargeted onto this VRM. */
+  /** GLB whose clips (authored on the Radbro auto-rig or a Mixamo rig) are retargeted onto this VRM. */
   clipLibrary?: string;
-  rig?: "meshy" | "mixamo";
+  rig?: "radbro" | "mixamo";
   /** Looping base clip ("" = rest pose). */
   clip?: string;
   inPlace?: boolean;
-  /** Re-aim limb rest directions onto the VRM's T-pose (needed for A-pose sources such as Meshy). */
+  /** Re-aim limb rest directions onto the VRM's T-pose (needed for A-pose sources such as the Radbro rig). */
   alignRestPose?: boolean;
   /** shipped = materials as loaded; mtoon = force MToonNodeMaterial; unlit = MeshBasicNodeMaterial. */
   look?: "shipped" | "mtoon" | "unlit";
@@ -176,7 +176,7 @@ function VrmModelView({ properties, enabled, children }: ComponentViewProps<VrmM
 
   const inPlace = properties.inPlace ?? true;
   const alignRestPose = properties.alignRestPose ?? true;
-  const rig = properties.rig === "mixamo" ? MIXAMO_RIG : MESHY_RIG;
+  const rig = properties.rig === "mixamo" ? MIXAMO_RIG : RADBRO_RIG;
   const clips = useMemo(() => {
     const table = new Map<string, AnimationClip>();
     if (!vrm || !library) return table;
@@ -301,7 +301,7 @@ export const VrmModel: Component<VrmModelProperties> = {
     expression: { type: "string", default: "" },
     expressionWeight: { default: 1, min: 0, max: 1, step: 0.05 },
     clipLibrary: { type: "string", default: "" },
-    rig: { type: "select", default: "meshy", options: [{ value: "meshy", label: "Meshy (Radbro)" }, { value: "mixamo", label: "Mixamo" }] },
+    rig: { type: "select", default: "radbro", options: [{ value: "radbro", label: "Radbro auto-rig" }, { value: "mixamo", label: "Mixamo" }] },
     clip: { type: "string", default: "" },
     inPlace: { type: "boolean", default: true },
     alignRestPose: { type: "boolean", default: true },
