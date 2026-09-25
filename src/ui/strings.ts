@@ -7,11 +7,11 @@ export const S = {
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   youChase: "You chase one of the other three",
   countdownBubble: "finders keepers",
-  panicBubble: "it's so over",
+  panicBubble: "!",
   panicTag: "PANIC",
   gassedBadge: "GASSED",
   gassedFeed: "He's gassed!",
-  corneredBubble: "pls no",
+  corneredBubble: "nope",
   fall: "rekt.",
   escape: "He rugged you.",
   goneFishing: "gone fishing",
@@ -25,17 +25,18 @@ export const S = {
   credits: "Radbro #652, #4764, #2564 and #723 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
+/** Runner taunt bubbles (voice taunt_1..6): slots 1-4 are reactions (a laugh, a scoff, a hum), 5-6 the only words. */
 export const TAUNTS: Record<RadbroId, string[]> = {
-  "652": ["stay rad, fren", "catch me if u can", "this bag is so comfy", "we're so back", "gm from up here", "wagmi (except u)"],
-  "4764": ["cope, fren", "the katana is just for vibes", "network spirituality. u wouldn't get it", "milady would be disappointed", "kino chase tbh", "tfw too slow"],
-  "2564": ["boo, fren", "can't catch a ghost", "the miladys are watching", "just vibes and tin foil", "the balloons are listening", "so comfy in the void"],
-  "723": ["howdy, fren", "yeehaw", "mighty comfy up here", "hold onto ur hat", "stay rad, partner", "we're so back, y'all"],
+  "652": ["hehe", "ha!", "phew", "hi", "i'll take good care of it", "you're so close"],
+  "4764": ["heh", "pff", "ha.", "hm.", "i'm not even running", "take your time"],
+  "2564": ["hehe", "shh", "ha", "\u266A", "over here", "wrong roof"],
+  "723": ["heh heh", "oh, man", "ahh", "nah", "nice day for it", "you good back there?"],
 };
 
-/** Per-character one-liners for the catch / escape beats (#652 sweet, #4764 deadpan, #2564 ghost, #723 cowboy). */
+/** Per-character one-liners for the catch / escape beats (#652 earnest, #4764 deadpan, #2564 quiet, #723 easygoing). */
 export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
-  caught: { "652": "ok... u got me, fren", "4764": "based, i guess", "2564": "how did u see me", "723": "well dang. gg, fren" },
-  escaped: { "652": "gn, fren", "4764": "few understand", "2564": "i was never here, fren", "723": "happy trails, fren" },
+  caught: { "652": "ok. that was kinda rad", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough" },
+  escaped: { "652": "sorry! good bag though", "4764": "check the chain.", "2564": "thank you", "723": "see ya" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -46,10 +47,10 @@ export const DIFF_BLURB: Record<Difficulty, string> = {
 };
 
 export const PERSONA: Record<RadbroId, string> = {
-  "652": "sweet",
+  "652": "earnest",
   "4764": "deadpan",
-  "2564": "ghost",
-  "723": "cowboy",
+  "2564": "quiet",
+  "723": "easygoing",
 };
 
 export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {

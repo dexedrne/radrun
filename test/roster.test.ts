@@ -46,7 +46,7 @@ test("roster: every Radbro has taunts, catch / escape lines, a persona and card 
     assert.ok(PERSONA[id], `#${id} persona`);
     assert.match(RADBRO_COLOR[id].body, /^#[0-9a-f]{6}$/);
   }
-  assert.ok(TAUNTS["723"].includes("yeehaw"));
+  assert.ok(TAUNTS["723"].includes("nice day for it"));
 });
 
 test("links: #723 round-trips as chaser and runner; older three-Radbro links still decode", () => {

@@ -2,7 +2,7 @@
 // music, window.__play), ChaseFx (his rope and yours from the RightHand bones, red YOINK ring, blob shadow,
 // the procedural money bag on the LeftHand + the catch hand-off, the lasso, the runner trail and the
 // flying rug) and ScreenTracker (bubble anchor + edge arrow, DOM writes).
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, LatheGeometry, Mesh, MeshBasicMaterial,
@@ -25,6 +25,7 @@ import { audioState, isMuted, outputLevel } from "../audio/engine.ts";
 import { voice } from "../audio/voice.ts";
 import { COUNT_KEYS, tauntKey } from "../audio/catalog.ts";
 import { roundEndVoice } from "../audio/speech.ts";
+import { Chatter } from "../audio/chatter.ts";
 import { sampleStats } from "../audio/samples.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
@@ -130,7 +131,11 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const phases = useRef(new Set<number>());
   const clips = useRef({ chaser: new Set<string>(), runner: new Set<string>(), george: new Set<string>() });
   const lastRun = useRef(-1);
-  const lines = useRef(0);
+  /** How often the runner talks (per-round budgets); `menu`: the title / level list was shown since the last round. */
+  const chat = useMemo(() => new Chatter(), []);
+  const menu = useRef(true);
+  const sayCountdown = useRef(true);
+  useEffect(() => useUi.subscribe(s => { if (s.screen === "title" || s.screen === "campaign") menu.current = true; }), []);
   const beep = useRef(4);
   const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120, gusting: false });
   const ghostPhase = useRef("");
@@ -152,10 +157,11 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       hints.newRun();
       // A new round: whatever the last one still had queued (its round-end lines) is cut here.
       voice.roundStart();
+      if (game.mode === "round") { sayCountdown.current = chat.startRound(menu.current); menu.current = false; }
       if (game.mode === "round" && !game.practice) {
         showBubble(S.countdownBubble);
-        // Voiced: he says it right after GO (the announcer has the countdown).
-        if (!voice.has(who, "countdown")) sfx.chatter(VOICE[who]);
+        // Voiced: he says it right after GO (the announcer has the countdown), not on every retry.
+        if (sayCountdown.current && !voice.has(who, "countdown")) sfx.chatter(VOICE[who]);
         music.countdown(COUNTDOWN_STEPS / 120);
       }
     }
@@ -176,7 +182,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       showBanner(S.go);
       sfx.beep(true);
       voice.announce("go");
-      voice.say(who, "countdown", { delay: 0.55, maxWait: 0.6 });
+      if (sayCountdown.current) voice.say(who, "countdown", { delay: 0.55, maxWait: 0.6 });
     }
     if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); voice.announce("rekt"); }
     const b = r.player;
@@ -195,15 +201,19 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (gusting && !audio.current.gusting) sfx.gust();
       audio.current.gusting = gusting;
     }
-    // Runner lines: voiced when loaded (cooldowns in voice.ts terms), else the chatter blips. Taunts come
-    // from far ahead, so they are quieter with distance.
+    // Runner lines, sparse (audio/chatter.ts budgets): voiced when loaded, else the chatter blips; the bubble
+    // shows only with a sound. He still waves / sprints on every event. Taunts come from far ahead, so they
+    // are quieter with distance.
+    const rt = r.chaseSteps / 120;
     if (rev & RE_TAUNT) {
-      const t = TAUNTS[who], i = lines.current++ % t.length;
-      showBubble(t[i]);
-      if (!voice.say(who, tauntKey(i), { group: "taunt", cooldown: 3.5, gain: Math.max(0.55, Math.min(1, 1.15 - r.d / 80)) })) sfx.chatter(VOICE[who]);
+      const i = chat.taunt(rt);
+      if (i >= 0) {
+        showBubble(TAUNTS[who][i]);
+        if (!voice.say(who, tauntKey(i), { group: "taunt", cooldown: 3.5, gain: Math.max(0.55, Math.min(1, 1.15 - r.d / 80)) })) sfx.chatter(VOICE[who]);
+      }
     }
-    if (rev & RE_PANIC) { showBubble(S.panicBubble); if (!voice.say(who, "panic", { cooldown: 4, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.25); }
-    if (rev & RE_CORNERED) { showBubble(S.corneredBubble); if (!voice.say(who, "cornered", { cooldown: 5, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.1); }
+    if ((rev & RE_PANIC) && chat.panic(rt)) { showBubble(S.panicBubble); if (!voice.say(who, "panic", { maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.25); }
+    if ((rev & RE_CORNERED) && chat.corner()) { showBubble(S.corneredBubble); if (!voice.say(who, "cornered", { cooldown: 5, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.1); }
     if (rev & RE_GASSED) {
       pushFeed(S.gassedFeed);
       voice.announce("gassed", { interrupt: false, maxWait: 0.6 });
