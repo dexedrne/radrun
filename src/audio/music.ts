@@ -1,3 +1,5 @@
+// Music: the sampled loops and stings (tracks.ts) when they are playable, else the procedural score
+// (audio/score.ts) - so a slow or failed file never means silence.
 // Procedural music (the score is audio/score.ts). A fixed voice graph built once when the context is
 // created (kick, snare, rim, hats, crash, bass, lead + echo, arp, pad: oscillators and ONE looping noise
 // source that run for the page's life); notes are only automation events on those voices, scheduled
@@ -6,6 +8,7 @@
 // are the only one-shot music nodes, a handful per round.
 import { engine, live, midiHz, musicOn, onLowChange, whenCreated, type Engine } from "./engine.ts";
 import { barNotes, tempoFor, type MusicMode, type Note } from "./score.ts";
+import { countdownTrack, holdTracks, stingTrack, trackProbe, updateTracks } from "./tracks.ts";
 
 const AHEAD = 0.2;
 const TICK_MS = 25;
@@ -253,10 +256,12 @@ whenCreated(e => {
 });
 
 /** The music the game wants now (called every frame; acts only on changes). */
-function update(target: { mode: MusicMode; layer: boolean }, opts: { difficulty: string; paused: boolean }): void {
+function update(target: { mode: MusicMode; layer: boolean }, opts: { difficulty: string; paused: boolean; district?: string }): void {
   difficulty = opts.difficulty;
   layerWant = target.layer;
-  if (target.mode !== mode) switchTo(target.mode);
+  const sampled = updateTracks(target.mode, target.layer, opts.district ?? "downtown", opts.paused);
+  const m = sampled ? "off" : target.mode;
+  if (m !== mode) switchTo(m);
   if (opts.paused !== paused) {
     paused = opts.paused;
     const e = engine();
@@ -270,6 +275,10 @@ function update(target: { mode: MusicMode; layer: boolean }, opts: { difficulty:
 /** A countdown starts: restart the intro half a bar early so GO lands near a downbeat; filter sweep + riser. */
 function countdown(seconds: number): void {
   holdUntil = 0; // a Retry during the catch sting starts the intro right away
+  if (countdownTrack(seconds)) {
+    switchTo("off");
+    return;
+  }
   mode = "off";
   switchTo("intro");
   const e = live();
@@ -337,6 +346,8 @@ function sting(kind: "caught" | "yoink" | "escaped"): void {
   if (!e) return;
   const now = e.ac.currentTime, t = now + 0.03;
   hush(now);
+  if (stingTrack(kind)) return;
+  holdTracks(kind === "escaped" ? 2.9 : 1.7);
   if (kind === "escaped") {
     const seq: [number, number][] = [[62, 0.34], [61, 0.34], [60, 0.34], [59, 1.25]];
     let at = t;
@@ -382,5 +393,5 @@ export const music = {
   update,
   countdown,
   sting,
-  probe: () => ({ mode, layer: layerOn, scheduled }),
+  probe: () => ({ mode, layer: layerOn, scheduled, ...trackProbe() }),
 };

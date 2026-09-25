@@ -463,6 +463,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label>music {Math.round(s.music * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.music} onChange={e => set({ music: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-music" /></label>
             <label>sound effects {Math.round(s.sfx * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.sfx} onChange={e => set({ sfx: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-sfx" /></label>
+            <label>voices {Math.round(s.voice * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.voice} onChange={e => set({ voice: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-voice" /></label>
             <label><input type="checkbox" checked={s.muted} onChange={e => set({ muted: e.target.checked })} data-testid="mute-check" /> mute all (M)</label>
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>

@@ -25,13 +25,13 @@ export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; 
 export type Quality = "low" | "high";
 
 /**
- * music / sfx = volume sliders 0..1; muted = the mute button / M key (both in pause -> Settings too).
+ * music / sfx / voice = volume sliders 0..1; muted = the mute button / M key (both in pause -> Settings too).
  * qualityChosen = the player picked Low / High in Settings (auto quality never overrides that);
  * qualityAuto = auto quality already switched to Low once (it never switches back).
  */
 export type Settings = {
   sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; quality: Quality;
-  music: number; sfx: number; muted: boolean; qualityChosen: boolean; qualityAuto: boolean;
+  music: number; sfx: number; voice: number; muted: boolean; qualityChosen: boolean; qualityAuto: boolean;
 };
 
 function load(): Stored {
@@ -62,6 +62,7 @@ export function loadSettings(cam: CameraTuning): Settings {
     // Round 1-3 had one "volume" (SFX only): it becomes the SFX volume.
     music: num(s.music, 0.6),
     sfx: num(s.sfx, num(s.volume, 0.8)),
+    voice: num(s.voice, 0.9),
     muted: s.muted === true,
     qualityChosen: s.qualityChosen === true,
     qualityAuto: s.qualityAuto === true,

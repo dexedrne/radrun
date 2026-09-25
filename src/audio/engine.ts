@@ -1,8 +1,10 @@
 // The one AudioContext (spec §13 audio/): created on the first user gesture (PLAY / PRACTICE / the mute
 // button / M), then kept for the page's life. Graph:
-//   music voices -> musicIn -> musicFilter (mode cutoff / pause duck) -> duck -> musicGain (volume) -> master
+//   music voices -> musicIn -> musicFilter (mode cutoff / pause duck) -> duck -> musicGain (volume) -> talk -> master
+//   music loops (tracks.ts) -> their own lift / pause filter ----------> duck
 //   stings ----------------------------------------------------------------------> musicGain
 //   SFX one-shots + wind -> sfxGain (volume) -> master
+//   voice lines (voice.ts) -> voiceGain (volume) -> master; `talk` dips the music under them
 //   master -> compressor -> destination
 // Muted or tab hidden = the context is suspended (no audio thread work at all). Before the unlock every
 // call is a no-op, and nothing here touches the DOM at import time (Node tests import the score only).
@@ -15,12 +17,15 @@ export type Engine = {
   duck: GainNode;
   musicGain: GainNode;
   sfxGain: GainNode;
+  voiceGain: GainNode;
+  /** Music dip under voice lines (voice.ts drives it). */
+  talk: GainNode;
   /** 2 s of white noise, shared by every noisy voice. */
   noise: AudioBuffer;
 };
 
 let eng: Engine | null = null;
-const vol = { music: 0.6, sfx: 0.8 };
+const vol = { music: 0.6, sfx: 0.8, voice: 0.9 };
 let muted = false;
 let hidden = false;
 let low = false;
@@ -43,6 +48,12 @@ export function sfxOn(): Engine | null {
 }
 export function musicOn(): boolean {
   return vol.music > 0 && live() !== null;
+}
+export function voiceOn(): Engine | null {
+  return vol.voice > 0 ? live() : null;
+}
+export function isLow(): boolean {
+  return low;
 }
 
 /** Register setup that needs the context (music voices, the wind loop); runs now if it exists. */
@@ -90,8 +101,11 @@ export function unlockAudio(): void {
       musicFilter.frequency.value = 16000;
       musicFilter.Q.value = 0.7;
       const musicIn = ac.createGain();
-      musicIn.connect(musicFilter).connect(duck).connect(musicGain).connect(master);
+      const talk = ac.createGain();
+      musicIn.connect(musicFilter).connect(duck).connect(musicGain).connect(talk).connect(master);
       sfxGain.connect(master);
+      const voiceGain = ac.createGain();
+      voiceGain.connect(master);
       const noise = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
       const d = noise.getChannelData(0);
       let s = 0x9e3779b9;
@@ -99,7 +113,7 @@ export function unlockAudio(): void {
         s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
         d[i] = ((s >>> 0) / 4294967296) * 2 - 1;
       }
-      eng = { ac, master, musicIn, musicFilter, duck, musicGain, sfxGain, noise };
+      eng = { ac, master, musicIn, musicFilter, duck, musicGain, sfxGain, voiceGain, talk, noise };
       applyVolumes();
       // Tab hidden = suspend (the game pauses too); back = resume unless muted.
       document.addEventListener("visibilitychange", () => { hidden = document.hidden; sync(); });
@@ -124,11 +138,13 @@ function applyVolumes(): void {
   const t = eng.ac.currentTime;
   eng.musicGain.gain.setTargetAtTime(curve(vol.music) * 0.55, t, 0.05);
   eng.sfxGain.gain.setTargetAtTime(curve(vol.sfx), t, 0.05);
+  eng.voiceGain.gain.setTargetAtTime(curve(vol.voice) * 0.9, t, 0.05);
 }
 
-export function setAudioVolumes(music: number, sfx: number): void {
+export function setAudioVolumes(music: number, sfx: number, voice = vol.voice): void {
   vol.music = Math.max(0, Math.min(1, music));
   vol.sfx = Math.max(0, Math.min(1, sfx));
+  vol.voice = Math.max(0, Math.min(1, voice));
   applyVolumes();
 }
 
@@ -141,7 +157,7 @@ export function isMuted(): boolean {
   return muted;
 }
 
-/** Low quality: the music drops its echo (see music.ts). */
+/** Low quality: the music drops its echo (see music.ts); only the first variation of each sampled SFX loads. */
 export function setAudioLow(l: boolean): void {
   low = l;
   for (const f of lowListeners) f(l);

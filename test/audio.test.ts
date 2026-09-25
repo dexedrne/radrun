@@ -3,6 +3,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LAYER_OFF, LAYER_ON, barNotes, musicTarget, tempoFor, type MusicInput } from "../src/audio/score.ts";
+import fs from "node:fs";
+import path from "node:path";
+import { CHASE_TRACK, TAUNT_LINES, allAudioFiles, chaseTrack, tauntKey } from "../src/audio/catalog.ts";
+import { RADBROS } from "../src/game/round.ts";
+import { TAUNTS } from "../src/ui/strings.ts";
+import { DISTRICT_IDS } from "../src/world/districts.ts";
 
 test("score: deterministic, in range, varies across the chase loop and between cycles", () => {
   const sig = (bar: number) => JSON.stringify(barNotes("chase", bar).base.filter(n => n.voice === "lead").map(n => [n.step, n.midi]));
@@ -42,4 +48,19 @@ test("music target: calm title/results, intro countdown, chase + close layer wit
   assert.deepEqual(musicTarget({ ...base, practice: true, d: 5 }, false), { mode: "chase", layer: false });
   assert.deepEqual(musicTarget({ ...base, phase: "caught" }, true), { mode: "calm", layer: false });
   assert.deepEqual(musicTarget({ ...base, results: true, phase: "escaped" }, false), { mode: "calm", layer: false });
+});
+
+test("sampled audio: every catalogued file ships, nothing unused ships, lines match the bubbles", () => {
+  const root = path.join(import.meta.dirname, "..", "public", "audio");
+  const want = allAudioFiles(RADBROS);
+  for (const f of want) assert.ok(fs.existsSync(path.join(root, f)), `missing public/audio/${f}`);
+  const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(root, path.join(d, e.name))]));
+  const extra = walk(root).filter(f => !want.includes(f));
+  assert.deepEqual(extra, [], "unreferenced files under public/audio");
+  for (const who of RADBROS) assert.equal(TAUNTS[who].length, TAUNT_LINES, `${who}: one voiced taunt per bubble`);
+  assert.equal(tauntKey(0), "taunt_1");
+  assert.equal(tauntKey(7), "taunt_2");
+  for (const id of DISTRICT_IDS) assert.notEqual(CHASE_TRACK[id], undefined, `${id} has a chase loop`);
+  assert.equal(chaseTrack("vertigo"), "chase_vertigo");
+  assert.equal(chaseTrack("nowhere"), "chase_downtown");
 });
