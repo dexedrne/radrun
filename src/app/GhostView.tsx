@@ -7,8 +7,12 @@ import { useFrame } from "@react-three/fiber";
 import { useAssetRuntime } from "react-three-game";
 import { Color, Matrix4, MeshBasicMaterial, Quaternion, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import type { PlayGame } from "../game/play.ts";
-import { EV_ATTACH, EV_BONK, EV_DJUMP, EV_JUMP, EV_LAND, EV_RELEASE } from "../sim/player.ts";
-import { A_ATTACH, A_BONK, A_DJUMP, A_JUMP, A_LAND, A_RELEASE, type Beat } from "../anim/animMachine.ts";
+import {
+  EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN,
+} from "../sim/player.ts";
+import {
+  A_ATTACH, A_BIGLAND, A_BONK, A_CLIMB, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP, A_WALLRUN, type Beat,
+} from "../anim/animMachine.ts";
 import { applyCmd, makeRig } from "./ActorsView.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
@@ -77,9 +81,10 @@ export function GhostView({ game }: { game: PlayGame }) {
     for (const m of rig.materials) m.opacity = OPACITY * st.alpha;
 
     const p = game.ghostP;
-    const hook = !g.done && b.ropeHook >= 0 ? b.ropeHook : -1;
+    const hook = !g.done && b.ropeSolid >= 0 ? 1 : -1;
     rig.hook = hook;
     rig.p.set(p.x, p.y, p.z);
+    rig.hand.copy(rig.p);
     const fe = game.ghostEvents;
     let ev = 0;
     if (fe & EV_JUMP) ev |= A_JUMP;
@@ -88,12 +93,21 @@ export function GhostView({ game }: { game: PlayGame }) {
     if (fe & EV_RELEASE) ev |= A_RELEASE;
     if (fe & EV_LAND) ev |= A_LAND;
     if (fe & EV_BONK) ev |= A_BONK;
+    if (fe & EV_WALLRUN) ev |= A_WALLRUN;
+    if (fe & EV_WALLJUMP) ev |= A_WALLJUMP;
+    if (fe & EV_LEDGE) ev |= A_LEDGE;
+    if (fe & EV_CLIMB) ev |= A_CLIMB;
+    if (fe & EV_VAULT) ev |= A_VAULT;
+    if (fe & EV_SLIDE) ev |= A_SLIDE;
+    if (fe & EV_ROLL) ev |= A_ROLL;
+    if (fe & EV_BIGLAND) ev |= A_BIGLAND;
     const vx = b.v.x, vy = b.v.y, vz = b.v.z;
     const speed = g.done ? 0 : Math.sqrt(vx * vx + vz * vz);
     const beat: Beat = gr.phase === "caught" ? "cheer" : "";
     applyCmd(rig.player, rig.machine.step({
       dt: rawDelta * game.timeScale, grounded: b.grounded || g.done, rope: hook >= 0, speed, vy, events: ev, landVy: b.landVy, panic: false, beat,
       clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
+      wall: g.done ? 0 : b.wallMode, ledge: g.done ? 0 : Math.min(2, b.ledgeMode), slide: !g.done && b.slideT > 0 && b.grounded,
     }));
 
     const faceTo = (x: number, z: number, rate: number) => {
@@ -107,7 +121,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     st.qYaw.setFromAxisAngle(st.up, rig.yaw);
     let tx = 0, ty = -0.9, tz = 0;
     if (hook >= 0) {
-      const h = game.model.hooks[hook];
+      const h = b.ropeA;
       st.u.set(h.x - p.x, h.y - p.y, h.z - p.z).normalize();
       st.v.set(vx, vy, vz);
       st.f.copy(st.v).addScaledVector(st.u, -st.v.dot(st.u));
@@ -121,7 +135,7 @@ export function GhostView({ game }: { game: PlayGame }) {
       st.m.makeBasis(st.x, st.u, st.f);
       st.q.setFromRotationMatrix(st.m);
       faceTo(st.f.x, st.f.z, 12);
-      tx = -rig.hand * st.u.x; ty = -rig.hand * st.u.y; tz = -rig.hand * st.u.z;
+      tx = -rig.hand_ * st.u.x; ty = -rig.hand_ * st.u.y; tz = -rig.hand_ * st.u.z;
     } else st.q.copy(st.qYaw);
     rig.ropeW += ((hook >= 0 ? 1 : 0) - rig.ropeW) * Math.min(1, (hook >= 0 ? 6 : 10) * rawDelta);
     const k = Math.min(1, 14 * rawDelta);
@@ -153,9 +167,9 @@ export function GhostView({ game }: { game: PlayGame }) {
     const tag = document.getElementById("rr-ghost-tag");
     const on = !!rig && st.visible;
     if (ro) {
-      ro.visible = on && rig!.hook >= 0;
+      ro.visible = on && rig!.hook >= 0 && !!game.ghost;
       if (ro.visible) {
-        const h = game.model.hooks[rig!.hook];
+        const h = game.ghost!.round.player.ropeA;
         if (rig!.bones.rightHand) rig!.bones.rightHand.getWorldPosition(st.a); else st.a.copy(rig!.p);
         st.b.set(h.x, h.y, h.z);
         const len = st.a.distanceTo(st.b);
@@ -184,7 +198,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     <>
       {rig && <primitive object={rig.root} />}
       <mesh ref={rope} material={ropeMat} visible={false}>
-        <cylinderGeometry args={[0.035, 0.035, 1, 6]} />
+        <cylinderGeometry args={[0.0175, 0.0175, 1, 6]} />
       </mesh>
     </>
   );

@@ -22,15 +22,15 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
   useFrame((state, delta) => {
     const b = game.body;
     let hook = null;
-    if (b.ropeHook >= 0) {
-      const h = game.model.hooks[b.ropeHook];
+    if (b.ropeSolid >= 0) {
+      const h = b.ropeP;
       tmp.hook.x = h.x; tmp.hook.y = h.y; tmp.hook.z = h.z;
       hook = tmp.hook;
     }
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
-    tmp.drop += ((b.ropeHook >= 0 ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
+    tmp.drop += ((b.ropeSolid >= 0 ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
     tmp.p.x = game.renderP.x; tmp.p.y = game.renderP.y - tmp.drop; tmp.p.z = game.renderP.z;
-    rigUpdate(game.rig, Math.min(delta, 0.1), { p: tmp.p, speed, grounded: b.grounded, hook, landed: (game.frameEvents & EV_LAND) !== 0 }, game.camera, hit);
+    rigUpdate(game.rig, Math.min(delta, 0.1), { p: tmp.p, speed, grounded: b.grounded || b.ledgeMode > 0, hook, landed: (game.frameEvents & EV_LAND) !== 0, wall: b.wallMode > 0 }, game.camera, hit);
     const r = game.rig;
     const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;
     if (scripted) {

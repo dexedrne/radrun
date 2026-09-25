@@ -20,7 +20,8 @@ export const SFX = {
   fall: ["fall_whistle"],
   meow: ["meow_happy", "meow_happy_2", "meow_happy_3"],
   sulky: ["meow_sulky", "meow_sulky_2", "meow_sulky_3"],
-  pop: ["balloon_pop", "balloon_pop_2", "balloon_pop_3"],
+  /** Round 9: a web snaps (the round 4 balloon-pop samples, reused). */
+  snap: ["balloon_pop", "balloon_pop_2", "balloon_pop_3"],
   gust: ["wind_gust"],
   rug: ["rug_swoosh"],
   wind: ["wind_loop"],

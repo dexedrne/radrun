@@ -61,7 +61,7 @@ export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botPar
     game.input.script = (f, i) => {
       script(f, i);
       const b = game.round.player;
-      onRope = b.ropeHook >= 0 ? onRope + 1 : 0;
+      onRope = b.ropeSolid >= 0 ? onRope + 1 : 0;
       if (onRope === 30 && game.round.phase === "chase") { w.__frozen = true; game.paused = true; }
     };
   }
@@ -81,11 +81,12 @@ function snapRound7(game: PlayGame, kinds: string[]): void {
     if (game.round.phase !== "chase" || w.__frozen) return n;
     const s = game.setup, b = game.round.player;
     const chaser = rigs.get(s.chaser), runner = rigs.get(s.runner);
-    sky = b.ropeHook >= 0 && game.model.hooks[b.ropeHook].src === "sky" ? sky + delta : 0;
+    // "sky" (round 7) = a long web from high up (a tower / needle anchor 30+ m above).
+    sky = b.ropeSolid >= 0 && b.ropeA.y - b.p.y >= 30 ? sky + delta : 0;
     let why = "";
     // (the rig's machine lags the sim by a frame: also require the body to be falling free right now)
     const run = game.round.runner.pose;
-    if (left.has("freefall") && chaser?.machine.ff && chaser.machine.ffT >= 0.45 && !b.grounded && b.ropeHook < 0 && b.v.y < -3) why = "freefall";
+    if (left.has("freefall") && chaser?.machine.ff && chaser.machine.ffT >= 0.45 && !b.grounded && b.ropeSolid < 0 && b.v.y < -3) why = "freefall";
     else if (left.has("sky") && sky >= 0.35) why = "sky";
     else if (left.has("runnerff") && runner?.machine.ff && runner.machine.ffT >= 0.45 && run.phase === PHASE_AIR) why = "runnerff";
     if (why) {
@@ -108,7 +109,7 @@ function snapAirborne(game: PlayGame): void {
     const n = frame(delta);
     const b = game.round.player, ev = game.frameEvents;
     if (ev & (EV_JUMP | EV_RELEASE)) { armed = ev & EV_RELEASE ? "release" : "jump"; t = 0; }
-    if (armed && (b.grounded || b.ropeHook >= 0 || game.round.phase !== "chase")) armed = "";
+    if (armed && (b.grounded || b.ropeSolid >= 0 || game.round.phase !== "chase")) armed = "";
     if (armed && n > 0 && (t += delta) >= 0.12) {
       w.__frozenWhy = armed;
       w.__frozen = true;

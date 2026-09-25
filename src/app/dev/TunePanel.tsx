@@ -9,23 +9,53 @@ import { GEORGE_RENDER, georgeToJson, resetGeorge, setGeorgeScale } from "../geo
 
 type Slider<K> = [K, number, number, number]; // key, min, max, step
 
-const PLAYER_SLIDERS: Slider<keyof Tuning>[] = [
-  ["gravity", 10, 40, 0.5], ["runSpeed", 5, 14, 0.25], ["jumpSpeed", 5, 14, 0.25], ["groundAccel", 20, 120, 1],
-  ["groundBrake", 10, 100, 1], ["carryDecay", 0, 30, 0.5], ["airAccel", 0, 20, 0.5], ["speedCap", 15, 40, 0.5],
-  ["aimRadius", 10, 24, 0.25], ["hookMinAbove", 0, 4, 0.1], ["scoreAhead", 0, 14, 0.5], ["scoreUp", 0, 14, 0.5],
-  ["hysteresis", 0, 6, 0.25], ["ropeScale", 0.4, 1.1, 0.01], ["reelSpeed", 0, 15, 0.25], ["ropeSteer", 0, 15, 0.25],
-  ["releaseBoost", 0, 8, 0.25], ["autoReleaseBelow", 0, 4, 0.1], ["bonkMinSpeed", 5, 25, 0.5], ["bonkRatio", 0.3, 1, 0.05],
-  ["bonkLock", 0, 1, 0.05], ["coyoteTime", 0, 0.3, 0.01], ["jumpBuffer", 0, 0.3, 0.01], ["holdDelay", 0, 0.3, 0.01],
-  // Double jump + web zip (player only).
-  ["airJumps", 0, 2, 1], ["doubleJumpSpeed", 3, 14, 0.25], ["zipSpeed", 8, 40, 0.5], ["zipPull", 2, 40, 0.5],
-  ["zipRange", 6, 40, 0.5], ["zipRise", 0, 20, 0.5], ["zipDrop", 0, 30, 0.5], ["zipCooldown", 0, 5, 0.1],
-  ["zipRelease", 0.3, 4, 0.1], ["zipMaxTime", 0.3, 3, 0.05], ["zipFlingFwd", 0, 12, 0.25], ["zipFlingUp", 0, 12, 0.25],
-  ["zipLedgeSpeed", 0, 14, 0.25], ["zipLedgeUp", 0, 10, 0.25],
+/** Round 9 (spec §8): every sim number has a slider, grouped; ranges from the spec's table. */
+const PLAYER_GROUPS: [string, Slider<keyof Tuning>[]][] = [
+  ["movement", [
+    ["gravity", 10, 40, 0.5], ["runSpeed", 5, 14, 0.25], ["jumpSpeed", 5, 14, 0.25], ["groundAccel", 20, 120, 1],
+    ["groundBrake", 10, 100, 1], ["carryDecay", 0, 30, 0.5], ["airAccel", 0, 20, 0.5], ["speedCap", 15, 45, 0.5],
+    ["coyoteTime", 0, 0.3, 0.01], ["jumpBuffer", 0, 0.3, 0.01], ["holdDelay", 0, 0.3, 0.01], ["failFloor", 0, 10, 0.25],
+    ["bonkMinSpeed", 5, 25, 0.5], ["bonkRatio", 0.3, 1, 0.05], ["bonkLock", 0, 1, 0.05],
+  ]],
+  ["anchor search", [
+    ["ropeMin", 4, 15, 0.25], ["ropeMax", 20, 60, 0.5], ["anchorMinAbove", 2, 12, 0.25], ["anchorAhead", 0, 25, 0.5],
+    ["anchorAheadPerSpeed", 0, 1.5, 0.05], ["anchorUp", 6, 35, 0.5], ["anchorVelBias", 0, 1.5, 0.05], ["anchorRimBonus", 0, 8, 0.25],
+    ["anchorAlternate", 0, 8, 0.25], ["hysteresis", 0, 8, 0.25], ["aimCos", 0, 0.9, 0.01],
+  ]],
+  ["pendulum", [
+    ["swingOut", 0, 10, 0.25], ["swingFloorClear", 2, 15, 0.25], ["swingReel", 0, 25, 0.5], ["swingGravity", 1, 2.5, 0.05],
+    ["swingPump", 0, 15, 0.25], ["swingKeepSpeed", 1, 2.5, 0.05], ["swingReleaseCos", 0.2, 1, 0.01], ["swingRehook", 0, 0.5, 0.01],
+    ["releaseBoost", 0, 8, 0.25], ["releaseUp", 0, 8, 0.25], ["autoReleaseBelow", 0, 6, 0.1], ["ropeSteer", 0, 15, 0.25], ["losSteps", 1, 60, 1],
+  ]],
+  ["wall run / wall jump", [
+    ["wallRunReach", 0.2, 1.5, 0.05], ["wallRunMinSpeed", 2, 12, 0.25], ["wallRunRatio", 0.3, 3, 0.05], ["wallRunMinBelowTop", 0, 4, 0.1],
+    ["wallRunFallMax", -25, 0, 0.5], ["wallRunTime", 0.3, 3, 0.05], ["wallRunSpeed", 6, 20, 0.25], ["wallRunAccel", 0, 30, 0.5],
+    ["wallRunGravity", 0, 1, 0.05], ["wallRunKick", 0, 8, 0.25], ["wallRunCooldown", 0, 1, 0.05], ["wallClimbSpeed", 4, 15, 0.25],
+    ["wallClimbTime", 0.2, 1.5, 0.05], ["wallJumpOut", 2, 14, 0.25], ["wallJumpUp", 4, 15, 0.25], ["wallJumpKeep", 0, 1.2, 0.05],
+    ["wallJumpGrace", 0, 0.4, 0.01],
+  ]],
+  ["ledge", [
+    ["ledgeLow", 0, 1.5, 0.05], ["ledgeHigh", 1, 3.5, 0.05], ["ledgeMaxVy", -5, 12, 0.25], ["ledgeHang", 0, 1, 0.05],
+    ["ledgeClimbTime", 0.1, 1, 0.05], ["ledgeExitSpeed", 0, 12, 0.25], ["ledgeJumpUp", 3, 12, 0.25],
+  ]],
+  ["vault", [["vaultMax", 0.5, 2.5, 0.05], ["vaultLook", 0.2, 2, 0.05], ["vaultMinSpeed", 1, 12, 0.25], ["vaultClear", 0, 1, 0.05]]],
+  ["slide", [
+    ["slideMinSpeed", 2, 12, 0.25], ["slideTime", 0.2, 2, 0.05], ["slideDecay", 0, 15, 0.25], ["slideSteer", 0, 15, 0.25],
+    ["slideJumpFwd", 0, 8, 0.25], ["slideBuffer", 0, 0.6, 0.01],
+  ]],
+  ["landing", [["rollMinVy", -30, -5, 0.5], ["rollTime", 0, 1.2, 0.05], ["stumbleVy", -40, -10, 0.5], ["stumbleKeep", 0, 1, 0.05], ["stumbleLock", 0, 1, 0.05]]],
+  ["double jump + web zip (player only)", [
+    ["airJumps", 0, 2, 1], ["doubleJumpSpeed", 3, 14, 0.25], ["zipSpeed", 8, 40, 0.5], ["zipPull", 2, 40, 0.5],
+    ["zipRange", 6, 40, 0.5], ["zipRise", 0, 20, 0.5], ["zipDrop", 0, 30, 0.5], ["zipCooldown", 0, 5, 0.1],
+    ["zipRelease", 0.3, 4, 0.1], ["zipMaxTime", 0.3, 3, 0.05], ["zipFlingFwd", 0, 12, 0.25], ["zipFlingUp", 0, 12, 0.25],
+    ["zipLedgeSpeed", 0, 14, 0.25], ["zipLedgeUp", 0, 10, 0.25],
+  ]],
 ];
+const PLAYER_TOGGLES: (keyof Tuning)[] = ["wallRun", "ledgeGrab", "vault", "slide", "autoRelease", "bonk"];
 const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
   ["fov", 55, 75, 1], ["sensitivity", 0.0005, 0.006, 0.0001], ["armGround", 3, 10, 0.25], ["armAir", 3, 12, 0.25],
-  ["armRope", 3, 14, 0.25], ["armBlend", 0.5, 10, 0.5], ["shoulder", 0, 1.5, 0.05], ["ropeBias", 0, 0.6, 0.05],
-  ["fovBoost", 0, 25, 1], ["fovEase", 0.5, 10, 0.5],
+  ["armRope", 3, 14, 0.25], ["armWall", 3, 12, 0.25], ["armBlend", 0.5, 10, 0.5], ["shoulder", 0, 1.5, 0.05], ["ropeBias", 0, 0.6, 0.05],
+  ["ropeBiasMax", 0, 8, 0.25], ["fovBoost", 0, 25, 1], ["fovSpeedLo", 0, 20, 0.5], ["fovSpeedHi", 10, 45, 0.5], ["fovEase", 0.5, 10, 0.5],
 ];
 const TOGGLES: (keyof CameraTuning)[] = ["invertY", "reducedMotion", "easyGrab"];
 
@@ -39,7 +69,7 @@ const GEORGE_SLIDERS: Slider<GeorgeTunable>[] = [
 ];
 
 const MECH_SLIDERS: Slider<keyof MechTuning>[] = [
-  ["popShare", 0, 1, 0.05], ["popRespawn", 1, 20, 0.5], ["windMax", 0, 20, 0.5], ["windGust", 0.5, 6, 0.1],
+  ["snapTime", 0.5, 4, 0.05], ["windMax", 0, 20, 0.5], ["windGust", 0.5, 6, 0.1],
   ["windRamp", 0.05, 1.5, 0.05], ["windGapMin", 2, 30, 0.5], ["windGapMax", 3, 40, 0.5], ["windWarn", 0, 3, 0.1],
   ["lowGravity", 0.3, 1, 0.05], ["sixtyClock", 20, 90, 5],
 ];
@@ -75,7 +105,17 @@ export default function TunePanel({ game }: { game: Tunable }) {
       {open && (
         <>
           <div style={{ opacity: 0.7, margin: "4px 0" }}>player (sim) — click the scene to capture the mouse, Esc to release</div>
-          {PLAYER_SLIDERS.map(([k, min, max, step]) => row(k, game.tuning[k] as number, min, max, step, v => { (game.tuning as Record<string, unknown>)[k] = v; }))}
+          {PLAYER_TOGGLES.map(k => (
+            <label key={k} style={{ display: "inline-block", marginRight: 8 }}>
+              <input type="checkbox" checked={game.tuning[k] as boolean} onChange={e => { (game.tuning as Record<string, unknown>)[k] = e.target.checked; bump(); }} /> {k}
+            </label>
+          ))}
+          {PLAYER_GROUPS.map(([title, list]) => (
+            <div key={title}>
+              <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>{title}</div>
+              {list.map(([k, min, max, step]) => row(k, game.tuning[k] as number, min, max, step, v => { (game.tuning as Record<string, unknown>)[k] = v; }))}
+            </div>
+          ))}
           <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>camera + scheme</div>
           {CAMERA_SLIDERS.map(([k, min, max, step]) => row(k, game.camera[k] as number, min, max, step, v => { (game.camera as Record<string, unknown>)[k] = v; }))}
           {TOGGLES.map(k => (
@@ -89,7 +129,7 @@ export default function TunePanel({ game }: { game: Tunable }) {
               {DIFF_SLIDERS.map(([k, min, max, step]) => row(`${d}.${k}`, game.difficulty![d][k], min, max, step, v => { game.difficulty![d][k] = v; }))}
             </div>
           ))}
-          <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>round 4 mechanics (pops / wind / low gravity / 60 s; next round)</div>
+          <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>mechanics (snapping webs / wind / low gravity / 60 s; next round)</div>
           {MECH_SLIDERS.map(([k, min, max, step]) => row(`mech.${k}`, MECH[k], min, max, step, v => { MECH[k] = v; }))}
           <div style={{ opacity: 0.7, margin: "8px 0 4px" }}>George (visual only; delay in 120 Hz steps, gaits in m/s)</div>
           {row("scale", GEORGE_RENDER.scale, 0.6, 2, 0.01, setGeorgeScale)}

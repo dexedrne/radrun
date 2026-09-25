@@ -6,7 +6,8 @@
 // Aim = horizontal unit vector chest -> runner chest. yoink: press web on each step after one whose
 // snapshot had ringId = RUNNER.
 // The swinger (SwingBot, round 3) plays with the REAL player sim instead: see below.
-import { chaseDist, emptyZipAim, pickTarget, zipTarget, EV_BONK, RING_RUNNER, type InputFrame } from "../sim/player.ts";
+import { chaseDist, emptyZipAim, pickRing, zipTarget, EV_BONK, EV_LAND, RING_RUNNER, type InputFrame } from "../sim/player.ts";
+import { emptyAnchor } from "../world/cityQuery.ts";
 import { DT } from "../sim/tuning.ts";
 import { Rand, type Vec3 } from "../sim/math.ts";
 import { PHASE_AIR, PHASE_GROUND, sampleEdge, type TrackPose } from "../route/trackPack.ts";
@@ -123,13 +124,14 @@ export class Bot {
 }
 
 // ---- swinging chaser -------------------------------------------------------------------------------
-// A competent swinger for balance (round 3): it plays through the real stepBody (no override) with the
-// same InputFrame a human produces. Street lanes (the street midlines, where the balloons hang) are the
-// highway: it picks the cheapest one- or two-lane route to where he will be up to 1.5 s from now, zips off the
-// roof edge onto a ringed lane balloon, lets go once past the balloon near the bottom of the arc (the
-// canyon-probe policy, ~16 m/s along the street), chains, turns at crossings, and near him heads
-// straight at him, drops the rope and YOINKs after a human reaction delay. Seeded noise (release point,
-// reaction time) comes from its own Rand, never the round's. Deterministic: sqrt-only maths.
+// A competent swinger for balance (round 3, round 9 building anchors): it plays through the real stepBody
+// (no override) with the same InputFrame a human produces. Street lanes (the street midlines) are the
+// highway: it picks the cheapest one- or two-lane route to where he will be up to 1.5 s from now, webs the
+// building ahead from the roof edge, lets go once past the pivot on the way up (or lets the auto-release
+// fling), re-holds after a cooldown, chains, turns at crossings, and near him heads straight at him, drops
+// the rope and YOINKs after a human reaction delay. Wall runs happen by themselves when a swing meets a
+// facade. Seeded noise (release point, reaction time) comes from its own Rand, never the round's.
+// Deterministic: sqrt-only maths.
 
 export type Lane = { along: 0 | 1; c: number; lo: number; hi: number };
 
@@ -174,10 +176,15 @@ export const SWING = {
   /** Lead: up to this many seconds of his track, at `leadSpeed` m of distance per second of lead. */
   lead: 1.5,
   leadSpeed: 12,
-  /** Release: once this far past the balloon along the lane (m, + noise) with v.y above releaseVy. */
+  /** Release: once this far past the pivot along the lane (m, + noise), rising at least releaseTan x the horizontal speed. */
   releaseAhead: 0,
   releaseNoise: 0.6,
   releaseVy: -3,
+  releaseTan: 0.4,
+  /** A ringed anchor is worth a web when its pivot is this far ahead along the lane (m). */
+  anchorAhead: 3,
+  /** He is "up on the roofs" when this far above you (m): swings let go level with him (see upTo). */
+  climbTo: 3,
   /** Steps without web after a release. */
   cooldown: 6,
   /** Red ring -> click reaction, steps (uniform). */
@@ -232,9 +239,11 @@ export class SwingBot {
   /** Round 7: the city is a Vertigo skyline (big height steps). */
   readonly vertigo: boolean;
 
-  /** Use the double jump + web zip (balance rows only; the default bot plays the classic moves). */
+  /** Use the double jump + web zip + slide (balance rows only; the default bot plays the classic moves). */
   readonly moves: boolean;
   private readonly za = emptyZipAim();
+  /** The anchor of the last ring() query. */
+  private readonly anc = emptyAnchor();
 
   constructor(round: Round, seed: number, moves = false) {
     this.moves = moves;
@@ -336,11 +345,10 @@ export class SwingBot {
     // Round 7: he is below and a lower roof is right there: step off and drop onto it.
     if (e.gap === GAP_DROP && this.T.y < round.player.p.y - 3) return false;
     if (e.gap === GAP_WALL) {
-      // Round 7 (Vertigo): a sky cluster that way carries you over the cliff.
+      // Round 7 (Vertigo): an anchor that way carries you over the cliff.
       if (this.vertigo) {
         this.setAim(inp, ax, az);
-        const ring = this.ring(round, inp);
-        if (ring >= 0 && round.model.hooks[ring].src === "sky") return true;
+        if (this.ring(round, inp) >= 0) return true;
       }
       this.blocked = 90;
       this.blockAxis = e.axis;
@@ -349,9 +357,7 @@ export class SwingBot {
       return false;
     }
     this.setAim(inp, ax, az);
-    const ring = this.ring(round, inp);
-    // (round 7: zip onto street balloons only; Vertigo: sky clusters too)
-    if (ring >= 0 && (this.vertigo || round.model.hooks[ring].src !== "sky")) return true;
+    if (this.ring(round, inp) >= 0) return true;
     inp.jumpPressed = true;
     return false;
   }
@@ -386,42 +392,46 @@ export class SwingBot {
     inp.moveX = x * f; inp.moveZ = z * f;
   }
 
-  /** The ring the sim will compute this step with this input. */
-  private ring(round: Round, inp: InputFrame): number {
-    const b = round.player;
-    return b.ropeHook >= 0 ? b.ropeHook : pickTarget(b, inp, round.tuning, round.world);
+  /**
+   * He is up on the roofs above you (more than climbTo m) and this swing is rising level with him: let go now
+   * so the fling carries you up onto the roofs instead of down the canyon again.
+   */
+  private upTo(round: Round): boolean {
+    const b = round.player, P = b.p, T = this.T;
+    if (b.ropeSolid < 0 || b.v.y <= 0 || T.y <= P.y + SWING.climbTo) return false;
+    const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z);
+    if (hs < 4) return false;
+    // Rising within climbTo of his height, or near the top of this arc (the pivot's height minus a few m).
+    return P.y >= T.y - SWING.climbTo || P.y >= b.ropeP.y - round.tuning.autoReleaseBelow - 2;
   }
 
-  /** Rescue: falling below the roofs with no rope - aim at the best balloon above and grab it. */
+  /** The ring the sim will compute this step with this input (its anchor in this.anc). */
+  private ring(round: Round, inp: InputFrame): number {
+    const b = round.player;
+    this.anc.solid = -1;
+    return b.ropeSolid >= 0 ? b.ropeSolid : pickRing(b, inp, round.tuning, round.world, this.anc);
+  }
+
+  /**
+   * Rescue: falling with no roof close below and no rope - look for a ring along the velocity, toward him
+   * and straight ahead (the aim that rings something wins) and grab it.
+   */
   private rescue(round: Round, inp: InputFrame): boolean {
-    const b = round.player, P = b.p, hooks = round.model.hooks;
-    if (b.grounded || b.ropeHook >= 0 || b.v.y > -2) return false;
+    const b = round.player, P = b.p;
+    if (b.grounded || b.ropeSolid >= 0 || b.v.y > -2 || b.wallMode > 0 || b.ledgeMode > 0) return false;
     const floor = round.index.groundBelow(P.x, P.z, P.y);
     if (floor > P.y - 3) return false; // a roof right below
-    // Vertigo, him far below: fall (free fall) until a street is under you, then only grabs that carry you
-    // toward him without climbing.
+    // Vertigo, him far below: fall (free fall) until close to his height, then grab.
     const diving = this.vertigo && this.T.y < P.y - SWING.dropChase;
-    if (diving && P.y > this.T.y + 12 && P.y > round.model.lowestRoof + 14) return false;
-    let best = -1, bs = Infinity;
-    for (let i = 0; i < hooks.length; i++) {
-      const h = hooks[i];
-      const dx = h.x - P.x, dy = h.y - P.y, dz = h.z - P.z;
-      if (dy < 2 || (diving && dy > 12)) continue;
-      const dd = dx * dx + dy * dy + dz * dz;
-      // Sky clusters only when diving after him (Vertigo), with their longer range.
-      if (h.src === "sky" && !diving) continue;
-      const rr = h.reach !== undefined ? h.reach - 1 : 16;
-      if (dd > rr * rr) continue;
-      // prefer balloons in the direction of travel (diving: toward him)
-      const tx = diving ? this.T.x - P.x : b.v.x, tz = diving ? this.T.z - P.z : b.v.z;
-      const s = dd - 20 * (dx * tx + dz * tz) / (Math.sqrt(tx * tx + tz * tz) + 1);
-      if (s < bs) { bs = s; best = i; }
+    if (diving && P.y > this.T.y + 12) return false;
+    const tx = this.T.x - P.x, tz = this.T.z - P.z;
+    const aims: [number, number][] = diving ? [[tx, tz], [b.v.x, b.v.z]] : [[b.v.x, b.v.z], [tx, tz], [this.ax, this.az]];
+    for (const [x, z] of aims) {
+      if (x * x + z * z < 1e-6) continue;
+      this.setAim(inp, x, z);
+      if (this.ring(round, inp) >= 0) return true;
     }
-    if (best < 0) return false;
-    const h = hooks[best];
-    this.setAim(inp, h.x - P.x, h.z - P.z);
-    const ring = this.ring(round, inp);
-    return ring >= 0 && (diving || hooks[ring].src !== "sky");
+    return false;
   }
 
   /**
@@ -430,7 +440,7 @@ export class SwingBot {
    */
   private steerLand(round: Round, inp: InputFrame): void {
     const b = round.player, P = b.p;
-    if (b.grounded || b.ropeHook >= 0 || b.v.y > 0) return;
+    if (b.grounded || b.ropeSolid >= 0 || b.v.y > 0) return;
     if (round.index.groundBelow(P.x, P.z, P.y) > P.y - SWING.landDrop) return;
     let best = Infinity, bx = 0, bz = 0;
     for (const s of round.model.solids) {
@@ -477,10 +487,10 @@ export class SwingBot {
       this.lane = -1;
       this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
       this.setMove(inp, tx, tz);
-      if (b.ropeHook >= 0) {
-        const h = round.model.hooks[b.ropeHook];
+      if (b.ropeSolid >= 0) {
+        const h = b.ropeP;
         const past = (P.x - h.x) * tx + (P.z - h.z) * tz;
-        held = !(d < SWING.dropRope || (past >= 0 && b.v.y >= SWING.releaseVy));
+        held = !(d < SWING.dropRope || this.upTo(round) || (past >= 0 && b.v.y >= SWING.releaseVy && T.y <= P.y + SWING.climbTo));
       } else if (!b.grounded) {
         if (this.cool <= 0 && this.rescue(round, inp)) held = true;
         else this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
@@ -505,34 +515,34 @@ export class SwingBot {
         const tlat = L.c - side * (SWING.laneHalf - 0.2);
         const mx = al === 0 ? dx * 5 : tlat - P.x, mz = al === 0 ? tlat - P.z : dz * 5;
         zip = this.ground(round, inp, mx, mz, dx + (al === 0 ? 0 : side * 0.4), dz + (al === 0 ? side * 0.4 : 0), dx, dz);
-      } else if (b.ropeHook >= 0) {
+      } else if (b.ropeSolid >= 0) {
         this.setMove(inp, dx + lx, dz + lz);
-        const h = round.model.hooks[b.ropeHook];
-        const ha = al === 0 ? h.x : h.z;
+        const ha = al === 0 ? b.ropeP.x : b.ropeP.z;
         const past = (pa - ha) * this.dir;
-        held = !(past >= this.relAhead && b.v.y >= SWING.releaseVy);
+        const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z);
+        held = !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && b.v.y >= SWING.releaseTan * hs && T.y <= P.y + SWING.climbTo));
       } else {
         this.setMove(inp, dx + lx, dz + lz);
-        if (this.cool <= 0) {
-          const ring = this.ring(round, inp);
-          if (ring >= 0) {
-            const h = round.model.hooks[ring];
-            const ha = al === 0 ? h.x : h.z, hl = al === 0 ? h.z : h.x;
-            if ((ha - pa) * this.dir > 1.5 && Math.abs(hl - L.c) < 1.5 && h.src !== "sky") held = true;
+        if (this.cool <= 0 && b.ledgeMode === 0) {
+          if (this.ring(round, inp) >= 0) {
+            const a = this.anc;
+            const ha = al === 0 ? a.px : a.pz;
+            if ((ha - pa) * this.dir > SWING.anchorAhead) held = true;
           }
           if (!held && this.rescue(round, inp)) held = true;
         }
         if (!held && this.vertigo) this.steerLand(round, inp);
       }
     }
-    if (this.held && !held && b.ropeHook >= 0) {
+    if (this.held && !held && b.ropeSolid >= 0) {
       this.cool = SWING.cooldown;
       this.relAhead = SWING.releaseAhead + SWING.releaseNoise * (this.rng.next() * 2 - 1);
     }
     this.held = held;
     inp.webHeld = held || zip;
-    inp.webPressed = zip;
+    inp.webPressed = zip || (held && !this.held);
     inp.zipPressed = false;
+    inp.slidePressed = false;
     if (this.moves) this.useMoves(round, inp, d, held);
     // YOINK: a red ring held for the reaction time -> click.
     if (this.ring(round, inp) === RING_RUNNER) {
@@ -542,28 +552,30 @@ export class SwingBot {
   }
 
   /**
-   * Double jump when dropping with no roof close below; web-zip toward him (ringed balloon or a ledge)
-   * from a roof when he is on another roof 8+ m away and the zip is ready.
+   * Double jump when dropping with no roof close below (or a wall kick when a facade is in grace); web-zip
+   * toward him (ringed anchor or a ledge) from a roof when he is on another roof 8+ m away and the zip is
+   * ready; slide on landing fast (keeps the speed).
    */
   private useMoves(round: Round, inp: InputFrame, d: number, held: boolean): void {
     const b = round.player, P = b.p, r = round.runner;
-    if (!b.grounded && b.ropeHook < 0 && !b.zipOn && b.airJumps > 0 && b.v.y < -3 && !held) {
+    if (!b.grounded && b.ropeSolid < 0 && !b.zipOn && b.ledgeMode === 0 && b.airJumps > 0 && b.v.y < -3 && !held) {
       if (round.index.groundBelow(P.x, P.z, P.y) < P.y - 4) inp.jumpPressed = true;
     }
+    if (b.grounded && (b.events & EV_LAND) && Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z) >= round.tuning.slideMinSpeed + 1) inp.slidePressed = true;
     if (b.grounded && !b.zipOn && b.zipCd <= 0 && d > 8 && r.roofId !== b.roofId) {
       const ax = this.ax, az = this.az;
       this.setAim(inp, this.T.x - P.x, this.T.z - P.z);
       const ring = this.ring(round, inp);
-      if (zipTarget(b, ring >= 0 ? ring : -1, inp.aimX, inp.aimZ, round.tuning, round.world, this.za) > 0) inp.zipPressed = true;
+      if (zipTarget(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimZ, round.tuning, round.world, this.za) > 0) inp.zipPressed = true;
       else this.setAim(inp, ax, az);
     }
   }
 
   after(round: Round): void {
     const b = round.player;
-    if (b.ropeHook >= 0 && !this.wasRope) this.stats.swings++;
+    if (b.ropeSolid >= 0 && !this.wasRope) this.stats.swings++;
     if (b.events & EV_BONK) this.stats.bonks++;
-    this.wasRope = b.ropeHook >= 0;
+    this.wasRope = b.ropeSolid >= 0;
   }
 }
 

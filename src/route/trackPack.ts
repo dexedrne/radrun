@@ -1,9 +1,11 @@
 // runner.pack.bin codec (spec §7 "ship the tracks, don't re-simulate them"). Layout:
 //   "RRP1" | u32 header byte length | header JSON (utf8, space-padded to an even length) | Int16 samples
 // Samples are 60 Hz, 5 int16 each: x, y, z (cm relative to the edge's origin junction), phase
-// (0 ground / 1 air / 2 rope) and ref (roof id on the ground, hook id on the rope, -1 in the air).
-// The header holds only integers (cm, steps, mm/s) so decoding is exact. Pure TS; runtime decoder +
-// the encoder used by the bake. Determinism rule applies (sqrt-only maths).
+// (0 ground / 1 air / 2 rope / 3 wall run / 4 ledge) and ref (roof id on the ground, the anchor index on
+// the rope, the solid on a wall / ledge, -1 in the air).
+// Round 9 pack v2 (spec §6.2): header.version 2 + `anchors` (flat x, y, z in cm: the web anchor points the
+// rope refs index). The header holds only integers (cm, steps, mm/s) so decoding is exact. Pure TS; runtime
+// decoder + the encoder used by the bake. Determinism rule applies (sqrt-only maths).
 import { Fnv1a, type Vec3 } from "../sim/math.ts";
 
 export const PACK_MAGIC = "RRP1";
@@ -13,11 +15,19 @@ export const SAMPLE_STRIDE = 5;
 export const PHASE_GROUND = 0;
 export const PHASE_AIR = 1;
 export const PHASE_ROPE = 2;
+/** Round 9: wall run / run-up (ref = the wall solid) and ledge hang / climb (ref = the solid). */
+export const PHASE_WALL = 3;
+export const PHASE_LEDGE = 4;
+/** The pack format the bake writes. */
+export const PACK_VERSION = 2;
 
 export const EVT_TAKEOFF = 1;
 export const EVT_ATTACH = 2;
 export const EVT_RELEASE = 3;
 export const EVT_LAND = 4;
+/** Round 9: a vault and a landing roll (the runner plays the same clips as the player). */
+export const EVT_VAULT = 5;
+export const EVT_ROLL = 6;
 
 export type PackJunction = { roof: number; x: number; y: number; z: number };
 
@@ -42,9 +52,12 @@ export type PackEdgeHeader = {
 };
 
 export type PackHeader = {
-  version: 1;
+  /** 2 = round 9 (anchors table). 1 = before (rope refs were balloon ids): still read, without anchors. */
+  version: 1 | 2;
   city: string;
   tuning: string;
+  /** v2: web anchor points, flat x, y, z in cm (a rope sample's ref indexes it). */
+  anchors?: number[];
   junctions: { roof: number; x: number; y: number; z: number }[]; // cm
   edges: PackEdgeHeader[];
 };
@@ -73,6 +86,8 @@ export type PackEdge = {
 export type Pack = {
   header: PackHeader;
   junctions: PackJunction[];
+  /** Web anchor points in metres, flat x, y, z (empty for a v1 pack). */
+  anchors: Float64Array;
   edges: PackEdge[];
   /** Outgoing edge indices per junction. */
   out: number[][];
@@ -107,6 +122,9 @@ export function decodePack(buf: ArrayBuffer | Uint8Array): Pack {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const hl = dv.getUint32(4, true);
   const header = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + hl))) as PackHeader;
+  // v1 packs (balloon refs) still load until every district is re-baked (INTEGRATE); they carry no anchors.
+  if (header.version !== 1 && header.version !== PACK_VERSION) throw new Error(`runner.pack.bin: unknown version ${header.version}`);
+  const anchors = Float64Array.from(header.anchors ?? [], v => v / 100);
   const base = 8 + hl;
   const n = (bytes.length - base) / 2;
   const all = new Int16Array(n);
@@ -128,7 +146,7 @@ export function decodePack(buf: ArrayBuffer | Uint8Array): Pack {
   });
   const out: number[][] = junctions.map(() => []);
   for (const e of edges) out[e.from].push(e.index);
-  return { header, junctions, edges, out, hash: packHash(bytes), bytes: bytes.length };
+  return { header, junctions, anchors, edges, out, hash: packHash(bytes), bytes: bytes.length };
 }
 
 /** A decoded pose on a track. */
@@ -156,6 +174,14 @@ export function sampleEdge(e: PackEdge, t: number, out: TrackPose): TrackPose {
   out.phase = s[k + 3];
   out.ref = s[k + 4];
   return out;
+}
+
+/** The web anchor of a rope pose (ref = anchor index) into `out`; false when the pack has none for it. */
+export function packAnchor(pack: Pack, ref: number, out: Vec3): boolean {
+  const i = ref * 3;
+  if (ref < 0 || i + 2 >= pack.anchors.length) return false;
+  out.x = pack.anchors[i]; out.y = pack.anchors[i + 1]; out.z = pack.anchors[i + 2];
+  return true;
 }
 
 /** Events with state index in (t0, t1] seconds of baked time (lookahead windows for animation). */

@@ -4,7 +4,7 @@
 import type { Difficulty } from "../sim/tuning.ts";
 import type { DistrictId } from "../world/districts.ts";
 import type { RoundStats, RoundPhase } from "./round.ts";
-import { M_LOWGRAV, M_NIGHT, M_NOYOINK, M_ONELIFE, M_POPS, M_SIXTY, M_WIND, MUTATORS } from "./mutators.ts";
+import { M_LOWGRAV, M_NIGHT, M_NOYOINK, M_ONELIFE, M_SNAP, M_SIXTY, M_WIND, MUTATORS } from "./mutators.ts";
 
 export type Objective =
   | { kind: "catch" }
@@ -35,21 +35,21 @@ const catchIt: Objective = { kind: "catch" };
 export const LEVELS: readonly Level[] = [
   { n: 1, name: "First Pour", map: "downtown", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 30 }, { kind: "noFalls" }], blurb: "He swiped your bag. Learn the ropes." },
   { n: 2, name: "Rush Hour", map: "downtown", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "under", s: 50 }, { kind: "chain", n: 4 }], blurb: "Normal speed. Chain your swings down the streets." },
-  { n: 3, name: "Pop Quiz", map: "downtown", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "Pale balloons pop when you let go. Pick your ropes." },
-  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 25 }, { kind: "noFalls" }], blurb: "Tight streets, lots of corners, some stretches with no balloons." },
+  { n: 3, name: "Snap Quiz", map: "downtown", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "Webs snap after 1.6 s. Keep them short." },
+  { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 25 }, { kind: "noFalls" }], blurb: "Low roofs, few anchors. Vault, climb and wall-kick." },
   { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 65 }], blurb: "No lasso tonight. You have to touch him." },
   { n: 6, name: "Lights Out", map: "market", difficulty: "normal", mutators: M_NIGHT, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 45 }], blurb: "The market after dark." },
   { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 55 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
   { n: 8, name: "Moon Jump", map: "docks", difficulty: "normal", mutators: M_WIND | M_LOWGRAV, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "yoink" }], blurb: "Low gravity, long flights, same wind." },
   { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 40 }, { kind: "closeCall", s: 10 }], blurb: "Sixty seconds on the clock." },
-  { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, popping balloons." },
-  { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_POPS | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Pops and wind at altitude." },
-  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_POPS | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 40 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
+  { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, snapping webs." },
+  { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_SNAP | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Snapping webs and wind at altitude." },
+  { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_SNAP | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 40 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
   // Round 7: Vertigo, the descending chase (swing bot, 300 seeds: L13 catch 97 % / no falls 94 % / chain 5 63 %;
   // L14 72 % / above 45 m 37 % / chain 5 71 %; L15 62 % / above 40 m 27 % / no falls 40 %).
   { n: 13, name: "Top Floor", map: "vertigo", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "noFalls" }, { kind: "chain", n: 5 }], blurb: "He starts at the top of the spiral. Step off the cliffs after him." },
-  { n: 14, name: "Free Fall", map: "vertigo", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "above", y: 45 }, { kind: "chain", n: 5 }], blurb: "Dive after him and grab the big gold sky balloons on the way down." },
-  { n: 15, name: "Street Level", map: "vertigo", difficulty: "degen", mutators: M_POPS, goals: [catchIt, { kind: "above", y: 40 }, { kind: "noFalls" }], blurb: "Degen runner, popping balloons. Catch him high." },
+  { n: 14, name: "Free Fall", map: "vertigo", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "above", y: 45 }, { kind: "chain", n: 5 }], blurb: "Dive after him and web the needles on the way down." },
+  { n: 15, name: "Street Level", map: "vertigo", difficulty: "degen", mutators: M_SNAP, goals: [catchIt, { kind: "above", y: 40 }, { kind: "noFalls" }], blurb: "Degen runner, snapping webs. Catch him high." },
 ];
 export const TOTAL_STARS = LEVELS.length * 3;
 

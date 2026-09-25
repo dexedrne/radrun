@@ -1,6 +1,6 @@
 // Phone / tablet controls (spec §4 "Touch"): a floating left-thumb stick (move), right-half drag
 // (camera), big WEB (hold) and JUMP buttons on the right, a ZIP (web zip) button above JUMP (dimmed while
-// it recharges), a small look-at-him button and a pause button.
+// it recharges), a small SLIDE button left of JUMP (round 9), a small look-at-him button and a pause button.
 // Everything writes into the same InputLatch as the keyboard and mouse, so the sim sees the same
 // InputFrame. Shown only in COUNTDOWN / CHASE while not paused.
 import { useEffect, useRef } from "react";
@@ -30,6 +30,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
   const webBtn = useRef<HTMLDivElement>(null);
   const jumpBtn = useRef<HTMLDivElement>(null);
   const zipBtn = useRef<HTMLDivElement>(null);
+  const slideBtn = useRef<HTMLDivElement>(null);
   const t = useRef<Track>({ stick: -1, ox: 0, oy: 0, look: -1, lx: 0, ly: 0, web: -1, wx: 0, wy: 0 });
 
   // Unmount (pause, results) releases everything the thumbs were holding.
@@ -158,7 +159,15 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         style={round(80, { right: safe("right", 146), bottom: safe("bottom", 22), background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
-      {/* ZIP: web-zip to the ringed balloon / the roof ahead; dimmed while it recharges */}
+      {/* SLIDE (round 9): a speed-keeping slide on a roof; in the air it buffers the landing slide */}
+      <div ref={slideBtn} data-testid="touch-slide"
+        onPointerDown={e => { stop(e); input.touchSlide(); press(slideBtn.current, true); }}
+        onPointerUp={e => { e.stopPropagation(); press(slideBtn.current, false); }}
+        onPointerCancel={() => press(slideBtn.current, false)}
+        style={round(56, { right: safe("right", 236), bottom: safe("bottom", 26), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
+        SLIDE
+      </div>
+      {/* ZIP: web-zip to the ringed anchor / the roof ahead; dimmed while it recharges */}
       {zip >= 0 && <div ref={zipBtn} data-testid="touch-zip"
         onPointerDown={e => { stop(e); input.touchZip(); press(zipBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); press(zipBtn.current, false); }}

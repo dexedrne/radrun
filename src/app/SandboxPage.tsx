@@ -35,13 +35,13 @@ function Hud({ game }: { game: Sandbox }) {
       <div style={{ position: "fixed", left: "50%", top: "50%", width: 8, height: 8, marginLeft: -4, marginTop: -4, borderRadius: 4, background: ringColor, boxShadow: "0 0 0 1.5px rgba(0,0,0,0.5)", zIndex: 10, pointerEvents: "none" }} />
       <div style={{ ...panel, left: 8, top: 8 }}>
         <div><b>RADRUN</b> · sandbox {AUTOPLAY ? "· autoplay" : ""}</div>
-        <div>{hud.speed.toFixed(1)} m/s · {hud.phase} · chain {hud.chain}</div>
+        <div>{hud.speed.toFixed(1)} m/s · {hud.phase} · chain {hud.chain} · parkour {hud.parkour}</div>
         <div style={{ opacity: 0.8 }}>top {hud.topSpeed.toFixed(1)} m/s · best chain {hud.maxChain} · falls {hud.falls} · bonks {hud.bonks}</div>
         <div style={{ opacity: 0.6 }}>{backend || "…"} · {hud.fps.toFixed(0)} fps{ready ? "" : " · loading city…"}</div>
       </div>
       {hints && (
         <div style={{ ...panel, left: 8, bottom: 8, opacity: 0.85 }}>
-          mouse look · WASD run · Space jump · LMB (hold) web onto the ringed balloon, release to let go · R restart · Esc pause
+          mouse look · WASD run · Space jump / wall kick · LMB (hold) web the building ahead, let go at the bottom to fling · run along a wall to wall-run · C slide · R restart · Esc pause
           {game.camera.easyGrab ? " · easy grab: hold Space to swing" : ""}
         </div>
       )}
@@ -68,6 +68,8 @@ export default function SandboxPage() {
   }, []);
   useEffect(() => {
     if (!game) return;
+    // Dev / test builds: the sandbox for e2e scripts (scripted swing / wall-run shots).
+    if (import.meta.env.MODE !== "production") (window as unknown as { __sandbox?: Sandbox }).__sandbox = game;
     if (AUTOPLAY) game.input.script = autoplayScript({ get body() { return game.body; }, rig: game.rig, model: game.model, stats: game.stats, spawnYaw: game.model.spawn.yaw });
     const el = canvasEl() ?? document.body;
     const detach = attachDom(game.input, el, locked => {

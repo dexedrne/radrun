@@ -1,18 +1,18 @@
 // Ghost runs (spec §17 stretch: "a verified ghost of your best run in challenge links"): the per-step
 // input record of a round, the compact link codec and the replay.
 //
-// The sim reads only the horizontal aim direction (pickTarget normalises aim.xz; aim.y is unused), the
-// move vector and three buttons. So one step is recorded as
+// The sim reads only the horizontal aim direction (pickRing normalises aim.xz; aim.y is unused), the
+// move vector and the buttons. So one step is recorded as
 //   yaw          camera yaw quantised to YAW_RES steps per turn (pitch never reaches the sim),
 //   fwd / right  the move input in camera space, quantised to 1/MOVE_RES (a key = MOVE_RES),
-//   bits         jumpPressed, webPressed, webHeld, zipPressed (format 2),
+//   bits         jumpPressed, webPressed, webHeld, zipPressed (format 2), slidePressed (format 3),
 // and the LIVE round steps with the InputFrame rebuilt from that record (buildFrame). A replay of the
 // record is therefore bit-exact. buildFrame takes sin/cos from a table built with + - * / only (no
 // Math.sin: trig can differ across JS engines), so a link recorded in one browser replays the same in
 // another. Pure TS shared with Node; the determinism rule applies (Math.round / atan2 appear only in
 // quantYaw / recFromFrame, which run on the recording side before the record exists).
 import { emptyInput, type InputFrame } from "../sim/player.ts";
-import { AIM_COS_TOUCH, HOLD_DELAY_EASY, MOVES_OFF, ROUND, TOUCH, type Difficulty, type Tuning } from "../sim/tuning.ts";
+import { AIM_COS_TOUCH, HOLD_DELAY_EASY, MOVES_OFF, ROUND, SLIDE_OFF, TOUCH, type Difficulty, type Tuning } from "../sim/tuning.ts";
 import type { Vec3 } from "../sim/math.ts";
 import type { Round, RadbroId } from "./round.ts";
 
@@ -24,13 +24,17 @@ export const B_WEB_PRESSED = 2;
 export const B_WEB_HELD = 4;
 /** Format 2 (double jump + web zip): the zip press. */
 export const B_ZIP = 8;
+/** Format 3 (round 9 parkour): the slide press. */
+export const B_SLIDE = 16;
 /** Chase steps a record can hold (the 90 s clock only runs down; +1 s slack). */
 export const GHOST_MAX_STEPS = ROUND.seconds * 120 + 120;
 /**
- * Record format: 1 = before the double jump / web zip (bits 0-7; replayed with those moves off, so old
- * links keep verifying), 2 = with them (+ B_ZIP).
+ * Record format: 1 = before the double jump / web zip (bits 0-7; replayed with those moves off), 2 = with them
+ * (+ B_ZIP), 3 = round 9 (+ B_SLIDE; building anchors and parkour). Formats 1-2 still decode (slide off), but
+ * only links from before round 9 carry them.
  */
-export const FORMAT = 2;
+export const FORMAT = 3;
+const FORMAT_MOVES = 2;
 const FORMAT_OLD = 1;
 
 /** One recorded step (integers). */
@@ -39,9 +43,10 @@ export const emptyRec = (): InputRec => ({ yaw: 0, fwd: 0, right: 0, bits: 0 });
 
 /**
  * What the round was created with, beyond the setup: touch (aim cone, +1 m Yoink, aim bias), easy grab,
- * and moves = false for a format-1 record (made before the double jump / web zip; missing = on).
+ * moves = false for a format-1 record (made before the double jump / web zip; missing = on) and slide = false
+ * for a format-1/2 record (made before the slide; missing = on).
  */
-export type GhostFlags = { touch: boolean; easy: boolean; moves?: boolean };
+export type GhostFlags = { touch: boolean; easy: boolean; moves?: boolean; slide?: boolean };
 
 /** A decoded ghost ready to race: the round it belongs to, the claimed time and the record. */
 export type GhostSpec = {
@@ -94,11 +99,11 @@ const quantMove = (v: number): number => {
 };
 
 /** Record from the latch's camera-space move (fwd / right, keys + stick) and buttons. */
-export function recFromInput(rec: InputRec, yaw: number, fwd: number, right: number, jump: boolean, webPressed: boolean, webHeld: boolean, zip = false): InputRec {
+export function recFromInput(rec: InputRec, yaw: number, fwd: number, right: number, jump: boolean, webPressed: boolean, webHeld: boolean, zip = false, slide = false): InputRec {
   rec.yaw = quantYaw(yaw);
   rec.fwd = quantMove(fwd);
   rec.right = quantMove(right);
-  rec.bits = (jump ? B_JUMP : 0) | (webPressed ? B_WEB_PRESSED : 0) | (webHeld ? B_WEB_HELD : 0) | (zip ? B_ZIP : 0);
+  rec.bits = (jump ? B_JUMP : 0) | (webPressed ? B_WEB_PRESSED : 0) | (webHeld ? B_WEB_HELD : 0) | (zip ? B_ZIP : 0) | (slide ? B_SLIDE : 0);
   return rec;
 }
 
@@ -108,7 +113,7 @@ export function recFromFrame(rec: InputRec, f: InputFrame): InputRec {
   const q = quantYaw(yaw);
   const sy = YAW_SIN[q], cy = YAW_COS[q];
   // move = -sy*fwd + cy*right, -cy*fwd - sy*right  =>  fwd = -(mx sy + mz cy), right = mx cy - mz sy
-  return recFromInput(rec, yaw, -(f.moveX * sy + f.moveZ * cy), f.moveX * cy - f.moveZ * sy, f.jumpPressed, f.webPressed, f.webHeld, f.zipPressed);
+  return recFromInput(rec, yaw, -(f.moveX * sy + f.moveZ * cy), f.moveX * cy - f.moveZ * sy, f.jumpPressed, f.webPressed, f.webHeld, f.zipPressed, f.slidePressed);
 }
 
 /**
@@ -140,13 +145,14 @@ export function buildFrame(f: InputFrame, rec: InputRec, v: Vec3, touch: boolean
   f.webPressed = (rec.bits & B_WEB_PRESSED) !== 0;
   f.webHeld = (rec.bits & B_WEB_HELD) !== 0;
   f.zipPressed = (rec.bits & B_ZIP) !== 0;
+  f.slidePressed = (rec.bits & B_SLIDE) !== 0;
   return f;
 }
 
 /**
  * The player tuning a round is created with (easy grab: longer hold delay, no zip, an airborne Space
- * with a ringed balloon grabs instead of double-jumping; touch: wider aim cone; a format-1 ghost: no
- * double jump / web zip).
+ * with a ringed anchor grabs instead of double-jumping; touch: wider aim cone; a format-1 ghost: no
+ * double jump / web zip / slide; a format-2 ghost: no slide).
  */
 export function roundTuning(t: Tuning, flags: GhostFlags): Tuning {
   return {
@@ -155,7 +161,7 @@ export function roundTuning(t: Tuning, flags: GhostFlags): Tuning {
     zip: flags.easy ? false : t.zip,
     airJumpNoRing: flags.easy ? true : t.airJumpNoRing,
     aimCos: flags.touch ? Math.min(t.aimCos, AIM_COS_TOUCH) : t.aimCos,
-    ...(flags.moves === false ? MOVES_OFF : {}),
+    ...(flags.moves === false ? MOVES_OFF : flags.slide === false ? SLIDE_OFF : {}),
   };
 }
 
@@ -277,11 +283,11 @@ function readCol(r: Reader, col: Col, n: number, wrap: boolean, lo: number, hi: 
 
 /**
  * Uncompressed bytes: format, flags, step count, then the yaw / fwd / right / bits columns. flags.moves
- * === false writes format 1 (the zip bit must then be unused).
+ * === false writes format 1 (zip / slide bits unused), flags.slide === false format 2 (slide bit unused).
  */
 export function encodeBytes(log: GhostLog, flags: GhostFlags): Uint8Array {
   const w = new Writer();
-  w.byte(flags.moves === false ? FORMAT_OLD : FORMAT);
+  w.byte(flags.moves === false ? FORMAT_OLD : flags.slide === false ? FORMAT_MOVES : FORMAT);
   w.byte((flags.touch ? 1 : 0) | (flags.easy ? 2 : 0));
   w.uv(log.n);
   writeCol(w, log.yaw, log.n, true);
@@ -296,7 +302,7 @@ export function decodeBytes(b: Uint8Array): { log: GhostLog; flags: GhostFlags }
   try {
     const r = new Reader(b);
     const format = r.byte();
-    if (format !== FORMAT && format !== FORMAT_OLD) return null;
+    if (format !== FORMAT && format !== FORMAT_MOVES && format !== FORMAT_OLD) return null;
     const fl = r.byte();
     const n = r.uv();
     if (n < 1 || n > GHOST_MAX_STEPS) return null;
@@ -305,10 +311,11 @@ export function decodeBytes(b: Uint8Array): { log: GhostLog; flags: GhostFlags }
     readCol(r, log.yaw, n, true, 0, YAW_RES - 1);
     readCol(r, log.fwd, n, false, -MOVE_MAX, MOVE_MAX);
     readCol(r, log.right, n, false, -MOVE_MAX, MOVE_MAX);
-    readCol(r, log.bits, n, false, 0, format === FORMAT ? 15 : 7);
+    readCol(r, log.bits, n, false, 0, format === FORMAT ? 31 : format === FORMAT_MOVES ? 15 : 7);
     if (r.i !== b.length) return null;
     const flags: GhostFlags = { touch: (fl & 1) !== 0, easy: (fl & 2) !== 0 };
     if (format === FORMAT_OLD) flags.moves = false;
+    if (format !== FORMAT) flags.slide = false;
     return { log, flags };
   } catch {
     return null;

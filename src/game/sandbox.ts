@@ -1,7 +1,7 @@
 // Free-roam swinging world (?sandbox): player body + fixed stepper + camera rig + input latch, no
 // runner. Lives outside React (one instance per page, keyed by runId) so restarts never remount the
 // canvas. Pure TS apart from reading the latch; SimDriver calls frame() once per rendered frame.
-import { copyBody, createBody, emptyInput, stepBody, cloneBody, EV_BONK, EV_FALL, EV_ATTACH, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
+import { copyBody, createBody, emptyInput, resetMoves, stepBody, cloneBody, EV_BONK, EV_FALL, EV_ATTACH, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import { FixedStepper } from "../sim/stepper.ts";
 import { HOLD_DELAY_EASY, type CameraTuning, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
@@ -9,7 +9,7 @@ import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
 
-export type SandboxStats = { topSpeed: number; maxChain: number; falls: number; bonks: number; swings: number; steps: number };
+export type SandboxStats = { topSpeed: number; maxChain: number; falls: number; bonks: number; swings: number; steps: number; parkour: number };
 
 /** Put a body back on a roof: the point clamped `inset` m inside the roof footprint, at rest. */
 export function respawnOnRoof(b: Body, model: CityModel, roofId: number, x: number, z: number, inset: number, halfHeight: number): void {
@@ -20,9 +20,7 @@ export function respawnOnRoof(b: Body, model: CityModel, roofId: number, x: numb
   b.v.x = b.v.y = b.v.z = 0;
   b.grounded = true;
   b.roofId = s.id;
-  b.ropeHook = -1;
-  b.heldFor = b.coyote = b.jumpBuf = b.bonkT = 0;
-  b.chainCount = 0;
+  resetMoves(b);
   b.lastSafeRoof = s.id;
   b.lastSafe.x = cx; b.lastSafe.y = b.p.y; b.lastSafe.z = cz;
 }
@@ -43,7 +41,7 @@ export class Sandbox {
   readonly rig: Rig;
   readonly input = new InputLatch();
   readonly frameInput: InputFrame = emptyInput();
-  readonly stats: SandboxStats = { topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, swings: 0, steps: 0 };
+  readonly stats: SandboxStats = { topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, swings: 0, steps: 0, parkour: 0 };
   /** Events OR-ed over the steps of the last frame (FX / camera). */
   frameEvents = 0;
   /** Interpolated body point for rendering. */
@@ -56,7 +54,7 @@ export class Sandbox {
   constructor(model: CityModel, tuning: Tuning, camera: CameraTuning) {
     this.model = model;
     const index = new CityIndex(model);
-    this.world = { index, hooks: model.hooks, lowestRoof: model.lowestRoof, runner: null };
+    this.world = { index, runner: null };
     this.tuning = tuning;
     this.camera = camera;
     this.simTuning = { ...tuning };
@@ -102,6 +100,7 @@ export class Sandbox {
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
     if (b.events & EV_ATTACH) st.swings++;
     if (b.events & EV_BONK) st.bonks++;
+    st.parkour = b.parkour;
     if (b.events & EV_FALL) {
       st.falls++;
       respawnOnRoof(b, this.model, b.lastSafeRoof, b.lastSafe.x, b.lastSafe.z, 1, this.tuning.halfHeight);

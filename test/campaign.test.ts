@@ -11,11 +11,11 @@ const {
   LEVELS, TOTAL_STARS, DEGEN_STARS, emptyProgress, evaluate, recordLevel, starCount, levelUnlocked, districtUnlocked,
   unlockedMutators, degenUnlocked, hatUnlocked, loadProgress, saveProgress,
 } = await import("../src/game/campaign.ts");
-const { M_POPS, M_WIND, M_LOWGRAV, M_SIXTY } = await import("../src/game/mutators.ts");
+const { M_SNAP, M_WIND, M_LOWGRAV, M_SIXTY } = await import("../src/game/mutators.ts");
 const { districtFromSearch } = await import("../src/world/districts.ts");
 
 const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number; runnerLow: number }> = {}) =>
-  ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, runnerLow: 60, ...o });
+  ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, runnerLow: 60, parkour: 0, ...o });
 
 test("campaign: 15 levels, 45 stars, stable numbering, every district and mutator used", () => {
   assert.equal(LEVELS.length, 15);
@@ -75,11 +75,11 @@ test("campaign: unlocks - levels, districts, mutators, Degen, hats", () => {
   recordLevel(p, 1, [true, false, false], 80);
   assert.ok(levelUnlocked(p, 2));
   recordLevel(p, 3, [true, false, false], 80); // Pop Quiz: pops
-  assert.equal(unlockedMutators(p), M_POPS);
+  assert.equal(unlockedMutators(p), M_SNAP);
   recordLevel(p, 4, [true, false, false], 80); // Neon Alleys opens the Night Market
   assert.ok(districtUnlocked(p, "market"));
   recordLevel(p, 8, [true, false, false], 80); // Moon Jump: wind + low gravity
-  assert.equal(unlockedMutators(p), M_POPS | M_WIND | M_LOWGRAV);
+  assert.equal(unlockedMutators(p), M_SNAP | M_WIND | M_LOWGRAV);
   assert.ok(!degenUnlocked(p));
   for (let n = 1; n <= DEGEN_STARS / 3; n++) recordLevel(p, n, [true, true, true], 30);
   assert.ok(degenUnlocked(p));

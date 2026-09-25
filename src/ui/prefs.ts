@@ -170,8 +170,9 @@ export function readChallenge(search: string): Challenge {
  * Link format version (round 4): v=2 links carry the district (m=, omitted for Downtown) and later the
  * mutators (mu=); a link without v is a v1 link = Downtown, no mutators. v=3 (one bump for round 7): the
  * double jump + web zip (the ghost record says which ruleset it replays with: format 1 = without them),
- * the Vertigo district and the sky balloons over the Towers (older Towers ghosts drift and show the
- * "made on an older build" note).
+ * the Vertigo district and the sky anchors over the Towers (older Towers ghosts drift and show the
+ * "made on an older build" note). Round 9 (building anchors, parkour, ghost format 3) bumps it to 4 at
+ * integration, together with the new cities.
  */
 export const LINK_VERSION = 3;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);

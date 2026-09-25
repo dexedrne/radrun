@@ -1,15 +1,16 @@
-// Round 4 mechanics: popping balloons, wind, low gravity, no Yoink, one life and the 60 s clock are
-// deterministic, player-only (the runner is untouched) and part of the round hash.
+// Round 4 mechanics (round 9: snapping webs replace the popping balloons): snapping webs, wind, low gravity,
+// no Yoink, one life and the 60 s clock are deterministic, player-only (the runner is untouched) and part of
+// the round hash.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { decodePack } from "../src/route/trackPack.ts";
 import { applyTuningJson, MECH } from "../src/sim/tuning.ts";
 import { Fnv1a } from "../src/sim/math.ts";
-import { emptyInput, EV_POP } from "../src/sim/player.ts";
+import { emptyInput, EV_ATTACH, EV_SNAP } from "../src/sim/player.ts";
 import { Round, windSchedule } from "../src/game/round.ts";
 import { Bot, SwingBot } from "../src/game/bots.ts";
-import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_POPS, M_SIXTY, M_WIND } from "../src/game/mutators.ts";
+import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_SIXTY, M_SNAP, M_WIND } from "../src/game/mutators.ts";
 import type { CityModel } from "../src/world/cityModel.ts";
 
 const lv = (f: string) => new URL(`../public/levels/${f}`, import.meta.url);
@@ -19,24 +20,26 @@ const { player, difficulty } = applyTuningJson(JSON.parse(fs.readFileSync(lv("tu
 const make = (seed: number, mutators: number, countdown = false) =>
   new Round({ model, pack, difficulty: "normal", params: difficulty.normal, tuning: player, chaser: "652", runner: "4764", seed, countdown, mutators });
 
-/** Drive a round with the swinging bot (real player sim) for up to `steps`; returns its per-step pop count. */
-function swingRun(r: Round, steps: number): { pops: number; hashes: string[] } {
+/** Drive a round with the swinging bot (real player sim) for up to `steps`; snaps and the longest rope (steps). */
+function swingRun(r: Round, steps: number): { snaps: number; longest: number; swings: number; hashes: string[] } {
   const bot = new SwingBot(r, r.opts.seed);
   const inp = emptyInput();
-  let pops = 0;
+  let snaps = 0, longest = 0, swings = 0;
   const hashes: string[] = [];
   for (let i = 0; i < steps && !r.over; i++) {
     const ov = bot.next(r, inp);
     r.step(inp, ov);
     bot.after(r);
-    if (r.player.events & EV_POP) pops++;
+    if (r.player.events & EV_SNAP) snaps++;
+    if (r.player.events & EV_ATTACH) swings++;
+    if (r.player.ropeSolid >= 0) longest = Math.max(longest, r.player.ropeSteps);
     if (i % 120 === 0) hashes.push(r.hash());
   }
-  return { pops, hashes };
+  return { snaps, longest, swings, hashes };
 }
 
-test("mechanics: pops + wind + low gravity replay bit-exactly (same seed, same bot)", () => {
-  const all = M_POPS | M_WIND | M_LOWGRAV;
+test("mechanics: snapping webs + wind + low gravity replay bit-exactly (same seed, same bot)", () => {
+  const all = M_SNAP | M_WIND | M_LOWGRAV;
   const a = swingRun(make(4242, all), 120 * 40);
   const b = swingRun(make(4242, all), 120 * 40);
   assert.deepEqual(a.hashes, b.hashes);
@@ -45,28 +48,23 @@ test("mechanics: pops + wind + low gravity replay bit-exactly (same seed, same b
   assert.notDeepEqual(a.hashes, c.hashes);
 });
 
-test("mechanics: fragile balloons pop when the rope leaves them and grow back after popRespawn", () => {
-  const r = make(77, M_POPS);
-  const { pops } = swingRun(r, 120 * 60);
-  assert.ok(pops > 0, "the swinging bot never popped a balloon");
-  const down = r.world.hookDown!;
-  const frag = r.world.fragile!;
-  let fragile = 0;
-  for (let i = 0; i < frag.length; i++) fragile += frag[i];
-  const share = fragile / frag.length;
-  assert.ok(Math.abs(share - MECH.popShare) < 0.12, `fragile share ${share}`);
-  for (let i = 0; i < down.length; i++) {
-    if (down[i] === 0) continue;
-    assert.equal(frag[i], 1, "only fragile balloons pop");
-    assert.ok(down[i] <= r.player.step + Math.round(MECH.popRespawn * 120), "popped for longer than popRespawn");
-  }
+test("mechanics: snapping webs - no web lasts longer than snapTime; it snaps (no boost) and you web again", () => {
+  const r = make(77, M_SNAP);
+  const snapSteps = Math.round(MECH.snapTime * 120);
+  assert.equal(r.world.snapSteps, snapSteps);
+  const { snaps, longest, swings } = swingRun(r, 120 * 60);
+  assert.ok(swings >= 3, `swings ${swings}`);
+  assert.ok(longest <= snapSteps, `longest rope ${longest} steps > ${snapSteps}`);
+  // The classic round never snaps on time.
+  assert.equal(make(77, 0).world.snapSteps, undefined);
+  assert.ok(snaps >= 0);
 });
 
 test("mechanics: the runner never reads the player's mechanics (same player path -> same runner)", () => {
   // The follower bot drives the player kinematically (no stepBody), so the player path is identical;
   // the runner must then be step-for-step identical with and without every player mutator.
   const runnerHash = (r: Round) => { const h = new Fnv1a(); r.runner.hash(h); return h.hex(); };
-  const a = make(9001, 0), b = make(9001, M_POPS | M_WIND | M_LOWGRAV | M_NOYOINK);
+  const a = make(9001, 0), b = make(9001, M_SNAP | M_WIND | M_LOWGRAV | M_NOYOINK);
   const ba = new Bot(a, { kind: "follow", k: 1.1, yoink: false }), bb = new Bot(b, { kind: "follow", k: 1.1, yoink: false });
   const inp = emptyInput();
   for (let i = 0; i < 120 * 30 && !a.over && !b.over; i++) {

@@ -1,6 +1,6 @@
 // ?autoplay: a scripted chain-swinger for smoke screenshots (the canyon-probe policy). Walks from the
-// spawn to its street edge, turns to look down the street, zips onto the ringed balloon, releases once
-// past the hook and re-grabs; after a landing or respawn it starts over. Also drives ?bot=swing (a
+// spawn to its street edge, turns to look down the street, webs the ringed building, lets go once past the
+// pivot on the way up and re-grabs; after a landing or respawn it starts over. Also drives ?bot=swing (a
 // real round with the real characters, for mid-swing screenshots).
 import type { Body, InputFrame } from "../sim/player.ts";
 import { rigLook, type Rig } from "../camera/rig.ts";
@@ -43,10 +43,11 @@ export function autoplayScript(game: AutoplayTarget): (f: InputFrame, i: number)
       }
     } else {
       f.moveX = -r.sy; f.moveZ = -r.cy;
-      if (b.ropeHook >= 0) {
-        const h = game.model.hooks[b.ropeHook];
+      if (b.ropeSolid >= 0) {
+        const h = b.ropeP;
         const ahead = (b.p.x - h.x) * -r.sy + (b.p.z - h.z) * -r.cy;
-        if (ahead >= 0 && b.v.y >= -3) { held = false; cooldown = 6; }
+        const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z);
+        if (ahead >= 0 && b.v.y > 0 && b.v.y >= 0.4 * hs) { held = false; cooldown = 6; }
       } else if (b.grounded) {
         held = true;
         press = b.ringId >= 0;

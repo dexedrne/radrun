@@ -64,8 +64,11 @@ export type RigInput = {
   p: Vec3;
   speed: number;
   grounded: boolean;
+  /** The swing pivot while on the rope, else null. */
   hook: Vec3 | null;
   landed: boolean;
+  /** Round 9: wall-running (the arm uses armWall). */
+  wall?: boolean;
 };
 
 /** segmentHit(a, b) -> parametric t in [0,1] of the first solid hit, or -1. */
@@ -73,15 +76,16 @@ export type SegmentHit = (ax: number, ay: number, az: number, bx: number, by: nu
 
 export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hit: SegmentHit | null): void {
   // Arm length by state, blended at armBlend/s.
-  const armTarget = s.hook ? cam.armRope : s.grounded ? cam.armGround : cam.armAir;
+  const armTarget = s.hook ? cam.armRope : s.wall ? cam.armWall : s.grounded ? cam.armGround : cam.armAir;
   r.arm += (armTarget - r.arm) * Math.min(1, cam.armBlend * dt);
 
-  // Target = chest; on the rope shift 25% toward the hook so the arc reads.
+  // Target = chest; on the rope lean ropeBias of the way toward the pivot, at most ropeBiasMax m (W10).
   let tx = s.p.x, ty = s.p.y + 0.3, tz = s.p.z;
   if (s.hook) {
-    tx += (s.hook.x - tx) * cam.ropeBias;
-    ty += (s.hook.y - ty) * cam.ropeBias;
-    tz += (s.hook.z - tz) * cam.ropeBias;
+    const hx = s.hook.x - tx, hy = s.hook.y - ty, hz = s.hook.z - tz;
+    const hl = Math.sqrt(hx * hx + hy * hy + hz * hz);
+    const lean = Math.min(cam.ropeBias * hl, cam.ropeBiasMax);
+    if (hl > 1e-6) { tx += (hx / hl) * lean; ty += (hy / hl) * lean; tz += (hz / hl) * lean; }
   }
   // Over-the-shoulder: the look target and the arm both shift 0.6 m to the right, so the view
   // direction is exactly the aim (forward) and the character sits left of the reticle.
@@ -106,7 +110,8 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   r.pos.z = bz + dz;
 
   // FOV: widen with speed (unless reduced motion), eased; -3 deg landing kick for 0.1 s.
-  const boost = cam.reducedMotion ? 0 : cam.fovBoost * Math.min(1, Math.max(0, (s.speed - 9) / 9));
+  const span = Math.max(1e-3, cam.fovSpeedHi - cam.fovSpeedLo);
+  const boost = cam.reducedMotion ? 0 : cam.fovBoost * Math.min(1, Math.max(0, (s.speed - cam.fovSpeedLo) / span));
   const want = cam.fov + boost;
   r.fov += (want - r.fov) * Math.min(1, cam.fovEase * dt);
   if (s.landed && !cam.reducedMotion) r.kickT = 0.1;

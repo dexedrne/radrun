@@ -258,11 +258,27 @@ export const sfx = {
   fall: () => smp("fall", 0.5, 0, 0) || at(0, (e, t) => tone(e, "triangle", 900, 110, t, 0.75, 0.14, 0.02)),
   /** George after a catch (sulky after an escape). */
   meow: (sulky = false) => smp(sulky ? "sulky" : "meow", 0.55, sulky ? 0.9 : 0.55) || at(sulky ? 0.9 : 0.55, (e, t) => meow(e, t, sulky)),
-  /** Round 4: a fragile balloon pops (a sharp burst + a rubbery squeak). */
-  pop: () => smp("pop", 0.6) || at(0, (e, t) => {
+  /** Round 9: a web snaps (a sharp burst + a rubbery squeak; the old balloon-pop samples). */
+  snap: () => smp("snap", 0.5) || at(0, (e, t) => {
     noise(e, "highpass", 1800, 900, 0.8, t, 0.05, 0.55, 0.05);
     tone(e, "square", 1400, 300, t, 0.06, 0.12, 0.001);
   }),
+  /** Round 9 parkour: feet catch a wall (a quick scuff). */
+  wallRun: () => smp("landLight", 0.28, 0, 0.03, 1.35) || at(0, (e, t) => noise(e, "bandpass", 1200, 700, 1.2, t, 0.12, 0.2, 0.2)),
+  /** A kick off a wall. */
+  wallJump: () => smp("jump", 0.42, 0, 0.02, 1.2) || at(0, (e, t) => { noise(e, "bandpass", 900, 500, 1, t, 0.08, 0.25, 0.1); tone(e, "square", 280, 520, t, 0.1, 0.05); }),
+  /** Hands on a ledge. */
+  ledge: () => smp("landLight", 0.32, 0, 0.02, 1.5) || at(0, (e, t) => noise(e, "bandpass", 1600, 900, 1.4, t, 0.07, 0.22, 0.1)),
+  /** Pulling up over a ledge. */
+  climb: () => smp("landLight", 0.24, 0, 0.02, 0.9) || at(0, (e, t) => noise(e, "lowpass", 900, 400, 0.8, t, 0.18, 0.18, 0.3)),
+  /** Hop over a low obstacle. */
+  vault: () => smp("jump", 0.3, 0, 0.02, 1.35) || at(0, (e, t) => tone(e, "square", 300, 560, t, 0.08, 0.04)),
+  /** A slide on a roof (a gritty swish). */
+  slide: () => at(0, (e, t) => { noise(e, "lowpass", 2200, 500, 0.9, t, 0.55, 0.22, 0.15); noise(e, "bandpass", 3000, 1200, 2, t, 0.35, 0.08, 0.2); }),
+  /** A landing roll. */
+  roll: () => smp("landHeavy", 0.32, 0, 0.02, 1.25) || at(0, (e, t) => noise(e, "lowpass", 700, 250, 0.8, t, 0.3, 0.25, 0.2)),
+  /** A web press with nothing to web to (a soft "no" tick). */
+  noAnchor: () => at(0, (e, t) => tone(e, "sine", 320, 210, t, 0.07, 0.035, 0.004)),
   /** Round 4: a wind gust starts (a rising, breathy swell). */
   gust: () => smp("gust", 0.55, 0, 0.02) || at(0, (e, t) => {
     noise(e, "bandpass", 300, 900, 0.7, t, 1.6, 0.22, 0.9);
