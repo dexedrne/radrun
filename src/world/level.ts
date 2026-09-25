@@ -10,6 +10,6 @@ export function modelFromCityPrefab(prefab: Prefab): { model: CityModel; warning
   const warnings = [...read.warnings];
   if (!read.config) warnings.push("city.json has no root Data {kind: 'city', config}; using defaults");
   const config = { ...DEFAULT_CONFIG, ...(read.config ?? {}) };
-  if (!read.solids.length) throw new Error("city.json has no Data kind 'roof'/'tower' nodes");
-  return { model: deriveModel(config, read.solids, read.manualHooks), warnings };
+  if (!read.solids.length) throw new Error("city.json has no Data kind 'roof'/'tower'/'prop' nodes");
+  return { model: deriveModel(config, read.solids), warnings };
 }

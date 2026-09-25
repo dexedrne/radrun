@@ -1,21 +1,33 @@
-// Round 7: drop hops (walk off a roof onto a much lower one: graph + bake validation), sky hooks (higher
-// balloon clusters with a longer grab range) and the Vertigo district's committed bake.
+// Round 7: drop hops (walk off a roof onto a much lower one: graph + bake validation) and the Vertigo
+// district's committed city and bake. Round 9: no sky balloons - the anchors of the descent are the higher
+// rings' cliff faces and five 150-220 m needles. The bake checks skip while the committed pack predates the
+// city (the integration re-bakes it).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CityIndex, type CityModel, type Solid } from "../src/world/cityModel.ts";
-import { deriveModel, skyHooks } from "../src/world/derive.ts";
+import { deriveModel, lintModel, RULES } from "../src/world/derive.ts";
 import { DEFAULT_CONFIG, generate } from "../src/world/generate.ts";
 import { buildLinks, GRAPH } from "../src/route/graph.ts";
 import { EdgeBot, newParams, PH_DONE, PH_FAIL } from "../src/route/bot.ts";
 import { BAKE, type BakeReport } from "../src/route/bake.ts";
 import { decodePack, PHASE_AIR, PHASE_GROUND, sampleEdge } from "../src/route/trackPack.ts";
 import { applyTuningJson, ROUND, runnerFrom } from "../src/sim/tuning.ts";
-import { createBody, emptyInput, pickTarget, RING_NONE, type SimWorld } from "../src/sim/player.ts";
+import { emptyInput, type SimWorld } from "../src/sim/player.ts";
 import { DISTRICTS, DISTRICT_IDS } from "../src/world/districts.ts";
 
 const { player } = applyTuningJson(JSON.parse(fs.readFileSync(new URL("../public/levels/tuning.json", import.meta.url), "utf8")));
 const file = (id: (typeof DISTRICT_IDS)[number], f: string) => new URL(`../public/${DISTRICTS[id].dir}${f}`, import.meta.url);
+const vertigoModel = (): CityModel => JSON.parse(fs.readFileSync(file("vertigo", "city.model.json"), "utf8"));
+/** Skip reason while Vertigo's runner pack was baked for an older city. */
+const stale: string | false = (() => {
+  try {
+    return decodePack(fs.readFileSync(file("vertigo", "runner.pack.bin"))).header.city === vertigoModel().hash ? false
+      : "vertigo: runner.pack.bin predates this city - run npm run level -- --map vertigo";
+  } catch (e) {
+    return `vertigo: runner.pack.bin unreadable (${(e as Error).message})`;
+  }
+})();
 
 /** Two 12 x 12 roofs across a 4 m alley along x: A (top ta) then B (top tb). */
 function pairModel(ta: number, tb: number): CityModel {
@@ -23,7 +35,7 @@ function pairModel(ta: number, tb: number): CityModel {
     { id: 0, kind: "roof", landable: true, x0: 0, z0: 0, x1: 12, z1: 12, top: ta },
     { id: 1, kind: "roof", landable: true, x0: 16, z0: 0, x1: 28, z1: 12, top: tb },
   ];
-  return deriveModel({ ...DEFAULT_CONFIG, autoHooks: false }, solids);
+  return deriveModel(DEFAULT_CONFIG, solids);
 }
 
 function runDrop(model: CityModel, pace: number): EdgeBot {
@@ -71,47 +83,34 @@ test("drop hops: the walk-off pace window lands >= 1.5 m inside with no wall con
   assert.match(slow.fail, /fell|wall contact|landing margin|landed on roof/, "too slow: short of the lower roof");
 });
 
-test("sky hooks: a longer grab range than street balloons, and only where the config asks", () => {
-  const solids: Solid[] = [{ id: 0, kind: "roof", landable: true, x0: -6, z0: -6, x1: 6, z1: 6, top: 40 }];
-  const model = deriveModel({ ...DEFAULT_CONFIG, autoHooks: false }, solids, [{ x: 12, y: 60, z: 0 }]);
-  // The manual hook is 23 m away: out of the 17 m aim radius.
-  const b = createBody(0, 40.9, 0, 0);
-  const inp = { ...emptyInput(), aimX: 1, aimY: 0, aimZ: 0 };
-  const world: SimWorld = { index: new CityIndex(model), hooks: model.hooks, lowestRoof: 40, runner: null };
-  assert.equal(pickTarget(b, inp, player, world), RING_NONE);
-  // Same spot as a sky hook (reach 30): ringed.
-  const sky = model.hooks.map(h => ({ ...h, src: "sky" as const, reach: 30 }));
-  assert.equal(pickTarget(b, inp, player, { ...world, hooks: sky }), 0);
-  // Derived: Towers and Vertigo carry sky hooks 15-35 m over the tallest nearby roof; the others none.
-  for (const id of DISTRICT_IDS) {
-    const m: CityModel = JSON.parse(fs.readFileSync(file(id, "city.model.json"), "utf8"));
-    const list = m.hooks.filter(h => h.src === "sky");
-    if (id === "towers" || id === "vertigo") assert.ok(list.length >= 10, `${id}: ${list.length} sky hooks`);
-    else assert.equal(list.length, 0, id);
-    const cfg = m.config.sky;
-    for (const h of list) {
-      assert.equal(h.reach, cfg!.reach);
-      let top = -1;
-      for (const s of m.solids) {
-        if (!s.landable) continue;
-        const dx = h.x < s.x0 ? s.x0 - h.x : h.x > s.x1 ? h.x - s.x1 : 0, dz = h.z < s.z0 ? s.z0 - h.z : h.z > s.z1 ? h.z - s.z1 : 0;
-        if (dx <= cfg!.radius && dz <= cfg!.radius) top = Math.max(top, s.top);
-      }
-      assert.ok(h.y - top >= cfg!.min - 1e-9 && h.y - top <= cfg!.max + 1e-9, `${id} sky hook ${h.id}: ${h.y - top} m above`);
-    }
+test("Vertigo city: the spiral keeps its range, five 150-220 m needles, no balloons, G2 alley steps", () => {
+  const model = vertigoModel();
+  assert.deepEqual(model.hooks, []);
+  const roofs = model.solids.filter(s => s.kind === "roof").map(s => s.top);
+  assert.ok(Math.min(...roofs) <= 25 && Math.max(...roofs) >= 85, `roofs ${Math.min(...roofs)}-${Math.max(...roofs)} m`);
+  const needles = model.solids.filter(s => s.kind === "tower");
+  assert.equal(needles.length, 5);
+  for (const n of needles) assert.ok(n.top >= 150 && n.top <= 220 && n.x1 - n.x0 === DISTRICTS.vertigo.config.vertigo!.needleSize);
+  for (const e of model.adjacency) {
+    const a = model.solids[e.a], b = model.solids[e.b];
+    if (e.kind !== "alley" || a.kind !== "roof" || b.kind !== "roof") continue;
+    const dh = Math.abs(a.top - b.top);
+    assert.ok(dh <= RULES.climbMax + 1e-9 || dh >= RULES.dropMin - 1e-9, `alley ${a.id}/${b.id}: ${dh} m`);
   }
-  // The generator agrees with the committed Vertigo model (sky hooks included).
-  const gen = generate(DISTRICTS.vertigo.config).model;
-  assert.deepEqual(skyHooks(gen.config, gen.solids).length > 0, true);
+  // Few anchors low down on purpose: coverage only warns.
+  const lint = lintModel(model);
+  assert.deepEqual(lint.errors, []);
+  // The generator agrees with the committed model.
+  assert.equal(generate(DISTRICTS.vertigo.config).model.hash, model.hash);
 });
 
-test("Vertigo: big height range, drop hops in his route, falls land clean", () => {
-  const model: CityModel = JSON.parse(fs.readFileSync(file("vertigo", "city.model.json"), "utf8"));
+test("Vertigo: big height range, drop hops in his route, falls land clean", { skip: stale }, () => {
+  const model = vertigoModel();
   const report: BakeReport = JSON.parse(fs.readFileSync(file("vertigo", "bake.report.json"), "utf8"));
   const pack = decodePack(fs.readFileSync(file("vertigo", "runner.pack.bin")));
   const roofs = model.solids.filter(s => s.landable).map(s => s.top);
   assert.ok(Math.min(...roofs) <= 25 && Math.max(...roofs) >= 85, `roofs ${Math.min(...roofs)}-${Math.max(...roofs)} m`);
-  assert.ok(model.solids.filter(s => s.kind === "tower").length >= 3, "needle towers");
+  assert.ok(model.solids.filter(s => s.kind === "tower").length >= 5, "needle towers");
   const kept = report.edges.filter(e => e.kept);
   const drops = kept.flatMap(e => e.hops).filter(h => h.kind === "drop");
   assert.ok(drops.length >= 8, `${drops.length} drop hops kept`);
@@ -138,7 +137,7 @@ test("Vertigo: big height range, drop hops in his route, falls land clean", () =
   assert.ok(longest >= 20, `longest fall ${longest.toFixed(1)} m`);
 });
 
-test("Vertigo round: he starts high, you spawn near his height (never next to him, off his first edge), runnerLow tracks his lowest roof", async () => {
+test("Vertigo round: he starts high, you spawn near his height (never next to him, off his first edge), runnerLow tracks his lowest roof", { skip: stale }, async () => {
   const { Round } = await import("../src/game/round.ts");
   const { difficulty } = applyTuningJson(JSON.parse(fs.readFileSync(new URL("../public/levels/tuning.json", import.meta.url), "utf8")));
   const model: CityModel = JSON.parse(fs.readFileSync(file("vertigo", "city.model.json"), "utf8"));

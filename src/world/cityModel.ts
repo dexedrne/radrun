@@ -2,7 +2,13 @@
 // 16 m uniform grid over the solids for allocation-free queries. Pure TS; covered by the determinism
 // rule (fixed iteration order, sqrt-only maths).
 
-export type SolidKind = "roof" | "tower";
+/**
+ * roof: a landable building. tower: a solid you can never land on (spines, needles, crane masts).
+ * prop (round 9): a rooftop obstacle (AC unit, crate, bulkhead, container stack) - a ground-rooted box
+ * inside one roof's footprint, landable, 0.8-1.4 m (vault) or 2.2-3.2 m (climb) above that roof; never in
+ * adjacency, junctions, spawn, lowestRoof or anchor coverage (world/derive.ts, lint G3).
+ */
+export type SolidKind = "roof" | "tower" | "prop";
 
 /** A ground-rooted, unrotated box. y0 is always 0; top = y1. */
 export type Solid = {
@@ -18,6 +24,7 @@ export type Solid = {
   node?: string;
 };
 
+/** @deprecated Round 9: balloons are gone; `model.hooks` is always []. Deleted at integration. */
 export type Hook = {
   id: number; x: number; y: number; z: number;
   /** "sky" (round 7): a high balloon cluster over an intersection / plaza, grabbable from further away. */
@@ -38,6 +45,29 @@ export type Adjacency = {
   hi: number;
 };
 
+/**
+ * Round 9 (lint G4): a notch between two roofs lined by a taller wall - the thief's wall-run hop. Derived by
+ * rule from the solids (world/derive.ts deriveWallGaps). Listed once; both directions are usable.
+ */
+export type WallGap = {
+  /** Landable roofs; a -> b along +dir on `axis`. */
+  a: number;
+  b: number;
+  /** The taller solid whose face lines the notch. */
+  wall: number;
+  /** Travel axis. */
+  axis: "x" | "z";
+  dir: 1 | -1;
+  /** a's takeoff edge on the axis. */
+  edge: number;
+  /** b's near edge on the axis. */
+  far: number;
+  /** The wall face coordinate on the other axis. */
+  face: number;
+  /** That face's outward normal sign on the other axis (points into the notch). */
+  side: 1 | -1;
+};
+
 export type CityConfig = {
   seed: number;
   blocksX: number;
@@ -47,41 +77,68 @@ export type CityConfig = {
   alley: number;
   building: number;
   mergeChance: number;
+  /** Block podium heights come from a smooth field in [roofMin, roofMax] (round 9). */
   roofMin: number;
   roofMax: number;
   roofQuant: number;
-  alleyMaxDh: number;
-  streetMaxDh: number;
+  /** Landmark towers: `towers` spines of towerMin-towerMax m, at least towerSpread m apart. */
   towers: number;
   towerMin: number;
   towerMax: number;
-  hookSpacing: number;
-  hookAbove: number;
-  hookClearance: number;
-  autoHooks: boolean;
   skylineCount: number;
   skylineMin: number;
   skylineMax: number;
+  /** Skyline box heights (decor ring, m; round 9: 80-300). */
+  skylineLow?: number;
+  skylineHigh?: number;
   /**
-   * Round 4: chance that a street segment (one block length of one street) has no balloons at all
-   * (intersection balloons stay). Seeded from `seed`; 0 / missing = every street keeps its balloons.
+   * Round 9 podium steps: each building of a block is the block's base height + one of these (seeded),
+   * redrawn until every alley step is a hop (<= 1.2 m), a climb (1.2-3.5 m) or a drop (>= 6 m).
    */
-  hookGapChance?: number;
+  steps?: number[];
+  /** Round 9: share of each block's base height that is seeded per block (the rest is the smooth field). */
+  podiumJitter?: number;
+  /** Round 9: tower footprints are inset this much from their lot (m). */
+  towerInset?: number;
+  /** Round 9: min distance between landmark towers (m; default 70). */
+  towerSpread?: number;
   /**
-   * Round 7 sky hooks: extra balloon clusters over street intersections (and empty lots / plazas) at
-   * `min`-`max` m above the tallest landable roof within `radius` m, kept with `chance` (seeded hash), grabbable
-   * from `reach` m. Missing = none (Downtown / Market / Docks).
+   * Round 9 anchor coverage (lint G1): every street-facing roof edge has a solid >= coverRise m taller
+   * within coverDist m. `coverFix` turns buildings into towers of roof + coverTower[0..1] m until it holds;
+   * `coverWarn` makes a gap a lint warning instead of an error (Market, Vertigo).
    */
-  sky?: SkyHooks;
-  /**
-   * Round 7: where two facing street roofs differ by at least this much, the street also gets a lower
-   * balloon tier at the lower roof + hookAbove, so both levels keep a swing lane. Missing = one tier.
-   */
-  lowTierDh?: number;
+  coverRise?: number;
+  coverDist?: number;
+  coverFix?: boolean;
+  coverWarn?: boolean;
+  coverTower?: [number, number];
+  /** Round 9 wall gaps (G4): chance per block, notch width [min, max] and wall rise [min, max] (m). */
+  wallGapChance?: number;
+  notch?: [number, number];
+  wallRise?: [number, number];
+  /** Round 9 solid rooftop props (G3): mean per roof (<= 3), share of climb-height ones, flavour set. */
+  props?: number;
+  propClimb?: number;
+  propSet?: "city" | "docks";
+  /** Round 9 runnable roof minimum side (G2; default 12, Market 10). */
+  minRoof?: number;
+  /** Round 9 Docks: crane masts (4 x 4 m towers) standing in the quay-side street intersections. */
+  masts?: { count: number; size: number; min: number; max: number };
   /** Round 7 "Vertigo" layout (generate.ts generateVertigo): roofs on stacked spiral ramps. */
   vertigo?: VertigoLayout;
+  /** @deprecated Round 1-8 balloon / clamp settings, ignored since round 9 (kept so old city.json files parse). */
+  alleyMaxDh?: number;
+  streetMaxDh?: number;
+  hookSpacing?: number;
+  hookAbove?: number;
+  hookClearance?: number;
+  autoHooks?: boolean;
+  hookGapChance?: number;
+  sky?: SkyHooks;
+  lowTierDh?: number;
 };
 
+/** @deprecated Round 7 sky balloon clusters (removed in round 9). */
 export type SkyHooks = { chance: number; min: number; max: number; radius: number; reach: number };
 
 /**
@@ -108,9 +165,12 @@ export type CityModel = {
   bounds: { x0: number; z0: number; x1: number; z1: number };
   lowestRoof: number;
   solids: Solid[];
+  /** @deprecated Always [] since round 9 (no balloons); deleted at integration. */
   hooks: Hook[];
   adjacency: Adjacency[];
-  /** Non-boundary landable roofs (runner junction candidates, M2). */
+  /** Round 9 wall-run notches (lint G4). Optional this round; required after integration. */
+  wallGaps?: WallGap[];
+  /** Non-boundary landable roofs (runner junction candidates, M2; never props). */
   junctionCandidates: number[];
   spawn: { roofId: number; x: number; y: number; z: number; yaw: number };
   hash: string;
