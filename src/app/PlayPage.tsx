@@ -32,7 +32,7 @@ import { FxView } from "./FxView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx } from "../audio/sfx.ts";
-import { preloadVoices } from "../audio/voice.ts";
+import { preloadVoices, voice } from "../audio/voice.ts";
 import { preloadTracks } from "../audio/tracks.ts";
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
@@ -272,6 +272,7 @@ export default function PlayPage() {
   const toLevels = useCallback(() => {
     if (!game) return;
     game.toTitle();
+    voice.hush();
     document.exitPointerLock?.();
     useUi.setState(s => ({ screen: "campaign", results: null, paused: false, ghost: null, campaignSel: s.campaign?.n ?? s.campaignSel, campaign: null }));
   }, [game]);
@@ -289,6 +290,7 @@ export default function PlayPage() {
   const toMenu = useCallback(() => {
     if (!game) return;
     game.toTitle();
+    voice.hush();
     document.exitPointerLock?.();
     useUi.setState({ screen: "title", results: null, paused: false, ghost: null, campaign: null });
   }, [game]);

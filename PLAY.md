@@ -94,8 +94,11 @@ the LOADING screen (the countdown sounds go first).
   speech). The announcer is a Milady: she calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged
   ("it's so over") and a new best ("we're so back"). The Radbros talk like Radbros (fren, comfy, stay rad).
   The runner says "finders keepers" right after GO, his taunts (the exact bubble; quieter the further ahead
-  he is), panic, cornered, gassed, caught and escaped; your Radbro cheers after a catch. A line that is not
-  loaded falls back to the old chatter blips.
+  he is), panic, cornered, gassed, caught and escaped. The round end is one call and one reply: the chase
+  lines stop, she calls it (a new best instead of YOINK / tagged), then the runner answers; nothing else
+  talks until the next round, and quitting to a menu cuts it. A line that is not loaded falls back to the
+  old chatter blips. `?vodebug` logs every line started / cut / dropped (with its caller) to
+  `window.__voiceLog`.
 - **Sound effects:** rope thwip and release whoosh, jump, **double jump** (the jump, a fifth higher),
   **web zip** (a thwip into a whoosh), light / heavy landings by impact, bonk, the YOINK lasso crack, the
   coin grab, countdown beeps, the "rekt." whistle, balloon pops, wind gusts, the rug swoosh, George's
