@@ -26,7 +26,7 @@ function devSave(): Plugin {
         const file = q.get("file") ?? "";
         const map = q.get("map") ?? "downtown";
         if (!LEVEL_FILES.has(file)) return reply(400, false, `not a level file: ${file}`);
-        if (!/^(downtown|market|docks|towers)$/.test(map)) return reply(400, false, `unknown map: ${map}`);
+        if (!/^(downtown|market|docks|towers|vertigo)$/.test(map)) return reply(400, false, `unknown map: ${map}`);
         const sub = file === "tuning.json" || map === "downtown" ? "" : map;
         let body = "";
         req.on("data", c => (body += c));

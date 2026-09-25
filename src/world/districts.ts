@@ -6,8 +6,8 @@ import type { CityConfig } from "./cityModel.ts";
 import { DEFAULT_CONFIG } from "./generate.ts";
 import type { Difficulty, DifficultyParams } from "../sim/tuning.ts";
 
-export type DistrictId = "downtown" | "market" | "docks" | "towers";
-export const DISTRICT_IDS: readonly DistrictId[] = ["downtown", "market", "docks", "towers"];
+export type DistrictId = "downtown" | "market" | "docks" | "towers" | "vertigo";
+export const DISTRICT_IDS: readonly DistrictId[] = ["downtown", "market", "docks", "towers", "vertigo"];
 
 /** Sky / fog / light colours (the "night" mutator darkens whatever the district uses). */
 export type DistrictLook = {
@@ -37,6 +37,14 @@ export type ChaseTweak = {
   spawnOther?: number;
   /** Added to the difficulty table's runner parameters, per difficulty. */
   add?: Partial<Record<Difficulty, Partial<DifficultyParams>>>;
+  /**
+   * Round 7 descending chase: he starts on one of his `startHigh` highest junctions (same rng draw), and
+   * his branch choice favours edges that end lower (`down` x the drop / 20 m, clamped to +-1).
+   */
+  startHigh?: number;
+  down?: number;
+  /** Round 7: a spawn roof more than 3 m below his start roof counts this many m further per m below. */
+  spawnBelow?: number;
 };
 
 export type District = {
@@ -51,6 +59,9 @@ export type District = {
   look: DistrictLook;
   chase?: ChaseTweak;
 };
+
+/** Round 7 sky hooks (Towers, Vertigo): high clusters over intersections / plazas, 30 m grab range. */
+const SKY_HOOKS = { chance: 0.6, min: 15, max: 35, radius: 16, reach: 30 };
 
 const DOWNTOWN_LOOK: DistrictLook = {
   skyHorizon: "#d3dcea", skyMid: "#98bde6", skyZenith: "#4c83d0", fog: "#d3dcea", fogNear: 120, fogFar: 380,
@@ -129,6 +140,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     config: {
       ...DEFAULT_CONFIG, seed: 1453, blocksX: 7, blocksZ: 6, roofMin: 38, roofMax: 52, streetMaxDh: 3.5,
       towers: 8, towerMin: 90, towerMax: 130, hookAbove: 10, skylineCount: 50, skylineMin: 260, skylineMax: 460,
+      sky: SKY_HOOKS,
     },
     // Round 6: a faster sprint, a 4.5 m Normal and 3 m Degen Yoink.
     chase: {
@@ -141,6 +153,43 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     look: {
       skyHorizon: "#f6c9a8", skyMid: "#b7b6dc", skyZenith: "#3f5fa8", fog: "#e2cfc6", fogNear: 150, fogFar: 520,
       sun: "#ffd6a8", sunIntensity: 1.55, hemiSky: "#d7e2ff", hemiGround: "#5b4f6b", hemiIntensity: 1.2,
+    },
+  },
+  vertigo: {
+    id: "vertigo",
+    name: "Vertigo",
+    blurb: "A skyline of spiral ramps, 20 to 90 m up. He starts at the top: drop, dive, grab the big sky balloons.",
+    dir: "levels/vertigo/",
+    sky: "sky/vertigo.webp",
+    // Round 7: helix rings of roofs (world/generate.ts generateVertigo), 3 needle towers, sky hooks and a
+    // lower balloon tier where a street crosses a cliff.
+    config: {
+      ...DEFAULT_CONFIG, seed: 20, blocksX: 6, blocksZ: 5, mergeChance: 0, roofMin: 22, roofMax: 90, alleyMaxDh: 90, streetMaxDh: 90,
+      towers: 0, towerMin: 120, towerMax: 170, hookAbove: 10, skylineCount: 40, skylineMin: 260, skylineMax: 480,
+      sky: { ...SKY_HOOKS, chance: 0.7 }, lowTierDh: 8,
+      vertigo: {
+        rings: [[22, 86], [26, 78], [30, 66], [34, 58]], streetStep: 2.6, alleyStep: 0.5,
+        needles: 3, needleMin: 120, needleMax: 170, needleSize: 7, plazas: 2, mesa: [84, 90],
+      },
+    },
+    // Descending chase: he starts on one of his 3 highest junctions and prefers edges that end lower; you
+    // spawn at about his height, away from his first edge (game/round.ts playerSpawn). The swinging bot
+    // intercepts fast here when a street line crosses his route (drops cost him horizontal speed) and gets
+    // lost under cliffs otherwise, so runner tuning trades catch rate against the median: a slower
+    // runner that waits for a lost chaser (mMin) with a shorter Normal Yoink. Swing bot, 600 seeds (npm run
+    // balance -- --map vertigo --only swing): chill 98 % median 9.0 s, normal 73 % 26.9 s, degen 67 % 32.3 s
+    // (Downtown 98 % 11.3 s / 93 % 26.6 s / 73 % 45.8 s).
+    chase: {
+      startHigh: 3, down: 0.6, spawnBelow: 5, spawnMin: 24,
+      add: {
+        chill: { base: -0.2 },
+        normal: { base: -0.15, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
+        degen: { base: -0.25, mMin: -0.4, gStar: 15, mMax: -0.4, airMax: -0.4, panicBudget: -10, yoinkRange: 0.5 },
+      },
+    },
+    look: {
+      skyHorizon: "#e3eee9", skyMid: "#8cc8dc", skyZenith: "#27589a", fog: "#dbe8e6", fogNear: 150, fogFar: 560,
+      sun: "#fff6e6", sunIntensity: 1.6, hemiSky: "#e6f4ff", hemiGround: "#56607a", hemiIntensity: 1.25,
     },
   },
 };

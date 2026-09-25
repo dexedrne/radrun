@@ -66,6 +66,11 @@ export class Runner {
   /** Look-back at the player this dwell (d < 20 m on arrival). */
   lookAt = false;
   lastScore = 0;
+  /**
+   * Round 7 descending chase (district chase tweak `down`; 0 = the classic policy): edges that end lower
+   * score higher, by down x (drop / 20 m) clamped to +-1.
+   */
+  down = 0;
   private ahead: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
 
   constructor(pack: Pack, params: RunnerParams, rng: Rand, startJunction: number, firstEdge: number) {
@@ -126,6 +131,10 @@ export class Runner {
     let s = R.awayW * (e.exitX * ax + e.exitZ * az) + R.farW * far;
     if (this.picks[0] === ei || this.picks[1] === ei) s -= R.recentW;
     if (e.to === this.prevJunction) s -= R.backW;
+    if (this.down > 0) {
+      const drop = (this.pack.junctions[e.from].y - end.y) / 20;
+      s += this.down * (drop < -1 ? -1 : drop > 1 ? 1 : drop);
+    }
     return s;
   }
 

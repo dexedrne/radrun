@@ -77,9 +77,10 @@ export function medal(d: Difficulty, t: number): string {
 export const MEDAL_COLOR: Record<string, string> = { RAD: "#ff4fd8", GOLD: "#ffd23f", SILVER: "#d7dde6", BRONZE: "#d08a4a" };
 
 export function clockText(s: number): string {
-  const t = Math.max(0, s);
-  const m = Math.floor(t / 60);
-  const r = t - m * 60;
+  // Round to tenths first (9.96 s left used to print "1:010.0", 59.96 s "0:60.0").
+  const tenths = Math.round(Math.max(0, s) * 10);
+  const m = Math.floor(tenths / 600);
+  const r = (tenths - m * 600) / 10;
   return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`;
 }
 

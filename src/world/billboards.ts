@@ -16,6 +16,7 @@ export const DISTRICT_ADS: Readonly<Record<DistrictId, readonly AdId[]>> = {
   market: ["ngmi", "wenmoon", "nothing", "buyhigh"],
   docks: ["gm", "buyhigh", "wagmi", "wenmoon"],
   towers: ["rugs", "ngmi", "hodl", "nothing"],
+  vertigo: ["wenmoon", "buyhigh", "gm", "ngmi"],
 };
 
 export const adMaterialId = (id: AdId): string => `ad_${id}`;

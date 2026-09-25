@@ -14,6 +14,10 @@
 //   unlit -> drop sit/lie clips -> resize 1024 -> webp 90 -> resample -> draco
 // Clip packs: skeleton + animations only, resample + prune + dedup (no mesh, nothing to draco).
 //
+// `npm run assets -- --radbros <dir> --packs-only [--only ...]` rebuilds just the clip packs (new clips in
+// game-clips/radbro<id>.clips.glb, e.g. round 7's Free_Fall / Big_Land) and merges their entries into
+// clips.meta.json; the character GLBs are not touched.
+//
 // `npm run assets -- --meta-only` re-measures the jump timings (Regular_Jump takeoff / apex / land,
 // forward kinematics of the feet) from the committed public/models GLBs and updates only those fields
 // in clips.meta.json (no source folder needed, no GLB rewritten).
@@ -210,7 +214,13 @@ const POLICY: Record<string, { loop: boolean; xz: "keep" | "pin"; y: "keep" | "p
   Falling_Down: { loop: false, xz: "pin", y: "keep" },
   Fishing_Cast: { loop: false, xz: "pin", y: "keep" },
   Waltz: { loop: false, xz: "pin", y: "keep" },
+  // Round 7 (clip manifest): the airborne loop is pinned (the game owns the fall); the landing keeps the
+  // hips' height (the crouch drops them ~30 cm with the feet planted).
+  Free_Fall: { loop: true, xz: "pin", y: "pin" },
+  Big_Land: { loop: false, xz: "pin", y: "keep" },
 };
+
+const PACKS_ONLY = process.argv.includes("--packs-only");
 
 async function radbros(dir: string) {
   const clipsDir = path.join(dir, "game-clips");
@@ -218,8 +228,32 @@ async function radbros(dir: string) {
   const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : { characters: {} };
   const metaFile = path.join(GEN, "clips.meta.json");
   const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> =
-    ONLY && fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
+    (ONLY || PACKS_ONLY) && fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
   const notes: string[] = [];
+  const entry = (name: string, m: Omit<ClipMeta, "loop" | "rootPolicy">, man: Record<string, { takeoffAt?: number; landAt?: number; rightHandMean?: number[] }>): ClipMeta => {
+    const pol = POLICY[name] ?? { loop: true, xz: "pin", y: "keep" };
+    const c: ClipMeta = { ...m, loop: pol.loop, rootPolicy: { xz: pol.xz, y: pol.y } };
+    if (man[name]?.takeoffAt !== undefined) c.takeoffAt = man[name].takeoffAt;
+    if (man[name]?.landAt !== undefined) c.landAt = man[name].landAt;
+    if (name === "Rope_Hang_Idle" && man[name]?.rightHandMean) c.handHeight = r3(man[name].rightHandMean![1]);
+    return c;
+  };
+  if (PACKS_ONLY) {
+    for (const id of ONLY ?? IDS) {
+      const packSrc = path.join(clipsDir, `radbro${id}.clips.glb`);
+      const packOut = path.join(OUT, `radbro${id}.clips.glb`);
+      if (!fs.existsSync(packSrc) || !meta[id]) { notes.push(`#${id}: no clip pack / meta entry, skipped`); continue; }
+      const packClips = await clipPack(packSrc, packOut);
+      console.log(`radbro${id}.clips.glb  ${kb(packOut)}  (${packClips.join(", ")})`);
+      const man = manifest.characters?.[id]?.clips ?? {};
+      for (const [name, m] of Object.entries(measure(await io.read(packOut)))) meta[id].clips[name] = entry(name, m, man);
+      meta[id].clipPack = true;
+    }
+    fs.writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
+    console.log(`src/generated/clips.meta.json updated (packs only)`);
+    for (const n of notes) console.log(`NOTE ${n}`);
+    return;
+  }
   for (const id of ONLY ?? IDS) {
     const replacement = path.join(clipsDir, `radbro${id}_character.glb`);
     const delivery = path.join(dir, "delivery", `radbro${id}_animations.glb`);
@@ -241,14 +275,7 @@ async function radbros(dir: string) {
     const measured = { ...own, ...(packClips.length ? measure(await io.read(packOut)) : {}) };
     const man = manifest.characters?.[id]?.clips ?? {};
     const clips: Record<string, ClipMeta> = {};
-    for (const [name, m] of Object.entries(measured)) {
-      const pol = POLICY[name] ?? { loop: true, xz: "pin", y: "keep" };
-      const c: ClipMeta = { ...m, loop: pol.loop, rootPolicy: { xz: pol.xz, y: pol.y } };
-      if (man[name]?.takeoffAt !== undefined) c.takeoffAt = man[name].takeoffAt;
-      if (man[name]?.landAt !== undefined) c.landAt = man[name].landAt;
-      if (name === "Rope_Hang_Idle" && man[name]?.rightHandMean) c.handHeight = r3(man[name].rightHandMean[1]);
-      clips[name] = c;
-    }
+    for (const [name, m] of Object.entries(measured)) clips[name] = entry(name, m, man);
     meta[id] = { clipPack: packClips.length > 0, clips };
   }
   fs.mkdirSync(GEN, { recursive: true });
@@ -308,7 +335,7 @@ if (process.argv.includes("--meta-only")) {
 const radbroDir = arg("radbros", "RUGRUN_RADBROS");
 const georgeDir = arg("george", "RUGRUN_GEORGE");
 if (!radbroDir && !georgeDir) {
-  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>] [--only <id,...>]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
+  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>] [--only <id,...>] [--packs-only]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
   process.exit(2);
 }
 fs.mkdirSync(OUT, { recursive: true });

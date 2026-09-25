@@ -52,13 +52,16 @@ const q = (v: number) => Math.round(v * 1000) / 1000;
 
 export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adjacency[], manual: ManualHook[]): Hook[] {
   const byId = new Map(solids.map(s => [s.id, s]));
-  const cand = new Map<string, { x: number; y: number; z: number; src: Hook["src"]; axis: "x" | "z" | "" }>();
+  type Cand = { x: number; y: number; z: number; src: Hook["src"]; axis: "x" | "z" | ""; reach?: number };
+  const cand = new Map<string, Cand>();
   const put = (x: number, y: number, z: number, src: Hook["src"], axis: "x" | "z" | "" = "") => {
     const key = `${q(x)},${q(z)}`;
     const cur = cand.get(key);
     if (!cur || y > cur.y) cand.set(key, { x: q(x), y: q(y), z: q(z), src: cur?.src === "intersection" ? "intersection" : src, axis: cur?.axis || axis });
   };
   const sp = config.hookSpacing;
+  /** Hooks that share an x/z with another (lower street tiers, sky clusters): not keyed by position. */
+  const extra: Cand[] = [];
   if (config.autoHooks) {
     const midX = new Map<number, number[]>(); // street midline x -> landable tops (streets running along z)
     const midZ = new Map<number, number[]>();
@@ -70,9 +73,13 @@ export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adja
       const y = Math.max(...tops) + config.hookAbove;
       const mid = (e.axis === "x" ? a.x1 : a.z1) + e.gap / 2;
       const k0 = Math.ceil((e.lo - SPAN_SLACK) / sp), k1 = Math.floor((e.hi + SPAN_SLACK) / sp);
+      // Round 7: a big height step across the street gets a second, lower tier for the lower roof.
+      const lowY = tops.length === 2 && config.lowTierDh !== undefined && Math.abs(tops[0] - tops[1]) >= config.lowTierDh
+        ? Math.min(...tops) + config.hookAbove : -1;
       for (let k = k0; k <= k1; k++) {
         const t = k * sp;
         if (e.axis === "x") put(mid, y, t, "street", "x"); else put(t, y, mid, "street", "z");
+        if (lowY > 0) extra.push(e.axis === "x" ? { x: q(mid), y: q(lowY), z: q(t), src: "street", axis: "x" } : { x: q(t), y: q(lowY), z: q(mid), src: "street", axis: "z" });
       }
       const m = e.axis === "x" ? midX : midZ;
       const key = q(mid);
@@ -114,26 +121,71 @@ export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adja
       if (hash01(config.seed, c.axis === "x" ? 1 : 2, Math.round(mid * 2), seg) < gapChance) cand.delete(key);
     }
   }
+  if (config.autoHooks && config.sky) extra.push(...skyHooks(config, solids));
   // Manual hooks (Data kind "hook" in city.json) replace any auto hook within 3 m horizontally.
   for (const m of manual) {
     for (const [key, c] of cand) {
       const dx = c.x - m.x, dz = c.z - m.z;
       if (dx * dx + dz * dz < 9) cand.delete(key);
     }
+    for (let i = extra.length - 1; i >= 0; i--) {
+      const dx = extra[i].x - m.x, dz = extra[i].z - m.z;
+      if (dx * dx + dz * dz < 9) extra.splice(i, 1);
+    }
   }
-  const list = [...cand.values()].filter(h => {
+  const list: Cand[] = [...cand.values(), ...extra].filter(h => {
     for (const s of solids) if (pointBoxDist(h.x, h.y, h.z, s) < config.hookClearance) return false;
     return true;
   });
   for (const m of manual) list.push({ x: q(m.x), y: q(m.y), z: q(m.z), src: "manual", axis: "" });
   list.sort((a, b) => a.x - b.x || a.z - b.z || a.y - b.y);
-  return list.map((h, id) => ({ id, x: h.x, y: h.y, z: h.z, src: h.src }));
+  return list.map((h, id) => (h.reach !== undefined ? { id, x: h.x, y: h.y, z: h.z, src: h.src, reach: h.reach } : { id, x: h.x, y: h.y, z: h.z, src: h.src }));
+}
+
+/**
+ * Round 7 sky hooks (config.sky): one high cluster over each street intersection and each empty building
+ * lot (plaza) of the block lattice, kept with `chance` and lifted `min`-`max` m above the tallest landable
+ * roof within `radius` m (both from an integer hash of the seed and the spot - no rng state). Their grab
+ * range is `reach` (Hook.reach). The clearance filter later drops any that end up next to a tower.
+ */
+export function skyHooks(config: CityConfig, solids: Solid[]): { x: number; y: number; z: number; src: "sky"; axis: ""; reach: number }[] {
+  const sky = config.sky!;
+  const pitch = config.block + config.street, step = config.building + config.alley;
+  const spots: [number, number][] = [];
+  // Intersections: street midlines between block columns / rows.
+  for (let bx = 1; bx < config.blocksX; bx++) for (let bz = 1; bz < config.blocksZ; bz++) {
+    spots.push([bx * pitch - config.street / 2, bz * pitch - config.street / 2]);
+  }
+  // Empty lots: lattice slot centres with no solid footprint over them.
+  for (let bx = 0; bx < config.blocksX; bx++) for (let bz = 0; bz < config.blocksZ; bz++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const x = bx * pitch + i * step + config.building / 2, z = bz * pitch + j * step + config.building / 2;
+    if (!solids.some(s => x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1)) spots.push([x, z]);
+  }
+  const out: { x: number; y: number; z: number; src: "sky"; axis: ""; reach: number }[] = [];
+  for (const [x, z] of spots) {
+    const kx = Math.round(x * 2), kz = Math.round(z * 2);
+    if (hash01(config.seed, 11, kx, kz) >= sky.chance) continue;
+    let top = -1;
+    for (const s of solids) {
+      if (!s.landable) continue;
+      const dx = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
+      const dz = z < s.z0 ? s.z0 - z : z > s.z1 ? z - s.z1 : 0;
+      if (dx <= sky.radius && dz <= sky.radius && s.top > top) top = s.top;
+    }
+    if (top < 0) continue;
+    const lift = Math.round((sky.min + hash01(config.seed, 12, kx, kz) * (sky.max - sky.min)) * 2) / 2;
+    out.push({ x: q(x), y: q(top + lift), z: q(z), src: "sky", axis: "", reach: sky.reach });
+  }
+  return out;
 }
 
 export function modelHash(m: Pick<CityModel, "solids" | "hooks">): string {
   const h = new Fnv1a();
   for (const s of m.solids) h.i32(s.id).str(s.kind).i32(s.landable ? 1 : 0).f64(s.x0).f64(s.z0).f64(s.x1).f64(s.z1).f64(s.top);
-  for (const k of m.hooks) h.i32(k.id).f64(k.x).f64(k.y).f64(k.z);
+  for (const k of m.hooks) {
+    h.i32(k.id).f64(k.x).f64(k.y).f64(k.z);
+    if (k.reach !== undefined) h.f64(k.reach); // round 7 sky hooks only (older models hash unchanged)
+  }
   return h.hex();
 }
 
@@ -246,12 +298,13 @@ export function lintModel(m: CityModel, aimRadius = 17): LintResult {
         for (const h of m.hooks) {
           if (h.y < py + 1) continue;
           const dx = h.x - px, dy = h.y - py, dz = h.z - pz;
-          best = Math.min(best, Math.sqrt(dx * dx + dy * dy + dz * dz));
+          // A hook with a longer grab range (sky) counts as that much nearer.
+          best = Math.min(best, Math.sqrt(dx * dx + dy * dy + dz * dz) - (h.reach !== undefined ? h.reach - aimRadius : 0));
         }
         worstReach = Math.max(worstReach, best);
         if (best > reach) {
-          // Districts with balloon-free gaps (round 4) break reach on purpose: warn, don't fail.
-          ((cfg.hookGapChance ?? 0) > 0 ? warnings : errors).push(`reach: roof ${s.id} edge point (${px.toFixed(1)}, ${pz.toFixed(1)}) nearest hook ${best.toFixed(2)} m > ${reach}`);
+          // Districts with balloon-free gaps (round 4) or cliffs (round 7 Vertigo) break reach on purpose: warn.
+          ((cfg.hookGapChance ?? 0) > 0 || cfg.vertigo ? warnings : errors).push(`reach: roof ${s.id} edge point (${px.toFixed(1)}, ${pz.toFixed(1)}) nearest hook ${best.toFixed(2)} m > ${reach}`);
           break;
         }
       }

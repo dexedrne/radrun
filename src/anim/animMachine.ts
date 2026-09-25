@@ -8,6 +8,12 @@
 // (CLIP.land, the same clip with the hips' height kept) for a moment. The Meshy airborne clips all read
 // as dives (Run_and_Jump = front flip, Fall_1 = belly-down skydive, Leap_of_Faith = swan dive), so
 // they are only cut-list fallbacks now.
+//
+// Round 7 free fall: a long drop (falling fast, or high above the ground below while descending)
+// crossfades from the apex hold into Free_Fall, an upright loop (treading air: arms sculling, legs
+// kicking); a rope grab cancels it. Landing after a real free fall (or very fast) plays Big_Land, a
+// feet-first superhero crouch (t = 0 is ground contact), cut short when he runs on. Without the clips
+// the apex hold / landing crouch stay.
 
 export const A_JUMP = 1;
 export const A_ATTACH = 2;
@@ -29,6 +35,8 @@ export type AnimInput = {
   events: number;
   /** v.y at the last landing (roll on hard landings). */
   landVy: number;
+  /** Feet height above the ground straight below (m; round 7 free fall). Missing = unknown (vy only). */
+  clearance?: number;
   /** Runner panic: sprint clip on the ground. */
   panic: boolean;
   beat: Beat;
@@ -61,6 +69,9 @@ export const CLIP = {
   flop: "Falling_Down",
   fish: "Fishing_Cast",
   waltz: "Waltz",
+  /** Round 7: upright airborne loop for long drops, and the big feet-first landing after one. */
+  freefall: "Free_Fall",
+  bigLand: "Big_Land",
 } as const;
 
 const RULE = {
@@ -77,6 +88,21 @@ const RULE = {
   landFor: 0.3,
   landFade: 0.12,
   grabFor: 0.85,
+  /**
+   * Free fall: airborne and falling faster than ffVy with at least ffNear m of air below, or descending
+   * (vy < ffDescend) with more than ffFar m below; crossfade ffFade.
+   */
+  ffVy: -9,
+  ffNear: 4,
+  ffDescend: -3,
+  ffFar: 6,
+  ffFade: 0.25,
+  /** Big landing after >= bigAfterFF s of free fall or below bigVy; cut after bigMove s when running on, else bigFor. */
+  bigAfterFF: 0.35,
+  bigVy: -17,
+  bigFade: 0.06,
+  bigMove: 0.5,
+  bigFor: 1.4,
 } as const;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -88,6 +114,10 @@ export class AnimMachine {
   shot = "";
   shotT = 0;
   airT = 0;
+  /** Round 7: in the free-fall loop, for how long, and the lowest v.y of this airborne spell. */
+  ff = false;
+  ffT = 0;
+  minVy = 0;
   beat: Beat = "";
   private base = "";
 
@@ -111,6 +141,8 @@ export class AnimMachine {
       [CLIP.fish]: [CLIP.idle],
       [CLIP.waltz]: [CLIP.idle],
       [CLIP.cheer]: [CLIP.idle],
+      [CLIP.freefall]: [],
+      [CLIP.bigLand]: [],
     };
     for (const s of sub[name] ?? []) if (c.has(s)) return s;
     return "";
@@ -141,6 +173,7 @@ export class AnimMachine {
    * apex otherwise). Without Regular_Jump: the cut-list fallback as a plain loop.
    */
   private air(fade: number, fromTakeoff = false): AnimCmd | null {
+    this.ff = false;
     const clip = this.pick(CLIP.jump);
     if (clip !== CLIP.jump) {
       this.shot = "";
@@ -152,8 +185,26 @@ export class AnimMachine {
     return cmd && cmd.kind === "shot" ? { ...cmd, freezeAt: apex } : cmd;
   }
 
+  /** Is this airborne frame a free fall (long drop ahead)? */
+  private falling(i: AnimInput): boolean {
+    const c = i.clearance ?? Infinity;
+    return (i.vy < RULE.ffVy && c > RULE.ffNear) || (i.vy < RULE.ffDescend && c > RULE.ffFar);
+  }
+
+  /** Crossfade into the free-fall loop. */
+  private freefall(): AnimCmd | null {
+    const clip = this.pick(CLIP.freefall);
+    if (!clip) return null;
+    this.ff = true;
+    this.ffT = 0;
+    this.shot = "";
+    this.clip = this.base = clip;
+    return { kind: "force", clip, fade: RULE.ffFade, scale: 1 };
+  }
+
   /** Back to locomotion now (a force), or the apex hold when airborne. */
   private toLoco(i: AnimInput, fade: number): AnimCmd | null {
+    this.ff = false;
     if (!i.grounded && !i.rope) return this.air(Math.min(fade, RULE.airFade));
     const [loco, scale] = this.locomotion(i);
     this.shot = "";
@@ -180,8 +231,13 @@ export class AnimMachine {
   /** One render frame. Returns at most one command. */
   step(i: AnimInput): AnimCmd | null {
     if (this.shot) this.shotT += i.dt;
-    if (!i.grounded && !i.rope) this.airT += i.dt;
+    const airNow = !i.grounded && !i.rope;
+    if (airNow) { this.airT += i.dt; if (i.vy < this.minVy) this.minVy = i.vy; if (this.ff) this.ffT += i.dt; }
     else this.airT = 0;
+    // What the fall was (read by the landing below), then reset for the next airborne spell.
+    const wasFF = this.ff && !airNow ? this.ffT : 0, fallVy = airNow ? 0 : this.minVy;
+    if (!airNow) { this.ff = false; this.ffT = 0; this.minVy = 0; }
+    if (i.rope) this.ff = false;
 
     // Beats own the character until they end ("" or a change).
     if (i.beat !== this.beat) {
@@ -202,10 +258,17 @@ export class AnimMachine {
     if ((ev & A_RELEASE) && air) return this.air(RULE.airFade);
     if ((ev & A_LAND) && i.grounded) {
       this.base = loco;
-      if (i.landVy < RULE.hardBelowVy && this.clips.has(CLIP.land)) return this.startShot(CLIP.land, loco, this.clips.landAt(CLIP.jump), 0.08);
+      const vy = i.landVy !== 0 ? i.landVy : fallVy; // the runner has no sim landVy: his fall speed
+      if ((wasFF >= RULE.bigAfterFF || vy < RULE.bigVy) && this.clips.has(CLIP.bigLand)) return this.startShot(CLIP.bigLand, loco, 0, RULE.bigFade);
+      if (vy < RULE.hardBelowVy && this.clips.has(CLIP.land)) return this.startShot(CLIP.land, loco, this.clips.landAt(CLIP.jump), 0.08);
       return this.toLoco(i, RULE.landFade);
     }
     if ((ev & A_JUMP) && air) return this.air(0.08, true);
+    // Free fall: once the drop is long, from the apex hold (or the stride) into the upright loop.
+    if (air) {
+      if (this.ff) return null;
+      if (this.falling(i) && this.pick(CLIP.freefall)) return this.freefall();
+    }
 
     // Shot cut-offs.
     if (this.shot) {
@@ -213,6 +276,7 @@ export class AnimMachine {
       const cut =
         (s === CLIP.jump && !air) ||
         (s === CLIP.land && (!i.grounded || this.shotT > RULE.landFor)) ||
+        (s === CLIP.bigLand && (!i.grounded || this.shotT > RULE.bigFor || (this.shotT > RULE.bigMove && i.speed > RULE.walkAbove))) ||
         (s === this.pick(CLIP.grab) && i.rope && this.shotT > RULE.grabFor) ||
         (s === this.pick(CLIP.grab) && !i.rope) ||
         (s === this.pick(CLIP.wave) && this.beat !== "wave" && this.beat !== "taunt" && i.speed > RULE.walkAbove);

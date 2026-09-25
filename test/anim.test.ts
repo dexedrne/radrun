@@ -30,14 +30,14 @@ test("jump: Regular_Jump from takeoff, frozen on the apex until landing; release
   for (let i = 0; i < 10; i++) step({});
   // Jump.
   assert.deepEqual(step({ grounded: false, vy: 6, events: A_JUMP }), { kind: "shot", clip: "Regular_Jump", fade: 0.08, startAt: T.takeoffAt, hold: true, then: "", freezeAt: T.apexAt });
-  for (let i = 0; i < 150; i++) assert.equal(step({ grounded: false, vy: 6 - i * 0.3 }), null, `air frame ${i}`);
+  for (let i = 0; i < 150; i++) assert.equal(step({ grounded: false, vy: 6 - i * 0.3, clearance: 2 }), null, `air frame ${i}`);
   // Land (soft) -> run.
   assert.deepEqual(step({ events: A_LAND, landVy: -8 }), { kind: "force", clip: "Run_02", fade: 0.12, scale: 8 / 9 });
   // Rope: grab, hang, release -> apex hold (0.1 s crossfade).
   assert.equal(step({ grounded: false, rope: true, events: A_ATTACH })?.clip, "Grab_Bar_and_Swing_Forward");
   for (let i = 0; i < 80; i++) step({ grounded: false, rope: true });
   assert.deepEqual(step({ grounded: false, vy: 3, events: A_RELEASE }), { kind: "shot", clip: "Regular_Jump", fade: 0.1, startAt: T.apexAt, hold: true, then: "", freezeAt: T.apexAt });
-  for (let i = 0; i < 90; i++) assert.equal(step({ grounded: false, vy: 3 - i * 0.3 }), null);
+  for (let i = 0; i < 90; i++) assert.equal(step({ grounded: false, vy: 3 - i * 0.3, clearance: 2 }), null);
   // Hard landing -> the landing crouch for 0.3 s, then the run.
   assert.deepEqual(step({ events: A_LAND, landVy: -16, speed: 12 }), { kind: "shot", clip: "Regular_Jump_Land", fade: 0.08, startAt: T.landAt, hold: false, then: "Lean_Forward_Sprint" });
   let back: AnimCmd | null = null;
@@ -47,7 +47,7 @@ test("jump: Regular_Jump from takeoff, frozen on the apex until landing; release
   // Walk off an edge: keep the stride for 0.25 s, then the apex hold.
   for (let i = 0; i < 10; i++) step({});
   const edge: (AnimCmd | null)[] = [];
-  for (let i = 0; i < 30; i++) edge.push(step({ grounded: false, vy: -i * 0.16 }));
+  for (let i = 0; i < 30; i++) edge.push(step({ grounded: false, vy: -i * 0.16, clearance: 2 }));
   const first = edge.findIndex(c => c !== null);
   assert.ok(first >= 14 && first <= 16, `apex hold after ~0.25 s (frame ${first})`);
   assert.equal(edge[first]?.kind, "shot");
@@ -65,7 +65,7 @@ test("runner-style phase events and beats never command a dive clip", () => {
     const ph = k % 4; // ground, air (jump), rope, air (release)
     for (let i = 0; i < 40; i++) {
       const c = m.step(frame({
-        grounded: ph === 0, rope: ph === 2, vy: ph === 0 ? 0 : 4 - i * 0.4, speed: 9,
+        grounded: ph === 0, rope: ph === 2, vy: ph === 0 ? 0 : 4 - i * 0.4, speed: 9, clearance: 30 - i,
         events: i ? 0 : ph === 1 ? A_JUMP : ph === 2 ? A_ATTACH : ph === 3 ? A_RELEASE : A_LAND,
         beat: k === 20 && ph === 0 ? "taunt" : "",
       }));
@@ -74,4 +74,74 @@ test("runner-style phase events and beats never command a dive clip", () => {
   }
   assert.ok(seen > 0);
   assert.equal(CLIP.jump, "Regular_Jump");
+});
+
+// Round 7 free fall: a long drop crossfades from the apex hold into Free_Fall (upright loop), a rope grab
+// cancels it, and the landing after it is Big_Land (cut short when he runs on).
+const FF = [...ALL, "Free_Fall", "Big_Land"];
+const ffMachine = (has = FF) => new AnimMachine({ has: n => has.includes(n), takeoffAt: () => T.takeoffAt, apexAt: () => T.apexAt, landAt: () => T.landAt });
+
+test("free fall: long drops loop Free_Fall, short hops never do; big landing after", () => {
+  const m = ffMachine();
+  const step = (o: Partial<AnimInput>) => m.step(frame(o));
+  for (let i = 0; i < 10; i++) step({});
+  // Ordinary jump across an alley: vy 9 -> -9 with the next roof 1-2 m below: apex hold only.
+  step({ grounded: false, vy: 9, events: A_JUMP, clearance: 0.5 });
+  for (let i = 1; i < 86; i++) assert.equal(step({ grounded: false, vy: 9 - i * 0.21, clearance: 2 }), null, `hop frame ${i}`);
+  assert.equal(step({ events: A_LAND, landVy: -9 })?.clip, "Run_02");
+  // Walk off a 40 m cliff: stride, apex hold, then Free_Fall once falling fast with air below.
+  const cmds: (AnimCmd | null)[] = [];
+  for (let i = 0; i < 120; i++) cmds.push(step({ grounded: false, vy: Math.max(-20, -i * 0.42), clearance: 40 - i * 0.3 }));
+  const ff = cmds.findIndex(c => c?.clip === "Free_Fall");
+  assert.ok(ff > 0, "Free_Fall commanded");
+  assert.deepEqual(cmds[ff], { kind: "force", clip: "Free_Fall", fade: 0.25, scale: 1 });
+  assert.ok(cmds.slice(ff + 1).every(c => c === null), "stays in the loop");
+  assert.equal(m.ff, true);
+  // Landing after it: Big_Land from ground contact, cut after 0.5 s when running on.
+  assert.deepEqual(step({ events: A_LAND, landVy: -20, speed: 9 }), { kind: "shot", clip: "Big_Land", fade: 0.06, startAt: 0, hold: false, then: "Run_02" });
+  let back: AnimCmd | null = null, n = 0;
+  for (; n < 90 && !back; n++) back = step({ speed: 9 });
+  assert.equal(back?.clip, "Run_02");
+  assert.ok(n >= 30 && n <= 32, `cut after ~0.5 s (frame ${n})`);
+  // Standing still after the landing: the whole crouch-and-rise (1.4 s).
+  for (let i = 0; i < 120; i++) step({ grounded: false, vy: -20, clearance: 30 });
+  assert.equal(step({ events: A_LAND, landVy: -20, speed: 0 })?.clip, "Big_Land");
+  back = null; n = 0;
+  for (; n < 120 && !back; n++) back = step({ speed: 0 });
+  assert.equal(back?.clip, "Idle");
+  assert.ok(n >= 83 && n <= 86, `full clip ~1.4 s (frame ${n})`);
+});
+
+test("free fall: a rope grab cancels it; release over a street re-enters only when falling", () => {
+  const m = ffMachine();
+  const step = (o: Partial<AnimInput>) => m.step(frame(o));
+  for (let i = 0; i < 5; i++) step({});
+  for (let i = 0; i < 60; i++) step({ grounded: false, vy: -15, clearance: 30 });
+  assert.equal(m.ff, true);
+  assert.equal(step({ grounded: false, rope: true, events: A_ATTACH })?.clip, "Grab_Bar_and_Swing_Forward");
+  assert.equal(m.ff, false);
+  for (let i = 0; i < 60; i++) step({ grounded: false, rope: true });
+  // Release going up: apex hold, no free fall while rising or barely falling.
+  assert.equal((step({ grounded: false, vy: 4, events: A_RELEASE, clearance: 20 }) as { freezeAt?: number }).freezeAt, T.apexAt);
+  for (let i = 0; i < 25; i++) assert.equal(step({ grounded: false, vy: 4 - i * 0.2, clearance: 20 }), null, `rising ${i}`);
+  // Then dropping with 20 m of air below: Free_Fall.
+  let c: AnimCmd | null = null;
+  for (let i = 0; i < 20 && !c; i++) c = step({ grounded: false, vy: -1 - i * 0.4, clearance: 20 });
+  assert.equal(c?.clip, "Free_Fall");
+  // Bonk in the free fall: the apex hold, then back into the loop once falling again.
+  assert.equal((step({ grounded: false, vy: -2, events: A_BONK, clearance: 20 }) as { freezeAt?: number }).freezeAt, T.apexAt);
+  assert.equal(step({ grounded: false, vy: -10, clearance: 18 })?.clip, "Free_Fall");
+});
+
+test("free fall: without the clips the apex hold / landing crouch stay; runner landings use his fall speed", () => {
+  const m = ffMachine(ALL);
+  const step = (o: Partial<AnimInput>) => m.step(frame(o));
+  for (let i = 0; i < 5; i++) step({});
+  for (let i = 0; i < 120; i++) { const c = step({ grounded: false, vy: -Math.min(20, i * 0.4), clearance: 40 }); assert.ok(!c || c.clip === "Regular_Jump", String(c?.clip)); }
+  assert.equal(step({ events: A_LAND, landVy: -20, speed: 9 })?.clip, "Regular_Jump_Land");
+  // Runner (landVy 0): his fall speed picks the landing.
+  const r = ffMachine();
+  for (let i = 0; i < 5; i++) r.step(frame({}));
+  for (let i = 0; i < 30; i++) r.step(frame({ grounded: false, vy: -18, clearance: 30 - i }));
+  assert.equal(r.step(frame({ events: A_LAND, landVy: 0, speed: 9 }))?.clip, "Big_Land");
 });

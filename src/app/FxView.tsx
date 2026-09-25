@@ -12,6 +12,9 @@ import { lowQuality } from "./quality.tsx";
 
 const BALLOON_COLORS = ["#ff5a7a", "#ffd23f", "#4fc3f7", "#7cdb6a", "#b388ff", "#ff9f43"];
 const CLUSTER: [number, number, number][] = [[0, 1.25, 0], [0.55, 1.05, 0.25], [-0.45, 1.0, -0.35]];
+/** Round 7 sky hooks (longer grab range): bigger clusters in gold / cream / white, so they read apart. */
+const SKY_COLORS = ["#ffd23f", "#fff3c4", "#ffffff"];
+const SKY_SCALE = 1.6;
 
 function useBalloons(game: ViewGame) {
   return useMemo(() => {
@@ -22,13 +25,15 @@ function useBalloons(game: ViewGame) {
     const c = new Color();
     let i = 0;
     for (const h of hooks) {
-      CLUSTER.forEach(([dx, dy, dz], j) => {
+      const sky = h.src === "sky", k = sky ? SKY_SCALE : 1;
+      CLUSTER.forEach(([cx, cy, cz], j) => {
+        const dx = cx * k, dy = 0.45 + (cy - 0.45) * k, dz = cz * k;
         o.position.set(h.x + dx, h.y + dy, h.z + dz);
-        o.scale.set(1, 1.18, 1);
+        o.scale.set(k, 1.18 * k, k);
         o.rotation.set(0, 0, 0);
         o.updateMatrix();
         balloons.setMatrixAt(i, o.matrix);
-        balloons.setColorAt(i, c.set(BALLOON_COLORS[(h.id * 3 + j) % BALLOON_COLORS.length]));
+        balloons.setColorAt(i, c.set(sky ? SKY_COLORS[j] : BALLOON_COLORS[(h.id * 3 + j) % BALLOON_COLORS.length]));
         // string from the knot (hook point) up to the balloon
         const len = Math.sqrt(dx * dx + (dy - 0.45) * (dy - 0.45) + dz * dz);
         o.position.set(h.x + dx / 2, h.y + (dy - 0.45) / 2, h.z + dz / 2);

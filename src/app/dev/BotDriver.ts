@@ -6,15 +6,19 @@
 // rec (with bot=chase): the bot's inputs go through the ghost codec, so a catch gives a ghost link
 // (window.__play.ghost.url) like a player's round. snap (any bot): freeze the sim 0.12 s into each of
 // the chaser's airborne jumps / rope releases (window.__frozen, __frozenWhy = "jump" | "release") so a
-// screenshot catches the airborne pose; resume through window.__unfreeze.
+// screenshot catches the airborne pose; resume through window.__unfreeze. Round 7: snap=freefall,sky,
+// runnerff (any subset) instead freezes once each: the chaser 0.45 s into his Free_Fall loop, 0.35 s
+// into a swing on a sky hook, the runner 0.45 s into his free fall.
 // Progress and the outcome are exposed on window.__play (PlayDriver).
 import type { PlayGame } from "../../game/play.ts";
 import { RADBROS, type RadbroId } from "../../game/round.ts";
 import { EV_JUMP, EV_RELEASE } from "../../sim/player.ts";
 import { DIFFICULTIES, type Difficulty } from "../../sim/tuning.ts";
 import { autoplayScript } from "../autoplay.ts";
+import { PHASE_AIR } from "../../route/trackPack.ts";
+import { rigs } from "../ActorsView.tsx";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean; mu: number } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; snap: boolean; snapKinds: string[]; mu: number } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -31,6 +35,7 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     r,
     rec: q.has("rec"),
     snap: q.has("snap"),
+    snapKinds: (q.get("snap") ?? "").split(",").filter(Boolean),
     /** Round 4 mutator bits (&mu=); default = none (predictions in tools/botshot use the same). */
     mu: (Number(q.get("mu") ?? 0) >>> 0) & 127,
   };
@@ -60,8 +65,37 @@ export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botPar
       if (onRope === 30 && game.round.phase === "chase") { w.__frozen = true; game.paused = true; }
     };
   }
-  if (p.snap) snapAirborne(game);
+  if (p.snap) { if (p.snapKinds.length) snapRound7(game, p.snapKinds); else snapAirborne(game); }
   console.info(`[rug-run] bot=${p.kind} k=${p.k} seed=${p.seed} d=${p.d} c=${p.c} r=${p.r}${p.rec ? " rec" : ""}`);
+}
+
+/** ?snap=freefall,sky,runnerff (round 7): freeze once per kind (see the header). */
+function snapRound7(game: PlayGame, kinds: string[]): void {
+  const w = window as unknown as { __frozen?: boolean; __frozenWhy?: string; __unfreeze?: () => void };
+  w.__unfreeze = () => { w.__frozen = false; game.paused = false; };
+  const left = new Set(kinds);
+  let sky = 0;
+  const frame = game.frame.bind(game);
+  game.frame = (delta: number) => {
+    const n = frame(delta);
+    if (game.round.phase !== "chase" || w.__frozen) return n;
+    const s = game.setup, b = game.round.player;
+    const chaser = rigs.get(s.chaser), runner = rigs.get(s.runner);
+    sky = b.ropeHook >= 0 && game.model.hooks[b.ropeHook].src === "sky" ? sky + delta : 0;
+    let why = "";
+    // (the rig's machine lags the sim by a frame: also require the body to be falling free right now)
+    const run = game.round.runner.pose;
+    if (left.has("freefall") && chaser?.machine.ff && chaser.machine.ffT >= 0.45 && !b.grounded && b.ropeHook < 0 && b.v.y < -3) why = "freefall";
+    else if (left.has("sky") && sky >= 0.35) why = "sky";
+    else if (left.has("runnerff") && runner?.machine.ff && runner.machine.ffT >= 0.45 && run.phase === PHASE_AIR) why = "runnerff";
+    if (why) {
+      left.delete(why);
+      w.__frozenWhy = why;
+      w.__frozen = true;
+      game.paused = true;
+    }
+    return n;
+  };
 }
 
 /** ?snap: freeze 0.12 s after each airborne jump / rope release of the chaser (animation screenshots). */

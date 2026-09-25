@@ -92,6 +92,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     const beat: Beat = gr.phase === "caught" ? "cheer" : "";
     applyCmd(rig.player, rig.machine.step({
       dt: rawDelta * game.timeScale, grounded: b.grounded || g.done, rope: hook >= 0, speed, vy, events: ev, landVy: b.landVy, panic: false, beat,
+      clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
     }));
 
     const faceTo = (x: number, z: number, rate: number) => {

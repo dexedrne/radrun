@@ -18,7 +18,13 @@ export type Solid = {
   node?: string;
 };
 
-export type Hook = { id: number; x: number; y: number; z: number; src: "street" | "intersection" | "manual" };
+export type Hook = {
+  id: number; x: number; y: number; z: number;
+  /** "sky" (round 7): a high balloon cluster over an intersection / plaza, grabbable from further away. */
+  src: "street" | "intersection" | "manual" | "sky";
+  /** Grab range override (m; sky hooks). Missing = the tuning's aimRadius. */
+  reach?: number;
+};
 
 export type Adjacency = {
   a: number;
@@ -61,6 +67,39 @@ export type CityConfig = {
    * (intersection balloons stay). Seeded from `seed`; 0 / missing = every street keeps its balloons.
    */
   hookGapChance?: number;
+  /**
+   * Round 7 sky hooks: extra balloon clusters over street intersections (and empty lots / plazas) at
+   * `min`-`max` m above the tallest landable roof within `radius` m, kept with `chance` (seeded hash), grabbable
+   * from `reach` m. Missing = none (Downtown / Market / Docks).
+   */
+  sky?: SkyHooks;
+  /**
+   * Round 7: where two facing street roofs differ by at least this much, the street also gets a lower
+   * balloon tier at the lower roof + hookAbove, so both levels keep a swing lane. Missing = one tier.
+   */
+  lowTierDh?: number;
+  /** Round 7 "Vertigo" layout (generate.ts generateVertigo): roofs on stacked spiral ramps. */
+  vertigo?: VertigoLayout;
+};
+
+export type SkyHooks = { chance: number; min: number; max: number; radius: number; reach: number };
+
+/**
+ * Helix rings: building ring r (0 = outer) climbs from rings[r][0] to rings[r][1] m going round the city
+ * (+streetStep per street crossing, +alleyStep per alley, scaled down to fit; odd rings the other way
+ * round), then drops back in one cliff. Rings past the list are the core: `needles` slim towers, `plazas`
+ * empty lots, the rest mesas at `mesa` m.
+ */
+export type VertigoLayout = {
+  rings: [number, number][];
+  streetStep: number;
+  alleyStep: number;
+  needles: number;
+  needleMin: number;
+  needleMax: number;
+  needleSize: number;
+  plazas: number;
+  mesa: [number, number];
 };
 
 export type CityModel = {

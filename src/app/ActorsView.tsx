@@ -214,6 +214,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
       applyCmd(rig.player, rig.machine.step({
         dt: delta, grounded: grounded || beat === "idle", rope: hook >= 0, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
         landVy: isChaser ? b.landVy : 0, panic: isRunner && run.band.panic && !run.band.gassed, beat,
+        // Round 7 free fall: air under the feet (the view reads the sim's index between steps).
+        clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
       }));
 
       // Facing (slerp 12 rad/s toward velocity; scripted beats face the other one).

@@ -184,6 +184,14 @@ export const SWING = {
   reactMax: 24,
   /** Take off this close to the roof edge (m). */
   edgeAt: 0.9,
+  /** Vertigo: go straight at him (dropping off roofs) once he is this far below (m). */
+  dropChase: 6,
+  /** Vertigo air steering: nothing under the feet within landDrop m -> steer for a roof within landReach m. */
+  landDrop: 8,
+  landReach: 7,
+  /** Vertigo: no gain on him for stuckFor steps -> the other plan (lanes / straight at him) for laneFor steps. */
+  stuckFor: 360,
+  laneFor: 480,
 };
 
 export type SwingStats = { swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number };
@@ -192,6 +200,8 @@ const sign = (v: number) => (v < 0 ? -1 : 1);
 const GAP_STREET = 0;
 const GAP_HOP = 1;
 const GAP_WALL = 2;
+/** Round 7 (Vertigo): a landable roof well below across the gap. */
+const GAP_DROP = 3;
 
 export class SwingBot {
   readonly lanes: Lane[];
@@ -212,9 +222,18 @@ export class SwingBot {
   /** Steps left sliding along a wall side (tower in the way), and that side's axis. */
   private blocked = 0;
   private blockAxis: 0 | 1 = 0;
+  /** Round 7 (Vertigo) stuck check: closest chase distance lately, steps since it last dropped, steps left on the forced plan (+ lanes, - straight at him). */
+  private bestD = Infinity;
+  private since = 0;
+  private laneFor = 0;
+  private wasDirect = false;
+
+  /** Round 7: the city is a Vertigo skyline (big height steps). */
+  readonly vertigo: boolean;
 
   constructor(round: Round, seed: number) {
     this.lanes = streetLanes(round.model);
+    this.vertigo = !!round.model.config?.vertigo;
     this.rng = new Rand((seed ^ 0x51f15eed) >>> 0);
     this.react = SWING.reactMin + Math.floor(this.rng.next() * (SWING.reactMax - SWING.reactMin + 1));
     this.relAhead = SWING.releaseAhead + SWING.releaseNoise * (this.rng.next() * 2 - 1);
@@ -288,7 +307,10 @@ export class SwingBot {
     const ux = axis === 0 ? sign(mx) : 0, uz = axis === 1 ? sign(mz) : 0;
     const qx = b.p.x + mx * t + ux * 5.5, qz = b.p.z + mz * t + uz * 5.5;
     const top = round.index.groundBelow(qx, qz, 999);
-    const gap = top > s.top + 3 ? GAP_WALL : top > s.top - 3 ? GAP_HOP : GAP_STREET;
+    let gap = top > s.top + 3 ? GAP_WALL : top > s.top - 3 ? GAP_HOP : this.vertigo && top > 0.5 ? GAP_DROP : GAP_STREET;
+    // Vertigo's outer ring is part of his route: past the city's edge there is nothing to swing on.
+    const B = round.model.bounds;
+    if (this.vertigo && (qx < B.x0 || qx > B.x1 || qz < B.z0 || qz > B.z1)) gap = GAP_WALL;
     return { dist: t, axis, gap };
   }
 
@@ -299,25 +321,48 @@ export class SwingBot {
   private ground(round: Round, inp: InputFrame, mx: number, mz: number, ax: number, az: number, alongX: number, alongZ: number): boolean {
     if (this.blocked > 0) {
       this.blocked--;
-      if (this.blockAxis === 0) mx = 0; else mz = 0;
-      if (mx * mx + mz * mz < 1e-4) { mx = alongX; mz = alongZ; }
+      [mx, mz] = this.slide(round, mx, mz, alongX, alongZ);
     }
     this.setMove(inp, mx, mz);
     const e = this.edge(round, inp.moveX, inp.moveZ);
     if (e.dist >= SWING.edgeAt) return false;
     if (e.gap === GAP_HOP) { inp.jumpPressed = true; return false; }
+    // Round 7: he is below and a lower roof is right there: step off and drop onto it.
+    if (e.gap === GAP_DROP && this.T.y < round.player.p.y - 3) return false;
     if (e.gap === GAP_WALL) {
+      // Round 7 (Vertigo): a sky cluster that way carries you over the cliff.
+      if (this.vertigo) {
+        this.setAim(inp, ax, az);
+        const ring = this.ring(round, inp);
+        if (ring >= 0 && round.model.hooks[ring].src === "sky") return true;
+      }
       this.blocked = 90;
       this.blockAxis = e.axis;
-      if (e.axis === 0) mx = 0; else mz = 0;
-      if (mx * mx + mz * mz < 1e-4) { mx = alongX; mz = alongZ; }
+      [mx, mz] = this.slide(round, mx, mz, alongX, alongZ);
       this.setMove(inp, mx, mz);
       return false;
     }
     this.setAim(inp, ax, az);
-    if (this.ring(round, inp) >= 0) return true;
+    const ring = this.ring(round, inp);
+    // (round 7: zip onto street balloons only; Vertigo: sky clusters too)
+    if (ring >= 0 && (this.vertigo || round.model.hooks[ring].src !== "sky")) return true;
     inp.jumpPressed = true;
     return false;
+  }
+
+  /**
+   * Along a wall side (blocked axis zeroed; `along` when nothing is left). Round 7 (Vertigo): when that
+   * still points into the wall (he is straight across a cliff), slide sideways toward his side instead.
+   */
+  private slide(round: Round, mx: number, mz: number, alongX: number, alongZ: number): [number, number] {
+    if (this.blockAxis === 0) mx = 0; else mz = 0;
+    if (mx * mx + mz * mz < 1e-4) { mx = alongX; mz = alongZ; }
+    if (this.vertigo) {
+      const P = round.player.p, T = this.T;
+      if (this.blockAxis === 0 && Math.abs(mx) >= Math.abs(mz)) { mx = 0; mz = T.z - P.z < 0 ? -1 : 1; }
+      else if (this.blockAxis === 1 && Math.abs(mz) >= Math.abs(mx)) { mz = 0; mx = T.x - P.x < 0 ? -1 : 1; }
+    }
+    return [mx, mz];
   }
 
   /** Aim / move helpers (horizontal unit vectors). A zero aim keeps the last one (never the latch's). */
@@ -347,21 +392,51 @@ export class SwingBot {
     if (b.grounded || b.ropeHook >= 0 || b.v.y > -2) return false;
     const floor = round.index.groundBelow(P.x, P.z, P.y);
     if (floor > P.y - 3) return false; // a roof right below
+    // Vertigo, him far below: fall (free fall) until a street is under you, then only grabs that carry you
+    // toward him without climbing.
+    const diving = this.vertigo && this.T.y < P.y - SWING.dropChase;
+    if (diving && P.y > this.T.y + 12 && P.y > round.model.lowestRoof + 14) return false;
     let best = -1, bs = Infinity;
     for (let i = 0; i < hooks.length; i++) {
       const h = hooks[i];
       const dx = h.x - P.x, dy = h.y - P.y, dz = h.z - P.z;
-      if (dy < 2) continue;
+      if (dy < 2 || (diving && dy > 12)) continue;
       const dd = dx * dx + dy * dy + dz * dz;
-      if (dd > 16 * 16) continue;
-      // prefer balloons in the direction of travel
-      const s = dd - 20 * (dx * b.v.x + dz * b.v.z) / (Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z) + 1);
+      // Sky clusters only when diving after him (Vertigo), with their longer range.
+      if (h.src === "sky" && !diving) continue;
+      const rr = h.reach !== undefined ? h.reach - 1 : 16;
+      if (dd > rr * rr) continue;
+      // prefer balloons in the direction of travel (diving: toward him)
+      const tx = diving ? this.T.x - P.x : b.v.x, tz = diving ? this.T.z - P.z : b.v.z;
+      const s = dd - 20 * (dx * tx + dz * tz) / (Math.sqrt(tx * tx + tz * tz) + 1);
       if (s < bs) { bs = s; best = i; }
     }
     if (best < 0) return false;
     const h = hooks[best];
     this.setAim(inp, h.x - P.x, h.z - P.z);
-    return this.ring(round, inp) >= 0;
+    const ring = this.ring(round, inp);
+    return ring >= 0 && (diving || hooks[ring].src !== "sky");
+  }
+
+  /**
+   * Round 7 (Vertigo): airborne off a rope with a long drop under the feet (an alley between cliffs):
+   * steer for the nearest landable roof below within reach instead of drifting down a wall.
+   */
+  private steerLand(round: Round, inp: InputFrame): void {
+    const b = round.player, P = b.p;
+    if (b.grounded || b.ropeHook >= 0 || b.v.y > 0) return;
+    if (round.index.groundBelow(P.x, P.z, P.y) > P.y - SWING.landDrop) return;
+    let best = Infinity, bx = 0, bz = 0;
+    for (const s of round.model.solids) {
+      if (!s.landable || s.top > P.y - 0.5) continue;
+      const cx = Math.min(Math.max(P.x, s.x0 + 1.5), s.x1 - 1.5), cz = Math.min(Math.max(P.z, s.z0 + 1.5), s.z1 - 1.5);
+      const h = Math.hypot(cx - P.x, cz - P.z);
+      if (h > SWING.landReach) continue;
+      // Nearer first; a roof about his height counts as nearer (m per m of height off his).
+      const c = h + 0.15 * Math.abs(s.top - this.T.y);
+      if (c < best) { best = c; bx = cx - P.x; bz = cz - P.z; }
+    }
+    if (best < Infinity) this.setMove(inp, bx, bz);
   }
 
   /** Fill the input for the next round step; returns null (no kinematic override). */
@@ -379,7 +454,17 @@ export class SwingBot {
     let zip = false;
     // Lane planning first; with no street lane within reach (wide docks blocks) head straight at him.
     let direct = d < SWING.engage || th < SWING.directBelow;
+    // Round 7 (Vertigo): the street lanes are flat plans; with him well below, head straight at him and drop.
+    // Stuck (no gain on him for stuckFor steps): switch plans for a while - behind a cliff going straight
+    // at him -> the street lanes; circling on the lanes -> straight at him.
+    if (this.vertigo) {
+      if (d < this.bestD - 2) { this.bestD = d; this.since = 0; } else this.since++;
+      if (this.laneFor > 0) this.laneFor--; else if (this.laneFor < 0) this.laneFor++;
+      else if (this.since > SWING.stuckFor) { this.laneFor = this.wasDirect ? SWING.laneFor : -SWING.laneFor; this.bestD = d; this.since = 0; }
+      if (this.laneFor < 0 || (this.laneFor === 0 && T.y < P.y - SWING.dropChase)) direct = true;
+    }
     if (!direct) { this.plan(P); if (this.lane < 0) direct = true; }
+    this.wasDirect = direct;
     if (direct) {
       // ---- straight at him --------------------------------------------------------------------------
       this.stats.directSteps++;
@@ -393,6 +478,7 @@ export class SwingBot {
       } else if (!b.grounded) {
         if (this.cool <= 0 && this.rescue(round, inp)) held = true;
         else this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
+        if (!held && this.vertigo) this.steerLand(round, inp);
       } else {
         zip = this.ground(round, inp, tx, tz, tx, tz, tx, tz);
         if (zip && th < 6) zip = false;
@@ -426,10 +512,11 @@ export class SwingBot {
           if (ring >= 0) {
             const h = round.model.hooks[ring];
             const ha = al === 0 ? h.x : h.z, hl = al === 0 ? h.z : h.x;
-            if ((ha - pa) * this.dir > 1.5 && Math.abs(hl - L.c) < 1.5) held = true;
+            if ((ha - pa) * this.dir > 1.5 && Math.abs(hl - L.c) < 1.5 && h.src !== "sky") held = true;
           }
           if (!held && this.rescue(round, inp)) held = true;
         }
+        if (!held && this.vertigo) this.steerLand(round, inp);
       }
     }
     if (this.held && !held && b.ropeHook >= 0) {

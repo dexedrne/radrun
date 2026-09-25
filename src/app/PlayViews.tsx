@@ -264,7 +264,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         round: {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
-          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, wind,
+          chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, runnerLow: rs.runnerLow, wind,
         },
       });
       // First-run tips (chase / practice only, never on bot pages).

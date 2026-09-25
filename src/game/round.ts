@@ -9,7 +9,7 @@ import {
 import { DT, MECH, ROUND, type Difficulty, type DifficultyParams, type Tuning } from "../sim/tuning.ts";
 import { M_LOWGRAV, M_NOYOINK, M_ONELIFE, M_POPS, M_SIXTY, M_WIND } from "./mutators.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
-import type { Pack } from "../route/trackPack.ts";
+import { sampleEdge, type Pack, type TrackPose } from "../route/trackPack.ts";
 import { Runner } from "../runner/runner.ts";
 import { DISTRICTS, type ChaseTweak, type DistrictId } from "../world/districts.ts";
 
@@ -37,6 +37,8 @@ export type RoundStats = {
   catchKind: "tag" | "yoink" | "";
   /** Seconds from GO to the catch (fall penalties included), or 0. */
   catchTime: number;
+  /** Round 7: the lowest roof top (m) he has stood on this round (Vertigo's "street level" star). */
+  runnerLow: number;
 };
 
 export type RoundOptions = {
@@ -129,7 +131,7 @@ export class Round {
   /** Chase distance d this step. */
   d = 0;
   events = 0;
-  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0 };
+  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0, runnerLow: Infinity };
   /** Runner pose before this step (render interpolation). */
   readonly prevRunner: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -150,13 +152,18 @@ export class Round {
     this.rng = new Rand(o.seed);
     const pack = o.pack;
     const nj = pack.junctions.length;
-    this.startJunction = Math.floor(this.rng.next() * nj);
+    // Round 7 (chase tweak startHigh): the same draw picks among his highest junctions.
+    if (tw?.startHigh) {
+      const high = pack.junctions.map((j, i) => i).sort((a, b) => pack.junctions[b].y - pack.junctions[a].y || a - b);
+      this.startJunction = high[Math.floor(this.rng.next() * Math.min(tw.startHigh, nj))];
+    } else this.startJunction = Math.floor(this.rng.next() * nj);
     const outs = pack.out[this.startJunction];
     const first = outs[Math.floor(this.rng.next() * outs.length)];
     // Same rng draws with or without a tweak (the tweak only moves the spawn and the runner numbers).
     const spawnMin = tw?.spawnMin ?? 22, spawnSpan = tw?.spawnSpan ?? 4, other = tw?.spawnOther ?? 3;
     this.runner = new Runner(pack, params, this.rng, this.startJunction, first);
-    this.spawn = playerSpawn(this.model, pack, this.startJunction, first, spawnMin + spawnSpan * this.rng.next(), other);
+    this.runner.down = tw?.down ?? 0;
+    this.spawn = playerSpawn(this.model, pack, this.startJunction, first, spawnMin + spawnSpan * this.rng.next(), other, tw?.spawnBelow ?? 0);
     this.player = createBody(this.spawn.x, this.spawn.y, this.spawn.z, this.spawn.roofId);
     this.prevPlayer = cloneBody(this.player);
     this.prevRunner.x = this.runner.p.x; this.prevRunner.y = this.runner.p.y; this.prevRunner.z = this.runner.p.z;
@@ -177,6 +184,7 @@ export class Round {
     this.phase = cd ? "countdown" : "chase";
     this.countdown = cd ? COUNTDOWN_STEPS : 0;
     this.d = chaseDist(this.player.p, this.runner.p);
+    this.stats.runnerLow = this.model.solids[pack.junctions[this.startJunction].roof].top;
   }
 
   get over(): boolean {
@@ -230,6 +238,7 @@ export class Round {
     if (sp > st.topSpeed) st.topSpeed = sp;
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
     if (this.d < st.closest) st.closest = this.d;
+    if (r.roofId >= 0) { const top = this.model.solids[r.roofId].top; if (top < st.runnerLow) st.runnerLow = top; }
 
     // 4. Catch: Yoink (red ring + press on this step) or tag.
     const dx = b.p.x - r.p.x, dz = b.p.z - r.p.z, dy = b.p.y - r.p.y;
@@ -336,7 +345,7 @@ export function respawnNear(b: Body, model: CityModel, roofId: number, near: Vec
  * Player spawn (spec §3): on a roof adjacent to the start junction's roof, on the side away from his
  * first edge, about `dist` m behind him; yaw faces him (camera only).
  */
-export function playerSpawn(model: CityModel, pack: Pack, junction: number, firstEdge: number, dist: number, otherPenalty = 3): { roofId: number; x: number; y: number; z: number; yaw: number } {
+export function playerSpawn(model: CityModel, pack: Pack, junction: number, firstEdge: number, dist: number, otherPenalty = 3, belowPenalty = 0): { roofId: number; x: number; y: number; z: number; yaw: number } {
   const j = pack.junctions[junction];
   const e = pack.edges[firstEdge];
   const jr = j.roof;
@@ -345,18 +354,39 @@ export function playerSpawn(model: CityModel, pack: Pack, junction: number, firs
   // footprint gets closest to it.
   const qx = j.x - e.exitX * dist, qz = j.z - e.exitZ * dist;
   let best = -1, bestS = Infinity, x = j.x, z = j.z;
-  // Adjacent roofs first; any other landable roof only if it gets > otherPenalty m closer (e.g. a tower is
-  // in the way; dense districts lower it so the spawn can reach past a small neighbour roof).
-  const adjacent = new Set<number>();
-  for (const a of model.adjacency) if (a.a === jr || a.b === jr) adjacent.add(a.a === jr ? a.b : a.a);
-  for (const s of model.solids) {
-    const other = s.id;
-    if (!s.landable || other === jr) continue;
-    const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
-    const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
-    const dq = Math.sqrt((cx - qx) * (cx - qx) + (cz - qz) * (cz - qz));
-    const dd = adjacent.has(other) ? dq : dq + otherPenalty;
-    if (dd < bestS - 1e-9 || (dd < bestS + 1e-9 && other < best)) { bestS = dd; best = other; x = cx; z = cz; }
+  if (belowPenalty > 0) {
+    // Round 7 (Vertigo): a roof about his height (6 m below to 24 m above his), at least 0.8 x dist from
+    // him and clear of his first edge's route (a spiral route can turn back past a spawn); nearest to the
+    // ideal point, a lower roof counting belowPenalty m per m further.
+    const jt = model.solids[jr].top;
+    const track: TrackPose[] = [];
+    for (let t = 0; t <= e.duration; t += 0.25) track.push(sampleEdge(e, t, { x: 0, y: 0, z: 0, phase: 0, ref: -1 }));
+    for (const s of model.solids) {
+      if (!s.landable || s.id === jr || s.top < jt - 6 || s.top > jt + 24) continue;
+      const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
+      const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
+      if (Math.hypot(cx - j.x, cz - j.z) < dist * 0.8) continue;
+      let onRoute = Infinity;
+      for (const p of track) onRoute = Math.min(onRoute, Math.hypot(p.x - cx, p.z - cz));
+      if (onRoute < ROUND.spawnClearRoute) continue;
+      const dd = Math.hypot(cx - qx, cz - qz) + Math.max(0, jt - s.top) * belowPenalty;
+      if (dd < bestS - 1e-9 || (dd < bestS + 1e-9 && s.id < best)) { bestS = dd; best = s.id; x = cx; z = cz; }
+    }
+  }
+  if (best < 0) {
+    // Adjacent roofs first; any other landable roof only if it gets > otherPenalty m closer (e.g. a tower is
+    // in the way; dense districts lower it so the spawn can reach past a small neighbour roof).
+    const adjacent = new Set<number>();
+    for (const a of model.adjacency) if (a.a === jr || a.b === jr) adjacent.add(a.a === jr ? a.b : a.a);
+    for (const s of model.solids) {
+      const other = s.id;
+      if (!s.landable || other === jr) continue;
+      const cx = Math.min(Math.max(qx, s.x0 + inset), s.x1 - inset);
+      const cz = Math.min(Math.max(qz, s.z0 + inset), s.z1 - inset);
+      const dq = Math.sqrt((cx - qx) * (cx - qx) + (cz - qz) * (cz - qz));
+      const dd = adjacent.has(other) ? dq : dq + otherPenalty;
+      if (dd < bestS - 1e-9 || (dd < bestS + 1e-9 && other < best)) { bestS = dd; best = other; x = cx; z = cz; }
+    }
   }
   const roof = model.solids[best >= 0 ? best : jr];
   // yaw convention (camera/rig.ts): forward = (-sin yaw, -cos yaw). Cosmetic, outside the sim.

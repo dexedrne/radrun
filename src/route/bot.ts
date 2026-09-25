@@ -16,7 +16,7 @@ export const BOT = {
   /** Alley takeoff lateral is clamped this far inside the overlapping span. */
   alleyLatInset: 2,
   landMargin: 1.5,
-  maxAirSteps: 480,
+  maxAirSteps: 720,
   maxLegSteps: 720,
   /** Final stop: decelerate at this rate (< groundBrake) toward the junction point. */
   stopDecel: 24,
@@ -31,7 +31,8 @@ export const PH_FINAL = 3;
 export const PH_DONE = 4;
 export const PH_FAIL = 5;
 
-export type HopParams = { lat: number; hook: number; jump: number; release: number };
+/** pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop). */
+export type HopParams = { lat: number; hook: number; jump: number; release: number; pace: number };
 
 export type HopResult = { jumpStep: number; landStep: number; margin: number; landRoof: number };
 
@@ -105,7 +106,7 @@ export class EdgeBot {
     const l = this.link;
     const p = this.params[this.hop];
     const lat = this.lateral();
-    if (l.kind === "alley") {
+    if (l.kind !== "street") {
       p.lat = Math.min(Math.max(lat, l.lo + BOT.alleyLatInset), l.hi - BOT.alleyLatInset);
       p.hook = -1;
     } else {
@@ -162,7 +163,8 @@ export class EdgeBot {
       const l = this.link, p = this.params[this.hop];
       const err = p.lat - this.lateral();
       const c = Math.min(Math.max(err * 1.5, -0.6), 0.6);
-      if (l.axis === "x") this.setMove(l.dir, c, 1); else this.setMove(c, l.dir, 1);
+      const mag = l.kind === "drop" ? p.pace / 100 : 1;
+      if (l.axis === "x") this.setMove(l.dir, c, mag); else this.setMove(c, l.dir, mag);
       if (s === p.jump) inp.jumpPressed = true;
     } else if (this.phase === PH_AIR) {
       const l = this.link, p = this.params[this.hop];
@@ -190,7 +192,8 @@ export class EdgeBot {
     this.legSteps++;
     if (b.events & EV_FALL) { this.fail = `fell (hop ${this.hop})`; this.phase = PH_FAIL; }
     else if (this.phase === PH_LINE || this.phase === PH_APPROACH) {
-      if (!b.grounded && (b.events & 1) /* EV_JUMP */) { this.phase = PH_AIR; this.airSteps = 0; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1 }; }
+      const walkOff = this.phase === PH_LINE && this.link.kind === "drop" && !b.grounded && wasGrounded;
+      if (!b.grounded && ((b.events & 1) /* EV_JUMP */ || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1 }; }
       else if (!b.grounded && wasGrounded && this.phase === PH_APPROACH) { this.fail = `ran off roof on approach (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (!b.grounded && this.legSteps > 60 && s > this.params[this.hop].jump + 13) { this.fail = `no takeoff (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (this.legSteps > BOT.maxLegSteps) { this.fail = `leg timeout (hop ${this.hop})`; this.phase = PH_FAIL; }
@@ -233,4 +236,4 @@ export class EdgeBot {
   }
 }
 
-export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, hook: -1, jump: -1, release: -1 }));
+export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, hook: -1, jump: -1, release: -1, pace: 100 }));

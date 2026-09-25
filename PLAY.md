@@ -23,6 +23,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | WASD | run |
 | Space | jump |
 | LMB hold | web onto the balloon with the ring; let go to release (LMB on a roof with a ringed balloon = jump + grab) |
+| (sky balloons) | the bigger **gold / cream / white** clusters hang 15-35 m above the roofs over crossings and plazas (the Towers, Vertigo) and can be grabbed from **30 m** (street balloons 17 m): long ropes, big pendulum swings, a re-grab in mid-fall. Street balloons keep the ring when both are in reach |
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
@@ -159,6 +160,18 @@ Adding a Radbro (how #723 went in):
    composited by the art script (untracked).
 5. `npm test` (`test/roster.test.ts` checks the files, clip meta, lines and links for every Radbro).
 
+**In the air (round 7).** A jump is Regular_Jump frozen on its upright apex; a long drop (falling faster
+than 9 m/s with more than 4 m of air below, or 6 m of air below while dropping) crossfades into
+**Free_Fall**, an upright loop treading air (arms sculling, legs kicking, never a dive), for you, the runner
+and ghosts alike. A rope grab ends it. Landing after at least 0.35 s of free fall (or faster than 17 m/s)
+plays **Big_Land**, a feet-first superhero crouch (one hand down, one arm up): the whole 1.4 s when you
+stand still, cut after 0.5 s when you run on; shorter hard landings keep the Regular_Jump crouch. Rules:
+`RULE` in `src/anim/animMachine.ts`. Both clips come from the owner's clip packs
+(`game-clips/radbro<id>.clips.glb`, manifest entries `Free_Fall` / `Big_Land`); after new clips land there,
+`npm run assets -- --radbros <folder> --packs-only` rebuilds just the four clip packs and their
+`clips.meta.json` entries (the character GLBs stay untouched). `?portrait=<id>&clip=Free_Fall&t=1&full&yaw=90`
+(dev / test build) renders one pose on its own.
+
 ## The chase and difficulties
 
 Falling off the city = "rekt.": respawn on your last roof, -3 s. He panics (sprints) when you get close
@@ -183,10 +196,11 @@ Pick the district on the title (a district change reloads the page; Retry never 
 | **Downtown** | `/` | the original skyline: wide streets, balloons everywhere |
 | **Night Market** | `?map=market` | dense and narrow (10 m streets, 10 m roofs), many junctions, some street stretches with **no balloons** (route around or carry momentum), purple dusk |
 | **The Docks** | `?map=docks` | low warehouses (12-20 m), wide 15 m streets, long flights over the water |
-| **The Towers** | `?map=towers` | tall roofs (38-52 m) between eight 90-130 m towers, deeper falls |
+| **The Towers** | `?map=towers` | tall roofs (38-52 m) between eight 90-130 m towers, deeper falls, sky balloons over the crossings |
+| **Vertigo** | `?map=vertigo` | round 7: every ring of roofs is a spiral ramp (22 to 86 m, neighbouring rings climbing opposite ways), so next to every gentle step there is a 10-50 m cliff; three needle towers (120-170 m), two plazas, gold sky balloons everywhere. A **descending chase**: he starts on one of his three highest roofs and prefers routes that end lower, dropping off roofs onto much lower ones mid-run; you start at about his height. Open from the start |
 
 Each district has its own level files: Downtown in `public/levels/`, the others in
-`public/levels/<market|docks|towers>/` (`city.json`, `decor.json`, `city.model.json`, `runner.pack.bin`,
+`public/levels/<market|docks|towers|vertigo>/` (`city.json`, `decor.json`, `city.model.json`, `runner.pack.bin`,
 `bake.report.json`). `tuning.json` is shared. Generator configs and looks: `src/world/districts.ts`.
 
 - `npm run gen-city -- --map docks [--force] [--decor]` (re)generates a district (never overwrites an
@@ -202,6 +216,19 @@ Each district has its own level files: Downtown in `public/levels/`, the others 
   cuts corners); the Docks and Towers get a faster sprint, and a shorter Yoink on Degen (3 m) and on
   Towers Normal (4.5 m). Downtown has no tweak. `npm run balance -- --all --only swing` prints every
   district.
+- **Vertigo's layout and route (round 7).** `generateVertigo` in `src/world/generate.ts` (config
+  `vertigo` in its district entry: ring height ranges, climb per street / alley step, needles, plazas,
+  summit mesas); `sky` adds the sky balloons (`chance`, `min`/`max` metres above the tallest roof within
+  `radius`, grab `reach`; the Towers use it too), `lowTierDh` a second, lower balloon tier on streets
+  that cross a big height step. His graph gains a third hop kind, the **drop**: an alley hop down by 6 m
+  or more is walked off at a baked pace (the bake sweeps 20-100 % of his run speed and keeps the middle of
+  the widest run that lands >= 1.5 m inside the lower roof with no wall contact; at least 8 points wide).
+  Climbs he can never make (alley > 1.2 m, street > 4.5 m) are not linked at all. In Vertigo the graph
+  also picks junctions spread out in height, tries drop-first routes and keeps edges with a drop first
+  (14 junctions, 61 edges, 21 drop hops, falls up to ~30 m). Its chase tweak: `startHigh`, `down`
+  (prefers edges that end lower), `spawnBelow` (spawn on a roof about his height, at least 0.8 x the spawn
+  distance from him and 16 m clear of his first edge's route) and a slower runner that also slows down
+  more for a chaser who got lost (`mMin`), with a 4 m Normal Yoink (numbers in the tweak's comment).
 
 ## Mechanics and mutators (round 4)
 
@@ -227,9 +254,10 @@ Values live in `MECH` (`src/sim/tuning.ts`), overridable in `tuning.json` under 
 
 ## Campaign (round 4)
 
-**CAMPAIGN** on the title: 12 levels, 3 per district, each with a difficulty, mutators and three
+**CAMPAIGN** on the title: 15 levels, 3 per district, each with a difficulty, mutators and three
 objectives (a star each; the first is always "catch him"). The others mix: under N s, no falls, finish
-with a YOINK, chain N swings, a close call (under N s left). The round HUD lists the level's objectives
+with a YOINK, chain N swings, a close call (under N s left), and in Vertigo "catch him before he reaches
+street level" (before he has stood on a roof below N m). The round HUD lists the level's objectives
 live (crossed out once lost, ticked once met), and the results show which you got plus NEW stars.
 
 | # | Level | District | Difficulty | Mutators |
@@ -237,10 +265,14 @@ live (crossed out once lost, ticked once met), and the results show which you go
 | 1-3 | First Pour, Rush Hour, Pop Quiz | Downtown | chill, normal, normal | -, -, pops |
 | 4-6 | Neon Alleys, Hands Only, Lights Out | Night Market | chill, normal, normal | -, no YOINK, night |
 | 7-9 | Sea Breeze, Moon Jump, Last Call | Docks | normal | wind; wind + low gravity; wind + 60 s |
-| 10-12 | Vertigo, High Winds, Rugpull | Towers | normal, normal, **degen** | pops; pops + wind; pops + wind + one life |
+| 10-12 | Altitude, High Winds, Rugpull | Towers | normal, normal, **degen** | pops; pops + wind; pops + wind + one life |
+| 13-15 | Top Floor, Free Fall, Street Level | Vertigo | chill, normal, **degen** | -, -, pops |
+
+Vertigo's stars: Top Floor = no falls + chain 5; Free Fall = before street level (45 m) + chain 5; Street
+Level = before street level (40 m) + no falls. (Level 10 was called "Vertigo" before round 7.)
 
 Unlocks: the next level once you catch him in the previous one; a district in free play once you catch him
-in its first level; a mutator toggle once you catch him in a level using it; **Degen** in free play at 12
+in its first level (Downtown and Vertigo are open from the start; `ALWAYS_OPEN` in `src/game/campaign.ts`); a mutator toggle once you catch him in a level using it; **Degen** in free play at 12
 stars; hats for George at 9 / 21 / 33 stars (party hat, crown, tin foil; pick on the campaign screen).
 Stars are best-of and live in the browser (`localStorage` "rugrun.campaign.v1"). Level list, objectives and
 unlock thresholds: `src/game/campaign.ts`. A level in another district reloads the page on that district
@@ -254,7 +286,8 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
   and there is no seam); it fades into the district's zenith colour on top and the fog colour below
   (`SkyGradient` in `src/app/cityLook.tsx`, `SKY_Y0` / `SKY_Y1` set how high it reaches). The colour
   gradient shows until it loads; the night mutator still swaps in its own dark sky. A replacement
-  panorama must tile horizontally (left and right edges continue into each other).
+  panorama must tile horizontally (left and right edges continue into each other). Vertigo's (round 7) is a
+  high morning above a cloud sea with needle spires far off (one generation, same seamless recipe).
 - **Billboards**: eight painted ads (`public/textures/billboards/*.webp`) are materials `ad_<name>` in
   every district's `decor.json`, so in `?editor=decor` a billboard face's material can be switched to any
   of them. `npm run billboards` re-applies them to boards that still use a text Sign (keeps hand edits);
@@ -274,8 +307,8 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?editor` | react-three-game PrefabEditor on `public/levels/city.json` (gameplay layout); `&map=<id>` for another district |
 | `?editor=decor` | the same editor on `public/levels/decor.json` (signs, rooftop props, the Milady stand) |
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
-| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`) |
-| `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
+| `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`). `&snap` freezes 0.12 s into each chaser jump / release; `&snap=freefall,sky,runnerff` (any subset) freezes once in the chaser's free fall, on a sky-balloon swing and in the runner's free fall (`window.__unfreeze()` resumes) |
+| `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`; `&clip=Free_Fall&full` any clip, whole body); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
 | `?hats` | George's three campaign hats on his head across his clips (one row per hat, 3/4 close-ups; `&yaw=` camera angle, `&lift=` / `&fwd=` try other offsets than `HAT_LIFT` / `HAT_FWD` in `src/app/hats.ts`) |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
@@ -384,8 +417,16 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   `sfx.ts` if something is too loud or too quiet.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
-- The production build is ~13.8 MB (models ~6.6 MB incl. four Radbros, four districts' level files, round 4 art); the 9 MB
-  budget is not enforced.
+- The production build is ~15 MB (models ~6.6 MB incl. four Radbros, five districts' level files, round 4 art;
+  Vertigo's runner pack is 401 KB); the 9 MB budget is not enforced.
+- Round 7 re-baked the Towers (sky balloons renumbered its balloons; his runs are the same), so Towers ghost
+  links made before it show as "unverified". Vertigo is tuned against the swinging bot, which is all or
+  nothing there: when a street line crosses his route it swings in fast (his drops cost him horizontal
+  speed), otherwise it gets lost under the cliffs. Swing bot, 600 seeds: Chill 98 % caught (median 9 s),
+  Normal 73 % (27 s, in the 25-40 s band; Downtown 93 % / 27 s), Degen 67 % (32 s; the Degen band wants
+  40-70 s, Downtown 73 % / 46 s). Runner tuning only trades catch rate for median here (tried: speed,
+  sprint, sprint budget, rubber band, Yoink, taunts, spawn distance, start roofs), so Degen stays below its
+  band on the bot. A human pass decides whether Vertigo's runner is too soft or too hard.
 - Round 4 districts, mechanics and campaign are tuned against bots only: the campaign's time / chain
   objectives (`src/game/campaign.ts`; the time stars were re-set in round 6 so the bot needs a good run
   for them) and the district mechanics (`MECH`, `?tune`) need a human pass.

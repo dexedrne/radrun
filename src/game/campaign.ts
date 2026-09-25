@@ -1,5 +1,5 @@
-// Round 4 campaign (docs/specs/2026-09-24-round4-depth.md §3): 12 levels across the four districts,
-// 3 objectives each, stars kept best-of, and the unlocks that hang off them. Pure (the storage calls
+// Round 4 campaign (docs/specs/2026-09-24-round4-depth.md §3): 12 levels across the four districts (round 7:
+// + 3 Vertigo levels, 13-15), 3 objectives each, stars kept best-of, and the unlocks that hang off them. Pure (the storage calls
 // are guarded and go through a tiny adapter so tests can run in Node).
 import type { Difficulty } from "../sim/tuning.ts";
 import type { DistrictId } from "../world/districts.ts";
@@ -12,7 +12,9 @@ export type Objective =
   | { kind: "noFalls" }
   | { kind: "yoink" }
   | { kind: "chain"; n: number }
-  | { kind: "closeCall"; s: number };
+  | { kind: "closeCall"; s: number }
+  /** Round 7 (Vertigo): catch him before he has stood on a roof below y m ("street level"). */
+  | { kind: "above"; y: number };
 
 export type Level = {
   /** 1-based, stable (stored progress keys on it). */
@@ -40,9 +42,14 @@ export const LEVELS: readonly Level[] = [
   { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 55 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
   { n: 8, name: "Moon Jump", map: "docks", difficulty: "normal", mutators: M_WIND | M_LOWGRAV, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "yoink" }], blurb: "Low gravity, long flights, same wind." },
   { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 40 }, { kind: "closeCall", s: 10 }], blurb: "Sixty seconds on the clock." },
-  { n: 10, name: "Vertigo", map: "towers", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, popping balloons." },
+  { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_POPS, goals: [catchIt, { kind: "under", s: 55 }, { kind: "chain", n: 4 }], blurb: "Tall roofs, deep drops, popping balloons." },
   { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_POPS | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Pops and wind at altitude." },
   { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_POPS | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 40 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
+  // Round 7: Vertigo, the descending chase (swing bot, 300 seeds: L13 catch 97 % / no falls 94 % / chain 5 63 %;
+  // L14 72 % / above 45 m 37 % / chain 5 71 %; L15 62 % / above 40 m 27 % / no falls 40 %).
+  { n: 13, name: "Top Floor", map: "vertigo", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "noFalls" }, { kind: "chain", n: 5 }], blurb: "He starts at the top of the spiral. Step off the cliffs after him." },
+  { n: 14, name: "Free Fall", map: "vertigo", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "above", y: 45 }, { kind: "chain", n: 5 }], blurb: "Dive after him and grab the big gold sky balloons on the way down." },
+  { n: 15, name: "Street Level", map: "vertigo", difficulty: "degen", mutators: M_POPS, goals: [catchIt, { kind: "above", y: 40 }, { kind: "noFalls" }], blurb: "Degen runner, popping balloons. Catch him high." },
 ];
 export const TOTAL_STARS = LEVELS.length * 3;
 
@@ -54,6 +61,7 @@ export function objectiveText(o: Objective): string {
     case "yoink": return "finish with a YOINK";
     case "chain": return `chain ${o.n} swings in a row`;
     case "closeCall": return `catch him with under ${o.s} s left`;
+    case "above": return `catch him before he reaches street level (below ${o.y} m)`;
   }
 }
 
@@ -69,6 +77,7 @@ export function evaluate(level: Level, phase: RoundPhase, stats: RoundStats, clo
       case "yoink": return stats.catchKind === "yoink";
       case "chain": return stats.maxChain >= o.n;
       case "closeCall": return clockLeft < o.s;
+      case "above": return stats.runnerLow >= o.y;
     }
   };
   return [one(level.goals[0]), one(level.goals[1]), one(level.goals[2])];
@@ -129,9 +138,13 @@ export const levelCaught = (p: Progress, n: number): boolean => !!p.stars[n]?.[0
 /** Level n is playable when it is the first or the one before it was caught. */
 export const levelUnlocked = (p: Progress, n: number): boolean => n <= 1 || levelCaught(p, n - 1);
 
-/** A district opens in free play once its first campaign level has been caught (Downtown always). */
+/**
+ * A district opens in free play once its first campaign level has been caught (Downtown always; round 7:
+ * Vertigo too, the new map is open from the start).
+ */
+export const ALWAYS_OPEN: readonly DistrictId[] = ["downtown", "vertigo"];
 export function districtUnlocked(p: Progress, id: DistrictId): boolean {
-  if (id === "downtown") return true;
+  if (ALWAYS_OPEN.includes(id)) return true;
   const first = LEVELS.find(l => l.map === id);
   return !!first && levelCaught(p, first.n);
 }

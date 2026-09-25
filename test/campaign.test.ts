@@ -13,14 +13,14 @@ const {
 const { M_POPS, M_WIND, M_LOWGRAV, M_SIXTY } = await import("../src/game/mutators.ts");
 const { districtFromSearch } = await import("../src/world/districts.ts");
 
-const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number }> = {}) =>
-  ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, ...o });
+const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number; runnerLow: number }> = {}) =>
+  ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, runnerLow: 60, ...o });
 
-test("campaign: 12 levels, 36 stars, stable numbering, every district and mutator used", () => {
-  assert.equal(LEVELS.length, 12);
-  assert.equal(TOTAL_STARS, 36);
+test("campaign: 15 levels, 45 stars, stable numbering, every district and mutator used", () => {
+  assert.equal(LEVELS.length, 15);
+  assert.equal(TOTAL_STARS, 45);
   LEVELS.forEach((l, i) => assert.equal(l.n, i + 1));
-  for (const id of ["downtown", "market", "docks", "towers"]) assert.ok(LEVELS.some(l => l.map === id), id);
+  for (const id of ["downtown", "market", "docks", "towers", "vertigo"]) assert.ok(LEVELS.some(l => l.map === id), id);
   const all = LEVELS.reduce((m, l) => m | l.mutators, 0);
   assert.equal(all, 127, "every mutator appears in some level");
   for (const l of LEVELS) assert.equal(l.goals[0].kind, "catch");
@@ -41,6 +41,15 @@ test("campaign: star evaluation", () => {
   assert.equal(l9.mutators, M_WIND | M_SIXTY);
   assert.equal(evaluate(l9, "caught", stats({ catchTime: 55 }), 5)[2], true);
   assert.equal(evaluate(l9, "caught", stats({ catchTime: 20 }), 40)[2], false);
+  // Round 7 Vertigo: "street level" = caught before he stood on a roof below y m.
+  const l14 = LEVELS[13];
+  assert.equal(l14.map, "vertigo");
+  assert.deepEqual(l14.goals[1], { kind: "above", y: 45 });
+  assert.equal(evaluate(l14, "caught", stats({ runnerLow: 45 }), 40)[1], true);
+  assert.equal(evaluate(l14, "caught", stats({ runnerLow: 44.5 }), 40)[1], false);
+  assert.equal(evaluate(l14, "escaped", stats({ runnerLow: 80 }), 0)[1], false);
+  assert.ok(LEVELS.filter(l => l.map === "vertigo").some(l => l.goals.some(o => o.kind === "noFalls")));
+  assert.ok(LEVELS.filter(l => l.map === "vertigo").some(l => l.goals.some(o => o.kind === "chain" && o.n === 5)));
 });
 
 test("campaign: stars are best-of, fresh stars reported once, best time kept", () => {
@@ -59,6 +68,7 @@ test("campaign: unlocks - levels, districts, mutators, Degen, hats", () => {
   assert.ok(levelUnlocked(p, 1));
   assert.ok(!levelUnlocked(p, 2));
   assert.ok(districtUnlocked(p, "downtown"));
+  assert.ok(districtUnlocked(p, "vertigo"), "round 7: the new map is open from the start");
   assert.ok(!districtUnlocked(p, "market"));
   assert.equal(unlockedMutators(p), 0);
   recordLevel(p, 1, [true, false, false], 80);

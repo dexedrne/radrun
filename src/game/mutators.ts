@@ -25,7 +25,7 @@ export const MUTATORS: readonly MutatorInfo[] = [
 ];
 
 /** Mechanics a district always uses in free play (campaign levels set their own). */
-export const DISTRICT_MUTATORS: Readonly<Record<DistrictId, number>> = { downtown: 0, market: 0, docks: M_WIND, towers: M_POPS };
+export const DISTRICT_MUTATORS: Readonly<Record<DistrictId, number>> = { downtown: 0, market: 0, docks: M_WIND, towers: M_POPS, vertigo: 0 };
 
 export const hasMut = (m: number, bit: number): boolean => (m & bit) !== 0;
 export const mutNames = (m: number): string[] => MUTATORS.filter(x => hasMut(m, x.bit)).map(x => x.name);

@@ -407,6 +407,56 @@
      "xz": "pin",
      "y": "keep"
     }
+   },
+   "Big_Land": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      -0.016,
+      0.481,
+      0.131
+     ],
+     "min": [
+      -0.037,
+      0.254,
+      0.131
+     ],
+     "max": [
+      0.024,
+      0.547,
+      0.168
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Free_Fall": {
+    "duration": 3,
+    "hips": {
+     "start": [
+      0.026,
+      0.595,
+      -0.08
+     ],
+     "min": [
+      0.009,
+      0.591,
+      -0.083
+     ],
+     "max": [
+      0.031,
+      0.604,
+      -0.06
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
    }
   }
  },
@@ -715,6 +765,56 @@
     "rootPolicy": {
      "xz": "pin",
      "y": "keep"
+    }
+   },
+   "Big_Land": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      0.001,
+      0.636,
+      0.218
+     ],
+     "min": [
+      -0.052,
+      0.318,
+      0.218
+     ],
+     "max": [
+      0.042,
+      0.725,
+      0.243
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Free_Fall": {
+    "duration": 3,
+    "hips": {
+     "start": [
+      0.026,
+      0.778,
+      -0.061
+     ],
+     "min": [
+      0.014,
+      0.771,
+      -0.065
+     ],
+     "max": [
+      0.033,
+      0.792,
+      -0.043
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
     }
    }
   }
@@ -1127,6 +1227,56 @@
      "xz": "pin",
      "y": "keep"
     }
+   },
+   "Big_Land": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      -0.006,
+      0.586,
+      0.179
+     ],
+     "min": [
+      -0.05,
+      0.299,
+      0.179
+     ],
+     "max": [
+      0.033,
+      0.665,
+      0.209
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Free_Fall": {
+    "duration": 3,
+    "hips": {
+     "start": [
+      0.023,
+      0.715,
+      -0.08
+     ],
+     "min": [
+      0.014,
+      0.711,
+      -0.084
+     ],
+     "max": [
+      0.026,
+      0.726,
+      -0.063
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
+    }
    }
   }
  },
@@ -1537,6 +1687,56 @@
     "rootPolicy": {
      "xz": "pin",
      "y": "keep"
+    }
+   },
+   "Big_Land": {
+    "duration": 2.6,
+    "hips": {
+     "start": [
+      -0.003,
+      0.44,
+      0.162
+     ],
+     "min": [
+      -0.015,
+      0.206,
+      0.162
+     ],
+     "max": [
+      0.043,
+      0.516,
+      0.204
+     ]
+    },
+    "loop": false,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "keep"
+    }
+   },
+   "Free_Fall": {
+    "duration": 3,
+    "hips": {
+     "start": [
+      0.03,
+      0.548,
+      -0.037
+     ],
+     "min": [
+      0.013,
+      0.546,
+      -0.04
+     ],
+     "max": [
+      0.038,
+      0.558,
+      -0.019
+     ]
+    },
+    "loop": true,
+    "rootPolicy": {
+     "xz": "pin",
+     "y": "pin"
     }
    }
   }

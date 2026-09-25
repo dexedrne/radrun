@@ -8,6 +8,11 @@ import type { CityIndex, Hook } from "../world/cityModel.ts";
 
 export const RING_NONE = -1;
 export const RING_RUNNER = -2;
+/**
+ * Round 7: a sky hook (Hook.reach set) scores this many metres worse in pickTarget, so the street
+ * balloons keep the ring and a sky cluster takes it when nothing closer is there (mid-fall, open air).
+ */
+export const SKY_SCORE = 4;
 
 /** One latched input sample, consumed by exactly one fixed step. */
 export type InputFrame = {
@@ -197,11 +202,13 @@ export function pickTarget(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): nu
     const h = hooks[i];
     const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;
     if (dy < k.hookMinAbove) continue;
-    if (dx * dx + dy * dy + dz * dz > r2) continue;
+    // Round 7: sky hooks carry their own (longer) grab range.
+    if (dx * dx + dy * dy + dz * dz > (h.reach !== undefined ? h.reach * h.reach : r2)) continue;
     const hl = Math.sqrt(dx * dx + dz * dz);
     if (hl > 1e-6 && dx * ax + dz * az < k.aimCos * hl) continue;
     const sx = h.x - cx, sy = h.y - cy, sz = h.z - cz;
     let s = Math.sqrt(sx * sx + sy * sy + sz * sz);
+    if (h.reach !== undefined) s += SKY_SCORE;
     if (i === b.ringId) s -= k.hysteresis;
     if (s >= bestS) continue;
     if (w.index.segmentBlocked(p.x, p.y, p.z, h.x, h.y, h.z)) continue;

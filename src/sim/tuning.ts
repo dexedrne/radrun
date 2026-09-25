@@ -177,6 +177,8 @@ export const ROUND = {
   tagDy: 1.8,
   respawnPenalty: 3,
   respawnInset: 1,
+  /** Round 7 (Vertigo spawn): keep this far (horizontal m) from his first edge's route. */
+  spawnClearRoute: 16,
 } as const;
 
 /** Fields tuning.json may override (numbers and booleans only; presets/targeting are fixed). */

@@ -31,7 +31,7 @@ export function CampaignScreen(props: { onStart: (n: number) => void; onBack: ()
           <div style={{ font: `900 ${compact ? 20 : 28}px ui-monospace, monospace`, letterSpacing: 3 }}>CAMPAIGN</div>
           <div style={{ fontWeight: 800, color: GOLD }} data-testid="campaign-stars">{total}/{TOTAL_STARS} ★</div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: compact ? "repeat(4, 1fr)" : "repeat(auto-fit, minmax(180px, 1fr))", gap: compact ? 6 : 10, marginTop: compact ? 6 : 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: compact ? `repeat(${DISTRICT_IDS.length}, 1fr)` : "repeat(auto-fit, minmax(150px, 1fr))", gap: compact ? 6 : 10, marginTop: compact ? 6 : 12 }}>
           {DISTRICT_IDS.map(id => (
             <div key={id}>
               <div style={{ fontSize: cell, fontWeight: 800, opacity: 0.85, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{DISTRICTS[id].name}</div>
@@ -93,12 +93,13 @@ function LevelCard({ level, progress, compact }: { level: Level; progress: Progr
 }
 
 /** Live objective state from the HUD numbers: met already, still open, or lost for this round. */
-function live(o: Objective, h: { elapsed: number; falls: number; maxChain: number; clock: number }): "met" | "open" | "lost" {
+function live(o: Objective, h: { elapsed: number; falls: number; maxChain: number; clock: number; runnerLow: number }): "met" | "open" | "lost" {
   switch (o.kind) {
     case "catch": case "yoink": case "closeCall": return "open";
     case "under": return h.elapsed >= o.s ? "lost" : "open";
     case "noFalls": return h.falls > 0 ? "lost" : "open";
     case "chain": return h.maxChain >= o.n ? "met" : "open";
+    case "above": return h.runnerLow < o.y ? "lost" : "open";
   }
 }
 
@@ -112,7 +113,7 @@ export function CampaignHud() {
   if (!camp || screen === "results") return null;
   const level = LEVELS[camp.n - 1];
   if (!level) return null;
-  const h = { elapsed: r.elapsed, falls: r.falls, maxChain: r.maxChain, clock: r.clock };
+  const h = { elapsed: r.elapsed, falls: r.falls, maxChain: r.maxChain, clock: r.clock, runnerLow: r.runnerLow };
   return (
     <div style={{ position: "fixed", zIndex: 10, pointerEvents: "none", left: 12, top: touch ? 112 : 58, ...panel, padding: "6px 10px", fontSize: compact ? 11 : 12 }} data-testid="campaign-hud">
       <div style={{ fontWeight: 900, marginBottom: 2 }}>{level.n}. {level.name}</div>

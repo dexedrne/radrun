@@ -39,6 +39,7 @@ export type Layout = { config: CityConfig; solids: Solid[]; skyline: DecoBox[] }
 const quant = (v: number, qv: number) => Math.floor(v / qv + 0.5) * qv;
 
 export function generateLayout(cfg: CityConfig = DEFAULT_CONFIG): Layout {
+  if (cfg.vertigo) return generateVertigo(cfg);
   const rand = mulberry32(cfg.seed);
   const pitch = cfg.block + cfg.street;
   const bw = cfg.building;
@@ -134,6 +135,107 @@ export function generateLayout(cfg: CityConfig = DEFAULT_CONFIG): Layout {
     const r = cfg.skylineMin + rand() * (cfg.skylineMax - cfg.skylineMin);
     const w = 18 + rand() * 34, d = 18 + rand() * 34, h = 30 + rand() * 90;
     skyline.push({ x: quant(cx + (ux / l) * r, 0.5), z: quant(cz + (uz / l) * r, 0.5), w: quant(w, 0.5), d: quant(d, 0.5), h: quant(h, 0.5) });
+  }
+  return { config: cfg, solids, skyline };
+}
+
+/** Clockwise ring of building cells (i, j) at depth r in an nx x nz lattice (empty when r is past the middle). */
+export function ringCells(nx: number, nz: number, r: number): [number, number][] {
+  const out: [number, number][] = [];
+  const i0 = r, i1 = nx - 1 - r, j0 = r, j1 = nz - 1 - r;
+  if (i0 > i1 || j0 > j1) return out;
+  for (let i = i0; i <= i1; i++) out.push([i, j0]);
+  for (let j = j0 + 1; j <= j1; j++) out.push([i1, j]);
+  if (j1 > j0) for (let i = i1 - 1; i >= i0; i--) out.push([i, j1]);
+  if (i1 > i0) for (let j = j1 - 1; j > j0; j--) out.push([i0, j]);
+  return out;
+}
+
+/**
+ * Round 7 "Vertigo" (cfg.vertigo): the block lattice of the grid layout (2 x 2 buildings per block), but
+ * every ring of buildings is a helix: walking round ring r (0 = outer) it climbs from rings[r][0] to
+ * rings[r][1] in steps the runner can take upward (+alleyStep across an alley, +streetStep across a street,
+ * scaled to fit), then drops back to the bottom in one cliff. Neighbouring rings climb in opposite
+ * directions from seeded starts, so they cross (two-way hops) in places and stand as tall cliffs (one-way
+ * drops, 10-50 m) elsewhere. The core (rings past the list): a few slim needle towers, empty plazas and
+ * summit mesas. Seeded from cfg.seed.
+ */
+export function generateVertigo(cfg: CityConfig): Layout {
+  const V = cfg.vertigo!;
+  const rand = mulberry32(cfg.seed);
+  const pitch = cfg.block + cfg.street, step = cfg.building + cfg.alley, bw = cfg.building;
+  const nx = cfg.blocksX * 2, nz = cfg.blocksZ * 2;
+  const W = cfg.blocksX * pitch - cfg.street, D = cfg.blocksZ * pitch - cfg.street;
+  const x0 = (i: number) => (i >> 1) * pitch + (i & 1) * step;
+  const top = new Float64Array(nx * nz).fill(-1);
+  const kind: ("roof" | "tower" | "none")[] = new Array(nx * nz).fill("roof");
+  // Crossing between lattice neighbours a -> b: alley inside a block, street between blocks.
+  const isAlley = (a: [number, number], b: [number, number]) => (a[0] !== b[0] ? Math.min(a[0], b[0]) : Math.min(a[1], b[1])) % 2 === 0;
+  const core: number[] = [];
+  for (let r = 0; ; r++) {
+    const cells = ringCells(nx, nz, r);
+    if (!cells.length) break;
+    const spec = V.rings[r];
+    if (!spec) { for (const [i, j] of cells) core.push(j * nx + i); continue; }
+    // Rotate so the cliff sits at a seeded spot; odd rings climb the other way round.
+    const s0 = Math.floor(rand() * cells.length);
+    let path = cells.slice(s0).concat(cells.slice(0, s0));
+    if (r % 2 === 1) path = path.reverse();
+    const inc = [0];
+    for (let k = 1; k < path.length; k++) inc.push(isAlley(path[k - 1], path[k]) ? V.alleyStep : V.streetStep);
+    const total = inc.reduce((a, b) => a + b, 0);
+    const scale = Math.min(1, (spec[1] - spec[0]) / (total || 1));
+    let h = spec[0];
+    path.forEach(([i, j], k) => {
+      h += inc[k] * scale;
+      top[j * nx + i] = quant(h, cfg.roofQuant);
+    });
+  }
+  // Core: needles (spread apart), plazas, then mesas.
+  const pickSpread = (from: number[], n: number): number[] => {
+    const out: number[] = [];
+    const pool = from.slice();
+    while (out.length < n && pool.length) {
+      let best = 0, bestD = -1;
+      for (let k = 0; k < pool.length; k++) {
+        const c = pool[k], ci = c % nx, cj = Math.floor(c / nx);
+        const d = out.length ? Math.min(...out.map(o => (o % nx - ci) ** 2 + (Math.floor(o / nx) - cj) ** 2)) + rand() * 0.5 : rand();
+        if (d > bestD) { bestD = d; best = k; }
+      }
+      out.push(pool[best]);
+      pool.splice(best, 1);
+    }
+    return out;
+  };
+  const needles = pickSpread(core, V.needles);
+  const rest = core.filter(c => !needles.includes(c));
+  const plazas = pickSpread(rest, V.plazas);
+  for (const c of core) {
+    if (needles.includes(c)) { kind[c] = "tower"; top[c] = quant(V.needleMin + rand() * (V.needleMax - V.needleMin), cfg.roofQuant); }
+    else if (plazas.includes(c)) kind[c] = "none";
+    else top[c] = quant(V.mesa[0] + rand() * (V.mesa[1] - V.mesa[0]), cfg.roofQuant);
+  }
+  const solids: Solid[] = [];
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const c = j * nx + i;
+    if (kind[c] === "none") continue;
+    const ax = x0(i), az = x0(j);
+    const inset = kind[c] === "tower" ? (bw - V.needleSize) / 2 : 0;
+    solids.push({
+      id: solids.length, kind: kind[c] as "roof" | "tower", landable: kind[c] === "roof",
+      x0: ax + inset, z0: az + inset, x1: ax + bw - inset, z1: az + bw - inset, top: top[c],
+    });
+  }
+  // Skyline ring (decor only), as the grid layout.
+  const cx = W / 2, cz = D / 2;
+  const skyline: DecoBox[] = [];
+  while (skyline.length < cfg.skylineCount) {
+    const ux = rand() * 2 - 1, uz = rand() * 2 - 1;
+    const l = Math.sqrt(ux * ux + uz * uz);
+    if (l < 0.2 || l > 1) continue;
+    const rr = cfg.skylineMin + rand() * (cfg.skylineMax - cfg.skylineMin);
+    const w = 14 + rand() * 24, d = 14 + rand() * 24, hh = 60 + rand() * 160;
+    skyline.push({ x: quant(cx + (ux / l) * rr, 0.5), z: quant(cz + (uz / l) * rr, 0.5), w: quant(w, 0.5), d: quant(d, 0.5), h: quant(hh, 0.5) });
   }
   return { config: cfg, solids, skyline };
 }

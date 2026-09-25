@@ -25,6 +25,9 @@ export const BAKE = {
   swingSweep: 360,
   keepPerJunction: 3,
   snapMax: 0.05,
+  /** Round 7 drops: walk-off pace swept dropPaceMin..100 % of runSpeed; the ok run must span dropWindow points. */
+  dropPaceMin: 20,
+  dropWindow: 8,
 } as const;
 
 export type HopReport = { kind: string; from: number; to: number; window: number; windowMs: number; param: number; margin: number };
@@ -45,7 +48,11 @@ export type BakeReport = {
   candidates: number;
   baked: number;
   kept: number;
-  checks: { stronglyConnected: boolean; forcedUTurns: number; walkStalls: number; minSwingWindowMs: number; minAlleyWindowMs: number; minLandMargin: number; maxSnap: number };
+  checks: {
+    stronglyConnected: boolean; forcedUTurns: number; walkStalls: number; minSwingWindowMs: number; minAlleyWindowMs: number; minLandMargin: number; maxSnap: number;
+    /** Round 7 (only with drop hops): narrowest walk-off pace window (% points) and drop hops kept. */
+    minDropWindow?: number; drops?: number;
+  };
   edges: EdgeReport[];
 };
 
@@ -86,7 +93,23 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
   for (let h = 0; h < cand.links.length; h++) {
     const link = cand.links[h];
     let window = 0, param = -1;
-    if (link.kind === "alley") {
+    if (link.kind === "drop") {
+      // Walk off at a swept pace (no jump); ok = lands on the target roof >= 1.5 m inside, no wall contact.
+      while (bot.phase !== PH_LINE && bot.phase < PH_DONE) bot.tick();
+      if (bot.phase >= PH_DONE) { report.reason = bot.fail || "approach failed"; return { cand, params, report }; }
+      const ok: boolean[] = [];
+      for (let pc = BAKE.dropPaceMin; pc <= 100; pc++) {
+        const c = bot.clone();
+        c.params[h].pace = pc;
+        c.runHop();
+        ok.push(c.phase !== PH_FAIL && c.hop > h);
+      }
+      const run = longestRun(ok);
+      window = run ? run[1] - run[0] + 1 : 0;
+      if (!run || window < BAKE.dropWindow) { report.reason = `drop hop ${h} window ${window} points`; report.hops.push({ kind: "drop", from: link.from, to: link.to, window, windowMs: 0, param: -1, margin: 0 }); return { cand, params, report }; }
+      param = BAKE.dropPaceMin + ((run[0] + run[1]) >> 1);
+      bot.params[h].pace = param;
+    } else if (link.kind === "alley") {
       while (bot.phase !== PH_LINE && bot.phase < PH_DONE) bot.tick();
       if (bot.phase >= PH_DONE) { report.reason = bot.fail || "approach failed"; return { cand, params, report }; }
       const s0 = bot.step;
@@ -142,7 +165,7 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
   for (let h = 0; h < params.length; h++) Object.assign(params[h], bot.params[h]);
   report.ok = true;
   report.seconds = bot.step / 120;
-  report.score = Math.min(...report.hops.map(hp => hp.window / (hp.kind === "alley" ? BAKE.alleyWindow : BAKE.swingWindow)));
+  report.score = Math.min(...report.hops.map(hp => hp.window / (hp.kind === "alley" ? BAKE.alleyWindow : hp.kind === "drop" ? BAKE.dropWindow : BAKE.swingWindow)));
   return { cand, params, report };
 }
 
@@ -240,7 +263,9 @@ export function bake(model: CityModel, player: Tuning, log: (m: string) => void 
   // Per junction: best edges by score (distinct destinations first), at most keepPerJunction.
   // Prefer edges of <= 10 s (spec 5-9 s), then the bake margin score, then the shorter one.
   const long = (b: Baked) => (b.report.seconds > 10 ? 1 : 0);
-  const byScore = (a: Baked, b: Baked) => long(a) - long(b) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
+  // Round 7 Vertigo: edges with a drop first (his route should mix swings with big falls).
+  const dropFirst = model.config?.vertigo ? (b: Baked) => (b.cand.links.some(l => l.kind === "drop") ? 0 : 1) : () => 0;
+  const byScore = (a: Baked, b: Baked) => dropFirst(a) - dropFirst(b) || long(a) - long(b) || b.report.score - a.report.score || a.report.seconds - b.report.seconds;
   let kept: Baked[] = [];
   // Greedy spread: after the best edge, each pick maximises the smallest exit-direction difference to
   // the edges already picked (so a junction never offers only one way out), distinct destinations.
@@ -302,6 +327,7 @@ export function bake(model: CityModel, player: Tuning, log: (m: string) => void 
   const bytes = encodePack(header, Int16Array.from(all));
   const keptEdges = kept.map(k => k.report);
   const hops = keptEdges.flatMap(e => e.hops);
+  const drops = hops.filter(h => h.kind === "drop");
   const refs = headerEdges.map(e => ({ from: e.from, to: e.to }));
   const report: BakeReport = {
     city: model.hash,
@@ -321,6 +347,7 @@ export function bake(model: CityModel, player: Tuning, log: (m: string) => void 
       minAlleyWindowMs: Math.min(...hops.filter(h => h.kind === "alley").map(h => h.windowMs), Infinity),
       minLandMargin: Math.min(...hops.map(h => h.margin)),
       maxSnap: Math.round(maxSnap * 10000) / 10000,
+      ...(drops.length ? { minDropWindow: Math.min(...drops.map(h => h.window)), drops: drops.length } : {}),
     },
     edges: baked.map(b => b.report),
   };
