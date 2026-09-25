@@ -306,8 +306,8 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const cd = screen === "countdown" ? Math.ceil(r.countdown) : 0;
   const ringColor = r.ring === "runner" ? "#ff3355" : r.ring === "attached" ? "#3ddc84" : r.ring === "hook" ? "#ffe14d" : "rgba(255,255,255,0.85)";
   const bannerOn = banner && now - banner.t < 1300;
-  // 1.8 s, longer for long lines (~60 ms a character: the cowboy's rooftop line stays ~2.8 s).
-  const bubbleOn = bubble && now - bubble.t < Math.max(1800, bubble.text.length * 60);
+  // 1.8 s, longer for long lines (~60 ms a character); t can be ahead (it waits for its voice line).
+  const bubbleOn = bubble && now >= bubble.t && now - bubble.t < Math.max(1800, bubble.text.length * 60);
   const fadeA = fade && now - fade < 600 ? 1 - (now - fade) / 600 : 0;
   const speedLines = !reducedMotion && r.speed > 14 ? Math.min(1, (r.speed - 14) / 10) : 0;
   const box: React.CSSProperties = { position: "fixed", zIndex: 10, pointerEvents: "none" };

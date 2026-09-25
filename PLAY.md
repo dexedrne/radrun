@@ -92,9 +92,14 @@ the LOADING screen (the countdown sounds go first).
   loops play at their own tempo on every difficulty.
 - **Voices:** one line at a time (a line waits its turn or is skipped; the music dips about 4 dB under
   speech). The announcer is a Milady: she calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged
-  ("it's so over") and a new best ("we're so back"). The Radbros talk like Radbros (fren, comfy, stay rad).
-  The runner says "finders keepers" right after GO, his taunts (the exact bubble; quieter the further ahead
-  he is), panic, cornered, gassed, caught and escaped. The round end is one call and one reply: the chase
+  ("it's so over") and a new best ("we're so back"); she is the loud one. The Radbros are flat and mostly
+  don't talk: a laugh, a scoff, a hum, a breath, and now and then a dry word. The runner says "finders
+  keepers" right after GO (after a menu, then one retry in three), and in the chase at most 2 taunts a
+  round (a 50% roll at a junction, 25 s apart, at most one worded; he still waves every time; quieter the
+  further ahead he is), a panic breath (the first, then 20 s later, 2 a round), cornered once, gassed, and
+  caught / escaped (`src/audio/chatter.ts`). A bubble shows only with a sound, lined up with it ("finders
+  keepers" too, after GO); a line the speech timeline skips (busy, cooldown) shows no bubble and uses up
+  none of the round's budget. The round end is one call and one reply: the chase
   lines stop, she calls it (a new best instead of YOINK / tagged), then the runner answers; nothing else
   talks until the next round, and quitting to a menu cuts it. A line that is not loaded falls back to the
   old chatter blips. `?vodebug` logs every line started / cut / dropped (with its caller) to
@@ -175,10 +180,10 @@ round is the same with any pair, so ghost links replay the same whoever you pick
 
 | | persona | taunts (a few) | caught / escaped |
 |---|---|---|---|
-| **#652** | sweet (soft, earnest) | "stay rad, fren", "this bag is so comfy", "we're so back" | "ok... u got me, fren" / "gn, fren" |
-| **#4764** | deadpan (the katana) | "cope, fren", "the katana is just for vibes", "milady would be disappointed" | "based, i guess" / "few understand" |
-| **#2564** | ghost (whispers) | "boo, fren", "can't catch a ghost", "the miladys are watching" | "how did u see me" / "i was never here, fren" |
-| **#723** | cowboy (brown hat, the wink, "HOT TOPIC BRO" plate carrier; gentle drawl) | "howdy, fren", "yeehaw", "mighty comfy up here", "we're so back, y'all" | "well dang. gg, fren" / "happy trails, fren" |
+| **#652** | earnest (sincere, a bit sheepish) | "hehe", "ha!", "hi", "i'll take good care of it", "you're so close" | "okay. you got me." / "sorry! good bag though" |
+| **#4764** | deadpan (the katana) | "heh", "pff", "ha.", "i'm not even running", "take your time" | "bro." / "mine now." |
+| **#2564** | quiet (whispers, hums) | "hehe", "shh", "♪", "over here", "wrong roof" | "oh. hello." / "thank you" |
+| **#723** | easygoing (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "heh heh", "oh, man", "nah", "nice day for it", "you good back there?" | "fair enough" / "see ya" |
 
 Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
 the chatter pitch per Radbro is `VOICE` in `src/app/PlayViews.tsx` (#723 has the lowest). A speech bubble
