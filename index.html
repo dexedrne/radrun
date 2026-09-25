@@ -2,10 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>RadRun</title>
     <meta name="description" content="He swiped your bag. 90 seconds. Swing across the rooftops and YOINK him." />
     <meta name="theme-color" content="#141833" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="RadRun" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="canonical" href="https://radrun.vyvanse.beer/" />
@@ -27,8 +32,17 @@
     <meta name="twitter:image" content="https://radrun.vyvanse.beer/og.jpg" />
     <meta name="twitter:image:alt" content="RadRun: a Radbro swinging from a balloon over the rooftops, with Radbros #652, #4764, #2564 and #723" />
     <style>
-      html, body, #root { margin: 0; height: 100%; width: 100%; background: #9fc3e6; overflow: hidden; }
+      html, body { margin: 0; height: 100%; width: 100%; background: #9fc3e6; overflow: hidden; overscroll-behavior: none; }
+      /* no double-tap zoom, no grey tap flash, no font boost on rotate */
+      html { touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
       body { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; }
+      /* the game is a fixed layer that always fills the visible viewport (it follows Safari's toolbars) */
+      #root { position: fixed; inset: 0; overflow: hidden; }
+      /* iPhone browser tab only (ui/iphoneFullscreen.tsx): scroll room behind the fixed game, so a swipe
+         up makes Safari minimise its toolbars */
+      html.rr-scroll, html.rr-scroll body { overflow: visible; }
+      html.rr-scroll body { height: auto; min-height: 100%; padding-bottom: 160px; }
+      @keyframes rr-swipe { 0%, 100% { transform: translateY(6px); opacity: 0.55; } 50% { transform: translateY(-6px); opacity: 1; } }
     </style>
   </head>
   <body>

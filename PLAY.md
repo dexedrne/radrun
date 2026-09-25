@@ -52,6 +52,19 @@ are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and
 browser allows it). There is no pointer lock, and leaving the tab pauses. On phones the canvas renders at up
 to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOUCH` in `src/sim/tuning.ts`.
 
+**iPhone: play it from the Home Screen.** Safari on iPhone can't go fullscreen from a web page, and in
+landscape its toolbars take a big slice off the top. Two fixes:
+- **Add to Home Screen** (Share -> Add to Home Screen): the RadRun icon then opens full screen with no
+  Safari bars at all (`public/manifest.webmanifest`, icons in `public/icons/` from `node tools/icons.ts`).
+  The Home Screen app keeps its own save, so campaign stars and bests start fresh there.
+- **In a Safari tab:** while the toolbars show in landscape (title, campaign, results or pause, never
+  mid-round), an overlay asks for one **swipe up**; Safari then minimises its bars. "not now" hides it
+  for the rest of the tab session. The title also shows a one-time "Add to Home Screen" tip (✕ hides it).
+
+The HUD, the touch buttons and the menus stay clear of the notch / Dynamic Island side and the home
+indicator (safe-area insets), and a landscape phone under 400 px tall (toolbars showing, small phones)
+gets a tighter title: no pitch line, smaller cards.
+
 **Quality (pause -> Settings).** High is the default everywhere (on touch devices High already caps the
 pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasing off (after a reload),
 no blob shadows, no runner trail, and no rooftop AC units or antennas (the water towers stay). It switches

@@ -26,6 +26,27 @@ export function canvasDpr(touch: boolean): [number, number] {
   return [1, touch && smallScreen() ? 1.25 : 1.5];
 }
 
+/** iPhone / iPod: no element fullscreen API in any browser there (all of them are WebKit). */
+export function isIPhone(): boolean {
+  try {
+    return /iPhone|iPod/.test(navigator.userAgent);
+  } catch {
+    return false;
+  }
+}
+
+/** Launched from the Home Screen (manifest display mode, or iOS's navigator.standalone): no browser UI. */
+export function isStandalone(): boolean {
+  try {
+    return matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  } catch {
+    return false;
+  }
+}
+
+/** An iPhone browser tab: the only ways to full screen are a swipe (toolbars minimise) or Add to Home Screen. */
+export const iphoneTab = (): boolean => isIPhone() && !isStandalone();
+
 /** Fullscreen + landscape lock where the browser allows it (Android Chrome); silently ignored elsewhere. */
 export function enterFullscreen(): void {
   try {

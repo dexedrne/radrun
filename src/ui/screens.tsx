@@ -12,6 +12,8 @@ import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
 import { DEGEN_STARS, LEVELS, TOTAL_STARS, degenUnlocked, districtUnlocked, starCount, unlockedMutators, type Progress } from "../game/campaign.ts";
 import { MUTATORS } from "../game/mutators.ts";
 import { CampaignHud, CampaignResult } from "./campaignScreen.tsx";
+import { HomeScreenTip } from "./iphoneFullscreen.tsx";
+import { safe, safePad } from "./safe.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -19,19 +21,26 @@ export const btn = (primary = false): React.CSSProperties => ({
   border: primary ? "none" : "1px solid rgba(255,255,255,0.35)", background: primary ? "#ff3d7f" : "rgba(255,255,255,0.08)", color: "#fff",
 });
 export const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
-/** A full-screen layer that centres its child and scrolls (from the top) when the child is taller. */
-export const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", WebkitOverflowScrolling: "touch" } as React.CSSProperties;
+/** A full-screen layer that centres its child and scrolls (from the top) when the child is taller; its content stays inside the safe area. */
+export const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", padding: safePad, boxSizing: "border-box" } as React.CSSProperties;
 
-/** Viewport size, re-read on resize / rotation. compact = a short (landscape phone) screen. */
-export function useViewport(): { w: number; h: number; compact: boolean; narrow: boolean; portrait: boolean } {
+/**
+ * Viewport size, re-read on resize / rotation / the visual viewport changing (Safari's toolbars showing
+ * or hiding). compact = a short (landscape phone) screen, tiny = a landscape phone under 400 px tall (the
+ * browser's toolbars showing, or a small phone).
+ */
+export function useViewport(): { w: number; h: number; compact: boolean; tiny: boolean; narrow: boolean; portrait: boolean } {
   const [vp, setVp] = useState(() => ({ w: innerWidth, h: innerHeight }));
   useEffect(() => {
-    const f = () => setVp({ w: innerWidth, h: innerHeight });
+    const f = () => setVp(v => (v.w === innerWidth && v.h === innerHeight ? v : { w: innerWidth, h: innerHeight }));
+    // iOS reports the rotated size a beat after orientationchange.
+    const late = () => { f(); setTimeout(f, 250); };
     addEventListener("resize", f);
-    addEventListener("orientationchange", f);
-    return () => { removeEventListener("resize", f); removeEventListener("orientationchange", f); };
+    addEventListener("orientationchange", late);
+    visualViewport?.addEventListener("resize", f);
+    return () => { removeEventListener("resize", f); removeEventListener("orientationchange", late); visualViewport?.removeEventListener("resize", f); };
   }, []);
-  return { ...vp, compact: vp.h < 520, narrow: vp.w < 560, portrait: vp.h > vp.w };
+  return { ...vp, compact: vp.h < 520, tiny: vp.h < 400 && vp.w > vp.h, narrow: vp.w < 560, portrait: vp.h > vp.w };
 }
 
 /** Touch in portrait: ask for landscape (non-blocking; the game still runs). */
@@ -45,7 +54,7 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
   };
   if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: RadRun plays in landscape</div>;
   return (
-    <div style={{ position: "fixed", left: "50%", top: 96, transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
+    <div style={{ position: "fixed", left: "50%", top: safe("top", 96), transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
       <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
     </div>
   );
@@ -111,16 +120,17 @@ export function Title(props: {
   const availMut = unlockedMutators(progress) | props.freeMut;
   const stars = starCount(progress);
   const touch = useUi(s => s.touch);
-  const { compact, narrow } = useViewport();
+  const { compact, tiny, narrow } = useViewport();
   // Phones (landscape = compact, portrait = narrow): the controls strip folds into a small toggle next to
   // the credits (the touch buttons are labelled and the first-run tips teach them), blurbs hide and the
   // buttons shrink, so the whole title fits on one screen.
   const small = compact || narrow;
   const [showControls, setShowControls] = useState(false);
-  const img = compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
-  const titlePx = compact ? 32 : narrow ? 40 : 72;
+  // tiny (landscape under 400 px: toolbars showing, small phones): no pitch / pick line, smaller cards.
+  const img = tiny ? 50 : compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
+  const titlePx = tiny ? 26 : compact ? 32 : narrow ? 40 : 72;
   const playBtn = (
-    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
+    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: compact ? "8px 28px" : small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
       {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
     </button>
   );
@@ -132,29 +142,30 @@ export function Title(props: {
   );
   const campaignBtn = (
     <button onClick={props.onCampaign} disabled={!props.ready} title="12 levels across the four districts, 3 stars each"
-      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: small ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
+      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
       CAMPAIGN · {stars}/{TOTAL_STARS} ★
     </button>
   );
   const practiceBtn = (
     <button onClick={props.onPractice} disabled={!props.ready} title="free swinging in the city: no runner, no timer"
-      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: small ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
+      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
       PRACTICE
     </button>
   );
   return (
     <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
-      <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: 10, right: 12, zIndex: 21 }} />
+      <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: safe("top", 10), right: safe("right", 12), zIndex: 21 }} />
       <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />
+        <HomeScreenTip />
         <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
-        <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>
+        {!tiny && <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>}
         {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
             challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs #${challenge.r}` : ""}
           </div>
         )}
-        <div style={{ ...panel, marginTop: small ? 8 : 16, padding: small ? "8px 12px" : panel.padding }}>
+        <div style={{ ...panel, marginTop: tiny ? 6 : small ? 8 : 16, padding: small ? "8px 12px" : panel.padding }}>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: compact ? 6 : 10 }} data-testid="districts">
             {DISTRICT_IDS.map(id => {
               const open = id === PAGE_DISTRICT || districtUnlocked(progress, id);
@@ -171,7 +182,7 @@ export function Title(props: {
             })}
           </div>
           {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>
+          {!tiny && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>}
           <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => (
               <button key={id} onClick={() => props.setChaser(id)} data-testid={`card-${id}`}
@@ -188,7 +199,7 @@ export function Title(props: {
                   <img src={`/ui/radbro${id}.webp`} alt="" width={img} height={img} draggable={false}
                     style={{ display: "block", width: img, height: img, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
                 </div>
-                <div>{narrow ? `#${id}` : `Radbro #${id}`}</div>
+                <div>{narrow || compact ? `#${id}` : `Radbro #${id}`}</div>
                 {!compact && <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>}
               </button>
             ))}
@@ -198,7 +209,7 @@ export function Title(props: {
               const open = d !== "degen" || degenUnlocked(progress) || d === difficulty;
               return (
                 <button key={d} onClick={() => open && props.setDifficulty(d)} data-testid={`diff-${d}`} disabled={!open} title={open ? undefined : `locked: earn ${DEGEN_STARS} campaign stars (${stars} so far)`}
-                  style={{ ...btn(false), padding: compact ? "8px 14px" : "10px 18px", opacity: open ? 1 : 0.45, background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
+                  style={{ ...btn(false), padding: compact ? "8px 11px" : "10px 18px", fontSize: compact ? 13 : 15, opacity: open ? 1 : 0.45, background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
                   {open ? "" : "🔒 "}{DIFF_LABEL[d]}
                 </button>
               );
@@ -284,6 +295,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const [hints, setHints] = useState(true);
   const touch = useUi(s => s.touch);
   const ghost = useUi(s => s.ghost);
+  const tip = useUi(s => s.hint);
   const { narrow } = useViewport();
   useEffect(() => {
     const t = setInterval(() => setNow(performance.now()), 100);
@@ -308,17 +320,17 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       {!practice && <CampaignHud />}
       {/* timer (practice: the mode tag) */}
       {practice ? (
-        <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: `900 ${touch || narrow ? 16 : 22}px ui-monospace, monospace`, letterSpacing: touch || narrow ? 2 : 4, color: "#fff", textShadow: "3px 3px 0 #ff3d7f, 0 2px 4px rgba(0,0,0,0.6)" }} data-testid="practice-tag">
+        <div style={{ ...box, top: safe("top", 10), left: "50%", transform: "translateX(-50%)", font: `900 ${touch || narrow ? 16 : 22}px ui-monospace, monospace`, letterSpacing: touch || narrow ? 2 : 4, color: "#fff", textShadow: "3px 3px 0 #ff3d7f, 0 2px 4px rgba(0,0,0,0.6)" }} data-testid="practice-tag">
           {S.practice}
         </div>
       ) : (
-        <div style={{ ...box, top: 10, left: "50%", transform: "translateX(-50%)", font: "800 30px ui-monospace, monospace", color: r.clock < 15 ? "#ff4d4d" : "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }} data-testid="timer">
+        <div style={{ ...box, top: safe("top", 10), left: "50%", transform: "translateX(-50%)", font: "800 30px ui-monospace, monospace", color: r.clock < 15 ? "#ff4d4d" : "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }} data-testid="timer">
           {clockText(r.clock)}
         </div>
       )}
       {/* the raced ghost: a chip under the timer + the floating tag GhostView positions */}
       {ghost && !practice && screen !== "results" && (
-        <div style={{ ...box, top: 48, left: "50%", transform: "translateX(-50%)", background: "rgba(20,40,60,0.8)", border: "1px solid #9fe6ff", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" }} data-testid="ghost-chip">
+        <div style={{ ...box, top: safe("top", 48), left: "50%", transform: "translateX(-50%)", background: "rgba(20,40,60,0.8)", border: "1px solid #9fe6ff", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" }} data-testid="ghost-chip">
           <span style={{ color: "#9fe6ff", letterSpacing: 2 }}>{S.ghost}</span> {ghost.claimed.toFixed(1)} s{ghost.status === "unverified" ? " (unverified)" : ""}
         </div>
       )}
@@ -327,7 +339,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       </div>
       {/* round 4 wind: an arrow (push direction on screen) that appears ~1 s before a gust and fills while it blows */}
       {r.wind && screen !== "results" && (
-        <div style={{ ...box, top: narrow ? 110 : 80, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8,
+        <div style={{ ...box, top: safe("top", narrow ? 110 : 80), left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 8,
           background: "rgba(10,20,40,0.55)", border: "1px solid rgba(159,230,255,0.6)", borderRadius: 8, padding: "4px 10px", opacity: 0.35 + 0.65 * Math.max(r.wind.warn, r.wind.level) }} data-testid="wind">
           <span style={{ display: "inline-block", transform: `rotate(${r.wind.angle}rad)`, fontSize: 20, lineHeight: 1, color: r.wind.level > 0 ? "#9fe6ff" : "#ffe14d" }}>↑</span>
           <span style={{ font: "800 12px ui-monospace, monospace", letterSpacing: 2, color: "#dff6ff" }}>{r.wind.level > 0 ? "WIND" : "GUST"}</span>
@@ -338,7 +350,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       )}
       {/* practice: speed + chain panel */}
       {practice && (
-        <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }} data-testid="practice-stats">
+        <div style={{ ...box, top: safe("top", narrow ? 52 : 10), right: safe("right", 12), ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }} data-testid="practice-stats">
           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
             <span>{r.speed.toFixed(1)} m/s</span>
             <span style={{ color: r.chain >= 3 ? "#3ddc84" : "#ffd23f" }}>chain {r.chain}</span>
@@ -350,7 +362,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         </div>
       )}
       {/* distance + heat */}
-      {screen !== "results" && !practice && <div style={{ ...box, top: narrow ? 52 : 10, right: 12, ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }}>
+      {screen !== "results" && !practice && <div style={{ ...box, top: safe("top", narrow ? 52 : 10), right: safe("right", 12), ...panel, padding: "8px 12px", minWidth: narrow ? 130 : 180 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800 }}>
           <span>{r.d.toFixed(0)} m</span>
           <span style={{ color: hot.color }}>{hot.label}</span>
@@ -391,11 +403,12 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         <div style={{ width: 0, height: 0, borderTop: "14px solid transparent", borderBottom: "14px solid transparent", borderLeft: "26px solid #ff3355", filter: "drop-shadow(0 1px 2px #000)" }} />
       </div>
       {/* feed */}
-      <div style={{ ...box, left: touch ? 62 : 12, ...(touch ? { top: 12 } : { bottom: 12 }), maxWidth: touch ? "36vw" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ ...box, left: safe("left", touch ? 62 : 12), ...(touch ? { top: safe("top", 12) } : { bottom: safe("bottom", 12) }), maxWidth: touch ? "min(36vw, calc(50vw - 125px - env(safe-area-inset-left, 0px)))" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
         {feed.filter(f => now - f.t < 5000).map(f => (
           <div key={f.id} style={{ background: "rgba(14,16,30,0.7)", padding: "3px 8px", borderRadius: 5 }}>{f.text}</div>
         ))}
-        {hints && (
+        {/* touch: the first-run TIP pill covers the same ground, and both would stack on a short screen */}
+        {hints && !(touch && tip) && (
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
             {practice
               ? (touch
@@ -408,12 +421,12 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         )}
       </div>
       {r.holdR > 0 && (
-        <div style={{ ...box, left: "50%", bottom: 40, transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>{practice ? "back to start…" : "retry…"} {Math.round(r.holdR * 100)}%</div>
+        <div style={{ ...box, left: "50%", bottom: safe("bottom", 40), transform: "translateX(-50%)", ...panel, padding: "4px 10px" }}>{practice ? "back to start…" : "retry…"} {Math.round(r.holdR * 100)}%</div>
       )}
       <HintPill />
       {/* mute: top left on desktop (M key while the mouse is captured), under the II button on touch */}
-      <MuteButton muted={muted} onMute={onMute} style={touch ? { left: 12, top: 62 } : { left: 12, top: 10 }} />
-      <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: 12 }), bottom: touch ? 4 : 8, fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
+      <MuteButton muted={muted} onMute={onMute} style={touch ? { left: safe("left", 12), top: safe("top", 62) } : { left: safe("left", 12), top: safe("top", 10) }} />
+      <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: safe("right", 12) }), bottom: safe("bottom", touch ? 4 : 8), fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
       <RotateHint />
     </>
   );
@@ -516,7 +529,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
   }
   const big = compact ? 26 : 34;
   return (
-    <div style={{ ...layer, display: "grid", placeItems: "end center", paddingBottom: compact ? "3vh" : "8vh", pointerEvents: "none" }}>
+    <div style={{ ...layer, display: "grid", placeItems: "end center", paddingLeft: safe("left", 0), paddingRight: safe("right", 0), paddingBottom: compact ? safe("bottom", 8) : "8vh", boxSizing: "border-box", pointerEvents: "none" }}>
       <div style={{ ...panel, minWidth: "min(360px, 90vw)", maxWidth: "94vw", boxSizing: "border-box", padding: compact ? "10px 14px" : panel.padding, textAlign: "center", pointerEvents: "auto" }} data-testid="results">
         {r.caught ? (
           <>
