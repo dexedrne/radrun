@@ -29,7 +29,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
 | M | mute / unmute (same as the speaker button on the title and the HUD) |
-| Esc | pause (Settings: quality, sensitivity, music + sound-effects volume, mute, FOV, invert Y, reduced motion, easy grab) |
+| Esc | pause (Settings: quality, sensitivity, music / sound-effects / voice volume, mute, FOV, invert Y, reduced motion, easy grab) |
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
@@ -65,25 +65,37 @@ it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
 
 ## Sound
 
-Everything is synthesised live with WebAudio (no audio files). Sound starts when you press PLAY or
-PRACTICE (browsers only allow audio after a click or a key press).
+Recorded music, stings, voice lines and sound effects (109 mp3s under `public/audio/`), with the older
+synthesised WebAudio sound as the fallback whenever a file is not loaded yet or fails, so a round is never
+silent. Sound starts when you press PLAY or PRACTICE (browsers only allow audio after a click or a key
+press). Nothing is fetched on page open: a round loads about 3 MB alongside its Radbros, without delaying
+the LOADING screen (the countdown sounds go first).
 
-- **Music:** a looping chiptune-ish track in A minor. Calm on the title and results (100 bpm), a
-  build-up under the 3-2-1 countdown (filter sweep + riser), then the chase groove from GO (122 / 128 /
-  136 bpm on Chill / Normal / Degen; 16 bars with a B section and fills, and the melody changes every 16
-  bars). When he is within 20 m (or panicking) a hi-hat + arpeggio layer comes in, and drops out past
-  24 m. A catch plays a short win sting (a longer one for a YOINK), "He rugged you." plays a sad trombone;
-  the calm track follows. The pause menu muffles the music.
-- **Sound effects:** rope "thwip" on grab, a fling whoosh on let-go, wind that grows with speed while you
-  are in the air, landing thuds by impact, wall bonks, the YOINK lasso whip + crack, a coin jingle when the
-  bag changes hands, George's meow after a catch (a sulky one after an escape), countdown beeps, speech
-  bubble chatter (each Radbro has his own pitch), the "rekt." whistle and the rug swoosh.
+- **Music:** a calm loop on the title and results; the countdown build (its cut lands exactly on GO); then
+  the district's **chase loop** from GO: Downtown, Night Market, Docks, Towers and **Vertigo** each have
+  their own (an unknown district plays Downtown's). When he is within 20 m (or panicking) the loop gets
+  brighter and louder. A catch plays the win sting (a YOINK sting for a YOINK), "He rugged you." its own
+  sting; the calm loop comes back under their tail. Pause dims it; a hidden tab or mute pauses it. The
+  loops play at their own tempo on every difficulty.
+- **Voices:** one line at a time (a line waits its turn or is skipped; the music dips about 4 dB under
+  speech). The announcer calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged and a new best.
+  The runner says "finders keepers" right after GO, his taunts (the exact bubble; quieter the further ahead
+  he is), panic, cornered, gassed, caught and escaped; your Radbro cheers after a catch. A line that is not
+  loaded falls back to the old chatter blips.
+- **Sound effects:** rope thwip and release whoosh, jump, **double jump** (the jump, a fifth higher),
+  **web zip** (a thwip into a whoosh), light / heavy landings by impact, bonk, the YOINK lasso crack, the
+  coin grab, countdown beeps, the "rekt." whistle, balloon pops, wind gusts, the rug swoosh, George's
+  meows and a wind loop that grows with speed in the air. Variations are picked at random with a slight
+  pitch spread.
 - **Controls:** the speaker button (title top right; in a round top left, or under II on touch) and **M**
-  mute everything. Pause -> Settings has separate **music** and **sound effects** sliders and a mute box.
-  All remembered in the browser. Leaving the tab (or muting) suspends the audio completely.
-- **Tuning:** the patterns, chords and tempos are in `src/audio/score.ts`; the instruments and mix in
-  `src/audio/music.ts`; each sound effect is a few lines in `src/audio/sfx.ts`. Low quality also drops the
-  lead's echo. Dev / test builds report the audio state and output level in `window.__play.audio`.
+  mute everything. Pause -> Settings has **music**, **sound effects** and **voices** sliders and a mute
+  box, all remembered in the browser. Leaving the tab (or muting) suspends the audio completely.
+- **Code:** `src/audio/catalog.ts` lists every file (a test checks each exists and nothing unlisted ships)
+  and maps district ids to chase loops; `samples.ts` loads (4 at a time); `tracks.ts` streams and
+  crossfades the music; `voice.ts` queues the lines; `sfx.ts` plays samples with the synth fallback; the
+  fallback music is `score.ts` / `music.ts`. Low quality loads one variation per sound and plays at most 6
+  sampled SFX at once. Dev / test builds report the track, voice lines and files loaded / failed in
+  `window.__play.audio`.
 
 ## Practice and tips
 
@@ -125,6 +137,8 @@ older link: it opens Downtown with no mutators, and if its replay does not verif
 an older build". `v=3` is the double jump + web zip build: its ghosts record the zip button (ghost record
 format 2). Ghosts recorded before it (format 1, incl. kept personal bests) replay with both moves off, so
 they still verify; any link older than the current version gets the "older build" note if it does not.
+`v=3` is also the round 7 build (Vertigo, and the sky balloons that re-laid the Towers), so older Towers
+ghosts that no longer verify get the same note.
 
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
@@ -427,13 +441,14 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
   404'd on some cold files, e.g. #270). `?milady=0` turns her off.
 - Ghost links replay only on the same game version: a later change to `tuning.json` (player or difficulty
   values), the city or the runner pack makes older ghosts drift and show as "unverified".
-- Music and sound effects are synthesised (no recorded audio). The mix was set from measured output
-  levels (music + SFX peak around -9 dBFS), not by ear: adjust the levels in `src/audio/music.ts` /
-  `sfx.ts` if something is too loud or too quiet.
+- Nobody has listened to the recorded audio yet: the mix (loop levels, the dip under speech, the brighter
+  close-chase loop, the Towers loop seam) was set from measured levels, not by ear. Levels live in
+  `src/audio/tracks.ts`, `voice.ts` and the gains in `sfx.ts`.
 - George's paws slide a little above ~4.8 m/s (his run plays up to 4x to keep up); he hides when the
   camera is pulled in close to him.
-- The production build is ~15 MB (models ~6.6 MB incl. four Radbros, five districts' level files, round 4 art;
-  Vertigo's runner pack is 401 KB); the 9 MB budget is not enforced.
+- The production build is ~23 MB (models ~6.6 MB incl. four Radbros, 7.9 MB of audio, five districts' level
+  files, round 4 art; Vertigo's runner pack is 401 KB); the 9 MB budget is not enforced. The audio is only
+  fetched once a round starts (about 3 MB per round).
 - Round 7 re-baked the Towers (sky balloons renumbered its balloons; his runs are the same), so Towers ghost
   links made before it show as "unverified". Vertigo is tuned against the swinging bot, which is all or
   nothing there: when a street line crosses his route it swings in fast (his drops cost him horizontal
