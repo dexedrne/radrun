@@ -60,11 +60,12 @@ export type District = {
   chase?: ChaseTweak;
 };
 
-/** Round 7 sky hooks (Towers, Vertigo): high clusters over intersections / plazas, 30 m grab range. */
-const SKY_HOOKS = { chance: 0.6, min: 15, max: 35, radius: 16, reach: 30 };
-
+// Round 9 (docs/specs/2026-09-25-round9-movement.md §4.2): 40-230 m canyon districts, no balloons. Web
+// anchors are the buildings themselves, so the configs set heights, towers, anchor coverage (G1), wall gaps
+// (G4) and solid rooftop props (G3). Fog reaches >= 700 m so the canyons read; the skyline ring stands at
+// 420-650 m.
 const DOWNTOWN_LOOK: DistrictLook = {
-  skyHorizon: "#d3dcea", skyMid: "#98bde6", skyZenith: "#4c83d0", fog: "#d3dcea", fogNear: 120, fogFar: 380,
+  skyHorizon: "#d3dcea", skyMid: "#98bde6", skyZenith: "#4c83d0", fog: "#d3dcea", fogNear: 220, fogFar: 760,
   sun: "#fff4e0", sunIntensity: 1.5, hemiSky: "#e3eeff", hemiGround: "#6b5d7a", hemiIntensity: 1.25,
 };
 
@@ -72,7 +73,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
   downtown: {
     id: "downtown",
     name: "Downtown",
-    blurb: "The original skyline. Wide streets, balloons everywhere.",
+    blurb: "Canyons of glass and brick. Swing the avenues.",
     dir: "levels/",
     sky: "sky/downtown.webp",
     config: DEFAULT_CONFIG,
@@ -81,13 +82,17 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
   market: {
     id: "market",
     name: "Night Market",
-    blurb: "Dense, narrow and twisty. Short hops, lots of junctions, some streets with no balloons.",
+    blurb: "Low, dense rooftops. Vault, climb, wall-kick. Few places to web.",
     dir: "levels/market/",
     sky: "sky/market.webp",
+    // The parkour district: dense low podiums whose steps favour climbs, six 55-90 m towers to swing near
+    // and bare stretches between them (G1 is a warning here). Lots are 12 m (not 11) so a wall-gap block
+    // (two 10 m roofs + an 8 m notch) still keeps every roof >= 10 x 10 m (G2).
     config: {
-      ...DEFAULT_CONFIG, seed: 311, blocksX: 8, blocksZ: 6, block: 23, street: 10, alley: 3, building: 10,
-      mergeChance: 0.12, roofMin: 18, roofMax: 26, streetMaxDh: 3, towers: 4, towerMin: 42, towerMax: 58,
-      hookAbove: 9.5, hookGapChance: 0.18, skylineCount: 46,
+      ...DEFAULT_CONFIG, seed: 311, blocksX: 8, blocksZ: 6, block: 28, street: 12, alley: 4, building: 12,
+      mergeChance: 0.12, roofMin: 18, roofMax: 32, steps: [0, 0, 1, -1, 2.5, 2.5, 3.5, 3.5, -7],
+      towers: 6, towerMin: 55, towerMax: 90, towerSpread: 55, coverFix: false, coverWarn: true,
+      wallGapChance: 0.3, props: 2.5, propClimb: 0.4, minRoof: 10, skylineCount: 60,
     },
     // Round 6: the dense blocks squeezed the spawn to ~17-20 m behind him (catches in 3 s), and his twisty
     // baked runs (crow-flies ~10 % shorter than Downtown's, ~1.8 corners per run) let a swinger cut
@@ -101,20 +106,23 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       },
     },
     look: {
-      skyHorizon: "#6e3a66", skyMid: "#3a2560", skyZenith: "#140f33", fog: "#4a2e57", fogNear: 70, fogFar: 300,
+      skyHorizon: "#6e3a66", skyMid: "#3a2560", skyZenith: "#140f33", fog: "#4a2e57", fogNear: 160, fogFar: 700,
       sun: "#ffb4d9", sunIntensity: 0.9, hemiSky: "#b9a4ff", hemiGround: "#2a1a33", hemiIntensity: 1.05,
     },
   },
   docks: {
     id: "docks",
     name: "The Docks",
-    blurb: "Low warehouses, wide streets and long flights over the water. Mind the wind.",
+    blurb: "Low sheds under crane masts. Long pendulums over the quay. Mind the wind.",
     dir: "levels/docks/",
     sky: "sky/docks.webp",
+    // Low sheds (12-22 m), six crane masts in the quay-side intersections, three 70-100 m offices, container
+    // stacks (climb) and crates (vault) on the roofs.
     config: {
-      ...DEFAULT_CONFIG, seed: 902, blocksX: 7, blocksZ: 3, block: 32, street: 15, alley: 4, building: 14,
-      mergeChance: 0.35, roofMin: 12, roofMax: 20, streetMaxDh: 3.5, towers: 3, towerMin: 36, towerMax: 48,
-      hookAbove: 10, skylineCount: 30,
+      ...DEFAULT_CONFIG, seed: 902, blocksX: 7, blocksZ: 3, block: 34, street: 18, alley: 4, building: 15,
+      mergeChance: 0.35, roofMin: 12, roofMax: 22, steps: [0, 0, 0, 1, -1, 2.5, 3.5, -7],
+      towers: 3, towerMin: 70, towerMax: 100, towerSpread: 90, masts: { count: 6, size: 4, min: 55, max: 80 }, coverTower: [25, 40],
+      wallGapChance: 0, props: 1.5, propClimb: 0.45, propSet: "docks", skylineCount: 44,
     },
     // Round 6: a longer head start (the wide blocks squeezed the spawn to ~24 m), a faster sprint and a
     // 3 m Degen Yoink.
@@ -127,20 +135,22 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       },
     },
     look: {
-      skyHorizon: "#f1d9bd", skyMid: "#a9c6de", skyZenith: "#5f8fbf", fog: "#dfd8cf", fogNear: 110, fogFar: 420,
+      skyHorizon: "#f1d9bd", skyMid: "#a9c6de", skyZenith: "#5f8fbf", fog: "#dfd8cf", fogNear: 220, fogFar: 760,
       sun: "#ffe2b8", sunIntensity: 1.6, hemiSky: "#dbe9f7", hemiGround: "#4c5a66", hemiIntensity: 1.2,
     },
   },
   towers: {
     id: "towers",
     name: "The Towers",
-    blurb: "Tall, steep and vertical. Big drops between roofs and towers everywhere.",
+    blurb: "The deepest canyons in town. Long ropes, big swings.",
     dir: "levels/towers/",
     sky: "sky/towers.webp",
+    // The Financial District, the Manhattan showcase: 70-120 m podiums on 24 m avenues and twelve 160-230 m
+    // towers (+ coverage).
     config: {
-      ...DEFAULT_CONFIG, seed: 1453, blocksX: 7, blocksZ: 6, roofMin: 38, roofMax: 52, streetMaxDh: 3.5,
-      towers: 8, towerMin: 90, towerMax: 130, hookAbove: 10, skylineCount: 50, skylineMin: 260, skylineMax: 460,
-      sky: SKY_HOOKS,
+      ...DEFAULT_CONFIG, seed: 1453, blocksX: 7, blocksZ: 6, block: 44, street: 24, alley: 5, building: 19.5,
+      roofMin: 70, roofMax: 120, towers: 12, towerMin: 160, towerMax: 230, towerSpread: 70,
+      wallGapChance: 0.25, skylineCount: 64,
     },
     // Round 6: a faster sprint, a 4.5 m Normal and 3 m Degen Yoink.
     chase: {
@@ -151,25 +161,25 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       },
     },
     look: {
-      skyHorizon: "#f6c9a8", skyMid: "#b7b6dc", skyZenith: "#3f5fa8", fog: "#e2cfc6", fogNear: 150, fogFar: 520,
+      skyHorizon: "#f6c9a8", skyMid: "#b7b6dc", skyZenith: "#3f5fa8", fog: "#e2cfc6", fogNear: 280, fogFar: 900,
       sun: "#ffd6a8", sunIntensity: 1.55, hemiSky: "#d7e2ff", hemiGround: "#5b4f6b", hemiIntensity: 1.2,
     },
   },
   vertigo: {
     id: "vertigo",
     name: "Vertigo",
-    blurb: "A skyline of spiral ramps, 20 to 90 m up. He starts at the top: drop, dive, grab the big sky balloons.",
+    blurb: "A skyline of spiral ramps, 20 to 90 m up. He starts at the top: drop, dive, web the needles on the way down.",
     dir: "levels/vertigo/",
     sky: "sky/vertigo.webp",
-    // Round 7: helix rings of roofs (world/generate.ts generateVertigo), 3 needle towers, sky hooks and a
-    // lower balloon tier where a street crosses a cliff.
+    // Round 7: helix rings of roofs (world/generate.ts generateVertigo). Round 9: five 150-220 m needles in
+    // the core; the anchors are the higher rings' cliff faces and the needles (G1 is a warning here).
     config: {
-      ...DEFAULT_CONFIG, seed: 20, blocksX: 6, blocksZ: 5, mergeChance: 0, roofMin: 22, roofMax: 90, alleyMaxDh: 90, streetMaxDh: 90,
-      towers: 0, towerMin: 120, towerMax: 170, hookAbove: 10, skylineCount: 40, skylineMin: 260, skylineMax: 480,
-      sky: { ...SKY_HOOKS, chance: 0.7 }, lowTierDh: 8,
+      ...DEFAULT_CONFIG, seed: 20, blocksX: 6, blocksZ: 5, block: 28, street: 14, alley: 4, building: 12,
+      mergeChance: 0, roofMin: 22, roofMax: 90, towers: 0, towerMin: 150, towerMax: 220,
+      coverFix: false, coverWarn: true, wallGapChance: 0, props: 1, propClimb: 0.3, skylineCount: 50,
       vertigo: {
         rings: [[22, 86], [26, 78], [30, 66], [34, 58]], streetStep: 2.6, alleyStep: 0.5,
-        needles: 3, needleMin: 120, needleMax: 170, needleSize: 7, plazas: 2, mesa: [84, 90],
+        needles: 5, needleMin: 150, needleMax: 220, needleSize: 7, plazas: 1, mesa: [84, 90],
       },
     },
     // Descending chase: he starts on one of his 3 highest junctions and prefers edges that end lower; you
@@ -188,7 +198,7 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       },
     },
     look: {
-      skyHorizon: "#e3eee9", skyMid: "#8cc8dc", skyZenith: "#27589a", fog: "#dbe8e6", fogNear: 150, fogFar: 560,
+      skyHorizon: "#e3eee9", skyMid: "#8cc8dc", skyZenith: "#27589a", fog: "#dbe8e6", fogNear: 260, fogFar: 820,
       sun: "#fff6e6", sunIntensity: 1.6, hemiSky: "#e6f4ff", hemiGround: "#56607a", hemiIntensity: 1.25,
     },
   },

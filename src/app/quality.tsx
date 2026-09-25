@@ -2,8 +2,9 @@
 //  High: r3g's pixel ratio range (touch devices capped per input/touch.ts: 1.25 on phones, 1.5 on
 //        tablets), anti-aliasing, blob shadows, the runner trail, every rooftop prop.
 //  Low:  pixel ratio 1, anti-aliasing off (the renderer is created once, so that part applies after a
-//        reload), no blob shadows or runner trail, and of the rooftop props only the water towers
-//        (decor.json's AC units and antennas are hidden).
+//        reload), no blob shadows or runner trail, and decor.json's antennas hidden. Round 9: the rooftop
+//        obstacles you can touch are solid "prop" boxes in city.json - never hidden at any quality (what you
+//        see is what you hit); only untouchable tower-top decor is thinned.
 // The views read lowQuality() every frame, so a switch takes effect immediately.
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -21,7 +22,8 @@ export const ANTIALIAS = !lowQuality();
 
 const DEV = import.meta.env.MODE !== "production";
 const PROPS_GROUP = /(^|\/)rooftop-props$/;
-/** AC units and antennas (the rooftop-props group's ac-b-* / ant-b-* and decor's own ac-N / antenna-N). */
+/** Tower-top antennas (decor.json's rooftop-props ant-*; older decor's ac-* / antenna-*). Never a city.json
+ *  prop (p-*). */
 const THINNED = /(^|\/)(ac|ant|antenna)-/;
 
 /** Mounted inside the canvas: applies the pixel ratio and thins the rooftop props. */

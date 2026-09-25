@@ -1,8 +1,10 @@
 // npm run level: a district's city.json (editable source of truth) -> city.model.json -> runner bake
-// -> runner.pack.bin + bake.report.json. Prints the city lint and the bake checks (never fails on
-// dropped edges; a non-zero exit only for lint errors or failed graph checks). Tuning is the shared
-// public/levels/tuning.json.
-//   node tools/level.ts [--map downtown|market|docks|towers | --all | --city <path>] [--no-bake]
+// -> runner.pack.bin + bake.report.json. Prints the city lint (round 9 geometry rules G1-G8) and the bake
+// checks (never fails on dropped edges; a non-zero exit only for lint errors, failed graph checks or a bake
+// that throws). Tuning is the shared public/levels/tuning.json.
+//   node tools/level.ts [--map downtown|market|docks|towers|vertigo | --all | --city <path>] [--no-bake]
+// --no-bake: derive + lint + write city.model.json only (the world builder's loop; packs are baked once the
+// sim that plays them is in).
 import fs from "node:fs";
 import path from "node:path";
 import { modelFromCityPrefab } from "../src/world/level.ts";
@@ -35,7 +37,7 @@ export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = pat
   const { model, warnings } = modelFromCityPrefab(prefab);
   const tuningPath = path.join(LEVELS, "tuning.json");
   const tuning = applyTuningJson(fs.existsSync(tuningPath) ? JSON.parse(fs.readFileSync(tuningPath, "utf8")) : null).player;
-  const lint = lintModel(model, tuning.aimRadius);
+  const lint = lintModel(model);
   const outPath = path.join(outDir, "city.model.json");
   fs.writeFileSync(outPath, JSON.stringify(model) + "\n");
   const cityStats = prefabBatchStats(prefab);
@@ -45,14 +47,21 @@ export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = pat
   const decorPath = path.join(path.dirname(cityPath), "decor.json");
   if (fs.existsSync(decorPath)) {
     const d = prefabBatchStats(JSON.parse(fs.readFileSync(decorPath, "utf8")));
-    console.log(`  decor.json: ${d.nodes} nodes, ${d.batchKeys} batch keys (budget 320 / 6)`);
+    console.log(`  decor.json: ${d.nodes} nodes, ${d.batchKeys} batch keys (budget 320 / 10)`);
   }
   for (const w of warnings.concat(lint.warnings)) console.log(`  warn: ${w}`);
   for (const e of lint.errors.slice(0, 30)) console.log(`  LINT: ${e}`);
   if (lint.errors.length > 30) console.log(`  ... ${lint.errors.length - 30} more lint errors`);
   let failures = lint.errors.length;
   if (doBake) {
-    const { bytes, report } = bake(model, tuning, m => console.log(`  ${m}`));
+    let baked: ReturnType<typeof bake>;
+    try {
+      baked = bake(model, tuning, m => console.log(`  ${m}`));
+    } catch (e) {
+      console.log(`  BAKE FAILED: ${(e as Error).message ?? e}`);
+      return failures + 1;
+    }
+    const { bytes, report } = baked;
     fs.writeFileSync(path.join(outDir, "runner.pack.bin"), bytes);
     fs.writeFileSync(path.join(outDir, "bake.report.json"), JSON.stringify(report, null, 1) + "\n");
     const kept = report.edges.filter(e => e.kept);

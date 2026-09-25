@@ -1,14 +1,14 @@
-// city.json (the hand-editable r3g prefab) -> solids + manual hooks + config. Nodes are recognised by
-// their Data {kind}: "roof" (landable solid), "tower" (solid, never landable), "hook" (a manual balloon
-// at the node's world position), "city" (root config). Transforms compose translation and scale down the
-// tree; solids must be unrotated and ground-rooted (warned and normalised if not).
+// city.json (the hand-editable r3g prefab) -> solids + config. Nodes are recognised by their Data {kind}:
+// "roof" (landable solid), "tower" (solid, never landable), "prop" (round 9: a solid rooftop obstacle,
+// landable), "city" (root config). Round 9: "hook" nodes (manual balloons) are ignored with a warning -
+// web anchors come from the buildings. Transforms compose translation and scale down the tree; solids must
+// be unrotated and ground-rooted (warned and normalised if not).
 import type { GameObject, Prefab } from "react-three-game";
 import type { CityConfig, Solid } from "./cityModel.ts";
-import type { ManualHook } from "./derive.ts";
 
 type Xf = { px: number; py: number; pz: number; sx: number; sy: number; sz: number };
 
-export type ReadCity = { config: CityConfig | null; solids: Solid[]; manualHooks: ManualHook[]; warnings: string[] };
+export type ReadCity = { config: CityConfig | null; solids: Solid[]; warnings: string[] };
 
 function comp(node: GameObject, type: string): Record<string, unknown> | null {
   for (const c of Object.values(node.components ?? {})) if (c && c.type === type) return c.properties as Record<string, unknown>;
@@ -17,7 +17,6 @@ function comp(node: GameObject, type: string): Record<string, unknown> | null {
 
 export function readCityPrefab(prefab: Prefab): ReadCity {
   const solids: Solid[] = [];
-  const manualHooks: ManualHook[] = [];
   const warnings: string[] = [];
   let config: CityConfig | null = null;
   const r6 = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -35,7 +34,7 @@ export function readCityPrefab(prefab: Prefab): ReadCity {
     const data = (comp(node, "Data")?.data ?? null) as Record<string, unknown> | null;
     const kind = data?.kind;
     if (kind === "city" && data?.config) config = data.config as CityConfig;
-    if (kind === "roof" || kind === "tower") {
+    if (kind === "roof" || kind === "tower" || kind === "prop") {
       if (rot.some(r => Math.abs(r) > 1e-6)) warnings.push(`${node.id}: rotation ignored (solids are unrotated boxes)`);
       const w = Math.abs(xf.sx), h = Math.abs(xf.sy), d = Math.abs(xf.sz);
       const bottom = xf.py - h / 2;
@@ -43,18 +42,18 @@ export function readCityPrefab(prefab: Prefab): ReadCity {
       solids.push({
         id: solids.length,
         kind,
-        landable: kind === "roof",
+        landable: kind !== "tower",
         x0: r6(xf.px - w / 2), x1: r6(xf.px + w / 2),
         z0: r6(xf.pz - d / 2), z1: r6(xf.pz + d / 2),
         top: r6(xf.py + h / 2),
         node: node.id,
       });
     }
-    if (kind === "hook") manualHooks.push({ x: xf.px, y: xf.py, z: xf.pz });
+    if (kind === "hook") warnings.push(`${node.id}: "hook" node ignored (no balloons since round 9; webs stick to buildings)`);
     for (const c of node.children ?? []) walk(c, xf);
   };
   walk(prefab.root, { px: 0, py: 0, pz: 0, sx: 1, sy: 1, sz: 1 });
-  return { config, solids, manualHooks, warnings };
+  return { config, solids, warnings };
 }
 
 /** Lint helpers for test 4: geometry signatures and batch keys (instanced meshes only). */

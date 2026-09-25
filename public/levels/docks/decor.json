@@ -7,11 +7,6 @@
    "roughness": 0.7,
    "metalness": 0
   },
-  "stand": {
-   "color": "#e86a92",
-   "roughness": 0.9,
-   "metalness": 0
-  },
   "balloonA": {
    "color": "#ff5a7a",
    "roughness": 0.4,
@@ -69,6 +64,21 @@
    "color": "#ffffff",
    "texture": "/textures/billboards/buyhigh.webp",
    "materialType": "basic"
+  },
+  "crane": {
+   "color": "#e3a82b",
+   "roughness": 0.8,
+   "metalness": 0
+  },
+  "tankWood": {
+   "color": "#8e5f3f",
+   "roughness": 0.9,
+   "metalness": 0
+  },
+  "tankRoof": {
+   "color": "#4f4648",
+   "roughness": 0.8,
+   "metalness": 0
   }
  },
  "root": {
@@ -81,13 +91,13 @@
       "type": "Transform",
       "properties": {
        "position": [
-        148,
-        16,
-        54
+        178.2,
+        21.5,
+        59.5
        ],
        "rotation": [
         0,
-        0.79,
+        1.57,
         0
        ]
       }
@@ -102,50 +112,6 @@
      }
     },
     "children": [
-     {
-      "id": "stand-counter",
-      "components": {
-       "transform": {
-        "type": "Transform",
-        "properties": {
-         "position": [
-          0,
-          0.55,
-          0
-         ],
-         "scale": [
-          2.4,
-          1.1,
-          1.2
-         ]
-        }
-       },
-       "geometry": {
-        "type": "Geometry",
-        "properties": {
-         "geometryType": "box",
-         "args": [
-          1,
-          1,
-          1
-         ]
-        }
-       },
-       "material": {
-        "type": "Material",
-        "properties": {
-         "materialId": "stand"
-        }
-       },
-       "mesh": {
-        "type": "Mesh",
-        "properties": {
-         "castShadow": false,
-         "receiveShadow": false
-        }
-       }
-      }
-     },
      {
       "id": "stand-sign",
       "components": {
@@ -282,14 +248,19 @@
       "type": "Transform",
       "properties": {
        "position": [
-        312.5,
-        12.5,
-        119
+        169.02,
+        24.32,
+        59.5
        ],
        "rotation": [
         0,
-        -1.57,
+        1.57,
         0
+       ],
+       "scale": [
+        1.37,
+        1.37,
+        1
        ]
       }
      },
@@ -364,56 +335,12 @@
          "position": [
           0,
           4.7,
-          0
+          0.05
          ],
          "scale": [
           7.3,
           3.3,
-          0.2
-         ]
-        }
-       },
-       "geometry": {
-        "type": "Geometry",
-        "properties": {
-         "geometryType": "box",
-         "args": [
-          1,
-          1,
-          1
-         ]
-        }
-       },
-       "material": {
-        "type": "Material",
-        "properties": {
-         "materialId": "metal"
-        }
-       },
-       "mesh": {
-        "type": "Mesh",
-        "properties": {
-         "castShadow": false,
-         "receiveShadow": false
-        }
-       }
-      }
-     },
-     {
-      "id": "billboard-0-leg",
-      "components": {
-       "transform": {
-        "type": "Transform",
-        "properties": {
-         "position": [
-          0,
-          1.55,
-          -0.1
-         ],
-         "scale": [
-          0.4,
-          3.1,
-          0.3
+          0.1
          ]
         }
        },
@@ -452,14 +379,19 @@
       "type": "Transform",
       "properties": {
        "position": [
-        1.5,
-        17,
-        119
+        332.98,
+        20.38,
+        17
        ],
        "rotation": [
         0,
-        1.57,
+        -1.57,
         0
+       ],
+       "scale": [
+        2.5,
+        2.5,
+        1
        ]
       }
      },
@@ -534,56 +466,12 @@
          "position": [
           0,
           4.7,
-          0
+          0.05
          ],
          "scale": [
           7.3,
           3.3,
-          0.2
-         ]
-        }
-       },
-       "geometry": {
-        "type": "Geometry",
-        "properties": {
-         "geometryType": "box",
-         "args": [
-          1,
-          1,
-          1
-         ]
-        }
-       },
-       "material": {
-        "type": "Material",
-        "properties": {
-         "materialId": "metal"
-        }
-       },
-       "mesh": {
-        "type": "Mesh",
-        "properties": {
-         "castShadow": false,
-         "receiveShadow": false
-        }
-       }
-      }
-     },
-     {
-      "id": "billboard-1-leg",
-      "components": {
-       "transform": {
-        "type": "Transform",
-        "properties": {
-         "position": [
-          0,
-          1.55,
-          -0.1
-         ],
-         "scale": [
-          0.4,
-          3.1,
-          0.3
+          0.1
          ]
         }
        },
@@ -622,14 +510,19 @@
       "type": "Transform",
       "properties": {
        "position": [
-        265.5,
-        18,
-        7
+        32.02,
+        20.32,
+        26.5
        ],
        "rotation": [
         0,
-        -1.57,
+        1.57,
         0
+       ],
+       "scale": [
+        1.37,
+        1.37,
+        1
        ]
       }
      },
@@ -704,56 +597,12 @@
          "position": [
           0,
           4.7,
-          0
+          0.05
          ],
          "scale": [
           7.3,
           3.3,
-          0.2
-         ]
-        }
-       },
-       "geometry": {
-        "type": "Geometry",
-        "properties": {
-         "geometryType": "box",
-         "args": [
-          1,
-          1,
-          1
-         ]
-        }
-       },
-       "material": {
-        "type": "Material",
-        "properties": {
-         "materialId": "metal"
-        }
-       },
-       "mesh": {
-        "type": "Mesh",
-        "properties": {
-         "castShadow": false,
-         "receiveShadow": false
-        }
-       }
-      }
-     },
-     {
-      "id": "billboard-2-leg",
-      "components": {
-       "transform": {
-        "type": "Transform",
-        "properties": {
-         "position": [
-          0,
-          1.55,
-          -0.1
-         ],
-         "scale": [
-          0.4,
-          3.1,
-          0.3
+          0.1
          ]
         }
        },
@@ -792,14 +641,19 @@
       "type": "Transform",
       "properties": {
        "position": [
-        19.5,
-        13.5,
-        7
+        280.98,
+        20.88,
+        121
        ],
        "rotation": [
         0,
-        1.57,
+        -1.57,
         0
+       ],
+       "scale": [
+        2.5,
+        2.5,
+        1
        ]
       }
      },
@@ -874,56 +728,12 @@
          "position": [
           0,
           4.7,
-          0
+          0.05
          ],
          "scale": [
           7.3,
           3.3,
-          0.2
-         ]
-        }
-       },
-       "geometry": {
-        "type": "Geometry",
-        "properties": {
-         "geometryType": "box",
-         "args": [
-          1,
-          1,
-          1
-         ]
-        }
-       },
-       "material": {
-        "type": "Material",
-        "properties": {
-         "materialId": "metal"
-        }
-       },
-       "mesh": {
-        "type": "Mesh",
-        "properties": {
-         "castShadow": false,
-         "receiveShadow": false
-        }
-       }
-      }
-     },
-     {
-      "id": "billboard-3-leg",
-      "components": {
-       "transform": {
-        "type": "Transform",
-        "properties": {
-         "position": [
-          0,
-          1.55,
-          -0.1
-         ],
-         "scale": [
-          0.4,
-          3.1,
-          0.3
+          0.1
          ]
         }
        },
@@ -962,9 +772,9 @@
       "type": "Transform",
       "properties": {
        "position": [
-        32.08,
-        35,
-        25
+        65.08,
+        39,
+        111.5
        ],
        "rotation": [
         0,
@@ -1001,9 +811,9 @@
       "type": "Transform",
       "properties": {
        "position": [
-        281.92,
-        37.5,
-        7
+        228.92,
+        41.5,
+        7.5
        ],
        "rotation": [
         0,
@@ -1016,8 +826,8 @@
       "type": "Sign",
       "properties": {
        "text": "FEW UNDERSTAND",
-       "width": 10.5,
-       "height": 2.8,
+       "width": 3.2,
+       "height": 13,
        "background": "#16161d",
        "color": "#f2c14e",
        "border": "#f2c14e"
@@ -1040,13 +850,13 @@
       "type": "Transform",
       "properties": {
        "position": [
-        108.08,
+        209.92,
         38.5,
-        101
+        111.5
        ],
        "rotation": [
         0,
-        1.57,
+        -1.57,
         0
        ]
       }
@@ -1073,472 +883,3847 @@
     }
    },
    {
-    "id": "ac-0",
+    "id": "banner-3",
     "components": {
      "transform": {
       "type": "Transform",
       "properties": {
        "position": [
-        208.2,
-        13.6,
-        123.8
+        130.5,
+        40,
+        13.08
        ],
-       "scale": [
-        1.6,
-        1.2,
-        1.2
+       "rotation": [
+        0,
+        0,
+        0
        ]
       }
      },
-     "geometry": {
-      "type": "Geometry",
+     "sign": {
+      "type": "Sign",
       "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
+       "text": "PROBABLY NOTHING",
+       "width": 3.2,
+       "height": 13,
+       "background": "#6ec6ff",
+       "color": "#16161d",
+       "border": "#16161d"
       }
      },
      "data": {
       "type": "Data",
       "properties": {
        "data": {
-        "kind": "ac"
+        "kind": "sign"
        }
       }
      }
     }
    },
    {
-    "id": "antenna-0",
+    "id": "banner-4",
     "components": {
      "transform": {
       "type": "Transform",
       "properties": {
        "position": [
-        218.5,
-        15.5,
-        113.5
+        136.08,
+        41.5,
+        111.5
        ],
-       "scale": [
-        0.15,
-        5,
-        0.15
+       "rotation": [
+        0,
+        1.57,
+        0
        ]
       }
      },
-     "geometry": {
-      "type": "Geometry",
+     "sign": {
+      "type": "Sign",
       "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
+       "text": "LFG",
+       "width": 3.2,
+       "height": 13,
+       "background": "#7cdb6a",
+       "color": "#16161d",
+       "border": "#16161d"
       }
      },
      "data": {
       "type": "Data",
       "properties": {
        "data": {
-        "kind": "antenna"
+        "kind": "sign"
        }
       }
      }
     }
    },
    {
-    "id": "ac-1",
+    "id": "banner-5",
     "components": {
      "transform": {
       "type": "Transform",
       "properties": {
        "position": [
-        96.2,
-        14.1,
-        123.8
+        84.08,
+        35,
+        59.5
        ],
-       "scale": [
-        1.6,
-        1.2,
-        1.2
+       "rotation": [
+        0,
+        1.57,
+        0
        ]
       }
      },
-     "geometry": {
-      "type": "Geometry",
+     "sign": {
+      "type": "Sign",
       "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
+       "text": "NOT FINANCIAL ADVICE",
+       "width": 3.2,
+       "height": 13,
+       "background": "#fff4d6",
+       "color": "#1c2a6b",
+       "border": "#1c2a6b"
       }
      },
      "data": {
       "type": "Data",
       "properties": {
        "data": {
-        "kind": "ac"
+        "kind": "sign"
        }
       }
      }
     }
    },
    {
-    "id": "ac-2",
+    "id": "rooftop-props",
     "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        96.2,
-        14.6,
-        11.8
-       ],
-       "scale": [
-        1.6,
-        1.2,
-        1.2
-       ]
-      }
-     },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
      "data": {
       "type": "Data",
       "properties": {
        "data": {
-        "kind": "ac"
+        "kind": "props",
+        "seed": 99
        }
       }
      }
-    }
-   },
-   {
-    "id": "antenna-2",
-    "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        106.5,
-        16.5,
-        1.5
-       ],
-       "scale": [
-        0.15,
-        5,
-        0.15
-       ]
-      }
-     },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
-     "data": {
-      "type": "Data",
-      "properties": {
+    },
+    "children": [
+     {
+      "id": "ant-t-64",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          23,
+          51.52,
+          23
+         ]
+        }
+       },
        "data": {
-        "kind": "antenna"
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
        }
-      }
-     }
-    }
-   },
-   {
-    "id": "ac-3",
-    "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        49.2,
-        14.6,
-        76.8
-       ],
-       "scale": [
-        1.6,
-        1.2,
-        1.2
-       ]
-      }
+      },
+      "children": [
+       {
+        "id": "ant-t-64-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.914468,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.828937,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-64-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            11.063149,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
      },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
-     "data": {
-      "type": "Data",
-      "properties": {
+     {
+      "id": "ant-t-65",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          56,
+          54.52,
+          23
+         ]
+        }
+       },
        "data": {
-        "kind": "ac"
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
        }
-      }
-     }
-    }
-   },
-   {
-    "id": "ac-4",
-    "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        190.2,
-        16.1,
-        11.8
-       ],
-       "scale": [
-        1.6,
-        1.2,
-        1.2
-       ]
-      }
+      },
+      "children": [
+       {
+        "id": "ant-t-65-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.57073,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.141461,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-65-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.513168,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
      },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
-     "data": {
-      "type": "Data",
-      "properties": {
+     {
+      "id": "ant-t-66",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          127,
+          89.02,
+          4
+         ]
+        }
+       },
        "data": {
-        "kind": "ac"
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
        }
-      }
-     }
-    }
-   },
-   {
-    "id": "antenna-4",
-    "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        200.5,
-        18,
-        1.5
-       ],
-       "scale": [
-        0.15,
-        5,
-        0.15
-       ]
-      }
+      },
+      "children": [
+       {
+        "id": "ant-t-66-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.952629,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.905259,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-66-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            11.124207,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
      },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
-     "data": {
-      "type": "Data",
-      "properties": {
+     {
+      "id": "ant-t-67",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          160,
+          56.52,
+          23
+         ]
+        }
+       },
        "data": {
-        "kind": "antenna"
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
        }
-      }
-     }
-    }
-   },
-   {
-    "id": "antenna-6",
-    "components": {
-     "transform": {
-      "type": "Transform",
-      "properties": {
-       "position": [
-        12.5,
-        16.5,
-        48.5
-       ],
-       "scale": [
-        0.15,
-        5,
-        0.15
-       ]
-      }
+      },
+      "children": [
+       {
+        "id": "ant-t-67-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            4.81631,
+            0
+           ],
+           "scale": [
+            0.18,
+            9.632619,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-67-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            7.706095,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
      },
-     "geometry": {
-      "type": "Geometry",
-      "properties": {
-       "geometryType": "box",
-       "args": [
-        1,
-        1,
-        1
-       ]
-      }
-     },
-     "material": {
-      "type": "Material",
-      "properties": {
-       "materialId": "metal"
-      }
-     },
-     "mesh": {
-      "type": "Mesh",
-      "properties": {
-       "castShadow": false,
-       "receiveShadow": false
-      }
-     },
-     "data": {
-      "type": "Data",
-      "properties": {
+     {
+      "id": "ant-t-68",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          231,
+          99.52,
+          4
+         ]
+        }
+       },
        "data": {
-        "kind": "antenna"
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
        }
-      }
+      },
+      "children": [
+       {
+        "id": "ant-t-68-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.512825,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.025649,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-68-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.420519,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-69",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          231,
+          41.52,
+          23
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-69-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            4.693163,
+            0
+           ],
+           "scale": [
+            0.18,
+            9.386327,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-69-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            7.509061,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-70",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          264,
+          51.52,
+          23
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-70-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.679252,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.358505,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-70-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.686804,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-71",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          335,
+          47.02,
+          4
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-71-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            5.062595,
+            0
+           ],
+           "scale": [
+            0.18,
+            10.125191,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-71-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            8.100152,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-72",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          23,
+          58.02,
+          75
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-72-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.797983,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.595967,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-72-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.876774,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-73",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          75,
+          45.52,
+          56
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-73-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            5.318987,
+            0
+           ],
+           "scale": [
+            0.18,
+            10.637974,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-73-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            8.510379,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-74",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          160,
+          50.52,
+          56
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-74-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.786758,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.573515,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-74-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.858812,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-75",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          56,
+          54.52,
+          108
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-75-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.820495,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.64099,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-75-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.912792,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "wt-t-76",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          130.56,
+          79.52,
+          110.78
+         ],
+         "scale": [
+          1.3,
+          1.3,
+          1.3
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "waterTower"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "wt-t-76-leg-0",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-leg-1",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-leg-2",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-leg-3",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-deck",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.25,
+            0
+           ],
+           "scale": [
+            2.3,
+            0.1,
+            2.3
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-tank",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.45,
+            0
+           ],
+           "scale": [
+            2.5,
+            2.3,
+            2.5
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.5,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankWood"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-76-roof",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            5.05,
+            0
+           ],
+           "scale": [
+            2.8,
+            0.9,
+            2.8
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.01,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankRoof"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "wt-t-77",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          214.63,
+          49.02,
+          111.37
+         ],
+         "scale": [
+          1.3,
+          1.3,
+          1.3
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "waterTower"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "wt-t-77-leg-0",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-leg-1",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-leg-2",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-leg-3",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-deck",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.25,
+            0
+           ],
+           "scale": [
+            2.3,
+            0.1,
+            2.3
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-tank",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.45,
+            0
+           ],
+           "scale": [
+            2.5,
+            2.3,
+            2.5
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.5,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankWood"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-77-roof",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            5.05,
+            0
+           ],
+           "scale": [
+            2.8,
+            0.9,
+            2.8
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.01,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankRoof"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "wt-t-78",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          286.17,
+          52.52,
+          120.39
+         ],
+         "scale": [
+          1.3,
+          1.3,
+          1.3
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "waterTower"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "wt-t-78-leg-0",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-leg-1",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            -0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-leg-2",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-leg-3",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            -0.85,
+            1.1,
+            0.85
+           ],
+           "scale": [
+            0.16,
+            2.2,
+            0.16
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-deck",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.25,
+            0
+           ],
+           "scale": [
+            2.3,
+            0.1,
+            2.3
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-tank",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.45,
+            0
+           ],
+           "scale": [
+            2.5,
+            2.3,
+            2.5
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.5,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankWood"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "wt-t-78-roof",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            5.05,
+            0
+           ],
+           "scale": [
+            2.8,
+            0.9,
+            2.8
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "cylinder",
+           "args": [
+            0.01,
+            0.5,
+            1,
+            14
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "tankRoof"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "ant-t-79",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          316,
+          45.52,
+          108
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "antenna"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "ant-t-79-mast",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            6.572196,
+            0
+           ],
+           "scale": [
+            0.18,
+            13.144393,
+            0.18
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "ant-t-79-bar",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            10.515514,
+            0
+           ],
+           "scale": [
+            1.6,
+            0.09,
+            0.09
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-80",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          43,
+          57,
+          95
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-80-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-80-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            12.970866
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            25.941731
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-80-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-80-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-81",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          147,
+          76,
+          95
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-81-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-81-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            15.514661
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            31.029321
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-81-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-81-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-82",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          251,
+          72.5,
+          95
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-82-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-82-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            11.961634
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            23.923268
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-82-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-82-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-83",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          95,
+          58,
+          43
+         ],
+         "rotation": [
+          0,
+          3.14,
+          0
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-83-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-83-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            15.082658
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            30.165317
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-83-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-83-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-84",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          199,
+          59,
+          43
+         ],
+         "rotation": [
+          0,
+          3.14,
+          0
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-84-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-84-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            13.428967
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            26.857934
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-84-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-84-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
+     },
+     {
+      "id": "crane-t-85",
+      "components": {
+       "transform": {
+        "type": "Transform",
+        "properties": {
+         "position": [
+          303,
+          80,
+          43
+         ],
+         "rotation": [
+          0,
+          3.14,
+          0
+         ]
+        }
+       },
+       "data": {
+        "type": "Data",
+        "properties": {
+         "data": {
+          "kind": "crane"
+         }
+        }
+       }
+      },
+      "children": [
+       {
+        "id": "crane-t-85-cab",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            1.6,
+            0
+           ],
+           "scale": [
+            3.2,
+            3.2,
+            3.2
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-85-jib",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            14.027494
+           ],
+           "scale": [
+            1.4,
+            1.2,
+            28.054989
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-85-counter",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            3.6,
+            -5
+           ],
+           "scale": [
+            1.8,
+            1.4,
+            10
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "crane"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       },
+       {
+        "id": "crane-t-85-weight",
+        "components": {
+         "transform": {
+          "type": "Transform",
+          "properties": {
+           "position": [
+            0,
+            2.6,
+            -9
+           ],
+           "scale": [
+            2.6,
+            2.4,
+            2.4
+           ]
+          }
+         },
+         "geometry": {
+          "type": "Geometry",
+          "properties": {
+           "geometryType": "box",
+           "args": [
+            1,
+            1,
+            1
+           ]
+          }
+         },
+         "material": {
+          "type": "Material",
+          "properties": {
+           "materialId": "metal"
+          }
+         },
+         "mesh": {
+          "type": "Mesh",
+          "properties": {
+           "castShadow": false,
+           "receiveShadow": false
+          }
+         }
+        }
+       }
+      ]
      }
-    }
+    ]
    }
   ]
  }

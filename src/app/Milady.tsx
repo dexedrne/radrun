@@ -1,6 +1,7 @@
 // Pockit Milady cameo (spec §11 + errata 6): she runs the balloon stand (decor.json node tagged
-// Data {kind: "miladyStand"}). Decoration only: never solid, never in the sim, and the game never
-// waits for her.
+// Data {kind: "miladyStand"}; round 9: its counter is the solid rooftop prop "p-stand" in city.json, the
+// balloons on it are the only balloons left in town). She is decoration only: never solid, never in the
+// sim, and the game never waits for her.
 //  - N is chosen once per page load; the file is fetched after PLAY from raw.githubusercontent at a
 //    pinned Pockit commit, falling back to jsDelivr (10 s timeout for both). jsDelivr went first until
 //    it 404'd on cold files (#270 seen); GitHub raw serves every number with CORS. 404 / timeout / parse

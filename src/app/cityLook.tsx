@@ -120,7 +120,8 @@ export function NightLook({ isNight }: { isNight: () => boolean }) {
       cur.day = scene.backgroundNode;
       const y = normalize(positionLocal).y;
       scene.backgroundNode = mix(mix(color("#2a1d44"), color("#141033"), smoothstep(0.0, 0.3, y)), color("#05040f"), smoothstep(0.25, 0.95, y));
-      if (fog) { cur.dayFog = { c: fog.color.getHex(), near: fog.near, far: fog.far }; fog.color.setHex(0x1b1530); fog.near = 40; fog.far = 230; }
+      // Round 9: the canyons are 40-230 m, so the night fog still lets the towers read.
+      if (fog) { cur.dayFog = { c: fog.color.getHex(), near: fog.near, far: fog.far }; fog.color.setHex(0x1b1530); fog.near = 70; fog.far = 420; }
       scene.traverse(o => {
         const l = o as unknown as { isLight?: boolean; intensity: number };
         if (l.isLight) { cur.lights.set(o, l.intensity); l.intensity *= 0.45; }

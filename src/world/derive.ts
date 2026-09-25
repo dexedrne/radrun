@@ -1,22 +1,73 @@
-// Everything the sim needs that is derived BY RULE from the solids: hooks (§6 balloon rule), roof
-// adjacency, junction candidates, spawn, bounds, lowest roof and the model hash. Used both by the
+// Everything the sim needs that is derived BY RULE from the solids: roof adjacency, wall-run notches
+// (round 9), junction candidates, spawn, bounds, lowest roof and the model hash. Used both by the
 // generator and by `npm run level` (which reads the hand-editable city.json), so moving a building in
 // the editor and re-running `npm run level` re-derives the gameplay layer.
+//
+// Round 9: no balloons. Web anchors are found at run time on the buildings themselves, so the model only
+// has to promise geometry (lintModel, rules G1-G8 of docs/specs/2026-09-25-round9-movement.md §4.3):
+// tall solids near every street edge, runnable roofs, solid rooftop props, wall gaps and no hook data.
 import { Fnv1a, hash01 } from "../sim/math.ts";
 export { hash01 };
-import { pointBoxDist, type Adjacency, type CityConfig, type CityModel, type Hook, type Solid } from "./cityModel.ts";
+import type { Adjacency, CityConfig, CityModel, Solid, WallGap } from "./cityModel.ts";
 
 /** Gap classes for facing roofs. */
 export const ALLEY_MAX_GAP = 6;
 export const STREET_MIN_GAP = 8;
-export const STREET_MAX_GAP = 22;
+/** Round 9: the Financial District's avenues are 24 m (+2 m tower setbacks). */
+export const STREET_MAX_GAP = 26;
 export const MIN_OVERLAP = 4;
-/** Lattice slack beyond a facing span, so hooks continue across alley mouths. */
-const SPAN_SLACK = 2.5;
 
-export type ManualHook = { x: number; y: number; z: number };
+/** Round 9 geometry rules (lint G1-G8). Per-district overrides live in CityConfig. */
+export const RULES = {
+  /** G1: a solid this much taller than a street-facing roof edge ... */
+  coverRise: 12,
+  /** ... within this horizontal box distance of every point of it (m). */
+  coverDist: 34,
+  /** G1 sample spacing along an edge (m). */
+  coverStep: 2,
+  /** G2: alley height steps are hops (<= hopMax), climbs (<= climbMax) or drops (>= dropMin). */
+  hopMax: 1.2,
+  climbMax: 3.5,
+  dropMin: 6,
+  minRoof: 12,
+  /** G3 props. */
+  vault: [0.8, 1.4] as const,
+  climb: [2.2, 3.2] as const,
+  propInset: 2.5,
+  propCentre: 3,
+  propApart: 3,
+  propPerRoof: 3,
+  /** G4 wall gaps. */
+  notch: [8, 11] as const,
+  wallAbove: 3,
+  gapFlat: 1,
+  gapSpanSlack: 1,
+  /** G6 heights. */
+  landMin: 10,
+  landMax: 140,
+  towerTop: 230,
+  /** G7. */
+  junctions: 14,
+} as const;
 
-/** Facing pairs: two solids separated along one axis with an overlapping span and nothing between. */
+const EPS = 1e-6;
+
+/** Horizontal distance from a point to a solid's footprint (0 inside). */
+export function footDist(x: number, z: number, s: Solid): number {
+  const dx = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
+  const dz = z < s.z0 ? s.z0 - z : z > s.z1 ? z - s.z1 : 0;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/** Horizontal gap between two footprints (0 when they touch or overlap). */
+export function footGap(a: Solid, b: Solid): number {
+  const dx = Math.max(0, a.x0 - b.x1, b.x0 - a.x1);
+  const dz = Math.max(0, a.z0 - b.z1, b.z0 - a.z1);
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/** Facing pairs: two solids separated along one axis with an overlapping span and nothing between. Pass
+ *  the non-prop solids (props never take part: G3). */
 export function facingPairs(solids: Solid[], maxGap = STREET_MAX_GAP): Adjacency[] {
   const out: Adjacency[] = [];
   for (let i = 0; i < solids.length; i++) {
@@ -48,133 +99,35 @@ export function facingPairs(solids: Solid[], maxGap = STREET_MAX_GAP): Adjacency
   return out;
 }
 
-const q = (v: number) => Math.round(v * 1000) / 1000;
-
-export function deriveHooks(config: CityConfig, solids: Solid[], adjacency: Adjacency[], manual: ManualHook[]): Hook[] {
-  const byId = new Map(solids.map(s => [s.id, s]));
-  type Cand = { x: number; y: number; z: number; src: Hook["src"]; axis: "x" | "z" | ""; reach?: number };
-  const cand = new Map<string, Cand>();
-  const put = (x: number, y: number, z: number, src: Hook["src"], axis: "x" | "z" | "" = "") => {
-    const key = `${q(x)},${q(z)}`;
-    const cur = cand.get(key);
-    if (!cur || y > cur.y) cand.set(key, { x: q(x), y: q(y), z: q(z), src: cur?.src === "intersection" ? "intersection" : src, axis: cur?.axis || axis });
-  };
-  const sp = config.hookSpacing;
-  /** Hooks that share an x/z with another (lower street tiers, sky clusters): not keyed by position. */
-  const extra: Cand[] = [];
-  if (config.autoHooks) {
-    const midX = new Map<number, number[]>(); // street midline x -> landable tops (streets running along z)
-    const midZ = new Map<number, number[]>();
-    for (const e of adjacency) {
-      if (e.kind !== "street") continue;
-      const a = byId.get(e.a)!, b = byId.get(e.b)!;
-      const tops = [a, b].filter(s => s.landable).map(s => s.top);
-      if (!tops.length) continue;
-      const y = Math.max(...tops) + config.hookAbove;
-      const mid = (e.axis === "x" ? a.x1 : a.z1) + e.gap / 2;
-      const k0 = Math.ceil((e.lo - SPAN_SLACK) / sp), k1 = Math.floor((e.hi + SPAN_SLACK) / sp);
-      // Round 7: a big height step across the street gets a second, lower tier for the lower roof.
-      const lowY = tops.length === 2 && config.lowTierDh !== undefined && Math.abs(tops[0] - tops[1]) >= config.lowTierDh
-        ? Math.min(...tops) + config.hookAbove : -1;
-      for (let k = k0; k <= k1; k++) {
-        const t = k * sp;
-        if (e.axis === "x") put(mid, y, t, "street", "x"); else put(t, y, mid, "street", "z");
-        if (lowY > 0) extra.push(e.axis === "x" ? { x: q(mid), y: q(lowY), z: q(t), src: "street", axis: "x" } : { x: q(t), y: q(lowY), z: q(mid), src: "street", axis: "z" });
-      }
-      const m = e.axis === "x" ? midX : midZ;
-      const key = q(mid);
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(...tops);
-    }
-    // Intersections: crossings of a street midline in x with one in z, clear of every footprint,
-    // with landable corner roofs in at least three quadrants nearby.
-    for (const X of [...midX.keys()].sort((a, b) => a - b)) {
-      for (const Z of [...midZ.keys()].sort((a, b) => a - b)) {
-        let inside = false;
-        for (const s of solids) if (X > s.x0 - 2 && X < s.x1 + 2 && Z > s.z0 - 2 && Z < s.z1 + 2) { inside = true; break; }
-        if (inside) continue;
-        const quads = [-Infinity, -Infinity, -Infinity, -Infinity];
-        for (const s of solids) {
-          if (!s.landable) continue;
-          const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2;
-          const dx = X < s.x0 ? s.x0 - X : X > s.x1 ? X - s.x1 : 0;
-          const dz = Z < s.z0 ? s.z0 - Z : Z > s.z1 ? Z - s.z1 : 0;
-          if (dx > STREET_MAX_GAP / 2 + 1 || dz > STREET_MAX_GAP / 2 + 1) continue;
-          const qi = (cx < X ? 0 : 1) + (cz < Z ? 0 : 2);
-          quads[qi] = Math.max(quads[qi], s.top);
-        }
-        const found = quads.filter(v => v > -Infinity);
-        if (found.length < 3) continue;
-        put(X, Math.max(...found) + config.hookAbove, Z, "intersection");
-      }
-    }
-  }
-  // Balloon-free gaps (round 4): drop every street balloon of a chosen street segment (one pitch of one
-  // street midline); intersection balloons stay. Integer hash of (seed, midline, segment) - no rng state.
-  const gapChance = config.hookGapChance ?? 0;
-  if (gapChance > 0) {
-    const pitch = config.block + config.street;
-    for (const [key, c] of cand) {
-      if (c.src !== "street" || !c.axis) continue;
-      const mid = c.axis === "x" ? c.x : c.z, along = c.axis === "x" ? c.z : c.x;
-      const seg = Math.floor(along / pitch);
-      if (hash01(config.seed, c.axis === "x" ? 1 : 2, Math.round(mid * 2), seg) < gapChance) cand.delete(key);
-    }
-  }
-  if (config.autoHooks && config.sky) extra.push(...skyHooks(config, solids));
-  // Manual hooks (Data kind "hook" in city.json) replace any auto hook within 3 m horizontally.
-  for (const m of manual) {
-    for (const [key, c] of cand) {
-      const dx = c.x - m.x, dz = c.z - m.z;
-      if (dx * dx + dz * dz < 9) cand.delete(key);
-    }
-    for (let i = extra.length - 1; i >= 0; i--) {
-      const dx = extra[i].x - m.x, dz = extra[i].z - m.z;
-      if (dx * dx + dz * dz < 9) extra.splice(i, 1);
-    }
-  }
-  const list: Cand[] = [...cand.values(), ...extra].filter(h => {
-    for (const s of solids) if (pointBoxDist(h.x, h.y, h.z, s) < config.hookClearance) return false;
-    return true;
-  });
-  for (const m of manual) list.push({ x: q(m.x), y: q(m.y), z: q(m.z), src: "manual", axis: "" });
-  list.sort((a, b) => a.x - b.x || a.z - b.z || a.y - b.y);
-  return list.map((h, id) => (h.reach !== undefined ? { id, x: h.x, y: h.y, z: h.z, src: h.src, reach: h.reach } : { id, x: h.x, y: h.y, z: h.z, src: h.src }));
-}
-
 /**
- * Round 7 sky hooks (config.sky): one high cluster over each street intersection and each empty building
- * lot (plaza) of the block lattice, kept with `chance` and lifted `min`-`max` m above the tallest landable
- * roof within `radius` m (both from an integer hash of the seed and the spot - no rng state). Their grab
- * range is `reach` (Hook.reach). The clearance filter later drops any that end up next to a tower.
+ * Round 9 wall gaps (G4), by rule: a street-class adjacency 8-11 m wide between two roofs within 1 m of each
+ * other, whose back sides (on the other axis) are flush with the face of one taller solid (>= 3 m above both)
+ * that spans the whole notch + 1 m each side. The thief runs along that face from a to b (or back).
  */
-export function skyHooks(config: CityConfig, solids: Solid[]): { x: number; y: number; z: number; src: "sky"; axis: ""; reach: number }[] {
-  const sky = config.sky!;
-  const pitch = config.block + config.street, step = config.building + config.alley;
-  const spots: [number, number][] = [];
-  // Intersections: street midlines between block columns / rows.
-  for (let bx = 1; bx < config.blocksX; bx++) for (let bz = 1; bz < config.blocksZ; bz++) {
-    spots.push([bx * pitch - config.street / 2, bz * pitch - config.street / 2]);
-  }
-  // Empty lots: lattice slot centres with no solid footprint over them.
-  for (let bx = 0; bx < config.blocksX; bx++) for (let bz = 0; bz < config.blocksZ; bz++) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-    const x = bx * pitch + i * step + config.building / 2, z = bz * pitch + j * step + config.building / 2;
-    if (!solids.some(s => x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1)) spots.push([x, z]);
-  }
-  const out: { x: number; y: number; z: number; src: "sky"; axis: ""; reach: number }[] = [];
-  for (const [x, z] of spots) {
-    const kx = Math.round(x * 2), kz = Math.round(z * 2);
-    if (hash01(config.seed, 11, kx, kz) >= sky.chance) continue;
-    let top = -1;
-    for (const s of solids) {
-      if (!s.landable) continue;
-      const dx = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
-      const dz = z < s.z0 ? s.z0 - z : z > s.z1 ? z - s.z1 : 0;
-      if (dx <= sky.radius && dz <= sky.radius && s.top > top) top = s.top;
+export function deriveWallGaps(solids: Solid[], adjacency: Adjacency[]): WallGap[] {
+  const out: WallGap[] = [];
+  for (const e of adjacency) {
+    if (e.kind !== "street" || e.gap < RULES.notch[0] - EPS || e.gap > RULES.notch[1] + EPS) continue;
+    const a = solids[e.a], b = solids[e.b];
+    if (a.kind !== "roof" || b.kind !== "roof" || Math.abs(a.top - b.top) > RULES.gapFlat + EPS) continue;
+    const X = e.axis === "x";
+    const edge = X ? a.x1 : a.z1, far = X ? b.x0 : b.z0;
+    for (const side of [-1, 1] as const) {
+      // side -1: the wall stands on the + side of the other axis and its face looks back (-) into the notch.
+      const face = side < 0 ? (X ? a.z1 : a.x1) : (X ? a.z0 : a.x0);
+      const fb = side < 0 ? (X ? b.z1 : b.x1) : (X ? b.z0 : b.x0);
+      if (Math.abs(face - fb) > 0.01) continue;
+      for (const w of solids) {
+        if (w.kind === "prop" || w.id === a.id || w.id === b.id) continue;
+        const wface = side < 0 ? (X ? w.z0 : w.x0) : (X ? w.z1 : w.x1);
+        const t0 = X ? w.x0 : w.z0, t1 = X ? w.x1 : w.z1;
+        if (Math.abs(wface - face) > 0.01) continue;
+        if (t0 > edge - RULES.gapSpanSlack + EPS || t1 < far + RULES.gapSpanSlack - EPS) continue;
+        if (w.top < Math.max(a.top, b.top) + RULES.wallAbove - EPS) continue;
+        out.push({ a: a.id, b: b.id, wall: w.id, axis: e.axis, dir: 1, edge, far, face, side });
+        break;
+      }
     }
-    if (top < 0) continue;
-    const lift = Math.round((sky.min + hash01(config.seed, 12, kx, kz) * (sky.max - sky.min)) * 2) / 2;
-    out.push({ x: q(x), y: q(top + lift), z: q(z), src: "sky", axis: "", reach: sky.reach });
   }
   return out;
 }
@@ -184,20 +137,24 @@ export function modelHash(m: Pick<CityModel, "solids" | "hooks">): string {
   for (const s of m.solids) h.i32(s.id).str(s.kind).i32(s.landable ? 1 : 0).f64(s.x0).f64(s.z0).f64(s.x1).f64(s.z1).f64(s.top);
   for (const k of m.hooks) {
     h.i32(k.id).f64(k.x).f64(k.y).f64(k.z);
-    if (k.reach !== undefined) h.f64(k.reach); // round 7 sky hooks only (older models hash unchanged)
+    if (k.reach !== undefined) h.f64(k.reach);
   }
   return h.hex();
 }
 
-/** Solids (ids reassigned in order) + manual hooks -> the full CityModel. */
-export function deriveModel(config: CityConfig, input: Solid[], manual: ManualHook[] = []): CityModel {
+const q = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Solids (ids reassigned in order) -> the full CityModel. Round 9: `hooks` is always []. */
+export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
   const solids = input.map((s, id) => ({ ...s, id }));
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const s of solids) { x0 = Math.min(x0, s.x0); z0 = Math.min(z0, s.z0); x1 = Math.max(x1, s.x1); z1 = Math.max(z1, s.z1); }
-  const landable = solids.filter(s => s.landable);
+  // Props (G3) never take part in adjacency, junctions, spawn or lowestRoof.
+  const main = solids.filter(s => s.kind !== "prop");
+  const landable = main.filter(s => s.landable);
   const lowestRoof = Math.min(...landable.map(s => s.top));
-  const adjacency = facingPairs(solids);
-  const hooks = deriveHooks(config, solids, adjacency, manual);
+  const adjacency = facingPairs(main);
+  const wallGaps = deriveWallGaps(solids, adjacency);
 
   // Junction candidates (M2): landable, not on the district boundary, >= 3 facing neighbours.
   const degree = new Map<number, number>();
@@ -244,8 +201,9 @@ export function deriveModel(config: CityConfig, input: Solid[], manual: ManualHo
     bounds: { x0, z0, x1, z1 },
     lowestRoof,
     solids,
-    hooks,
+    hooks: [],
     adjacency,
+    wallGaps,
     junctionCandidates,
     spawn,
     hash: "",
@@ -254,77 +212,192 @@ export function deriveModel(config: CityConfig, input: Solid[], manual: ManualHo
   return model;
 }
 
+// ---- anchor coverage (G1; also used by the generator's fix-up) ----------------------------------
+
+export type EdgePoint = { roof: number; x: number; z: number; top: number };
+
+/**
+ * Sample points (every coverStep m, both ends) on every street-facing edge of every landable roof. A wall
+ * gap's notch (8-11 m, G4) is not a street: its edges are wall-run edges and need no anchor.
+ */
+export function streetEdgePoints(solids: Solid[], adjacency: Adjacency[], wallGaps: WallGap[] = [], step: number = RULES.coverStep): EdgePoint[] {
+  const out: EdgePoint[] = [];
+  for (const e of adjacency) {
+    if (e.kind !== "street") continue;
+    if (wallGaps.some(g => g.a === e.a && g.b === e.b && g.axis === e.axis)) continue;
+    for (const id of [e.a, e.b]) {
+      const s = solids[id];
+      if (s.kind !== "roof") continue;
+      const edge = id === e.a ? (e.axis === "x" ? s.x1 : s.z1) : (e.axis === "x" ? s.x0 : s.z0);
+      const n = Math.max(1, Math.ceil((e.hi - e.lo) / step - EPS));
+      for (let k = 0; k <= n; k++) {
+        const t = e.lo + ((e.hi - e.lo) * k) / n;
+        out.push(e.axis === "x" ? { roof: id, x: edge, z: t, top: s.top } : { roof: id, x: t, z: edge, top: s.top });
+      }
+    }
+  }
+  return out;
+}
+
+/** Does solid s give an anchor for edge point p (G1)? Props never count. */
+export function covers(s: Solid, p: EdgePoint, rise: number, dist: number): boolean {
+  return s.kind !== "prop" && s.id !== p.roof && s.top >= p.top + rise - EPS && footDist(p.x, p.z, s) <= dist + EPS;
+}
+
+/** Edge points with no anchor solid (G1). */
+export function uncoveredPoints(solids: Solid[], points: EdgePoint[], rise: number, dist: number): EdgePoint[] {
+  const tall = solids.filter(s => s.kind !== "prop");
+  return points.filter(p => !tall.some(s => covers(s, p, rise, dist)));
+}
+
+/** The landable roof a prop stands on (footprint inside, top below), or undefined. */
+export function propHost(solids: Solid[], p: Solid): Solid | undefined {
+  for (const r of solids) {
+    if (r.kind !== "roof" || r.top >= p.top) continue;
+    if (p.x0 >= r.x0 - EPS && p.x1 <= r.x1 + EPS && p.z0 >= r.z0 - EPS && p.z1 <= r.z1 + EPS) return r;
+  }
+  return undefined;
+}
+
 // ---- lint (test 4; printed by `npm run level`) --------------------------------------------------
 
 export type LintResult = { errors: string[]; warnings: string[]; stats: Record<string, number> };
 
-export function lintModel(m: CityModel, aimRadius = 17): LintResult {
+const inBand = (v: number, band: readonly [number, number]) => v >= band[0] - EPS && v <= band[1] + EPS;
+
+/** Round 9 geometry rules G1-G8 (docs/specs/2026-09-25-round9-movement.md §4.3). Geometry only. */
+export function lintModel(m: CityModel): LintResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const cfg = m.config;
-  let worstAlley = 0, worstStreet = 0, worstReach = 0;
+  const S = m.solids;
+  const roofs = S.filter(s => s.kind === "roof");
+  const props = S.filter(s => s.kind === "prop");
+  const towers = S.filter(s => s.kind === "tower");
+
+  // G8: unrotated ground-rooted boxes (structural), non-degenerate, non-prop footprints never overlap.
+  for (const s of S) if (!(s.x1 > s.x0 && s.z1 > s.z0 && s.top > 0)) errors.push(`G8: solid ${s.id} is degenerate`);
+  const main = S.filter(s => s.kind !== "prop");
+  for (let i = 0; i < main.length; i++) for (let j = i + 1; j < main.length; j++) {
+    const a = main[i], b = main[j];
+    const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
+    if (ox > 0.01 && oz > 0.01) errors.push(`G8: solids ${a.id}/${b.id} overlap`);
+  }
+
+  // G6: heights.
+  for (const s of roofs) if (s.top < RULES.landMin - EPS || s.top > RULES.landMax + EPS) errors.push(`G6: roof ${s.id} top ${s.top} m outside ${RULES.landMin}-${RULES.landMax}`);
+  for (const s of towers) if (s.top > RULES.towerTop + EPS) errors.push(`G6: tower ${s.id} top ${s.top} m > ${RULES.towerTop}`);
+  for (const s of S) if (s.landable !== (s.kind !== "tower")) errors.push(`G6: solid ${s.id} (${s.kind}) landable=${s.landable}`);
+
+  // G2: runnable roofs and alley steps.
+  const minRoof = cfg.minRoof ?? RULES.minRoof;
+  for (const s of roofs) {
+    if (s.x1 - s.x0 < minRoof - EPS || s.z1 - s.z0 < minRoof - EPS) errors.push(`G2: roof ${s.id} is ${(s.x1 - s.x0).toFixed(1)} x ${(s.z1 - s.z0).toFixed(1)} m (< ${minRoof} x ${minRoof})`);
+  }
+  let worstAlley = 0, worstStreet = 0, hops = 0, climbs = 0, drops = 0;
   for (const e of m.adjacency) {
-    const a = m.solids[e.a], b = m.solids[e.b];
-    if (!a.landable || !b.landable) continue;
+    const a = S[e.a], b = S[e.b];
+    if (a.kind === "prop" || b.kind === "prop") errors.push(`G3: prop in adjacency ${e.a}/${e.b}`);
+    if (a.kind !== "roof" || b.kind !== "roof") continue;
     const dh = Math.abs(a.top - b.top);
-    if (e.kind === "alley") {
-      worstAlley = Math.max(worstAlley, dh);
-      if (dh > cfg.alleyMaxDh + 1e-9) errors.push(`alley roofs ${a.id}/${b.id} differ by ${dh} m (> ${cfg.alleyMaxDh})`);
+    if (e.kind === "street") { worstStreet = Math.max(worstStreet, dh); continue; }
+    worstAlley = Math.max(worstAlley, dh);
+    if (dh <= RULES.hopMax + EPS) hops++;
+    else if (dh <= RULES.climbMax + EPS) climbs++;
+    else if (dh >= RULES.dropMin - EPS) drops++;
+    else errors.push(`G2: alley roofs ${a.id}/${b.id} differ by ${dh} m (neither a climb <= ${RULES.climbMax} nor a drop >= ${RULES.dropMin})`);
+  }
+
+  // G3: props.
+  const perHost = new Map<number, Solid[]>();
+  for (const p of props) {
+    if (!p.landable) errors.push(`G3: prop ${p.id} is not landable`);
+    const host = propHost(S, p);
+    if (!host) { errors.push(`G3: prop ${p.id} is not inside a roof footprint`); continue; }
+    const h = p.top - host.top;
+    if (!inBand(h, RULES.vault) && !inBand(h, RULES.climb)) errors.push(`G3: prop ${p.id} is ${h.toFixed(2)} m tall (vault ${RULES.vault.join("-")} or climb ${RULES.climb.join("-")})`);
+    const inset = Math.min(p.x0 - host.x0, host.x1 - p.x1, p.z0 - host.z0, host.z1 - p.z1);
+    if (inset < RULES.propInset - EPS) errors.push(`G3: prop ${p.id} is ${inset.toFixed(2)} m inside roof ${host.id}'s edge (< ${RULES.propInset})`);
+    const dc = footDist((host.x0 + host.x1) / 2, (host.z0 + host.z1) / 2, p);
+    if (dc < RULES.propCentre - EPS) errors.push(`G3: prop ${p.id} is ${dc.toFixed(2)} m from roof ${host.id}'s centre (< ${RULES.propCentre})`);
+    if (!perHost.has(host.id)) perHost.set(host.id, []);
+    perHost.get(host.id)!.push(p);
+  }
+  for (const [host, list] of perHost) {
+    if (list.length > RULES.propPerRoof) errors.push(`G3: roof ${host} has ${list.length} props (> ${RULES.propPerRoof})`);
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const g = footGap(list[i], list[j]);
+      if (g < RULES.propApart - EPS) errors.push(`G3: props ${list[i].id}/${list[j].id} are ${g.toFixed(2)} m apart (< ${RULES.propApart})`);
+    }
+  }
+  const isProp = (id: number) => S[id]?.kind === "prop";
+  if (m.junctionCandidates.some(isProp)) errors.push("G3: a prop is a junction candidate");
+  if (isProp(m.spawn.roofId)) errors.push("G3: the spawn roof is a prop");
+  if (roofs.length && m.lowestRoof !== Math.min(...S.filter(s => s.landable && s.kind !== "prop").map(s => s.top))) errors.push("G3: lowestRoof counts a prop");
+
+  // G4: wall gaps.
+  const gaps = m.wallGaps ?? [];
+  for (const g of gaps) {
+    const a = S[g.a], b = S[g.b], w = S[g.wall];
+    const tag = `G4: wall gap ${g.a}->${g.b} (wall ${g.wall})`;
+    if (!a || !b || !w || a.kind !== "roof" || b.kind !== "roof" || w.kind === "prop") { errors.push(`${tag}: bad solids`); continue; }
+    if (Math.abs(a.top - b.top) > RULES.gapFlat + EPS) errors.push(`${tag}: roofs differ by ${Math.abs(a.top - b.top)} m`);
+    if (w.top < Math.max(a.top, b.top) + RULES.wallAbove - EPS) errors.push(`${tag}: wall only ${(w.top - Math.max(a.top, b.top)).toFixed(1)} m above`);
+    const notch = g.far - g.edge;
+    if (!inBand(notch, RULES.notch)) errors.push(`${tag}: notch ${notch} m`);
+    const X = g.axis === "x";
+    const back = (s: Solid) => (g.side < 0 ? (X ? s.z1 : s.x1) : (X ? s.z0 : s.x0));
+    const wface = g.side < 0 ? (X ? w.z0 : w.x0) : (X ? w.z1 : w.x1);
+    if (Math.abs(back(a) - g.face) > 0.01 || Math.abs(back(b) - g.face) > 0.01 || Math.abs(wface - g.face) > 0.01) errors.push(`${tag}: not flush with the wall face`);
+    if ((X ? w.x0 : w.z0) > g.edge - RULES.gapSpanSlack + EPS || (X ? w.x1 : w.z1) < g.far + RULES.gapSpanSlack - EPS) errors.push(`${tag}: the face does not span the notch + 1 m`);
+  }
+  if ((cfg.wallGapChance ?? 0) > 0 && !gaps.length) warnings.push("G4: wallGapChance > 0 but no wall gaps");
+
+  // G5: no balloons.
+  if (m.hooks.length) errors.push(`G5: ${m.hooks.length} hooks (balloons were removed in round 9)`);
+
+  // G7.
+  if (m.junctionCandidates.length < RULES.junctions) errors.push(`G7: only ${m.junctionCandidates.length} junction candidates (< ${RULES.junctions})`);
+
+  // G1: anchor coverage.
+  const rise = cfg.coverRise ?? RULES.coverRise, dist = cfg.coverDist ?? RULES.coverDist;
+  const points = streetEdgePoints(S, m.adjacency, gaps);
+  const bad = uncoveredPoints(S, points, rise, dist);
+  const badRoofs = [...new Set(bad.map(p => p.roof))].sort((a, b) => a - b);
+  if (bad.length) {
+    if (cfg.coverWarn || cfg.vertigo) {
+      warnings.push(`G1: ${bad.length}/${points.length} street-edge points on ${badRoofs.length} roofs have no solid >= ${rise} m taller within ${dist} m (few-anchor district: run, vault, climb)`);
     } else {
-      worstStreet = Math.max(worstStreet, dh);
-      if (dh > cfg.streetMaxDh + 1e-9) errors.push(`street roofs ${a.id}/${b.id} differ by ${dh} m (> ${cfg.streetMaxDh})`);
-    }
-  }
-  for (const h of m.hooks) {
-    for (const s of m.solids) {
-      const d = pointBoxDist(h.x, h.y, h.z, s);
-      if (d < cfg.hookClearance - 1e-9) errors.push(`hook ${h.id} is ${d.toFixed(2)} m from solid ${s.id}`);
-    }
-  }
-  for (const s of m.solids) {
-    if (!(s.x1 > s.x0 && s.z1 > s.z0 && s.top > 0)) errors.push(`solid ${s.id} is degenerate`);
-  }
-  // Reach: every street-facing roof edge has a hook within aimRadius - 0.5 of a standing takeoff point.
-  const reach = aimRadius - 0.5;
-  for (const e of m.adjacency) {
-    if (e.kind !== "street") continue;
-    for (const id of [e.a, e.b]) {
-      const s = m.solids[id];
-      if (!s.landable) continue;
-      const edge = id === e.a ? (e.axis === "x" ? s.x1 : s.z1) : (e.axis === "x" ? s.x0 : s.z0);
-      for (let t = e.lo + 0.5; t <= e.hi - 0.5 + 1e-9; t += 1) {
-        const px = e.axis === "x" ? edge : t, pz = e.axis === "x" ? t : edge, py = s.top + 0.9;
-        let best = Infinity;
-        for (const h of m.hooks) {
-          if (h.y < py + 1) continue;
-          const dx = h.x - px, dy = h.y - py, dz = h.z - pz;
-          // A hook with a longer grab range (sky) counts as that much nearer.
-          best = Math.min(best, Math.sqrt(dx * dx + dy * dy + dz * dz) - (h.reach !== undefined ? h.reach - aimRadius : 0));
-        }
-        worstReach = Math.max(worstReach, best);
-        if (best > reach) {
-          // Districts with balloon-free gaps (round 4) or cliffs (round 7 Vertigo) break reach on purpose: warn.
-          ((cfg.hookGapChance ?? 0) > 0 || cfg.vertigo ? warnings : errors).push(`reach: roof ${s.id} edge point (${px.toFixed(1)}, ${pz.toFixed(1)}) nearest hook ${best.toFixed(2)} m > ${reach}`);
-          break;
-        }
+      for (const id of badRoofs) {
+        const p = bad.find(b => b.roof === id)!;
+        errors.push(`G1: roof ${id} edge point (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) has no solid >= ${rise} m taller within ${dist} m`);
       }
     }
   }
-  if (m.hooks.length < 50) warnings.push(`only ${m.hooks.length} hooks`);
+
+  const tops = roofs.map(s => s.top);
   return {
     errors,
     warnings,
     stats: {
-      solids: m.solids.length,
-      roofs: m.solids.filter(s => s.landable).length,
-      towers: m.solids.filter(s => s.kind === "tower").length,
+      solids: S.length,
+      roofs: roofs.length,
+      towers: towers.length,
+      props: props.length,
+      wallGaps: gaps.length,
       hooks: m.hooks.length,
       adjacency: m.adjacency.length,
       junctionCandidates: m.junctionCandidates.length,
+      alleyHops: hops,
+      alleyClimbs: climbs,
+      alleyDrops: drops,
       worstAlleyDh: worstAlley,
       worstStreetDh: worstStreet,
-      worstReach: Math.round(worstReach * 100) / 100,
       lowestRoof: m.lowestRoof,
+      highestRoof: tops.length ? Math.max(...tops) : 0,
+      tallest: Math.max(...S.map(s => s.top)),
+      uncoveredEdgePoints: bad.length,
+      edgePoints: points.length,
     },
   };
 }

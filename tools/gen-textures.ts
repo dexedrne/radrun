@@ -7,7 +7,8 @@
 //   facade_brick.png  brick + punched windows, same grid                    -> repeatCount [0.0625, 0.041667]
 //   facade_glass.png  curtain wall (towers), same grid                      -> repeatCount [0.0625, 0.041667]
 //   roof.png          gravel roof with seams, 4 x 4 m                        -> repeatCount [0.25, 0.25]
-//   street.png        one 42 m block pitch: pavement, asphalt, lanes, zebras -> repeatCount [0.0238, 0.0238]
+//   street.png        one block pitch (block:street = 2:1): pavement, asphalt, lanes, zebras -> repeatCount
+//                     1 / (block + street) per district (world/toPrefab.ts cityMaterials)
 //   water.png         soft ripples, 16 x 16 m                                -> repeatCount [0.0625, 0.0625]
 // Deterministic (seeded); re-running rewrites byte-identical files.
 import fs from "node:fs";
