@@ -34,7 +34,7 @@ function Hud({ game }: { game: Sandbox }) {
     <>
       <div style={{ position: "fixed", left: "50%", top: "50%", width: 8, height: 8, marginLeft: -4, marginTop: -4, borderRadius: 4, background: ringColor, boxShadow: "0 0 0 1.5px rgba(0,0,0,0.5)", zIndex: 10, pointerEvents: "none" }} />
       <div style={{ ...panel, left: 8, top: 8 }}>
-        <div><b>RUG RUN</b> · sandbox {AUTOPLAY ? "· autoplay" : ""}</div>
+        <div><b>RADRUN</b> · sandbox {AUTOPLAY ? "· autoplay" : ""}</div>
         <div>{hud.speed.toFixed(1)} m/s · {hud.phase} · chain {hud.chain}</div>
         <div style={{ opacity: 0.8 }}>top {hud.topSpeed.toFixed(1)} m/s · best chain {hud.maxChain} · falls {hud.falls} · bonks {hud.bonks}</div>
         <div style={{ opacity: 0.6 }}>{backend || "…"} · {hud.fps.toFixed(0)} fps{ready ? "" : " · loading city…"}</div>
@@ -51,7 +51,7 @@ function Hud({ game }: { game: Sandbox }) {
           style={{ position: "fixed", inset: 0, zIndex: 20, display: "grid", placeItems: "center", background: "rgba(8,10,20,0.35)", cursor: "pointer" }}
         >
           <div style={{ background: "rgba(12,16,28,0.85)", padding: "18px 26px", borderRadius: 10, textAlign: "center" }}>
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 2 }}>RUG RUN</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 2 }}>RADRUN</div>
             <div style={{ marginTop: 6 }}>free-swing sandbox — click to play</div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 // Link-preview assets: public/og.jpg (1200x630 OG / Twitter card: a mid-swing frame from the game with
-// the RUG RUN logo, the pitch and the Radbro portraits) and public/apple-touch-icon.png (180 px,
+// the RADRUN logo, the pitch and the Radbro portraits) and public/apple-touch-icon.png (180 px,
 // from public/favicon.svg).
 //   npm run dev   (in another shell)
 //   RUGRUN_CHROME_PROFILE=<throwaway dir> node tools/og-image.ts [--url <game url>] [--pick N] [--bg <png>] [--bg-out <png>]
@@ -105,9 +105,9 @@ try {
   </style></head><body>
     <img class="bg" src="${bg}">
     <div class="shade"></div>
-    <div class="logo">RUG RUN</div>
+    <div class="logo">RADRUN</div>
     <div class="pitch">He swiped your bag. 90 seconds.<br>Swing across the rooftops and <b>YOINK</b> him.</div>
-    <div class="cta"><span class="play">PLAY FREE</span><span class="url">rugrun.vyvanse.beer</span></div>
+    <div class="cta"><span class="play">PLAY FREE</span><span class="url">radrun.vyvanse.beer</span></div>
     <div class="cards">${cards}</div>
   </body></html>`;
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });

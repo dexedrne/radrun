@@ -1,9 +1,9 @@
-# Playing Rug Run
+# Playing RadRun
 
 He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) before the rug shows up.
 
-**Play it: https://rugrun.vyvanse.beer** (desktop with a mouse, or a phone / tablet in landscape; the old
-https://radbro-rug-run.vercel.app address still works).
+**Play it: https://radrun.vyvanse.beer** (desktop with a mouse, or a phone / tablet in landscape; the old
+https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redirect there, query strings included).
 
 ## Run it
 
@@ -242,7 +242,7 @@ live (crossed out once lost, ticked once met), and the results show which you go
 Unlocks: the next level once you catch him in the previous one; a district in free play once you catch him
 in its first level; a mutator toggle once you catch him in a level using it; **Degen** in free play at 12
 stars; hats for George at 9 / 21 / 33 stars (party hat, crown, tin foil; pick on the campaign screen).
-Stars are best-of and live in the browser (`localStorage` "rugrun.campaign.v1"). Level list, objectives and
+Stars are best-of and live in the browser (`localStorage` "rugrun.campaign.v1", named for the working title and kept so progress carries over). Level list, objectives and
 unlock thresholds: `src/game/campaign.ts`. A level in another district reloads the page on that district
 (`?map=docks&lvl=7` opens the campaign screen on level 7). Bots: `&lvl=N` scores a bot round as level N
 (pass that level's `d` and `mu` too).
@@ -398,8 +398,9 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 ## Link previews
 
 `index.html` carries the title, description, theme colour, favicon and the Open Graph / Twitter card
-tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on https://rugrun.vyvanse.beer (the canonical
-address; the old vercel.app alias serves the same page), so change them if the game moves. Share and
+tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on https://radrun.vyvanse.beer (the canonical
+address; `vercel.json` permanently redirects the old rugrun.vyvanse.beer and vercel.app hosts there, path and
+query kept), so change them if the game moves. Share and
 challenge / ghost links are built from the address the game was opened on.
 `public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the four
 Radbro portraits; `public/favicon.svg` is drawn by hand. `npm run og-image` (dev server up,

@@ -43,7 +43,7 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
     background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "8px 14px", borderRadius: 10, fontSize: 13,
     boxShadow: "0 3px 12px rgba(0,0,0,0.35)", textAlign: "center",
   };
-  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: Rug Run plays in landscape</div>;
+  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: RadRun plays in landscape</div>;
   return (
     <div style={{ position: "fixed", left: "50%", top: 96, transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
       <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
