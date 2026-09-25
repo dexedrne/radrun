@@ -75,7 +75,7 @@ function sayAny(who: Speaker, key: string, o: SayOpts): boolean {
 export const voice = {
   /** A Radbro's line (runner bubbles, the chaser's cheer). */
   say: (who: RadbroId, key: VoiceKey, o: SayOpts = {}): boolean => sayAny(who, key, o),
-  /** The announcer (interrupts by default: it calls the round). */
+  /** The announcer, a Milady (interrupts by default: she calls the round). */
   announce: (key: AnnouncerKey, o: SayOpts = {}): boolean => sayAny("announcer", key, { interrupt: true, ...o }),
   /** Cut every line (quit / restart). */
   hush: (): void => {

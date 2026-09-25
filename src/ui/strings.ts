@@ -7,7 +7,7 @@ export const S = {
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   youChase: "You chase one of the other three",
   countdownBubble: "finders keepers",
-  panicBubble: "wtf",
+  panicBubble: "it's so over",
   panicTag: "PANIC",
   gassedBadge: "GASSED",
   gassedFeed: "He's gassed!",
@@ -26,16 +26,16 @@ export const S = {
 } as const;
 
 export const TAUNTS: Record<RadbroId, string[]> = {
-  "652": ["too slow, ser", "watch and learn", "catch me if u can", "main character energy", "clip that", "wagmi (not you)"],
-  "4764": ["cope", "ngmi", "have fun staying poor", "skill issue", "sir this is my bag", "buying the dip on you"],
-  "2564": ["they're watching", "can't catch a ghost", "the balloons are listening", "you're being followed", "who sent you", "rad response team, stand down"],
-  "723": ["yeehaw", "this rooftop ain't big enough for the two of us", "catch me at Hot Topic, partner", "you're slower than dial-up", "hold onto your hat", "giddy up, bagholder"],
+  "652": ["stay rad, fren", "catch me if u can", "this bag is so comfy", "we're so back", "gm from up here", "wagmi (except u)"],
+  "4764": ["cope, fren", "the katana is just for vibes", "network spirituality. u wouldn't get it", "milady would be disappointed", "kino chase tbh", "tfw too slow"],
+  "2564": ["boo, fren", "can't catch a ghost", "the miladys are watching", "just vibes and tin foil", "the balloons are listening", "so comfy in the void"],
+  "723": ["howdy, fren", "yeehaw", "mighty comfy up here", "hold onto ur hat", "stay rad, partner", "we're so back, y'all"],
 };
 
-/** Per-character one-liners for the catch / escape beats (#652 showboat, #4764 smug, #2564 paranoid ghost, #723 cowboy). */
+/** Per-character one-liners for the catch / escape beats (#652 sweet, #4764 deadpan, #2564 ghost, #723 cowboy). */
 export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
-  caught: { "652": "ok ok, good content", "4764": "this changes nothing", "2564": "how did you see me", "723": "well, dang. fair draw, partner" },
-  escaped: { "652": "gm, bagholder", "4764": "few understand", "2564": "i was never here", "723": "happy trails, partner" },
+  caught: { "652": "ok... u got me, fren", "4764": "based, i guess", "2564": "how did u see me", "723": "well dang. gg, fren" },
+  escaped: { "652": "gn, fren", "4764": "few understand", "2564": "i was never here, fren", "723": "happy trails, fren" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -46,9 +46,9 @@ export const DIFF_BLURB: Record<Difficulty, string> = {
 };
 
 export const PERSONA: Record<RadbroId, string> = {
-  "652": "showboat",
-  "4764": "smug",
-  "2564": "paranoid ghost",
+  "652": "sweet",
+  "4764": "deadpan",
+  "2564": "ghost",
   "723": "cowboy",
 };
 

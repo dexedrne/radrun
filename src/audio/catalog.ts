@@ -1,7 +1,7 @@
 // The sampled audio under public/audio/ (pure: Node tests import it and check every file exists).
 //   music/  loops (title + one chase loop per district) streamed through media elements; stings decoded
 //   sfx/    one-shots (+ the wind loop), `_2` / `_3` = variations of the same sound
-//   voice/  per-Radbro lines (keys match the bubbles in ui/strings.ts) + the announcer
+//   voice/  per-Radbro lines (keys match the bubbles in ui/strings.ts) + the announcer (a Milady)
 // Everything here is optional at runtime: a file that fails to load falls back to the procedural sound.
 import type { RadbroId } from "../game/round.ts";
 

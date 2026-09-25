@@ -78,7 +78,8 @@ the LOADING screen (the countdown sounds go first).
   sting; the calm loop comes back under their tail. Pause dims it; a hidden tab or mute pauses it. The
   loops play at their own tempo on every difficulty.
 - **Voices:** one line at a time (a line waits its turn or is skipped; the music dips about 4 dB under
-  speech). The announcer calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged and a new best.
+  speech). The announcer is a Milady: she calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged
+  ("it's so over") and a new best ("we're so back"). The Radbros talk like Radbros (fren, comfy, stay rad).
   The runner says "finders keepers" right after GO, his taunts (the exact bubble; quieter the further ahead
   he is), panic, cornered, gassed, caught and escaped; your Radbro cheers after a catch. A line that is not
   loaded falls back to the old chatter blips.
@@ -158,10 +159,10 @@ round is the same with any pair, so ghost links replay the same whoever you pick
 
 | | persona | taunts (a few) | caught / escaped |
 |---|---|---|---|
-| **#652** | showboat | "too slow, ser", "main character energy" | "ok ok, good content" / "gm, bagholder" |
-| **#4764** | smug | "cope", "skill issue" | "this changes nothing" / "few understand" |
-| **#2564** | paranoid ghost | "they're watching", "the balloons are listening" | "how did you see me" / "i was never here" |
-| **#723** | cowboy (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "yeehaw", "this rooftop ain't big enough for the two of us", "catch me at Hot Topic, partner", "you're slower than dial-up" | "well, dang. fair draw, partner" / "happy trails, partner" |
+| **#652** | sweet (soft, earnest) | "stay rad, fren", "this bag is so comfy", "we're so back" | "ok... u got me, fren" / "gn, fren" |
+| **#4764** | deadpan (the katana) | "cope, fren", "the katana is just for vibes", "milady would be disappointed" | "based, i guess" / "few understand" |
+| **#2564** | ghost (whispers) | "boo, fren", "can't catch a ghost", "the miladys are watching" | "how did u see me" / "i was never here, fren" |
+| **#723** | cowboy (brown hat, the wink, "HOT TOPIC BRO" plate carrier; gentle drawl) | "howdy, fren", "yeehaw", "mighty comfy up here", "we're so back, y'all" | "well dang. gg, fren" / "happy trails, fren" |
 
 Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
 the chatter pitch per Radbro is `VOICE` in `src/app/PlayViews.tsx` (#723 has the lowest). A speech bubble
