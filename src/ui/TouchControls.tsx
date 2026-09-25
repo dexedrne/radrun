@@ -1,5 +1,6 @@
 // Phone / tablet controls (spec §4 "Touch"): a floating left-thumb stick (move), right-half drag
-// (camera), big WEB (hold) and JUMP buttons on the right, a small look-at-him button and a pause button.
+// (camera), big WEB (hold) and JUMP buttons on the right, a ZIP (web zip) button above JUMP (dimmed while
+// it recharges), a small look-at-him button and a pause button.
 // Everything writes into the same InputLatch as the keyboard and mouse, so the sim sees the same
 // InputFrame. Shown only in COUNTDOWN / CHASE while not paused.
 import { useEffect, useRef } from "react";
@@ -20,10 +21,12 @@ const round = (size: number, extra: React.CSSProperties = {}): React.CSSProperti
 
 export function TouchControls({ input, onPause, noRunner = false }: { input: InputLatch; onPause: () => void; noRunner?: boolean }) {
   const ring = useUi(s => s.round.ring);
+  const zip = useUi(s => s.round.zip);
   const base = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
   const webBtn = useRef<HTMLDivElement>(null);
   const jumpBtn = useRef<HTMLDivElement>(null);
+  const zipBtn = useRef<HTMLDivElement>(null);
   const t = useRef<Track>({ stick: -1, ox: 0, oy: 0, look: -1, lx: 0, ly: 0, web: -1, wx: 0, wy: 0 });
 
   // Unmount (pause, results) releases everything the thumbs were holding.
@@ -152,6 +155,14 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         style={round(80, { right: 146, bottom: 22, background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
+      {/* ZIP: web-zip to the ringed balloon / the roof ahead; dimmed while it recharges */}
+      {zip >= 0 && <div ref={zipBtn} data-testid="touch-zip"
+        onPointerDown={e => { stop(e); input.touchZip(); press(zipBtn.current, true); }}
+        onPointerUp={e => { e.stopPropagation(); press(zipBtn.current, false); }}
+        onPointerCancel={() => press(zipBtn.current, false)}
+        style={round(64, { right: 148, bottom: 114, background: zip > 0 ? "rgba(14,16,30,0.35)" : "rgba(40,150,190,0.62)", opacity: zip > 0 ? 0.5 : 1 })}>
+        ZIP
+      </div>}
       {/* ease the camera toward him while held (Q / RMB on desktop); not in practice (no runner) */}
       {!noRunner && <div data-testid="touch-face"
         onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchFace = true; }}

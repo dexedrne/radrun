@@ -73,10 +73,10 @@ function pick(name: SfxName): AudioBuffer | null {
 }
 
 /**
- * Play the sampled `name` (gain, slight random pitch); true if handled (played, or nothing may play
+ * Play the sampled `name` (gain, slight random pitch around `rate`); true if handled (played, or nothing may play
  * now), false = not loaded -> the caller synthesises it.
  */
-function smp(name: SfxName, gain: number, delay = 0, detune = 0.04): boolean {
+function smp(name: SfxName, gain: number, delay = 0, detune = 0.04, rate = 1): boolean {
   const e = sfxOn();
   if (!e) return true;
   const b = pick(name);
@@ -84,7 +84,7 @@ function smp(name: SfxName, gain: number, delay = 0, detune = 0.04): boolean {
   if (isLow() && voices >= 6) return true;
   played++;
   voices++;
-  const { src } = playBuffer(e, b, e.sfxGain, e.ac.currentTime + 0.005 + delay, gain, 1 + (Math.random() * 2 - 1) * detune);
+  const { src } = playBuffer(e, b, e.sfxGain, e.ac.currentTime + 0.005 + delay, gain, rate * (1 + (Math.random() * 2 - 1) * detune));
   src.addEventListener("ended", () => { voices--; });
   return true;
 }
@@ -194,6 +194,17 @@ export const sfx = {
     noise(e, "bandpass", 500 + 400 * k, 1800 + 1800 * k, 0.9, t, 0.26 + 0.1 * k, 0.18 + 0.25 * k, 0.35);
   }),
   jump: () => smp("jump", 0.4) || at(0, (e, t) => tone(e, "square", 240, 470, t, 0.1, 0.05)),
+  /** Double jump: the jump sample (or blip) a fifth higher and quicker. */
+  djump: () => smp("jump", 0.38, 0, 0.02, 1.5) || at(0, (e, t) => tone(e, "square", 360, 720, t, 0.08, 0.05)),
+  /** Web zip: a thwip, then a rising whoosh along the line (sampled thwip + release whoosh when loaded). */
+  zip: () => {
+    if (smp("thwip", 0.5)) { smp("fling", 0.6, 0.04, 0.03, 0.85); return; }
+    at(0, (e, t) => {
+      noise(e, "bandpass", 5200, 1500, 3, t, 0.08, 0.4, 0.1);
+      tone(e, "sine", 2600, 700, t, 0.07, 0.16, 0.003);
+      noise(e, "bandpass", 450, 3200, 1.1, t + 0.04, 0.42, 0.38, 0.55);
+    });
+  },
   /** Landing thud; impact = downward speed (m/s) at touch-down. */
   land: (impact: number) => landSample(impact) || at(0, (e, t) => {
     const k = clamp01((impact - 2) / 14);

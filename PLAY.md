@@ -21,8 +21,9 @@ backend. `npm run build && npm run preview` serves the production build on http:
 |---|---|
 | Mouse | look / aim (PLAY captures the mouse; click the canvas if the browser refused) |
 | WASD | run |
-| Space | jump |
+| Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing or a rope grab recharges it) |
 | LMB hold | web onto the balloon with the ring; let go to release (LMB on a roof with a ringed balloon = jump + grab) |
+| E / Shift | **web zip**: a straight, fast pull to the ringed balloon (let go near it with a forward + up fling), or, with no balloon ringed, onto the roof ledge you are aiming at (a cyan marker shows it). 1.5 s cooldown: the thin ring around the reticle fills back up |
 | (sky balloons) | the bigger **gold / cream / white** clusters hang 15-35 m above the roofs over crossings and plazas (the Towers, Vertigo) and can be grabbed from **30 m** (street balloons 17 m): long ropes, big pendulum swings, a re-grab in mid-fall. Street balloons keep the ring when both are in reach |
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
@@ -40,7 +41,8 @@ credits (tap to show it), so the whole title fits on one screen.
 | Left thumb (anywhere on the left half) | floating stick: run / steer on the rope |
 | Drag on the right half | look / aim |
 | WEB (hold) | web onto the ringed balloon; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
-| JUMP | jump |
+| JUMP | jump; tap again in the air = double jump |
+| ZIP | web zip (ringed balloon, or the roof ledge ahead); dimmed while it recharges |
 | HIM (hold) | ease the camera toward him |
 | II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch and the volumes) |
 | speaker (under II) | mute / unmute |
@@ -93,8 +95,10 @@ Resume / Back to start / Settings / Back to title.
 **First-run tips** pop up under your Radbro (above it on touch) the moment they matter, once each:
 "hold LMB/WEB while a balloon has the yellow ring" (a balloon is ringed), "let go at the bottom of the arc
 to fling forward" (you are on the rope), "chain swings down the streets to go fast" (after your first
-let-go) and "red ring on him = click / tap WEB to YOINK" (the first red ring in a real round). They are
-remembered in the browser; pause -> Settings -> **show tips again** brings them back.
+let-go), "red ring on him = click / tap WEB to YOINK" (the first red ring in a real round), then "press
+Space / tap JUMP again in the air to double jump" (airborne) and "press E or Shift / tap ZIP to web-zip"
+(on a roof with a ringed balloon). They are remembered in the browser; pause -> Settings -> **show tips
+again** brings them back.
 
 ## Ghost links
 
@@ -118,7 +122,9 @@ title replays it as a ghost.
 Since round 4 links are versioned: `?v=2&m=docks&mu=2&c=...` carries the link version, the district
 (`m=`, left out for Downtown) and the mutator bits (`mu=`, left out when none). A link without `v` is an
 older link: it opens Downtown with no mutators, and if its replay does not verify the banner adds "made on
-an older build".
+an older build". `v=3` is the double jump + web zip build: its ghosts record the zip button (ghost record
+format 2). Ghosts recorded before it (format 1, incl. kept personal bests) replay with both moves off, so
+they still verify; any link older than the current version gets the "older build" note if it does not.
 
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
@@ -368,7 +374,14 @@ Swing defaults (changed from the spec's 28 m/s cap):
 | `ropeScale` | 0.75 | rope reels to this fraction of its length; this is what builds chain speed |
 | `ropeSteer` | 5 | steering force while on the rope |
 
-The runner is baked with the same player constants, so after changing any `player` value run
+Double jump + web zip (player only; the runner bake and old ghosts run with them off, so these never need
+a re-bake): `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.5: v.y = max(v.y, this)), `webZip`,
+`zipSpeed` (26 m/s, but the speed cap wins), `zipPull` (how fast the velocity turns onto the line),
+`zipRange` / `zipRise` / `zipDrop` (ledge search along the aim, how far above / below you), `zipCooldown`
+(1.5 s), `zipRelease` / `zipMaxTime` (auto-release distance / time), `zipFlingFwd` / `zipFlingUp`
+(balloon release fling), `zipLedgeSpeed` / `zipLedgeUp` (the hop onto the roof). All in `?tune`.
+
+The runner is baked with the same player constants, so after changing any other `player` value run
 `npm run level` (the dev-server Save does it), then `npm run balance` to see the catch rates, and commit
 the regenerated `runner.pack.bin` and `bake.report.json`.
 
@@ -377,7 +390,9 @@ at k x his speed, never swings), the camper, and the **swinging chaser** (`Swing
 `src/game/bots.ts`: the real player sim, chain-swinging down the streets at ~16 m/s, letting go past
 each balloon near the bottom of the arc, cutting over to him and Yoinking after a ~0.1-0.2 s reaction).
 Targets: Normal swinger median 25-40 s, Degen swinger median ~45-70 s with some escapes, the old
-follower targets for Normal/Chill. `--set normal.gStar=36` tries a value, `--only swing` runs just those
+follower targets for Normal/Chill. The `swing+moves` rows are the same bot also double-jumping off drops
+and web-zipping at him from the roofs (info: Downtown Normal median ~20 s vs ~28 s, Degen ~38 s vs ~45 s;
+the runner table was left alone). `--set normal.gStar=36` tries a value, `--only swing` runs just those
 rows, `--n 500` more seeds, `--map market` / `--all` another / every district (with its chase tweak).
 `npm run probe:canyon`
 reports chain speed on test canyons with the current `tuning.json`.

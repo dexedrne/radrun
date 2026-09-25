@@ -44,6 +44,8 @@ export type RoundHud = {
    * and its push direction on screen (radians clockwise from "forward"); null when there is no wind.
    */
   wind: { level: number; warn: number; angle: number } | null;
+  /** Web zip cooldown left as a fraction (1 = just used, 0 = ready; also 1 while zipping); -1 = no zip. */
+  zip: number;
 };
 
 export type Results = {
@@ -137,7 +139,7 @@ export const useUi = create<UiState>(() => ({
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0 },
   screen: "boot",
   paused: false,
-  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0, elapsed: 0, runnerLow: Infinity, wind: null },
+  round: { clock: 90, d: 0, panic: false, gassed: false, ring: "none", speed: 0, countdown: 3, fps: 0, holdR: 0, chain: 0, maxChain: 0, topSpeed: 0, falls: 0, elapsed: 0, runnerLow: Infinity, wind: null, zip: 0 },
   results: null,
   feed: [],
   banner: null,

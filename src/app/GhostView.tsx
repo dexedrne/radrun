@@ -7,8 +7,8 @@ import { useFrame } from "@react-three/fiber";
 import { useAssetRuntime } from "react-three-game";
 import { Color, Matrix4, MeshBasicMaterial, Quaternion, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import type { PlayGame } from "../game/play.ts";
-import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE } from "../sim/player.ts";
-import { A_ATTACH, A_BONK, A_JUMP, A_LAND, A_RELEASE, type Beat } from "../anim/animMachine.ts";
+import { EV_ATTACH, EV_BONK, EV_DJUMP, EV_JUMP, EV_LAND, EV_RELEASE } from "../sim/player.ts";
+import { A_ATTACH, A_BONK, A_DJUMP, A_JUMP, A_LAND, A_RELEASE, type Beat } from "../anim/animMachine.ts";
 import { applyCmd, makeRig } from "./ActorsView.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
@@ -83,6 +83,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     const fe = game.ghostEvents;
     let ev = 0;
     if (fe & EV_JUMP) ev |= A_JUMP;
+    if (fe & EV_DJUMP) ev |= A_DJUMP;
     if (fe & EV_ATTACH) ev |= A_ATTACH;
     if (fe & EV_RELEASE) ev |= A_RELEASE;
     if (fe & EV_LAND) ev |= A_LAND;

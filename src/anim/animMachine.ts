@@ -20,6 +20,8 @@ export const A_ATTACH = 2;
 export const A_RELEASE = 4;
 export const A_LAND = 8;
 export const A_BONK = 16;
+/** Double jump: Regular_Jump again from its takeoff frame, played quicker, into the same apex hold. */
+export const A_DJUMP = 32;
 
 /** Scripted beats that override locomotion (countdown wave, taunt, catch, escape, results). */
 export type Beat = "" | "wave" | "taunt" | "cheer" | "flop" | "waltz" | "fish" | "rug" | "idle";
@@ -46,7 +48,7 @@ export type AnimCmd =
   | { kind: "base"; clip: string; fade: number; scale: number }
   | { kind: "force"; clip: string; fade: number; scale: number }
   /** One-shot; `freezeAt` pauses it on that clip time (a hold until the next command). */
-  | { kind: "shot"; clip: string; fade: number; startAt: number; hold: boolean; then: string; freezeAt?: number };
+  | { kind: "shot"; clip: string; fade: number; startAt: number; hold: boolean; then: string; freezeAt?: number; rate?: number };
 
 /** Clip timings (clips.meta.json): Regular_Jump's takeoff / apex / land, seconds into the clip. */
 export type ClipInfo = { has(name: string): boolean; takeoffAt(name: string): number; apexAt(name: string): number; landAt(name: string): number };
@@ -103,6 +105,8 @@ const RULE = {
   bigFade: 0.06,
   bigMove: 0.5,
   bigFor: 1.4,
+  /** Double jump: the takeoff -> apex part of Regular_Jump at this rate (a quick upright tuck). */
+  djumpRate: 1.4,
 } as const;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -172,7 +176,7 @@ export class AnimMachine {
    * Airborne pose: Regular_Jump frozen on its apex (from the takeoff frame on a jump, straight onto the
    * apex otherwise). Without Regular_Jump: the cut-list fallback as a plain loop.
    */
-  private air(fade: number, fromTakeoff = false): AnimCmd | null {
+  private air(fade: number, fromTakeoff = false, rate = 1): AnimCmd | null {
     this.ff = false;
     const clip = this.pick(CLIP.jump);
     if (clip !== CLIP.jump) {
@@ -182,7 +186,7 @@ export class AnimMachine {
     }
     const apex = this.clips.apexAt(clip);
     const cmd = this.startShot(clip, "", fromTakeoff ? Math.min(this.clips.takeoffAt(clip), apex) : apex, fade, true);
-    return cmd && cmd.kind === "shot" ? { ...cmd, freezeAt: apex } : cmd;
+    return cmd && cmd.kind === "shot" ? { ...cmd, freezeAt: apex, ...(rate !== 1 ? { rate } : {}) } : cmd;
   }
 
   /** Is this airborne frame a free fall (long drop ahead)? */
@@ -263,6 +267,7 @@ export class AnimMachine {
       if (vy < RULE.hardBelowVy && this.clips.has(CLIP.land)) return this.startShot(CLIP.land, loco, this.clips.landAt(CLIP.jump), 0.08);
       return this.toLoco(i, RULE.landFade);
     }
+    if ((ev & A_DJUMP) && air) return this.air(0.06, true, RULE.djumpRate);
     if ((ev & A_JUMP) && air) return this.air(0.08, true);
     // Free fall: once the drop is long, from the apex hold (or the stride) into the upright loop.
     if (air) {

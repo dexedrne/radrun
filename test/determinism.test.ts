@@ -1,5 +1,6 @@
 // Test 2 (spec §16): a recorded 60 s InputFrame log replayed under five frame patterns gives an
-// identical final state hash (ringId included) on the committed city.
+// identical final state hash (ringId included) on the committed city. The log includes double jumps
+// (a second Space in the air) and web zips (fixture updated for the moves).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -20,7 +21,7 @@ function run(pattern: (i: number) => number, log: InputFrame[] | null): { hash: 
   } else {
     // Recording run: a wandering, jumping, swinging scripted player.
     const rand = mulberry32(1234);
-    let yaw = model.spawn.yaw, turn = 0, webFor = 0, jumpIn = 60;
+    let yaw = model.spawn.yaw, turn = 0, webFor = 0, jumpIn = 60, djIn = -1;
     sb.input.record = [];
     sb.input.script = (f, i) => {
       if (i % 90 === 0) turn = (rand() - 0.5) * 1.6;
@@ -28,8 +29,9 @@ function run(pattern: (i: number) => number, log: InputFrame[] | null): { hash: 
       const sy = Math.sin(yaw), cy = Math.cos(yaw), pitch = 0.35;
       f.aimX = -sy * Math.cos(pitch); f.aimY = Math.sin(pitch); f.aimZ = -cy * Math.cos(pitch);
       f.moveX = -sy; f.moveZ = -cy;
-      f.jumpPressed = --jumpIn <= 0;
-      if (f.jumpPressed) jumpIn = 80 + Math.floor(rand() * 120);
+      f.jumpPressed = --jumpIn <= 0 || --djIn === 0;
+      if (jumpIn <= 0) { jumpIn = 80 + Math.floor(rand() * 120); djIn = 25 + Math.floor(rand() * 30); }
+      f.zipPressed = i % 420 === 210;
       f.webPressed = webFor <= 0 && rand() < 0.02;
       if (f.webPressed) webFor = 40 + Math.floor(rand() * 110);
       f.webHeld = webFor-- > 0;
@@ -45,6 +47,7 @@ test("60 s input log replays to the same state hash under five frame patterns", 
   const log = rec.sb.input.record!;
   assert.equal(log.length, STEPS);
   assert.ok(rec.sb.stats.swings > 5, `recording should swing (swings=${rec.sb.stats.swings})`);
+  assert.ok(log.some(f => f.zipPressed) && log.filter(f => f.jumpPressed).length > 30, "recording presses zip and double jumps");
   const jit = mulberry32(99);
   const patterns: [string, (i: number) => number][] = [
     ["60 Hz", () => 1 / 60],

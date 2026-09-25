@@ -228,10 +228,10 @@ export function Title(props: {
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {touch ? (
             <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing from the ringed balloon, let go = release ·
-            JUMP · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
+            JUMP (again in the air = double jump) · <b>ZIP</b> = web-zip to the ringed balloon / the roof ahead · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
-            <><b>controls</b> · mouse look/aim · WASD run · Space jump · LMB hold = web onto the ringed balloon, release = let go ·
-            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
+            <><b>controls</b> · mouse look/aim · WASD run · Space jump (again in the air = double jump) · LMB hold = web onto the ringed balloon, release = let go ·
+            E / Shift = <b>web-zip</b> to the ringed balloon or the roof ahead · red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
         </div>}
         <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 10 : 11, textShadow: "0 1px 2px #000" }}>
@@ -365,6 +365,12 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       </div>}
       {/* reticle */}
       {screen !== "results" && <div style={{ ...box, left: "50%", top: "50%", width: 8, height: 8, marginLeft: -4, marginTop: -4, borderRadius: 4, background: ringColor, boxShadow: "0 0 0 1.5px rgba(0,0,0,0.5)" }} />}
+      {/* web-zip cooldown: a thin ring around the reticle that fills back up (full and bright = ready) */}
+      {screen !== "results" && r.zip >= 0 && <div data-testid="zip-ring" style={{
+        ...box, left: "50%", top: "50%", width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: 11,
+        background: `conic-gradient(${r.zip <= 0 ? "rgba(127,231,255,0.8)" : "rgba(160,170,190,0.55)"} ${Math.round(360 * (1 - r.zip))}deg, rgba(255,255,255,0.1) 0deg)`,
+        WebkitMask: "radial-gradient(circle, transparent 8px, #000 8.5px)", mask: "radial-gradient(circle, transparent 8px, #000 8.5px)",
+      }} />}
       {r.ring === "runner" && screen === "chase" && (
         <div style={{ ...box, left: "50%", top: "50%", transform: "translate(-50%, 14px)", color: "#ff3355", font: "900 18px ui-monospace, monospace", textShadow: "0 1px 3px #000", letterSpacing: 2 }}>{S.yoink}</div>
       )}
@@ -393,11 +399,11 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
             {practice
               ? (touch
-                ? "left thumb run · drag right to look · hold WEB = swing · II = menu"
-                : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · hold R = back to start · Esc = menu`)
+                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · II = menu"
+                : `WASD run · Space jump (x2 in the air) · ${easyGrab ? "hold Space" : "hold LMB"} = web · E/Shift zip · hold R = back to start · Esc = menu`)
               : touch
-                ? "left thumb run · drag right to look · hold WEB = swing · red ring = WEB to YOINK"
-                : `WASD run · Space jump · ${easyGrab ? "hold Space" : "hold LMB"} = web · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
+                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · red ring = WEB to YOINK"
+                : `WASD run · Space jump (x2 in the air) · ${easyGrab ? "hold Space" : "hold LMB"} = web · E/Shift zip · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
           </div>
         )}
       </div>

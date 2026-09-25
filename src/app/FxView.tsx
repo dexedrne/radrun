@@ -1,5 +1,6 @@
 // Plain R3F FX (priority -1): balloon clusters as one InstancedMesh (+ strings), the reticle ring on
-// snapshot.ringId (yellow, green while attached), the rope, and a blob shadow under the player.
+// snapshot.ringId (yellow, green while attached), the rope (and the taut web-zip line), the web-zip
+// ledge marker, and a blob shadow under the player.
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
@@ -9,6 +10,7 @@ import {
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
+import { emptyZipAim, zipTarget } from "../sim/player.ts";
 
 const BALLOON_COLORS = ["#ff5a7a", "#ffd23f", "#4fc3f7", "#7cdb6a", "#b388ff", "#ff9f43"];
 const CLUSTER: [number, number, number][] = [[0, 1.25, 0], [0.55, 1.05, 0.25], [-0.45, 1.0, -0.35]];
@@ -101,6 +103,8 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const ring = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
   const shadow = useRef<Mesh>(null);
+  const ledge = useRef<Mesh>(null);
+  const za = useMemo(emptyZipAim, []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
   const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), t: 0 }), []);
 
@@ -128,12 +132,28 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
         rm.scale.set(s, s, s);
       }
     }
-    // Rope to the hook knot from the character's RightHand (ropeFrom), else from the body point.
+    // Web-zip ledge marker: where ZIP goes when no balloon is ringed (ready, not on a rope / zipping).
+    const lm = ledge.current;
+    if (lm) {
+      const k = game.simTuning, f = game.frameInput;
+      let on = false;
+      if (!hide && k && k.webZip && f && !b.zipOn && b.ropeHook < 0 && b.ringId < 0 && b.zipCd <= 0) {
+        on = zipTarget(b, -1, f.aimX, f.aimZ, k, game.world, za) === 2;
+        if (on) {
+          lm.position.set(za.x, za.y - k.halfHeight + 0.08, za.z);
+          const s = 1 + 0.1 * Math.sin(tmp.t * 7);
+          lm.scale.set(s, s, s);
+        }
+      }
+      lm.visible = on;
+    }
+    // Rope to the hook knot (or the web-zip anchor) from the character's RightHand (ropeFrom), else from
+    // the body point.
     const ro = rope.current;
     if (ro) {
-      ro.visible = b.ropeHook >= 0 && !hide;
+      ro.visible = (b.ropeHook >= 0 || b.zipOn) && !hide;
       if (ro.visible) {
-        const h = hooks[b.ropeHook];
+        const h = b.zipOn ? b.zipP : hooks[b.ropeHook];
         if (!ropeFrom?.(tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
         const len = tmp.a.distanceTo(tmp.b);
@@ -164,6 +184,10 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       <mesh ref={rope} visible={false}>
         <cylinderGeometry args={[0.045, 0.045, 1, 6]} />
         <meshBasicMaterial color="#fafafa" />
+      </mesh>
+      <mesh ref={ledge} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false}>
+        <ringGeometry args={[0.45, 0.7, 4]} />
+        <meshBasicMaterial color="#7fe7ff" transparent opacity={0.9} depthTest={false} side={DoubleSide} />
       </mesh>
       <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[0.65, 20]} />

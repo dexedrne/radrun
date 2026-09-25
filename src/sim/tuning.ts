@@ -45,6 +45,32 @@ export type Tuning = {
   yoink: boolean;
   yoinkRange: number;
   failBelowLowestRoof: number;
+  /** Double jump: extra jumps while airborne (not on the rope), recharged on landing / rope attach; 0 = off. */
+  airJumps: number;
+  /** Double jump: v.y = max(v.y, doubleJumpSpeed). */
+  doubleJumpSpeed: number;
+  /** Easy grab: an airborne jump press only double-jumps when no balloon is ringed (the same press grabs). */
+  airJumpNoRing: boolean;
+  /** Web zip (ZIP key): a straight pull to the ringed balloon or a roof ledge under the aim. */
+  webZip: boolean;
+  /** Pull speed (m/s; the speed cap still applies) and how fast the velocity turns onto the line (1/s). */
+  zipSpeed: number;
+  zipPull: number;
+  /** Ledge search range (horizontal m along the aim) and how far above / below you a ledge may be. */
+  zipRange: number;
+  zipRise: number;
+  zipDrop: number;
+  /** Seconds after a zip ends before the next one. */
+  zipCooldown: number;
+  /** Auto-release this close to the anchor (m), or after zipMaxTime s. */
+  zipRelease: number;
+  zipMaxTime: number;
+  /** Balloon zip release fling: added forward (horizontal) and up, m/s. */
+  zipFlingFwd: number;
+  zipFlingUp: number;
+  /** Ledge zip release: onto the roof at this horizontal speed with this hop (m/s). */
+  zipLedgeSpeed: number;
+  zipLedgeUp: number;
 };
 
 export const DT = 1 / 120;
@@ -99,11 +125,35 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   yoink: true,
   yoinkRange: 5,
   failBelowLowestRoof: 8,
+  airJumps: 1,
+  doubleJumpSpeed: 7.5,
+  airJumpNoRing: false,
+  webZip: true,
+  zipSpeed: 26,
+  zipPull: 14,
+  zipRange: 24,
+  zipRise: 10,
+  zipDrop: 14,
+  zipCooldown: 1.5,
+  zipRelease: 1.4,
+  zipMaxTime: 1.6,
+  zipFlingFwd: 4,
+  zipFlingUp: 6,
+  zipLedgeSpeed: 7,
+  zipLedgeUp: 4,
 });
 
-/** Runner bake preset: no air control, no rope steer, no Yoink. */
+/** The player-only moves (double jump + web zip); the runner, the prototype and old ghosts run without them. */
+export const MOVES_OFF = { airJumps: 0, webZip: false } as const satisfies Partial<Tuning>;
+/** Keys that exist only for those moves (left out of the runner bake's tuning hash while they are off). */
+export const MOVE_KEYS: readonly (keyof Tuning)[] = [
+  "airJumps", "doubleJumpSpeed", "airJumpNoRing", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown",
+  "zipRelease", "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
+];
+
+/** Runner bake preset: no air control, no rope steer, no Yoink, no double jump / web zip. */
 export function runnerFrom(player: Readonly<Tuning>): Tuning {
-  return { ...player, airAccel: 0, ropeSteer: 0, yoink: false };
+  return { ...player, airAccel: 0, ropeSteer: 0, yoink: false, ...MOVES_OFF };
 }
 export const RUNNER: Readonly<Tuning> = Object.freeze(runnerFrom(PLAYER));
 
@@ -123,6 +173,7 @@ export const PROTOTYPE: Readonly<Tuning> = Object.freeze({
   holdDelay: HOLD_DELAY_EASY,
   zip: false,
   yoink: false,
+  ...MOVES_OFF,
 });
 
 export type Difficulty = "chill" | "normal" | "degen";
@@ -187,6 +238,8 @@ export const TUNABLE_KEYS = [
   "coyoteTime", "jumpBuffer", "aimRadius", "aimCos", "hookMinAbove", "scoreAhead", "scoreUp", "hysteresis",
   "ropeScale", "reelSpeed", "ropeSteer", "releaseBoost", "autoRelease", "autoReleaseBelow", "bonk",
   "bonkMinSpeed", "bonkRatio", "bonkLock", "holdDelay", "zip", "yoinkRange", "failBelowLowestRoof",
+  "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown", "zipRelease",
+  "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
 ] as const satisfies readonly (keyof Tuning)[];
 
 export type CameraTuning = {

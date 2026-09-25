@@ -29,7 +29,22 @@
     "holdDelay": 0,
     "zip": true,
     "yoinkRange": 5,
-    "failBelowLowestRoof": 8
+    "failBelowLowestRoof": 8,
+    "airJumps": 1,
+    "doubleJumpSpeed": 7.5,
+    "webZip": true,
+    "zipSpeed": 26,
+    "zipPull": 14,
+    "zipRange": 24,
+    "zipRise": 10,
+    "zipDrop": 14,
+    "zipCooldown": 1.5,
+    "zipRelease": 1.4,
+    "zipMaxTime": 1.6,
+    "zipFlingFwd": 4,
+    "zipFlingUp": 6,
+    "zipLedgeSpeed": 7,
+    "zipLedgeUp": 4
   },
   "camera": {
     "fov": 62,

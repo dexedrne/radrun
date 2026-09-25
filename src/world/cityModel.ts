@@ -223,6 +223,35 @@ export class CityIndex {
     return this.segmentHit(ax, ay, az, bx, by, bz, skipA, skipB) >= 0;
   }
 
+  /** Entry distance of the last ledgeAlong hit (m along the ray). */
+  ledgeT = 0;
+
+  /**
+   * Web zip (player): the first landable roof whose footprint the horizontal ray from (x, z) along the
+   * unit (dx, dz) enters within `range`, with its top in [yMin, yMax]. A solid entered earlier that rises
+   * above yMax (or a non-landable one above yMin) blocks it. `skip` (the roof you stand on) and solids
+   * containing the start are ignored. Returns the roof id (entry distance in ledgeT) or -1.
+   */
+  ledgeAlong(x: number, z: number, dx: number, dz: number, range: number, yMin: number, yMax: number, skip = -1): number {
+    const ex = x + dx * range, ez = z + dz * range;
+    const n = this.nearbySolids(Math.min(x, ex), Math.min(z, ez), Math.max(x, ex), Math.max(z, ez));
+    let best = -1, bestT = Infinity, block = Infinity;
+    for (let i = 0; i < n; i++) {
+      const s = this.solids[this.out[i]];
+      if (s.id === skip) continue;
+      if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1) continue;
+      const t = slab(x, 0, z, ex - x, 0, ez - z, s.x0, -1, s.z0, s.x1, 1, s.z1);
+      if (t < 0) continue;
+      const d = t * range;
+      if (s.top > yMax || (!s.landable && s.top > yMin)) { if (d < block) block = d; continue; }
+      if (!s.landable || s.top < yMin) continue;
+      if (d < bestT || (d === bestT && s.top > this.solids[best].top)) { bestT = d; best = s.id; }
+    }
+    if (best >= 0 && bestT >= block) best = -1;
+    this.ledgeT = best >= 0 ? bestT : 0;
+    return best;
+  }
+
   /** Highest solid top at (x, z) that is <= y + 0.05, or 0 (water / street level). */
   groundBelow(x: number, z: number, y: number): number {
     const n = this.nearbySolids(x, z, x, z);

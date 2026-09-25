@@ -16,6 +16,11 @@ const PLAYER_SLIDERS: Slider<keyof Tuning>[] = [
   ["hysteresis", 0, 6, 0.25], ["ropeScale", 0.4, 1.1, 0.01], ["reelSpeed", 0, 15, 0.25], ["ropeSteer", 0, 15, 0.25],
   ["releaseBoost", 0, 8, 0.25], ["autoReleaseBelow", 0, 4, 0.1], ["bonkMinSpeed", 5, 25, 0.5], ["bonkRatio", 0.3, 1, 0.05],
   ["bonkLock", 0, 1, 0.05], ["coyoteTime", 0, 0.3, 0.01], ["jumpBuffer", 0, 0.3, 0.01], ["holdDelay", 0, 0.3, 0.01],
+  // Double jump + web zip (player only).
+  ["airJumps", 0, 2, 1], ["doubleJumpSpeed", 3, 14, 0.25], ["zipSpeed", 8, 40, 0.5], ["zipPull", 2, 40, 0.5],
+  ["zipRange", 6, 40, 0.5], ["zipRise", 0, 20, 0.5], ["zipDrop", 0, 30, 0.5], ["zipCooldown", 0, 5, 0.1],
+  ["zipRelease", 0.3, 4, 0.1], ["zipMaxTime", 0.3, 3, 0.05], ["zipFlingFwd", 0, 12, 0.25], ["zipFlingUp", 0, 12, 0.25],
+  ["zipLedgeSpeed", 0, 14, 0.25], ["zipLedgeUp", 0, 10, 0.25],
 ];
 const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
   ["fov", 55, 75, 1], ["sensitivity", 0.0005, 0.006, 0.0001], ["armGround", 3, 10, 0.25], ["armAir", 3, 12, 0.25],
@@ -91,6 +96,9 @@ export default function TunePanel({ game }: { game: Tunable }) {
           {GEORGE_SLIDERS.map(([k, min, max, step]) => row(`george.${k}`, GEORGE[k], min, max, step, v => setGeorge(k, v)))}
           <label style={{ display: "block" }}>
             <input type="checkbox" checked={game.tuning.zip} onChange={e => { game.tuning.zip = e.target.checked; bump(); }} /> zip (grounded LMB = jump + grab)
+          </label>
+          <label style={{ display: "block" }}>
+            <input type="checkbox" checked={game.tuning.webZip} onChange={e => { game.tuning.webZip = e.target.checked; bump(); }} /> webZip (E / Shift / touch ZIP)
           </label>
         </>
       )}

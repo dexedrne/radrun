@@ -46,6 +46,10 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
     { label: "chill  swing", d: "chill", bot: { kind: "swing", k: 1, yoink: true }, target: "(info: forgiving)", check: () => true },
     { label: "normal swing", d: "normal", bot: { kind: "swing", k: 1, yoink: true }, target: "median 25-40 s", check: (c, m) => c > 0 && m >= 25 && m <= 40 },
     { label: "degen  swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true }, target: "median ~45-70 s, some escapes", check: (c, m) => c < 0.95 * n && c >= 0.5 * n && m >= 40 && m <= 70 },
+    // The same swinger also double-jumping and web-zipping at him (info: the moves must not trivialise it).
+    { label: "chill  swing+moves", d: "chill", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info)", check: () => true },
+    { label: "normal swing+moves", d: "normal", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: median >= 20 s)", check: (c, m) => c > 0 && m >= 20 },
+    { label: "degen  swing+moves", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: median >= 35 s)", check: (c, m) => c > 0 && m >= 35 },
   ];
   return cfgs.filter(c => !only || c.label.includes(only)).map(c => {
     const r = runConfig(model, index, pack, tuning, table, c.d, c.bot, n, 1, 0, district);
