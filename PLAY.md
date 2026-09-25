@@ -97,7 +97,9 @@ the LOADING screen (the countdown sounds go first).
   keepers" right after GO (after a menu, then one retry in three), and in the chase at most 2 taunts a
   round (a 50% roll at a junction, 25 s apart, at most one worded; he still waves every time; quieter the
   further ahead he is), a panic breath (the first, then 20 s later, 2 a round), cornered once, gassed, and
-  caught / escaped (`src/audio/chatter.ts`). A bubble shows only with a sound. The round end is one call and one reply: the chase
+  caught / escaped (`src/audio/chatter.ts`). A bubble shows only with a sound, lined up with it ("finders
+  keepers" too, after GO); a line the speech timeline skips (busy, cooldown) shows no bubble and uses up
+  none of the round's budget. The round end is one call and one reply: the chase
   lines stop, she calls it (a new best instead of YOINK / tagged), then the runner answers; nothing else
   talks until the next round, and quitting to a menu cuts it. A line that is not loaded falls back to the
   old chatter blips. `?vodebug` logs every line started / cut / dropped (with its caller) to
@@ -178,8 +180,8 @@ round is the same with any pair, so ghost links replay the same whoever you pick
 
 | | persona | taunts (a few) | caught / escaped |
 |---|---|---|---|
-| **#652** | earnest (sincere, a bit sheepish) | "hehe", "ha!", "hi", "i'll take good care of it", "you're so close" | "ok. that was kinda rad" / "sorry! good bag though" |
-| **#4764** | deadpan (the katana) | "heh", "pff", "ha.", "i'm not even running", "take your time" | "bro." / "check the chain." |
+| **#652** | earnest (sincere, a bit sheepish) | "hehe", "ha!", "hi", "i'll take good care of it", "you're so close" | "okay. you got me." / "sorry! good bag though" |
+| **#4764** | deadpan (the katana) | "heh", "pff", "ha.", "i'm not even running", "take your time" | "bro." / "mine now." |
 | **#2564** | quiet (whispers, hums) | "hehe", "shh", "♪", "over here", "wrong roof" | "oh. hello." / "thank you" |
 | **#723** | easygoing (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "heh heh", "oh, man", "nah", "nice day for it", "you good back there?" | "fair enough" / "see ya" |
 

@@ -7,11 +7,9 @@ export const S = {
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   youChase: "You chase one of the other three",
   countdownBubble: "finders keepers",
-  panicBubble: "!",
   panicTag: "PANIC",
   gassedBadge: "GASSED",
   gassedFeed: "He's gassed!",
-  corneredBubble: "nope",
   fall: "rekt.",
   escape: "He rugged you.",
   goneFishing: "gone fishing",
@@ -33,10 +31,15 @@ export const TAUNTS: Record<RadbroId, string[]> = {
   "723": ["heh heh", "oh, man", "ahh", "nah", "nice day for it", "you good back there?"],
 };
 
-/** Per-character one-liners for the catch / escape beats (#652 earnest, #4764 deadpan, #2564 quiet, #723 easygoing). */
-export const LINES: Record<"caught" | "escaped", Record<RadbroId, string>> = {
-  caught: { "652": "ok. that was kinda rad", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough" },
-  escaped: { "652": "sorry! good bag though", "4764": "check the chain.", "2564": "thank you", "723": "see ya" },
+/**
+ * Per-character bubbles for the panic / cornered / catch / escape lines, as he says them (#652 earnest,
+ * #4764 deadpan, #2564 quiet, #723 easygoing).
+ */
+export const LINES: Record<"panic" | "cornered" | "caught" | "escaped", Record<RadbroId, string>> = {
+  panic: { "652": "!", "4764": "!", "2564": "!", "723": "oh, hey" },
+  cornered: { "652": "nope, sorry", "4764": "nope", "2564": "nope", "723": "oh, nope" },
+  caught: { "652": "okay. you got me.", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough" },
+  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "2564": "thank you", "723": "see ya" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };

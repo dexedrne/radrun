@@ -22,8 +22,8 @@ import { sfx } from "../audio/sfx.ts";
 import { music } from "../audio/music.ts";
 import { musicTarget } from "../audio/score.ts";
 import { audioState, isMuted, outputLevel } from "../audio/engine.ts";
-import { voice } from "../audio/voice.ts";
-import { COUNT_KEYS, tauntKey } from "../audio/catalog.ts";
+import { voice, type SayOpts } from "../audio/voice.ts";
+import { COUNT_KEYS, tauntKey, type VoiceKey } from "../audio/catalog.ts";
 import { roundEndVoice } from "../audio/speech.ts";
 import { Chatter } from "../audio/chatter.ts";
 import { sampleStats } from "../audio/samples.ts";
@@ -41,6 +41,18 @@ const BOT_PAGE = new URLSearchParams(location.search).has("bot");
 
 /** Speech-bubble chatter pitch per runner (Hz). */
 const VOICE: Record<RadbroId, number> = { "652": 640, "4764": 780, "2564": 540, "723": 470 };
+
+/**
+ * A runner line with its bubble: the bubble shows when the line plays (lined up with it), or with the chatter
+ * blips when it is not loaded; a line the speech timeline drops (busy, cooldown) shows nothing. False = dropped.
+ */
+function runnerLine(who: RadbroId, key: VoiceKey, bubble: string, o: SayOpts = {}, pitch = 1): boolean {
+  const said = voice.say(who, key, o);
+  if (said === "dropped") return false;
+  if (said === "missing") sfx.chatter(VOICE[who] * pitch);
+  showBubble(bubble, said === "missing" ? 0 : said);
+  return true;
+}
 
 // ---- driver --------------------------------------------------------------------------------------
 
@@ -158,12 +170,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       // A new round: whatever the last one still had queued (its round-end lines) is cut here.
       voice.roundStart();
       if (game.mode === "round") { sayCountdown.current = chat.startRound(menu.current); menu.current = false; }
-      if (game.mode === "round" && !game.practice) {
-        showBubble(S.countdownBubble);
-        // Voiced: he says it right after GO (the announcer has the countdown), not on every retry.
-        if (sayCountdown.current && !voice.has(who, "countdown")) sfx.chatter(VOICE[who]);
-        music.countdown(COUNTDOWN_STEPS / 120);
-      }
+      if (game.mode === "round" && !game.practice) music.countdown(COUNTDOWN_STEPS / 120);
     }
     phases.current.add(run.pose.phase);
     const ch = rigs.get(game.setup.chaser), rn = rigs.get(who);
@@ -182,7 +189,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       showBanner(S.go);
       sfx.beep(true);
       voice.announce("go");
-      if (sayCountdown.current) voice.say(who, "countdown", { delay: 0.55, maxWait: 0.6 });
+      // He says it right after GO (the announcer has the countdown), not on every retry; the bubble with it.
+      if (sayCountdown.current) runnerLine(who, "countdown", S.countdownBubble, { delay: 0.55, maxWait: 0.6 });
     }
     if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); voice.announce("rekt"); }
     const b = r.player;
@@ -202,18 +210,15 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       audio.current.gusting = gusting;
     }
     // Runner lines, sparse (audio/chatter.ts budgets): voiced when loaded, else the chatter blips; the bubble
-    // shows only with a sound. He still waves / sprints on every event. Taunts come from far ahead, so they
-    // are quieter with distance.
+    // shows only with a sound, and a line the timeline drops spends nothing. He still waves / sprints on every
+    // event. Taunts come from far ahead, so they are quieter with distance.
     const rt = r.chaseSteps / 120;
     if (rev & RE_TAUNT) {
-      const i = chat.taunt(rt);
-      if (i >= 0) {
-        showBubble(TAUNTS[who][i]);
-        if (!voice.say(who, tauntKey(i), { group: "taunt", cooldown: 3.5, gain: Math.max(0.55, Math.min(1, 1.15 - r.d / 80)) })) sfx.chatter(VOICE[who]);
-      }
+      const gain = Math.max(0.55, Math.min(1, 1.15 - r.d / 80));
+      chat.taunt(rt, i => runnerLine(who, tauntKey(i), TAUNTS[who][i], { group: "taunt", cooldown: 3.5, gain }));
     }
-    if ((rev & RE_PANIC) && chat.panic(rt)) { showBubble(S.panicBubble); if (!voice.say(who, "panic", { maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.25); }
-    if ((rev & RE_CORNERED) && chat.corner()) { showBubble(S.corneredBubble); if (!voice.say(who, "cornered", { cooldown: 5, maxWait: 0.4 })) sfx.chatter(VOICE[who] * 1.1); }
+    if (rev & RE_PANIC) chat.panic(rt, () => runnerLine(who, "panic", LINES.panic[who], { maxWait: 0.4 }, 1.25));
+    if (rev & RE_CORNERED) chat.corner(() => runnerLine(who, "cornered", LINES.cornered[who], { cooldown: 5, maxWait: 0.4 }, 1.1));
     if (rev & RE_GASSED) {
       pushFeed(S.gassedFeed);
       voice.announce("gassed", { interrupt: false, maxWait: 0.6 });

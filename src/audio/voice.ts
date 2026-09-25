@@ -4,7 +4,8 @@
 // cooldowns keep taunts from stacking. The round end is one call (roundEnd): it cuts the chase lines,
 // plays the announcer's call then one Radbro reply, and nothing else speaks until the next round.
 // Lines are scheduled on the AudioContext clock (no timers) and dip the music by ~4 dB while they play.
-// say() returns false only when that line is not loaded (the caller then plays the chatter blips).
+// say() tells the caller whether the line plays (and when it starts), is not loaded (the caller plays the
+// chatter blips) or was dropped (busy / cooldown / closed: nothing plays, so no bubble either).
 // ?vodebug logs every line started / cut / dropped (time, speaker, key, caller) to window.__voiceLog.
 import type { RadbroId } from "../game/round.ts";
 import { RADBROS } from "../game/round.ts";
@@ -25,6 +26,12 @@ export type SayOpts = {
   group?: string;
   gain?: number;
 };
+
+/**
+ * What say() did: the seconds until the line starts (it plays; `delay` when voices are off), or why nothing
+ * plays: "missing" (not loaded: the caller plays the chatter blips) / "dropped" (busy, cooldown or closed).
+ */
+export type Said = number | "missing" | "dropped";
 
 const DIP = 0.63;
 const speech = new Speech();
@@ -76,15 +83,19 @@ function play(e: Engine, plan: Plan, bufs: Map<string, AudioBuffer>, gain: numbe
   }
 }
 
-function sayAny(who: Speaker, key: string, o: SayOpts, pri: number): boolean {
+function sayAny(who: Speaker, key: string, o: SayOpts, pri: number): Said {
   const buf = sample(voicePath(who, key));
-  if (!buf) return false;
+  if (!buf) return "missing";
   const e = voiceOn();
-  if (!e) return true;
-  const plan = speech.say(e.ac.currentTime, { ...o, who, key, dur: buf.duration, pri });
-  if (plan.drop) debug("drop", { who, key, why: plan.drop });
+  if (!e) return o.delay ?? 0;
+  const now = e.ac.currentTime;
+  const plan = speech.say(now, { ...o, who, key, dur: buf.duration, pri });
+  if (plan.drop) {
+    debug("drop", { who, key, why: plan.drop });
+    return "dropped";
+  }
   play(e, plan, new Map([[`${who}:${key}`, buf]]), o.gain ?? 1);
-  return true;
+  return Math.max(0, plan.play[0].start - now);
 }
 
 /** A plan with nothing to start (a new round, a quit): cut what it names. */
@@ -96,10 +107,10 @@ function cutOnly(f: (now: number) => Plan): void {
 }
 
 export const voice = {
-  /** A Radbro's line (runner bubbles, the countdown quip). */
-  say: (who: RadbroId, key: VoiceKey, o: SayOpts = {}): boolean => sayAny(who, key, o, PRI.chatter),
+  /** A Radbro's line (runner bubbles, the countdown quip). Show its bubble only when this is not "dropped". */
+  say: (who: RadbroId, key: VoiceKey, o: SayOpts = {}): Said => sayAny(who, key, o, PRI.chatter),
   /** The announcer, a Milady (interrupts by default: she calls the countdown, GO, a fall). */
-  announce: (key: AnnouncerKey, o: SayOpts = {}): boolean => sayAny("announcer", key, { interrupt: true, ...o }, PRI.call),
+  announce: (key: AnnouncerKey, o: SayOpts = {}): Said => sayAny("announcer", key, { interrupt: true, ...o }, PRI.call),
   /**
    * The round is over: cut every queued / talking line, then the announcer's `call` and one Radbro
    * `reply` after it; nothing else speaks until roundStart. Once per `run` (a repeat is ignored).

@@ -53,3 +53,19 @@ test("chatter: the countdown line after a menu, then one retry in three", () => 
     [true, false, false, true, false, false, true, false]);
   assert.ok(c.startRound(true));
 });
+
+test("chatter: a line the speech timeline drops spends nothing (no silent bubble eats the slot)", () => {
+  const c = new Chatter(() => 0.1);
+  c.startRound(true);
+  assert.equal(c.panic(0, () => false), false);
+  assert.equal(c.panic(0.5), true);
+  assert.equal(c.corner(() => false), false);
+  assert.equal(c.corner(), true);
+  assert.equal(c.corner(), false);
+  let asked = -1;
+  assert.equal(c.taunt(5, s => { asked = s; return false; }), -1);
+  assert.ok(asked >= 0);
+  assert.ok(c.taunt(6) >= 0);
+  assert.ok(c.taunt(31) >= 0);
+  assert.equal(c.taunt(90), -1);
+});

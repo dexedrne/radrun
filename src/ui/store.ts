@@ -164,6 +164,7 @@ export function pushFeed(text: string): void {
 export function showBanner(text: string): void {
   useUi.setState({ banner: { text, t: performance.now() } });
 }
-export function showBubble(text: string): void {
-  useUi.setState({ bubble: { text, t: performance.now() } });
+/** The runner's bubble, `delay` s from now (lined up with his voice line). */
+export function showBubble(text: string, delay = 0): void {
+  useUi.setState({ bubble: { text, t: performance.now() + delay * 1000 } });
 }

@@ -6,6 +6,8 @@
 //   panic     the first of the round, then again only 20 s after the last one, at most 2 a round
 //   cornered  once a round
 //   countdown every round after a menu (title / level pick), then one retry / next in three
+// Each call takes `voiced`, which tries to play the line (and shows its bubble); when the speech timeline
+// drops it (busy, cooldown), nothing is spent and the next event gets the slot.
 // Times are the round clock (chase steps / 120), not wall time. The sim never sees any of this.
 
 export const TAUNT_MAX = 2;
@@ -47,8 +49,11 @@ export class Chatter {
     return this.again % COUNTDOWN_EVERY === 0;
   }
 
-  /** He reached a junction far ahead (t = round clock, s): the taunt slot to voice, or -1 (he just waves). */
-  taunt(t: number): number {
+  /**
+   * He reached a junction far ahead (t = round clock, s): the taunt slot voiced, or -1 (he just waves).
+   * `voiced(slot)` plays it; false (dropped) spends nothing.
+   */
+  taunt(t: number, voiced: (slot: number) => boolean = () => true): number {
     if (this.taunts.length >= TAUNT_MAX || t - this.lastTaunt < TAUNT_GAP) return -1;
     if (this.rand() >= TAUNT_ODDS) return -1;
     const worded = this.taunts.some(isWorded);
@@ -59,22 +64,25 @@ export class Chatter {
     let x = this.rand() * sum, slot = 0;
     while (slot < ok.length - 1 && (x -= ok[slot]) >= 0) slot++;
     while (!ok[slot]) slot--; // float edge: never land on a zero-weight slot
+    if (!voiced(slot)) return -1;
     this.taunts.push(slot);
     this.lastTaunt = t;
     this.lastSlot = slot;
     return slot;
   }
 
-  /** He panics: voice it (and show the bubble)? */
-  panic(t: number): boolean {
-    if (this.panics >= PANIC_MAX || t - this.lastPanic < PANIC_GAP) return false;
+  /** He panics: voiced (`voiced()` plays it and shows the bubble; false = dropped, nothing spent)? */
+  panic(t: number, voiced: () => boolean = () => true): boolean {
+    if (this.panics >= PANIC_MAX || t - this.lastPanic < PANIC_GAP || !voiced()) return false;
     this.panics++;
     this.lastPanic = t;
     return true;
   }
 
-  /** He is cornered: voice it (once a round)? */
-  corner(): boolean {
-    return this.cornered++ === 0;
+  /** He is cornered: voiced (once a round; a dropped line spends nothing)? */
+  corner(voiced: () => boolean = () => true): boolean {
+    if (this.cornered || !voiced()) return false;
+    this.cornered = 1;
+    return true;
   }
 }
