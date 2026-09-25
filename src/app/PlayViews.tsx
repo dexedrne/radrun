@@ -24,6 +24,7 @@ import { musicTarget } from "../audio/score.ts";
 import { audioState, isMuted, outputLevel } from "../audio/engine.ts";
 import { voice } from "../audio/voice.ts";
 import { COUNT_KEYS, tauntKey } from "../audio/catalog.ts";
+import { roundEndVoice } from "../audio/speech.ts";
 import { sampleStats } from "../audio/samples.ts";
 import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
@@ -149,6 +150,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       clips.current.george.clear();
       beep.current = 4;
       hints.newRun();
+      // A new round: whatever the last one still had queued (its round-end lines) is cut here.
+      voice.roundStart();
       if (game.mode === "round" && !game.practice) {
         showBubble(S.countdownBubble);
         // Voiced: he says it right after GO (the announcer has the countdown).
@@ -213,33 +216,30 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       ghostPhase.current = gph;
     }
     if (ev & (RV_CAUGHT | RV_ESCAPED)) {
+      const res = buildResults(game);
+      const yoink = r.stats.catchKind === "yoink";
       if (ev & RV_ESCAPED) {
         showBanner(S.escape);
         showBubble(LINES.escaped[who]);
         music.sting("escaped");
         sfx.rug();
         sfx.meow(true);
-        voice.announce("rugged");
-        voice.say(who, "escaped", { maxWait: 2.5 });
       }
       else {
-        const yoink = r.stats.catchKind === "yoink";
         showBanner(yoink ? `${S.yoink}!` : "TAGGED!");
         showBubble(LINES.caught[who]);
         if (ev & RV_YOINK) sfx.yoink();
         music.sting(yoink ? "yoink" : "caught");
         sfx.jingle();
         sfx.meow();
-        // The announcer calls it, he sighs, your Radbro cheers.
-        voice.announce(yoink ? "yoink" : "tagged");
-        voice.say(who, "caught", { maxWait: 2 });
-        voice.say(game.setup.chaser, "win", { maxWait: 4 });
       }
-      useUi.setState({ results: buildResults(game) });
+      // One call and one reply, in turn (the chase lines are cut; nothing else speaks until the next round).
+      const vo = roundEndVoice({ caught: !(ev & RV_ESCAPED), yoink, newBest: res.newBest, runner: who });
+      voice.roundEnd(game.runId, vo.call, vo.reply);
+      useUi.setState({ results: res });
     }
     if (game.mode === "round" && r.over && game.endT > RESULTS_AFTER[r.phase === "caught" ? "caught" : "escaped"] && useUi.getState().screen !== "results") {
       useUi.setState({ screen: "results" });
-      if (useUi.getState().results?.newBest) voice.announce("new_best", { interrupt: false, maxWait: 5 });
     }
 
     const st = useUi.getState();
