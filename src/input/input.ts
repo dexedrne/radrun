@@ -16,6 +16,8 @@ export class InputLatch {
   rmb = false;
   jumpEdge = false;
   webEdge = false;
+  /** Web zip press (E / Shift, touch ZIP). */
+  zipEdge = false;
   /** Touch: the left-thumb stick (x right, y forward, dead zone applied, |stick| <= 1). */
   stickX = 0;
   stickY = 0;
@@ -37,6 +39,7 @@ export class InputLatch {
       this.jumpEdge = true;
       if (this.easyGrab) this.webEdge = true;
     }
+    if (code === "KeyE" || code === "ShiftLeft" || code === "ShiftRight") this.zipEdge = true;
   }
   release(code: string): void {
     this.keys.delete(code);
@@ -66,12 +69,15 @@ export class InputLatch {
   touchJump(): void {
     this.jumpEdge = true;
   }
+  touchZip(): void {
+    this.zipEdge = true;
+  }
   clear(): void {
     this.keys.clear();
     this.stickX = this.stickY = 0;
     this.touchWeb = this.touchFace = false;
     this.lmb = this.rmb = false;
-    this.jumpEdge = this.webEdge = false;
+    this.jumpEdge = this.webEdge = this.zipEdge = false;
     this.mouseDX = this.mouseDY = 0;
   }
   /** Mouse deltas since the last call (applied to the camera once per frame). */
@@ -98,9 +104,10 @@ export class InputLatch {
    */
   sample(rec: InputRec, yaw: number): InputRec {
     const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
-    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge);
+    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge);
     this.jumpEdge = false;
     this.webEdge = false;
+    this.zipEdge = false;
     this.steps++;
     return rec;
   }
@@ -125,8 +132,10 @@ export class InputLatch {
     f.jumpPressed = this.jumpEdge;
     f.webPressed = this.webEdge;
     f.webHeld = webHeldNow || this.webEdge;
+    f.zipPressed = this.zipEdge;
     this.jumpEdge = false;
     this.webEdge = false;
+    this.zipEdge = false;
     if (this.script) this.script(f, this.steps);
     this.steps++;
     if (this.record) this.record.push({ ...f });

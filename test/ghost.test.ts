@@ -56,7 +56,7 @@ test("codec: encode -> decode and pack -> unpack round-trip exactly (runs, yaw w
       else if (u < 0.31) yaw = Math.floor(rand() * YAW_RES); // flicks
       if (rand() < 0.02) fwd = [127, -127, 64, 0, -64, 13][Math.floor(rand() * 6)];
       if (rand() < 0.02) right = Math.floor(rand() * 255) - 127;
-      if (rand() < 0.05) bits = Math.floor(rand() * 8);
+      if (rand() < 0.05) bits = Math.floor(rand() * 16); // B_ZIP (8) included (format 2)
       rec.yaw = yaw; rec.fwd = fwd; rec.right = right; rec.bits = bits;
       log.push(rec);
     }

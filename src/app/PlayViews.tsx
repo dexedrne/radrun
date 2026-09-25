@@ -12,7 +12,7 @@ import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
 import { COUNTDOWN_STEPS, RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK, type RadbroId } from "../game/round.ts";
 import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts";
-import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_POP, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
+import { EV_ATTACH, EV_BONK, EV_DJUMP, EV_JUMP, EV_LAND, EV_POP, EV_RELEASE, EV_ZIP, EV_ZIP_END, RING_RUNNER } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
 import { getBest, ghostUrl, recordBest, saveBestGhost } from "../ui/prefs.ts";
@@ -126,6 +126,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const beep = useRef(4);
   const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120, gusting: false });
   const ghostPhase = useRef("");
+  /** Player event bits since the last 10 Hz tick (tips: double jump / zip done). */
+  const tickEv = useRef(0);
   const autoQ = useRef(new AutoQuality());
   useFrame((_, delta) => {
     game.frame(delta);
@@ -159,9 +161,11 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     const b = r.player;
     const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (r.phase === "chase") {
-      if (pe & EV_JUMP) sfx.jump();
+      if (pe & EV_DJUMP) sfx.djump();
+      else if (pe & EV_JUMP) sfx.jump();
       if (pe & EV_ATTACH) sfx.thwip();
-      if (pe & EV_RELEASE) sfx.fling(sp);
+      if (pe & EV_ZIP) sfx.zip();
+      if (pe & (EV_RELEASE | EV_ZIP_END)) sfx.fling(sp);
       if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land(-b.landVy);
       if (pe & EV_BONK) sfx.bonk();
       if (pe & EV_POP) sfx.pop();
@@ -214,6 +218,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       audio.current.windAcc = 0;
       sfx.wind(sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
     }
+    tickEv.current |= pe;
     const mp = music.probe();
     // Auto quality: the first ~10 s of each real chase on High (never on bot pages).
     const aq = autoQ.current;
@@ -265,12 +270,16 @@ export function PlayDriver({ game }: { game: PlayGame }) {
           clock: r.clock, d: r.d, panic: run.band.panic, gassed: run.band.gassed, ring, speed: sp,
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
           chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, wind,
+          zip: r.tuning.webZip ? (b.zipOn ? 1 : Math.min(1, b.zipCd / Math.max(1e-6, r.tuning.zipCooldown))) : -1,
         },
       });
+      const tev = tickEv.current;
+      tickEv.current = 0;
       // First-run tips (chase / practice only, never on bot pages).
       hints.tick(dt, {
         active: !BOT_PAGE && game.mode === "round" && !game.paused && (st.screen === "chase" || st.screen === "practice") && r.phase === "chase",
         grounded: b.grounded, rope: b.ropeHook >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
+        djumped: (tev & EV_DJUMP) !== 0, zipped: (tev & EV_ZIP) !== 0, moves: r.tuning.webZip,
       });
     }
   }, FRAME.sim);

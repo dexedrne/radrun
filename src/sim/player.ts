@@ -21,10 +21,12 @@ export type InputFrame = {
   jumpPressed: boolean;
   webHeld: boolean;
   webPressed: boolean;
+  /** Web zip press (E / Shift / touch ZIP). */
+  zipPressed: boolean;
 };
 
 export const emptyInput = (): InputFrame => ({
-  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false,
+  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false, zipPressed: false,
 });
 
 // Per-step event bits (Body.events is reset at the start of every step).
@@ -38,6 +40,10 @@ export const EV_WALL = 64;
 export const EV_AUTORELEASE = 128;
 /** Round 4: a fragile balloon popped when the rope left it (player only). */
 export const EV_POP = 256;
+/** Moves (player only): a web zip started / ended (release fling or landing), a double jump. */
+export const EV_ZIP = 512;
+export const EV_ZIP_END = 1024;
+export const EV_DJUMP = 2048;
 
 export type Body = {
   /** Body centre (feet = p.y - halfHeight). */
@@ -63,6 +69,17 @@ export type Body = {
   events: number;
   /** v.y at the most recent landing (animation / FX). */
   landVy: number;
+  /** Double jumps left this airtime. */
+  airJumps: number;
+  /** Web zip: active, seconds in, cooldown left (s), target (hook id or -1, ledge roof id or -1), anchor, ledge inward dir. */
+  zipOn: boolean;
+  zipT: number;
+  zipCd: number;
+  zipHook: number;
+  zipRoof: number;
+  zipP: Vec3;
+  zipDx: number;
+  zipDz: number;
 };
 
 /** What stepBody needs from the world. */
@@ -107,6 +124,15 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     t: 0,
     events: 0,
     landVy: 0,
+    airJumps: 0,
+    zipOn: false,
+    zipT: 0,
+    zipCd: 0,
+    zipHook: -1,
+    zipRoof: -1,
+    zipP: { x: 0, y: 0, z: 0 },
+    zipDx: 0,
+    zipDz: 0,
   };
 }
 
@@ -130,6 +156,15 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.t = src.t;
   dst.events = src.events;
   dst.landVy = src.landVy;
+  dst.airJumps = src.airJumps;
+  dst.zipOn = src.zipOn;
+  dst.zipT = src.zipT;
+  dst.zipCd = src.zipCd;
+  dst.zipHook = src.zipHook;
+  dst.zipRoof = src.zipRoof;
+  dst.zipP.x = src.zipP.x; dst.zipP.y = src.zipP.y; dst.zipP.z = src.zipP.z;
+  dst.zipDx = src.zipDx;
+  dst.zipDz = src.zipDz;
   return dst;
 }
 
@@ -142,6 +177,8 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.f64(b.heldFor).f64(b.coyote).f64(b.jumpBuf).f64(b.bonkT);
   h.i32(b.lastSafeRoof).f64(b.lastSafe.x).f64(b.lastSafe.y).f64(b.lastSafe.z);
   h.i32(b.ringId).i32(b.chainCount).i32(b.step);
+  h.i32(b.airJumps).i32(b.zipOn ? 1 : 0).f64(b.zipT).f64(b.zipCd).i32(b.zipHook).i32(b.zipRoof);
+  h.f64(b.zipP.x).f64(b.zipP.y).f64(b.zipP.z).f64(b.zipDx).f64(b.zipDz);
   return h;
 }
 
@@ -211,6 +248,51 @@ export function pickTarget(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): nu
   return best;
 }
 
+// ---- web zip target ------------------------------------------------------------------------------
+
+/** Ledge anchors: feet this far above the roof, this far inside its edge; the pre-point just outside. */
+export const LEDGE_UP = 1.0;
+export const LEDGE_IN = 0.4;
+export const LEDGE_OUT = 0.8;
+
+/** A web zip target: kind 1 = balloon (hook), 2 = roof ledge (roof + inward dir), 0 = none. */
+export type ZipAim = { kind: number; hook: number; roof: number; x: number; y: number; z: number; dx: number; dz: number };
+export const emptyZipAim = (): ZipAim => ({ kind: 0, hook: -1, roof: -1, x: 0, y: 0, z: 0, dx: 0, dz: 0 });
+
+/**
+ * Where a web zip from `b` goes this step: the ringed balloon (`ringId` >= 0), else the first roof ledge
+ * along the horizontal aim within zipRange (clear line of sight to just outside its edge). The anchor
+ * never sits below you (a lower roof = a level zip, then the drop), so a zip never pulls into your own
+ * roof. Pure (the HUD previews it); returns out.kind.
+ */
+export function zipTarget(b: Body, ringId: number, aimX: number, aimZ: number, k: Tuning, w: SimWorld, out: ZipAim): number {
+  out.kind = 0; out.hook = -1; out.roof = -1;
+  const p = b.p;
+  if (ringId >= 0) {
+    const h = w.hooks[ringId];
+    out.kind = 1; out.hook = ringId; out.x = h.x; out.y = h.y; out.z = h.z; out.dx = 0; out.dz = 0;
+    return 1;
+  }
+  const al = Math.sqrt(aimX * aimX + aimZ * aimZ);
+  if (al < 1e-9) return 0;
+  const dx = aimX / al, dz = aimZ / al;
+  const feet = p.y - k.halfHeight;
+  const skip = b.grounded ? b.roofId : -1;
+  const idx = w.index;
+  const roof = idx.ledgeAlong(p.x, p.z, dx, dz, k.zipRange, feet - k.zipDrop, feet + k.zipRise, skip);
+  if (roof < 0) return 0;
+  const t = idx.ledgeT;
+  const y = Math.max(idx.solids[roof].top + k.halfHeight + LEDGE_UP, p.y + 0.3);
+  const o = Math.max(0, t - LEDGE_OUT);
+  if (idx.segmentBlocked(p.x, p.y, p.z, p.x + dx * o, y, p.z + dz * o, skip, roof)) return 0;
+  out.kind = 2; out.roof = roof;
+  out.x = p.x + dx * (t + LEDGE_IN); out.y = y; out.z = p.z + dz * (t + LEDGE_IN);
+  out.dx = dx; out.dz = dz;
+  return 2;
+}
+
+const ZA = emptyZipAim();
+
 // ---- helpers -----------------------------------------------------------------------------------
 
 function attach(b: Body, hookId: number, k: Tuning, w: SimWorld): void {
@@ -221,7 +303,53 @@ function attach(b: Body, hookId: number, k: Tuning, w: SimWorld): void {
   b.ropeLen = d;
   b.ropeTarget = d * k.ropeScale;
   b.chainCount++;
+  b.airJumps = k.airJumps;
   b.events |= EV_ATTACH;
+}
+
+function startZip(b: Body, a: ZipAim, k: Tuning): void {
+  b.zipOn = true;
+  b.zipT = 0;
+  b.zipHook = a.hook;
+  b.zipRoof = a.roof;
+  b.zipP.x = a.x; b.zipP.y = a.y; b.zipP.z = a.z;
+  b.zipDx = a.dx; b.zipDz = a.dz;
+  b.ropeHook = -1;
+  b.grounded = false;
+  b.coyote = 0;
+  b.jumpBuf = 0;
+  b.airJumps = k.airJumps;
+  if (a.hook >= 0) b.chainCount++;
+  b.events |= EV_ZIP;
+}
+
+/** End a zip: `fling` = the auto-release (balloon: forward + up; ledge: onto the roof), else a landing. */
+function endZip(b: Body, k: Tuning, w: SimWorld, fling: boolean): void {
+  b.zipOn = false;
+  b.zipCd = k.zipCooldown;
+  b.events |= EV_ZIP_END;
+  const v = b.v;
+  if (fling) {
+    if (b.zipRoof >= 0) {
+      v.x = b.zipDx * k.zipLedgeSpeed;
+      v.z = b.zipDz * k.zipLedgeSpeed;
+      v.y = k.zipLedgeUp;
+    } else {
+      const hs = Math.sqrt(v.x * v.x + v.z * v.z);
+      if (hs > 1e-6) { v.x += (v.x / hs) * k.zipFlingFwd; v.z += (v.z / hs) * k.zipFlingFwd; }
+      v.y = Math.max(v.y, 0) + k.zipFlingUp;
+    }
+    if (k.speedCap > 0) {
+      const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+      if (sp > k.speedCap) { const f = k.speedCap / sp; v.x *= f; v.y *= f; v.z *= f; }
+    }
+  }
+  // Round 4: a fragile balloon pops once you zip off it.
+  const hk = b.zipHook;
+  if (hk >= 0 && w.fragile !== undefined && w.hookDown !== undefined && w.fragile[hk] === 1) {
+    w.hookDown[hk] = b.step + (w.popSteps ?? 720);
+    b.events |= EV_POP;
+  }
 }
 
 function release(b: Body, k: Tuning): void {
@@ -267,6 +395,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   b.jumpBuf = inp.jumpPressed ? k.jumpBuffer : Math.max(0, b.jumpBuf - dt);
   const locked = b.bonkT > 0;
   b.bonkT = Math.max(0, b.bonkT - dt);
+  if (!b.zipOn) b.zipCd = Math.max(0, b.zipCd - dt);
   const hookBefore = b.ropeHook;
 
   let mx = locked ? 0 : inp.moveX, mz = locked ? 0 : inp.moveZ;
@@ -278,9 +407,15 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   // Targeting from this step's latched aim. While on the rope the ring stays on its hook.
   b.ringId = b.ropeHook >= 0 ? b.ropeHook : w.forceHook !== undefined ? w.forceHook : pickTarget(b, inp, k, w);
 
+  // Web zip (player only): the ringed balloon, else a roof ledge under the aim. A zip owns the step's
+  // actions until it ends (hold web through it to swing right after the release).
+  if (k.webZip && inp.zipPressed && !locked && !b.zipOn && b.zipCd <= 0 && zipTarget(b, b.ringId, inp.aimX, inp.aimZ, k, w, ZA) > 0) startZip(b, ZA, k);
+
   // Actions (same precedence as the prototype).
   const wantJump = !locked && (inp.jumpPressed || b.jumpBuf > 0);
-  if (b.grounded) {
+  if (b.zipOn) {
+    // (the zip's pull and release are below)
+  } else if (b.grounded) {
     groundMove(b, mx, mz, k, dt);
     const zip = k.zip && !locked && inp.webPressed && b.ringId >= 0;
     if (wantJump || zip) {
@@ -295,14 +430,37 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.coyote = 0;
     b.jumpBuf = 0;
     b.events |= EV_JUMP;
+  } else if (inp.jumpPressed && !locked && b.ropeHook < 0 && b.airJumps > 0 && !(k.airJumpNoRing && b.ringId >= 0)) {
+    // Double jump: one more upward kick while airborne (not on the rope).
+    if (v.y < k.doubleJumpSpeed) v.y = k.doubleJumpSpeed;
+    b.airJumps--;
+    b.jumpBuf = 0;
+    b.events |= EV_JUMP | EV_DJUMP;
   } else if (b.ropeHook < 0 && held && !locked && b.heldFor >= k.holdDelay && b.ringId >= 0) {
     attach(b, b.ringId, k, w);
   } else if (b.ropeHook >= 0 && !held) {
     release(b, k);
   }
 
-  // Forces.
-  if (!b.grounded) {
+  // Forces. A zip is a straight pull (no gravity / wind): the velocity turns onto the line to the anchor
+  // (below a ledge: first to the point just outside its edge) at zipSpeed, the speed cap included.
+  if (b.zipOn) {
+    b.zipT += dt;
+    let tx = b.zipP.x, tz = b.zipP.z;
+    if (b.zipRoof >= 0 && p.y - k.halfHeight < w.index.solids[b.zipRoof].top + 0.3) {
+      tx -= b.zipDx * (LEDGE_IN + LEDGE_OUT);
+      tz -= b.zipDz * (LEDGE_IN + LEDGE_OUT);
+    }
+    const dx = tx - p.x, dy = b.zipP.y - p.y, dz = tz - p.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d > 1e-6) {
+      const sp = (k.speedCap > 0 && k.zipSpeed > k.speedCap ? k.speedCap : k.zipSpeed) / d;
+      const f = Math.min(1, k.zipPull * dt);
+      v.x += (dx * sp - v.x) * f;
+      v.y += (dy * sp - v.y) * f;
+      v.z += (dz * sp - v.z) * f;
+    }
+  } else if (!b.grounded) {
     v.y -= k.gravity * dt;
     if (w.wind !== undefined) { v.x += w.wind.x * dt; v.z += w.wind.z * dt; }
     if (b.ropeHook >= 0) {
@@ -367,6 +525,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   }
 
+  // Zip auto-release near the anchor (or after zipMaxTime).
+  if (b.zipOn) {
+    const dx = b.zipP.x - p.x, dy = b.zipP.y - p.y, dz = b.zipP.z - p.z;
+    if (dx * dx + dy * dy + dz * dz <= k.zipRelease * k.zipRelease || b.zipT >= k.zipMaxTime) endZip(b, k, w, true);
+  }
+
   // Collision: box vs ground-rooted AABBs.
   const hw = k.halfWidth, hh = k.halfHeight;
   const feet = p.y - hh;
@@ -387,7 +551,9 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         b.ropeHook = -1;
         b.roofId = s.id;
         b.chainCount = 0;
+        b.airJumps = k.airJumps;
         b.events |= EV_LAND;
+        if (b.zipOn) endZip(b, k, w, false);
       }
     } else {
       const hs = Math.sqrt(v.x * v.x + v.z * v.z);
@@ -406,7 +572,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         else { p.z = s.z1 + hw; if (v.z < 0) v.z = 0; }
       }
       b.events |= EV_WALL;
-      if (k.bonk && !b.grounded && nrm > k.bonkMinSpeed && nrm > k.bonkRatio * hs) {
+      if (k.bonk && !b.grounded && !b.zipOn && nrm > k.bonkMinSpeed && nrm > k.bonkRatio * hs) {
         b.ropeHook = -1;
         b.bonkT = k.bonkLock;
         b.events |= EV_BONK;
@@ -426,6 +592,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   }
   if (b.grounded) {
     b.chainCount = 0;
+    b.airJumps = k.airJumps;
     b.lastSafeRoof = b.roofId;
     b.lastSafe.x = p.x; b.lastSafe.y = p.y; b.lastSafe.z = p.z;
   }

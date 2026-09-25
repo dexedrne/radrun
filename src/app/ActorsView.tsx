@@ -14,10 +14,10 @@ import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.j
 import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER } from "../game/play.ts";
 import type { RadbroId } from "../game/round.ts";
-import { EV_ATTACH, EV_BONK, EV_JUMP, EV_LAND, EV_RELEASE, RING_RUNNER } from "../sim/player.ts";
+import { EV_ATTACH, EV_BONK, EV_DJUMP, EV_JUMP, EV_LAND, EV_RELEASE, EV_ZIP, EV_ZIP_END, RING_RUNNER } from "../sim/player.ts";
 import { RM_EDGE, RM_TAUNT } from "../runner/runner.ts";
 import { PHASE_AIR, PHASE_GROUND, PHASE_ROPE } from "../route/trackPack.ts";
-import { A_ATTACH, A_BONK, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type Beat } from "../anim/animMachine.ts";
+import { A_ATTACH, A_BONK, A_DJUMP, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type Beat } from "../anim/animMachine.ts";
 import { AnimPlayer } from "./animPlayer.ts";
 import { CLIP_META, clipsPath, handHeight, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
@@ -103,7 +103,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
 
 export function applyCmd(pl: AnimPlayer, c: AnimCmd | null): void {
   if (!c) return;
-  if (c.kind === "shot") pl.play(c.clip, { once: !c.hold, hold: c.hold, startAt: c.startAt, fade: c.fade, then: c.then, freezeAt: c.freezeAt });
+  if (c.kind === "shot") pl.play(c.clip, { once: !c.hold, hold: c.hold, startAt: c.startAt, fade: c.fade, then: c.then, freezeAt: c.freezeAt, timeScale: c.rate });
   else if (c.kind === "force") pl.force(c.clip, c.fade, c.scale);
   else { pl.setBase(c.clip, c.fade, c.scale); pl.setTimeScale(c.scale); }
 }
@@ -173,10 +173,12 @@ export function ActorsView({ game }: { game: PlayGame }) {
       const vy = isChaser ? b.v.y : rig.vel.y;
       const speed = Math.sqrt(vx * vx + vz * vz);
 
-      // Rope hook this frame.
+      // Rope hook this frame (a web zip hangs from its anchor the same way).
       let hook = -1;
+      let zip = false;
       if (!r.over) {
         if (isChaser && b.ropeHook >= 0) hook = b.ropeHook;
+        if (isChaser && b.zipOn) zip = true;
         if (isRunner && run.pose.phase === PHASE_ROPE) hook = run.pose.ref;
       }
       rig.hook = hook;
@@ -187,8 +189,9 @@ export function ActorsView({ game }: { game: PlayGame }) {
       if (isChaser) {
         const fe = game.frameEvents;
         if (fe & EV_JUMP) ev |= A_JUMP;
-        if (fe & EV_ATTACH) ev |= A_ATTACH;
-        if (fe & EV_RELEASE) ev |= A_RELEASE;
+        if (fe & EV_DJUMP) ev |= A_DJUMP;
+        if (fe & (EV_ATTACH | EV_ZIP)) ev |= A_ATTACH;
+        if (fe & (EV_RELEASE | EV_ZIP_END)) ev |= A_RELEASE;
         if (fe & EV_LAND) ev |= A_LAND;
         if (fe & EV_BONK) ev |= A_BONK;
         grounded = b.grounded;
@@ -212,7 +215,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
       else if (r.phase === "escaped") beat = isRunner ? "rug" : "fish";
       else if (isRunner && run.mode === RM_TAUNT) beat = "taunt";
       applyCmd(rig.player, rig.machine.step({
-        dt: delta, grounded: grounded || beat === "idle", rope: hook >= 0, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
+        dt: delta, grounded: grounded || beat === "idle", rope: hook >= 0 || zip, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
         landVy: isChaser ? b.landVy : 0, panic: isRunner && run.band.panic && !run.band.gassed, beat,
       }));
 
@@ -230,8 +233,9 @@ export function ActorsView({ game }: { game: PlayGame }) {
       // Root placement: feet at p - 0.9; on the rope the body hangs from RightHand at p (errata 1).
       tmp.qYaw.setFromAxisAngle(UP, rig.yaw);
       let tx = 0, ty = -0.9, tz = 0;
-      if (hook >= 0) {
-        const h = game.model.hooks[hook];
+      const anchor = hook >= 0 ? game.model.hooks[hook] : zip ? b.zipP : null;
+      if (anchor) {
+        const h = anchor;
         tmp.u.set(h.x - p.x, h.y - p.y, h.z - p.z).normalize();
         // Facing = swing tangent (velocity minus its rope component), else the current yaw.
         tmp.v.set(vx, vy, vz);
@@ -248,7 +252,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
         faceTo(tmp.f.x, tmp.f.z, 12);
         tx = -rig.hand * tmp.u.x; ty = -rig.hand * tmp.u.y; tz = -rig.hand * tmp.u.z;
       } else tmp.q.copy(tmp.qYaw);
-      rig.ropeW += ((hook >= 0 ? 1 : 0) - rig.ropeW) * Math.min(1, (hook >= 0 ? 6 : 10) * rawDelta);
+      rig.ropeW += ((anchor ? 1 : 0) - rig.ropeW) * Math.min(1, (anchor ? 6 : 10) * rawDelta);
       const k = Math.min(1, 14 * rawDelta);
       rig.off.x += (tx - rig.off.x) * k; rig.off.y += (ty - rig.off.y) * k; rig.off.z += (tz - rig.off.z) * k;
       let px = p.x + rig.off.x, py = p.y + rig.off.y, pz = p.z + rig.off.z;

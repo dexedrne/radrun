@@ -3,7 +3,7 @@
 // run the graph checks and record 60 Hz tracks into runner.pack.bin. Failing candidates are dropped
 // (never fail the build); the graph checks are reported for test 5.
 import { Fnv1a } from "../sim/math.ts";
-import { runnerFrom, type Tuning } from "../sim/tuning.ts";
+import { MOVE_KEYS, runnerFrom, type Tuning } from "../sim/tuning.ts";
 import { EV_ATTACH, EV_JUMP, EV_LAND, EV_RELEASE, type SimWorld } from "../sim/player.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import { buildGraph, forcedUTurns, stronglyConnected, type Candidate, type Junction } from "./graph.ts";
@@ -53,7 +53,10 @@ type Baked = { cand: Candidate; params: HopParams[]; report: EdgeReport };
 
 export function tuningHash(t: Tuning): string {
   const h = new Fnv1a();
+  // The player-only moves are off for the runner: leave their keys out so older bakes hash the same.
+  const movesOff = t.airJumps === 0 && !t.webZip;
   for (const k of Object.keys(t).sort()) {
+    if (movesOff && (MOVE_KEYS as readonly string[]).includes(k)) continue;
     const v = (t as Record<string, unknown>)[k];
     h.str(k);
     if (typeof v === "number") h.f64(v); else h.str(String(v));

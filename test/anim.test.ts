@@ -4,7 +4,7 @@
 // clips (Run_and_Jump, Fall_1, Leap_of_Faith) and Roll_Dodge are never commanded.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { A_ATTACH, A_BONK, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type AnimInput } from "../src/anim/animMachine.ts";
+import { A_ATTACH, A_BONK, A_DJUMP, A_JUMP, A_LAND, A_RELEASE, AnimMachine, CLIP, type AnimCmd, type AnimInput } from "../src/anim/animMachine.ts";
 import CLIP_META from "../src/generated/clips.meta.json" with { type: "json" };
 
 const ALL = ["Idle", "Casual_Walk", "Run_02", "Lean_Forward_Sprint", "Regular_Jump", "Regular_Jump_Land", "Run_and_Jump", "Fall_1",
@@ -74,4 +74,17 @@ test("runner-style phase events and beats never command a dive clip", () => {
   }
   assert.ok(seen > 0);
   assert.equal(CLIP.jump, "Regular_Jump");
+});
+
+test("double jump: Regular_Jump again from its takeoff frame at 1.4x into the apex hold (upright, never a flip)", () => {
+  const m = machine();
+  for (let i = 0; i < 10; i++) m.step(frame({}));
+  m.step(frame({ grounded: false, vy: 6, events: A_JUMP }));
+  for (let i = 0; i < 20; i++) m.step(frame({ grounded: false, vy: 6 - i * 0.3 }));
+  const c = m.step(frame({ grounded: false, vy: 7.5, events: A_JUMP | A_DJUMP }));
+  assert.deepEqual(c, { kind: "shot", clip: "Regular_Jump", fade: 0.06, startAt: T.takeoffAt, hold: true, then: "", freezeAt: T.apexAt, rate: 1.4 });
+  for (let i = 0; i < 60; i++) assert.equal(m.step(frame({ grounded: false, vy: 7 - i * 0.3 })), null);
+  // A web zip reads as a grab (A_ATTACH with rope on) and its end as a release into the apex hold.
+  assert.equal(m.step(frame({ grounded: false, rope: true, events: A_ATTACH }))?.clip, "Grab_Bar_and_Swing_Forward");
+  assert.equal(m.step(frame({ grounded: false, vy: 5, events: A_RELEASE }))?.clip, "Regular_Jump");
 });

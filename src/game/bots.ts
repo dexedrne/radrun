@@ -6,7 +6,7 @@
 // Aim = horizontal unit vector chest -> runner chest. yoink: press web on each step after one whose
 // snapshot had ringId = RUNNER.
 // The swinger (SwingBot, round 3) plays with the REAL player sim instead: see below.
-import { chaseDist, pickTarget, EV_BONK, RING_RUNNER, type InputFrame } from "../sim/player.ts";
+import { chaseDist, emptyZipAim, pickTarget, zipTarget, EV_BONK, RING_RUNNER, type InputFrame } from "../sim/player.ts";
 import { DT } from "../sim/tuning.ts";
 import { Rand, type Vec3 } from "../sim/math.ts";
 import { PHASE_AIR, PHASE_GROUND, sampleEdge, type TrackPose } from "../route/trackPack.ts";
@@ -16,7 +16,8 @@ import type { Kinematic, Round } from "./round.ts";
 
 export type BotKind = "follow" | "camper" | "swing";
 /** k: follower speed factor (follow / camper); ignored by the swinger. */
-export type BotOptions = { kind: BotKind; k: number; yoink: boolean };
+/** moves (swing bot): also double-jumps off drops and web-zips toward him (tools/balance "+moves" rows). */
+export type BotOptions = { kind: BotKind; k: number; yoink: boolean; moves?: boolean };
 
 type TrailPt = { x: number; y: number; z: number; grounded: boolean; phase: number; roofId: number; speed: number };
 
@@ -213,7 +214,12 @@ export class SwingBot {
   private blocked = 0;
   private blockAxis: 0 | 1 = 0;
 
-  constructor(round: Round, seed: number) {
+  /** Use the double jump + web zip (balance rows only; the default bot plays the classic moves). */
+  readonly moves: boolean;
+  private readonly za = emptyZipAim();
+
+  constructor(round: Round, seed: number, moves = false) {
+    this.moves = moves;
     this.lanes = streetLanes(round.model);
     this.rng = new Rand((seed ^ 0x51f15eed) >>> 0);
     this.react = SWING.reactMin + Math.floor(this.rng.next() * (SWING.reactMax - SWING.reactMin + 1));
@@ -439,11 +445,31 @@ export class SwingBot {
     this.held = held;
     inp.webHeld = held || zip;
     inp.webPressed = zip;
+    inp.zipPressed = false;
+    if (this.moves) this.useMoves(round, inp, d, held);
     // YOINK: a red ring held for the reaction time -> click.
     if (this.ring(round, inp) === RING_RUNNER) {
       if (++this.red >= this.react) { inp.webPressed = true; inp.webHeld = true; }
     } else this.red = 0;
     return null;
+  }
+
+  /**
+   * Double jump when dropping with no roof close below; web-zip toward him (ringed balloon or a ledge)
+   * from a roof when he is on another roof 8+ m away and the zip is ready.
+   */
+  private useMoves(round: Round, inp: InputFrame, d: number, held: boolean): void {
+    const b = round.player, P = b.p, r = round.runner;
+    if (!b.grounded && b.ropeHook < 0 && !b.zipOn && b.airJumps > 0 && b.v.y < -3 && !held) {
+      if (round.index.groundBelow(P.x, P.z, P.y) < P.y - 4) inp.jumpPressed = true;
+    }
+    if (b.grounded && !b.zipOn && b.zipCd <= 0 && d > 8 && r.roofId !== b.roofId) {
+      const ax = this.ax, az = this.az;
+      this.setAim(inp, this.T.x - P.x, this.T.z - P.z);
+      const ring = this.ring(round, inp);
+      if (zipTarget(b, ring >= 0 ? ring : -1, inp.aimX, inp.aimZ, round.tuning, round.world, this.za) > 0) inp.zipPressed = true;
+      else this.setAim(inp, ax, az);
+    }
   }
 
   after(round: Round): void {
@@ -458,7 +484,7 @@ export type BotRun = { caught: boolean; kind: string; time: number; steps: numbe
 
 /** Run a whole round with a bot (no countdown). */
 export function runBotRound(round: Round, opts: BotOptions, inp: InputFrame): BotRun {
-  const bot = opts.kind === "swing" ? new SwingBot(round, round.opts.seed) : new Bot(round, opts);
+  const bot = opts.kind === "swing" ? new SwingBot(round, round.opts.seed, opts.moves ?? false) : new Bot(round, opts);
   let guard = 0;
   while (!round.over && guard++ < 20000) {
     const ov = bot.next(round, inp);

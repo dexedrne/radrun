@@ -326,6 +326,8 @@ export function respawnNear(b: Body, model: CityModel, roofId: number, near: Vec
   b.roofId = s.id;
   b.ropeHook = -1;
   b.heldFor = b.coyote = b.jumpBuf = b.bonkT = 0;
+  b.zipOn = false;
+  b.zipT = b.zipCd = 0;
   b.chainCount = 0;
   b.ringId = RING_NONE;
   b.lastSafeRoof = s.id;

@@ -10,7 +10,7 @@ import type { RadbroId } from "../game/round.ts";
 import type { Difficulty } from "../sim/tuning.ts";
 import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
-import { applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
+import { LINK_VERSION, applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
 import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
 import { CampaignScreen } from "../ui/campaignScreen.tsx";
 import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaign.ts";
@@ -62,7 +62,10 @@ function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"
   };
 }
 
-/** `older`: a link from before versioned links (v < 2) - it is replayed as Downtown with no mutators. */
+/**
+ * `older`: a link from an earlier link version (v < LINK_VERSION). v1 links replay as Downtown with no
+ * mutators; records made before the double jump / web zip replay without them (ghost format 1).
+ */
 async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["source"], older = false): Promise<GhostChoice | null> {
   const dec = await unpackGhost(g.g);
   if (!dec) return null;
@@ -167,7 +170,7 @@ export default function PlayPage() {
     const { c, r, d, s, t, g, mu, v } = challenge;
     if (!c || !r || !d || s === null || t === null || !g) return;
     setLinkGhostBusy(true);
-    void decodeGhost(game, { c, r, d, s, t, g, mu }, "link", v < 2).then(ch => { setLinkGhost(ch); setLinkGhostBusy(false); });
+    void decodeGhost(game, { c, r, d, s, t, g, mu }, "link", v < LINK_VERSION).then(ch => { setLinkGhost(ch); setLinkGhostBusy(false); });
   }, [game, challenge]);
 
   // Your kept best run for the picked chaser x difficulty (title: "race your best").

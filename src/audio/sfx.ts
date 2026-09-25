@@ -120,6 +120,14 @@ export const sfx = {
     noise(e, "bandpass", 500 + 400 * k, 1800 + 1800 * k, 0.9, t, 0.26 + 0.1 * k, 0.18 + 0.25 * k, 0.35);
   }),
   jump: () => at(0, (e, t) => tone(e, "square", 240, 470, t, 0.1, 0.05)),
+  /** Double jump: the jump blip, a fifth higher and quicker. */
+  djump: () => at(0, (e, t) => tone(e, "square", 360, 720, t, 0.08, 0.05)),
+  /** Web zip: a thwip, then a rising whoosh along the line. */
+  zip: () => at(0, (e, t) => {
+    noise(e, "bandpass", 5200, 1500, 3, t, 0.08, 0.4, 0.1);
+    tone(e, "sine", 2600, 700, t, 0.07, 0.16, 0.003);
+    noise(e, "bandpass", 450, 3200, 1.1, t + 0.04, 0.42, 0.38, 0.55);
+  }),
   /** Landing thud; impact = downward speed (m/s) at touch-down. */
   land: (impact: number) => at(0, (e, t) => {
     const k = clamp01((impact - 2) / 14);
