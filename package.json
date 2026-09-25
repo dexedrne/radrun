@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "VPL",
   "author": "dexedrne",
   "engines": {
     "node": ">=23.6"

@@ -90,4 +90,17 @@ Tools (print results, never gate the build): `npm run balance` (follower/camper/
 (headless `?bot` round: outcome vs the Node prediction + screenshots; `?bot=swing` URLs save mid-swing
 shots).
 
-Credits: Radbro #652, #4764, #2564 and #723 · dexedrne · built on react-three-game by prnth.
+## Use it
+
+RadRun is under the [Viral Public License](LICENSE), the same license as Milady, Remilio and
+react-three-game. Fork it, remix it, ship your own version, sell it; no credit needed. Anything made
+from it keeps the license. The four Radbros are also free to use on their own, as rigged and animated
+models: [dexedrne/radbros-3d](https://github.com/dexedrne/radbros-3d).
+
+The license covers what is in this repo. It does not cover the Pockit Milady model: she is prnth's,
+she loads at runtime from his repo, and she is not part of this one. Ask him before using her in your
+own thing.
+
+Credits: Radbros #652, #4764, #2564 and #723 are dexedrne's own, used with permission from the Radbro
+Webring dev · the Pockit Milady is by prnth, used with his permission · built on
+[react-three-game](https://prnth.com/react-three-game/) by prnth.
