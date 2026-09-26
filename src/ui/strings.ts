@@ -20,7 +20,7 @@ export const S = {
   practice: "PRACTICE",
   ghost: "GHOST",
   autoLow: "switched to Low quality for smoother play — change in Settings",
-  credits: "Radbro #652, #4764, #2564 and #723 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
+  credits: "Radbro #652, #4764, #2564, #723 and #3171 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
 /** Runner taunt bubbles (voice taunt_1..6): slots 1-4 are reactions (a laugh, a scoff, a hum), 5-6 the only words. */
@@ -29,17 +29,18 @@ export const TAUNTS: Record<RadbroId, string[]> = {
   "4764": ["heh", "pff", "ha.", "hm.", "i'm not even running", "take your time"],
   "2564": ["hehe", "shh", "ha", "\u266A", "over here", "wrong roof"],
   "723": ["heh heh", "oh, man", "ahh", "nah", "nice day for it", "you good back there?"],
+  "3171": ["heh", "oop", "ha", "yeah?", "don't mind the halo", "almost had me"],
 };
 
 /**
  * Per-character bubbles for the panic / cornered / catch / escape lines, as he says them (#652 earnest,
- * #4764 deadpan, #2564 quiet, #723 easygoing).
+ * #4764 deadpan, #2564 quiet, #723 easygoing, #3171 impish).
  */
 export const LINES: Record<"panic" | "cornered" | "caught" | "escaped", Record<RadbroId, string>> = {
-  panic: { "652": "!", "4764": "!", "2564": "!", "723": "oh, hey" },
-  cornered: { "652": "nope, sorry", "4764": "nope", "2564": "nope", "723": "oh, nope" },
-  caught: { "652": "okay. you got me.", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough" },
-  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "2564": "thank you", "723": "see ya" },
+  panic: { "652": "!", "4764": "!", "2564": "!", "723": "oh, hey", "3171": "!" },
+  cornered: { "652": "nope, sorry", "4764": "nope", "2564": "nope", "723": "oh, nope", "3171": "wasn't me" },
+  caught: { "652": "okay. you got me.", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough", "3171": "worth a shot" },
+  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "2564": "thank you", "723": "see ya", "3171": "later" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -54,6 +55,7 @@ export const PERSONA: Record<RadbroId, string> = {
   "4764": "deadpan",
   "2564": "quiet",
   "723": "easygoing",
+  "3171": "impish",
 };
 
 export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {
@@ -61,6 +63,7 @@ export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = 
   "4764": { body: "#8e6cff", accent: "#16161d" },
   "2564": { body: "#eef3fa", accent: "#b9c6d6" },
   "723": { body: "#a8683a", accent: "#1b1b22" },
+  "3171": { body: "#ffb020", accent: "#1a1a1a" },
 };
 
 export function heat(d: number): { label: string; color: string; fill: number } {

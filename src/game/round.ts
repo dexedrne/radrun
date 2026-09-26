@@ -14,8 +14,8 @@ import { sampleEdge, type Pack, type TrackPose } from "../route/trackPack.ts";
 import { Runner } from "../runner/runner.ts";
 import { DISTRICTS, type ChaseTweak, type DistrictId } from "../world/districts.ts";
 
-export type RadbroId = "652" | "4764" | "2564" | "723";
-export const RADBROS: readonly RadbroId[] = ["652", "4764", "2564", "723"];
+export type RadbroId = "652" | "4764" | "2564" | "723" | "3171";
+export const RADBROS: readonly RadbroId[] = ["652", "4764", "2564", "723", "3171"];
 
 export type RoundPhase = "countdown" | "chase" | "caught" | "escaped";
 

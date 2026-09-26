@@ -1,7 +1,7 @@
-// The Radbro roster (#652, #4764, #2564 and, since round 5, #723 the cowboy): every Radbro ships a web
-// GLB, a clip pack, clip meta with every clip the game commands and a title portrait; every per-character
-// table covers him; links carry him by id (and older links still decode); the runner is drawn from the
-// other three; and which Radbro you play never changes the round (ghost links stay exact).
+// The Radbro roster (#652, #4764, #2564, #723 the cowboy and, since 2026-09-25, #3171 the halo): every
+// Radbro ships a web GLB, a clip pack, clip meta with every clip the game commands and a title portrait;
+// every per-character table covers him; links carry him by id (and older links still decode); the runner
+// is drawn from the others; and which Radbro you play never changes the round (ghost links stay exact).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -23,8 +23,8 @@ const pub = (f: string) => new URL(`../public/${f}`, import.meta.url);
 const USED = ["Idle", "Casual_Walk", "Run_02", "Lean_Forward_Sprint", "Regular_Jump", "Grab_Bar_and_Swing_Forward", "Rope_Hang_Idle",
   "Big_Wave_Hello", "Victory_Cheer", "Falling_Down", "Fishing_Cast", "Waltz"];
 
-test("roster: four Radbros, #723 included", () => {
-  assert.deepEqual([...RADBROS], ["652", "4764", "2564", "723"]);
+test("roster: five Radbros, #723 and #3171 included", () => {
+  assert.deepEqual([...RADBROS], ["652", "4764", "2564", "723", "3171"]);
 });
 
 test("roster: every Radbro has its GLB, clip pack, portrait and full clip meta", () => {
