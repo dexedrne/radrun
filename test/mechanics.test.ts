@@ -49,7 +49,8 @@ test("mechanics: snapping webs + wind + low gravity replay bit-exactly (same see
 });
 
 test("mechanics: snapping webs - no web lasts longer than snapTime; it snaps (no boost) and you web again", () => {
-  const r = make(77, M_SNAP);
+  // (Round 12: seed 77's bot caught him in 5 s; 78 chases long enough to see the webs snap.)
+  const r = make(78, M_SNAP);
   const snapSteps = Math.round(MECH.snapTime * 120);
   assert.equal(r.world.snapSteps, snapSteps);
   const { snaps, longest, swings } = swingRun(r, 120 * 60);
