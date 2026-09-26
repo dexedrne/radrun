@@ -23,6 +23,7 @@ export function protoModel(): CityModel {
     wallGaps: [],
     junctionCandidates: [],
     spawn: { roofId: 0, x: 0, y: LEVEL.roofs[0].top + 0.9, z: 0, yaw: 0 },
+    rigs: [],
     hash: "proto",
   };
 }

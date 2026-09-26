@@ -119,7 +119,49 @@
     "zipFlingFwd": 4,
     "zipFlingUp": 6,
     "zipLedgeSpeed": 7,
-    "zipLedgeUp": 4
+    "zipLedgeUp": 4,
+    "rigBonus": 4,
+    "rigEndInset": 2,
+    "zipReach": 45,
+    "zipLift": 0.14,
+    "zipAimMin": -0.34,
+    "zipAimMax": 0.77,
+    "zipRigAssist": 1.2,
+    "zipAssistCos": 0.966,
+    "zipStop": 1,
+    "zipKeep": 0.85,
+    "zipCharges": 2,
+    "zipRimReach": 2.5,
+    "zipPopWindow": 0.25,
+    "zipPopUp": 14,
+    "zipPopFwd": 6,
+    "charge": true,
+    "chargeMin": 0.15,
+    "chargeTime": 0.55,
+    "chargeWalk": 4,
+    "chargeUp": 13,
+    "chargeFwd": 8,
+    "chargeWallOut": 6,
+    "chargeWallUp": 8,
+    "chargeHangMax": 1.5,
+    "chargeFling": 8,
+    "chargeFlingUp": 4,
+    "chargeAir": 0.3,
+    "swingPerfectCos": 0.82,
+    "releasePerfect": 3,
+    "reboundWindow": 0.12,
+    "reboundKeep": 0.6,
+    "kickChainUp": 0.8,
+    "dive": true,
+    "diveMinDrop": 6,
+    "diveSpeed": 12,
+    "diveGravity": 1.5,
+    "yankSpeed": 32,
+    "yankTime": 0.7,
+    "yankCooldown": 2.5,
+    "airTurn": 1.6,
+    "flowCap": 2,
+    "flowDecay": 2.5
   },
   "camera": {
     "fov": 62,
@@ -144,7 +186,12 @@
     "armMin": 3,
     "dodgeRate": 5,
     "webClear": 0.8,
-    "wallCam": 1.4
+    "wallCam": 1.4,
+    "zipFov": 6,
+    "armZip": 6.5,
+    "armDive": 8,
+    "chargeArm": 0.5,
+    "chargeFov": 3
   },
   "difficulty": {
     "chill": {
@@ -158,7 +205,8 @@
       "taunt": 1.8,
       "airMin": 0.9,
       "airMax": 1.25,
-      "lead": 4
+      "lead": 4,
+      "yankRange": 0
     },
     "normal": {
       "base": 1,
@@ -171,7 +219,8 @@
       "taunt": 1.4,
       "airMin": 0.9,
       "airMax": 1.5,
-      "lead": 0
+      "lead": 0,
+      "yankRange": 12
     },
     "degen": {
       "base": 1.1,
@@ -184,7 +233,8 @@
       "taunt": 0.9,
       "airMin": 0.9,
       "airMax": 2,
-      "lead": 3
+      "lead": 3,
+      "yankRange": 9
     }
   },
   "george": {
@@ -212,5 +262,69 @@
     "windWarn": 1,
     "lowGravity": 0.65,
     "sixtyClock": 60
+  },
+  "structures": {
+    "default": {
+      "cables": 1,
+      "cableTier1": 0.55,
+      "cableTier2": 0.85,
+      "cableMin": 12,
+      "cableSag": 0.25,
+      "rigApart": 12,
+      "gantry": true,
+      "gantryMin": 13,
+      "gantryMax": 16,
+      "gantryMinL": 30,
+      "skybridge": 0.12,
+      "skybridgeLo": 0.35,
+      "skybridgeHi": 0.6,
+      "tanks": 0.1,
+      "tankLo": 7,
+      "tankHi": 10,
+      "boards": 0.15,
+      "boardLo": 6,
+      "boardHi": 8,
+      "stacks": 0.1,
+      "stackBelowLo": 4,
+      "stackBelowHi": 8
+    },
+    "towers": {
+      "cableTier1": 0.45,
+      "cableTier2": 0.75,
+      "skybridge": 0.2,
+      "tanks": 0.05,
+      "boards": 0.1,
+      "stacks": 0.12
+    },
+    "market": {
+      "cables": 0.7,
+      "cableTier1": 0.85,
+      "cableTier2": 0,
+      "gantry": false,
+      "skybridge": 0,
+      "tanks": 0.25,
+      "boards": 0.15,
+      "stacks": 0.1
+    },
+    "docks": {
+      "cables": 0.5,
+      "cableTier1": 0.85,
+      "cableTier2": 0,
+      "gantry": false,
+      "skybridge": 0,
+      "tanks": 0.25,
+      "boards": 0.15,
+      "stacks": 0
+    },
+    "vertigo": {
+      "cables": 0.6,
+      "cableTier1": 0.6,
+      "cableTier2": 0,
+      "gantry": false,
+      "skybridge": 0.08,
+      "tanks": 0.1,
+      "boards": 0,
+      "stacks": 0
+    }
   }
 }

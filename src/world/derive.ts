@@ -201,6 +201,7 @@ export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
     wallGaps,
     junctionCandidates,
     spawn,
+    rigs: [],
     hash: "",
   };
   model.hash = modelHash(model);

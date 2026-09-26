@@ -209,6 +209,66 @@ export type Tuning = {
   /** Ledge zip release: onto the roof at this horizontal speed with this hop (m/s). */
   zipLedgeSpeed: number;
   zipLedgeUp: number;
+  // ---- round 12 (docs/specs/2026-09-26-round12-spider-tag.md §9) ----
+  /** Rig anchors (cables): score bonus (m) and how far from each end the ring may glide (m). */
+  rigBonus: number;
+  rigEndInset: number;
+  /**
+   * Straight zip (§4): reach (m); the aim is the camera forward pitched up by zipLift (a sine), clamped to
+   * [zipAimMin, zipAimMax] (sines); a cable within zipRigAssist m of the ray counts as hit; with nothing hit the
+   * ringed anchor within zipAssistCos of the aim is the target. The pull ends zipStop m short; an early end keeps
+   * zipKeep x the speed; zipCharges zips per airtime; a hit within zipRimReach m under a landable top is a rim.
+   */
+  zipReach: number;
+  zipLift: number;
+  zipAimMin: number;
+  zipAimMax: number;
+  zipRigAssist: number;
+  zipAssistCos: number;
+  zipStop: number;
+  zipKeep: number;
+  zipCharges: number;
+  zipRimReach: number;
+  /** Zip pop (§6.2): Jump in the last zipPopWindow s of a zip (or on arrival) = zipPopUp up + zipPopFwd along the aim. */
+  zipPopWindow: number;
+  zipPopUp: number;
+  zipPopFwd: number;
+  /** Charge jump (§5): hold C. c = clamp((held - chargeMin) / chargeTime, 0, 1). */
+  charge: boolean;
+  chargeMin: number;
+  chargeTime: number;
+  chargeWalk: number;
+  chargeUp: number;
+  chargeFwd: number;
+  chargeWallOut: number;
+  chargeWallUp: number;
+  chargeHangMax: number;
+  chargeFling: number;
+  chargeFlingUp: number;
+  chargeAir: number;
+  /** Perfect release (§6.1): let go past swingPerfectCos from straight down (and before the auto-release). */
+  swingPerfectCos: number;
+  releasePerfect: number;
+  /** Rebound kick (§6.3). */
+  reboundWindow: number;
+  reboundKeep: number;
+  /** Kick chains (§6.4): up speed per chained wall kick (at most 3). */
+  kickChainUp: number;
+  /** Dive (§6.5). */
+  dive: boolean;
+  diveMinDrop: number;
+  diveSpeed: number;
+  diveGravity: number;
+  /** Web-yank (§6.6): range (m; per difficulty, set by the round; 0 = off), homing speed, time and cooldown. */
+  yankRange: number;
+  yankSpeed: number;
+  yankTime: number;
+  yankCooldown: number;
+  /** Air carve (§6.7, rad/s). */
+  airTurn: number;
+  /** Flow (§6.8): speed cap per pip (m/s), one pip drains every flowDecay s. */
+  flowCap: number;
+  flowDecay: number;
 };
 
 export const DT = 1 / 120;
@@ -352,6 +412,49 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   zipFlingUp: 6,
   zipLedgeSpeed: 7,
   zipLedgeUp: 4,
+  rigBonus: 4,
+  rigEndInset: 2,
+  zipReach: 45,
+  zipLift: 0.14,
+  zipAimMin: -0.34,
+  zipAimMax: 0.77,
+  zipRigAssist: 1.2,
+  zipAssistCos: 0.966,
+  zipStop: 1,
+  zipKeep: 0.85,
+  zipCharges: 2,
+  zipRimReach: 2.5,
+  zipPopWindow: 0.25,
+  zipPopUp: 14,
+  zipPopFwd: 6,
+  charge: true,
+  chargeMin: 0.15,
+  chargeTime: 0.55,
+  chargeWalk: 4,
+  chargeUp: 13,
+  chargeFwd: 8,
+  chargeWallOut: 6,
+  chargeWallUp: 8,
+  chargeHangMax: 1.5,
+  chargeFling: 8,
+  chargeFlingUp: 4,
+  chargeAir: 0.3,
+  swingPerfectCos: 0.82,
+  releasePerfect: 3,
+  reboundWindow: 0.12,
+  reboundKeep: 0.6,
+  kickChainUp: 0.8,
+  dive: true,
+  diveMinDrop: 6,
+  diveSpeed: 12,
+  diveGravity: 1.5,
+  yankRange: 0,
+  yankSpeed: 32,
+  yankTime: 0.7,
+  yankCooldown: 2.5,
+  airTurn: 1.6,
+  flowCap: 2,
+  flowDecay: 2.5,
 });
 
 /** The player-only moves (double jump + web zip + slide); the runner and old ghosts run without them. */
@@ -377,11 +480,20 @@ export function runnerFrom(player: Readonly<Tuning>): Tuning {
     ...player, airAccel: 0, ropeSteer: 0, yoink: false, airJumps: 0, slide: false, webZip: true,
     releaseSweet: 0, swingReelUp: 0, autoReleaseUp: player.releaseUp, webLift: 0, swingAvoid: 0, edgeAvoid: 0,
     wallUpKick: 0, wallPushOff: 0, anchorArcPenalty: 0,
+    // Round 12 (§7.1): the straight zip (forced targets only) and the charge are his; the player's tech is not.
+    charge: true, releasePerfect: 0, reboundWindow: 0, kickChainUp: 0, dive: false, yankRange: 0, airTurn: 0, flowCap: 0, zipPopWindow: 0,
   };
 }
-/** Player-only keys the runner never uses (double jump + slide): left out of the bake's tuning hash. */
+/** Round 12 player-only tech keys (§9 "runner-unused"): never read by the runner's sim. */
+export const TECH_KEYS: readonly (keyof Tuning)[] = [
+  "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
+  "yankRange", "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
+  "zipPopWindow", "zipPopUp", "zipPopFwd", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos",
+];
+/** Player-only keys the runner never uses (double jump, slide, round 12 tech): left out of the bake's tuning hash. */
 export const RUNNER_UNUSED_KEYS: readonly (keyof Tuning)[] = [
   "airJumps", "doubleJumpSpeed", "airJumpNoRing", "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
+  ...TECH_KEYS,
 ];
 export const RUNNER: Readonly<Tuning> = Object.freeze(runnerFrom(PLAYER));
 
@@ -397,14 +509,16 @@ export type DifficultyParams = {
    * round is not over in a few seconds), Degen 3 (fewer lucky early catches), Normal 0.
    */
   lead: number;
+  /** Round 12 web-yank range (m; 0 = no yank). The owner's call: Chill has none. */
+  yankRange: number;
 };
 export type DifficultyTable = Record<Difficulty, DifficultyParams>;
 /** Spec §7 defaults; public/levels/tuning.json "difficulty" overrides them (set from tools/balance). */
 export const DIFFICULTY: Readonly<DifficultyTable> = Object.freeze({
-  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1, lead: 4 },
-  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1, lead: 0 },
+  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1, lead: 4, yankRange: 0 },
+  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1, lead: 0, yankRange: 12 },
   /** Round 3: faster, smarter, shorter taunts, 4 m Yoink (tuned against the swinging bot, tools/balance). */
-  degen: { base: 1.2, gStar: 50, mMin: 0.85, mMax: 2.0, panicBudget: 30, sigma: 0.08, yoinkRange: 4, taunt: 0.9, airMin: 0.9, airMax: 2.0, lead: 3 },
+  degen: { base: 1.2, gStar: 50, mMin: 0.85, mMax: 2.0, panicBudget: 30, sigma: 0.08, yoinkRange: 4, taunt: 0.9, airMin: 0.9, airMax: 2.0, lead: 3, yankRange: 9 },
 });
 
 export const MEDALS = {
@@ -461,6 +575,11 @@ export const TUNABLE_KEYS = [
   "rollMinVy", "rollTime", "stumbleVy", "stumbleKeep", "stumbleLock", "failFloor",
   "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown", "zipRelease",
   "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
+  "rigBonus", "rigEndInset",
+  "zipReach", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipStop", "zipKeep", "zipCharges", "zipRimReach", "zipPopWindow", "zipPopUp", "zipPopFwd",
+  "charge", "chargeMin", "chargeTime", "chargeWalk", "chargeUp", "chargeFwd", "chargeWallOut", "chargeWallUp", "chargeHangMax", "chargeFling", "chargeFlingUp", "chargeAir",
+  "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
+  "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
 ] as const satisfies readonly (keyof Tuning)[];
 
 export type CameraTuning = {
@@ -496,6 +615,12 @@ export type CameraTuning = {
   webClear: number;
   /** Round 11: on a wall run (and nearWallFor s after) the camera keeps this far (m) off the wall's face (0 = off). */
   wallCam: number;
+  /** Round 12: FOV + zipFov (deg) and arm armZip (m) while zipping; charging pulls the arm in chargeArm m, FOV - chargeFov; diving arm armDive. */
+  zipFov: number;
+  armZip: number;
+  armDive: number;
+  chargeArm: number;
+  chargeFov: number;
 };
 
 export const CAMERA: Readonly<CameraTuning> = Object.freeze({
@@ -522,7 +647,67 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   dodgeRate: 5,
   webClear: 0.8,
   wallCam: 1.4,
+  zipFov: 6,
+  armZip: 6.5,
+  armDive: 8,
+  chargeArm: 0.5,
+  chargeFov: 3,
 });
+
+/**
+ * Round 12 structures between the buildings (§2.2, derived by `npm run level`): per-district knobs. `default` is
+ * Downtown; the other districts override some keys. Mutable so tuning.json "structures" can override them (tools
+ * and the ?tune sliders); a chase keeps its baked city.model.json.
+ */
+export type StructureKnobs = {
+  /** Chance of a cable per street station; its tier heights x L (L = the lower facade top; cableTier2 0 = one tier). */
+  cables: number;
+  cableTier1: number;
+  cableTier2: number;
+  cableMin: number;
+  cableSag: number;
+  /** Same-tier cables at least this far apart along a street run (m). */
+  rigApart: number;
+  gantry: boolean;
+  gantryMin: number;
+  gantryMax: number;
+  gantryMinL: number;
+  skybridge: number;
+  skybridgeLo: number;
+  skybridgeHi: number;
+  tanks: number;
+  tankLo: number;
+  tankHi: number;
+  boards: number;
+  boardLo: number;
+  boardHi: number;
+  stacks: number;
+  stackBelowLo: number;
+  stackBelowHi: number;
+};
+export const STRUCTURES_DEFAULT: Readonly<StructureKnobs> = Object.freeze({
+  cables: 1, cableTier1: 0.55, cableTier2: 0.85, cableMin: 12, cableSag: 0.25, rigApart: 12,
+  gantry: true, gantryMin: 13, gantryMax: 16, gantryMinL: 30,
+  skybridge: 0.12, skybridgeLo: 0.35, skybridgeHi: 0.6,
+  tanks: 0.1, tankLo: 7, tankHi: 10, boards: 0.15, boardLo: 6, boardHi: 8,
+  stacks: 0.1, stackBelowLo: 4, stackBelowHi: 8,
+});
+/** §2.2 district table (Downtown = the defaults). */
+export const STRUCTURES_DISTRICT: Readonly<Record<string, Partial<StructureKnobs>>> = Object.freeze({
+  towers: { cableTier1: 0.45, cableTier2: 0.75, skybridge: 0.2, tanks: 0.05, boards: 0.1, stacks: 0.12 },
+  market: { cables: 0.7, cableTier1: 0.85, cableTier2: 0, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0.1 },
+  docks: { cables: 0.5, cableTier1: 0.85, cableTier2: 0, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0 },
+  vertigo: { cables: 0.6, cableTier1: 0.6, cableTier2: 0, gantry: false, skybridge: 0.08, tanks: 0.1, boards: 0, stacks: 0 },
+});
+/** The live structure knobs: `default` + per-district overrides (tuning.json "structures" replaces them). */
+export const STRUCTURES: { default: StructureKnobs; [district: string]: Partial<StructureKnobs> } = {
+  default: { ...STRUCTURES_DEFAULT },
+  ...Object.fromEntries(Object.entries(STRUCTURES_DISTRICT).map(([k, v]) => [k, { ...v }])),
+};
+/** A district's structure knobs (the defaults with its overrides). */
+export function structureKnobs(district: string): StructureKnobs {
+  return { ...STRUCTURES.default, ...(district === "default" || district === "downtown" ? {} : STRUCTURES[district] ?? {}) };
+}
 
 export type TuningJson = {
   player?: Partial<Record<string, number | boolean>>;
@@ -532,6 +717,8 @@ export type TuningJson = {
   george?: Partial<Record<string, number>>;
   /** Round 4 mechanics (MECH). */
   mechanics?: Partial<Record<string, number>>;
+  /** Round 12 structure knobs (STRUCTURES): `default` + per-district overrides. */
+  structures?: Partial<Record<string, Partial<Record<string, number | boolean>>>>;
 };
 
 /** Merge tuning.json over the PLAYER preset and camera defaults. Unknown keys are ignored (warned). */
@@ -559,6 +746,18 @@ export function applyTuningJson(json: TuningJson | null | undefined, warn: (m: s
     if (!(k in MECH) || typeof v !== "number") { warn(`tuning.json: bad mechanics.${k}`); continue; }
     (MECH as Record<string, number>)[k] = v;
   }
+  if (json?.structures) {
+    // A "structures" section replaces the built-in district table (the file is the whole truth once saved).
+    for (const d of Object.keys(STRUCTURES)) if (d !== "default") delete STRUCTURES[d];
+    STRUCTURES.default = { ...STRUCTURES_DEFAULT };
+    for (const [d, sec] of Object.entries(json.structures)) {
+      const dst: Record<string, unknown> = d === "default" ? STRUCTURES.default : (STRUCTURES[d] = {});
+      for (const [k, v] of Object.entries(sec ?? {})) {
+        if (!(k in STRUCTURES_DEFAULT) || typeof v !== typeof (STRUCTURES_DEFAULT as Record<string, unknown>)[k]) { warn(`tuning.json: bad structures.${d}.${k}`); continue; }
+        dst[k] = v;
+      }
+    }
+  }
   const c = json?.camera ?? {};
   for (const [k, v] of Object.entries(c)) {
     if (!(k in CAMERA)) { warn(`tuning.json: unknown camera key ${k}`); continue; }
@@ -574,5 +773,6 @@ export function tuningToJson(player: Tuning, camera: CameraTuning, difficulty: D
   for (const k of TUNABLE_KEYS) out.player![k] = player[k] as number | boolean;
   for (const k of Object.keys(CAMERA) as (keyof CameraTuning)[]) out.camera![k] = camera[k];
   out.mechanics = { ...MECH };
+  out.structures = Object.fromEntries(Object.entries(STRUCTURES).map(([d, v]) => [d, { ...v }]));
   return out;
 }
