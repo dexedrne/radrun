@@ -76,7 +76,7 @@ test("codec: encode -> decode and pack -> unpack round-trip exactly (runs, yaw w
 
 test("codec: garbage, truncated or tampered strings decode to null (never throw)", async () => {
   const log = new GhostLog();
-  for (let i = 0; i < 300; i++) log.push({ yaw: i % YAW_RES, fwd: 64, right: 0, bits: i % 50 < 20 ? 4 : 0 });
+  for (let i = 0; i < 300; i++) log.push({ yaw: i % YAW_RES, fwd: 64, right: 0, bits: i % 50 < 20 ? 4 : 0, pitch: 0 });
   const bytes = encodeBytes(log, { touch: false, easy: false });
   assert.equal(decodeBytes(bytes.slice(0, bytes.length - 1)), null);
   assert.equal(decodeBytes(new Uint8Array([9, 0, 1, 0])), null);

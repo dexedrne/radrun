@@ -8,7 +8,7 @@ import { TOUCH, type CameraTuning, type Difficulty, type DifficultyTable, type T
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
 import type { DistrictId } from "../world/districts.ts";
 import type { Pack } from "../route/trackPack.ts";
-import { PHASE_ROPE, packAnchor } from "../route/trackPack.ts";
+import { PHASE_ROPE, PHASE_ZIP, packAnchor } from "../route/trackPack.ts";
 import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
@@ -239,7 +239,7 @@ export class PlayGame {
       // Players: the step's input is a quantised record and the frame is rebuilt from it, so the
       // recorded run replays bit-exactly (game/ghost.ts). Touch biases the aim toward where you are
       // going (buildFrame), so a thumb-aimed camera still rings the building ahead.
-      this.input.sample(rec, rig.yaw);
+      this.input.sample(rec, rig.yaw, rig.pitch);
       buildFrame(f, rec, round.player.v, this.roundFlags.touch, round.tuning.runSpeed);
       if (this.recording && chase) this.log.push(rec);
       round.step(f);
@@ -367,7 +367,7 @@ export class PlayGame {
   /** His web anchor this step (on the rope with a v2 pack) into `out`; false otherwise. */
   runnerAnchor(out: Vec3): boolean {
     const pose = this.round.runner.pose;
-    return pose.phase === PHASE_ROPE && packAnchor(this.pack, pose.ref, out);
+    return (pose.phase === PHASE_ROPE || pose.phase === PHASE_ZIP) && packAnchor(this.pack, pose.ref, out);
   }
 
   get justEnded(): boolean {

@@ -86,7 +86,7 @@ const GHOST_STATUS: Record<string, { text: string; color: string }> = {
   verified: { text: "verified replay", color: "#3ddc84" },
   unverified: { text: "unverified", color: "#ffb347" },
 };
-const caughtVerb = (kind: string) => (kind === "yoink" ? "yoinked" : kind === "tag" ? "tagged" : "caught");
+const caughtVerb = (kind: string) => (kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : kind === "tag" ? "tagged" : "caught");
 
 /** Title: the ghost link's banner (who, what time, whether the replay reproduces it). */
 function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; active: boolean; busy: boolean }) {
@@ -535,7 +535,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
       <div style={{ ...panel, minWidth: "min(360px, 90vw)", maxWidth: "94vw", boxSizing: "border-box", padding: compact ? "10px 14px" : panel.padding, textAlign: "center", pointerEvents: "auto" }} data-testid="results">
         {r.caught ? (
           <>
-            <div style={{ font: `900 ${big}px ui-monospace, monospace`, letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
+            <div style={{ font: `900 ${big}px ui-monospace, monospace`, letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : r.kind === "yank" ? "YANKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
             <div style={{ marginTop: 8, display: "inline-block", padding: "4px 14px", borderRadius: 20, fontWeight: 900, color: "#111", background: MEDAL_COLOR[r.medal] }}>{r.medal}</div>
             <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
               {r.newBest ? (r.best === null ? (r.oldBest != null ? `first catch on this build - best (older build ${r.oldBest.toFixed(1)} s)` : "first catch - personal best") : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}

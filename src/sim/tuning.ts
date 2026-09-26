@@ -189,24 +189,18 @@ export type Tuning = {
   doubleJumpSpeed: number;
   /** Easy grab: an airborne jump press only double-jumps when nothing is ringed (the same press grabs). */
   airJumpNoRing: boolean;
-  /** Web zip (ZIP key): a straight pull to the ringed anchor or a roof ledge under the aim. */
+  /** Web zip (ZIP key; round 12: the straight zip where the camera points, §4). */
   webZip: boolean;
   /** Pull speed (m/s; the speed cap still applies) and how fast the velocity turns onto the line (1/s). */
   zipSpeed: number;
   zipPull: number;
-  /** Ledge search range (horizontal m along the aim) and how far above / below you a ledge may be. */
-  zipRange: number;
-  zipRise: number;
-  zipDrop: number;
   /** Seconds after a zip ends before the next one. */
   zipCooldown: number;
-  /** Auto-release this close to the anchor (m), or after zipMaxTime s. */
-  zipRelease: number;
+  /** A zip ends after zipMaxTime s at most. */
   zipMaxTime: number;
-  /** Facade zip release (too slow for a wall run): added forward (horizontal) and up, m/s. */
-  zipFlingFwd: number;
+  /** Round 12: a cable fling (a cable reached without web held) adds this up (m/s). */
   zipFlingUp: number;
-  /** Ledge zip release: onto the roof at this horizontal speed with this hop (m/s). */
+  /** Rim arrival (the ledge pop): onto the roof at this horizontal speed with this hop (m/s). */
   zipLedgeSpeed: number;
   zipLedgeUp: number;
   // ---- round 12 (docs/specs/2026-09-26-round12-spider-tag.md §9) ----
@@ -400,17 +394,12 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   doubleJumpSpeed: 7.5,
   airJumpNoRing: false,
   webZip: true,
-  zipSpeed: 26,
-  zipPull: 14,
-  zipRange: 24,
-  zipRise: 10,
-  zipDrop: 14,
-  zipCooldown: 1.5,
-  zipRelease: 1.4,
+  zipSpeed: 30,
+  zipPull: 60,
+  zipCooldown: 0.35,
   zipMaxTime: 1.6,
-  zipFlingFwd: 4,
-  zipFlingUp: 6,
-  zipLedgeSpeed: 7,
+  zipFlingUp: 3,
+  zipLedgeSpeed: 12,
   zipLedgeUp: 4,
   rigBonus: 4,
   rigEndInset: 2,
@@ -459,10 +448,12 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
 
 /** The player-only moves (double jump + web zip + slide); the runner and old ghosts run without them. */
 export const MOVES_OFF = { airJumps: 0, webZip: false, slide: false } as const satisfies Partial<Tuning>;
+/** Round 12: format 1-3 ghosts (made before the charge / dive / pitch column) replay with those off. */
+export const CHARGE_OFF = { charge: false, dive: false } as const satisfies Partial<Tuning>;
 /** Keys that exist only for those moves (left out of the runner bake's tuning hash while they are off). */
 export const MOVE_KEYS: readonly (keyof Tuning)[] = [
-  "airJumps", "doubleJumpSpeed", "airJumpNoRing", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown",
-  "zipRelease", "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
+  "airJumps", "doubleJumpSpeed", "airJumpNoRing", "webZip", "zipSpeed", "zipPull", "zipCooldown",
+  "zipMaxTime", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
   "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
 ];
 /** Format-2 ghosts (made before round 9): no slide input existed, so slide is off for their replay. */
@@ -573,8 +564,8 @@ export const TUNABLE_KEYS = [
   "vault", "vaultMax", "vaultLook", "vaultMinSpeed", "vaultClear",
   "slide", "slideMinSpeed", "slideTime", "slideDecay", "slideSteer", "slideJumpFwd", "slideBuffer",
   "rollMinVy", "rollTime", "stumbleVy", "stumbleKeep", "stumbleLock", "failFloor",
-  "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipRange", "zipRise", "zipDrop", "zipCooldown", "zipRelease",
-  "zipMaxTime", "zipFlingFwd", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
+  "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipCooldown",
+  "zipMaxTime", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
   "rigBonus", "rigEndInset",
   "zipReach", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipStop", "zipKeep", "zipCharges", "zipRimReach", "zipPopWindow", "zipPopUp", "zipPopFwd",
   "charge", "chargeMin", "chargeTime", "chargeWalk", "chargeUp", "chargeFwd", "chargeWallOut", "chargeWallUp", "chargeHangMax", "chargeFling", "chargeFlingUp", "chargeAir",

@@ -6,8 +6,8 @@
 // in the hot path.
 import { Fnv1a, type Vec3 } from "./math.ts";
 import type { Tuning } from "./tuning.ts";
-import type { CityIndex } from "../world/cityModel.ts";
-import { anchorVisible, copyAnchor, emptyAnchor, emptyFace, faceCoord, findAnchor, ledgeAt, obstacleAhead, wallProbe, type AnchorHit, type FaceHit } from "../world/cityQuery.ts";
+import { RIG0, type CityIndex } from "../world/cityModel.ts";
+import { anchorVisible, copyAnchor, emptyAnchor, emptyFace, faceCoord, findAnchor, ledgeAt, obstacleAhead, segmentFace, wallProbe, type AnchorHit, type FaceHit } from "../world/cityQuery.ts";
 
 export const RING_NONE = -1;
 export const RING_RUNNER = -2;
@@ -17,7 +17,10 @@ export type InputFrame = {
   /** World-space horizontal move vector, |move| <= 1. */
   moveX: number;
   moveZ: number;
-  /** Aim = camera forward (unit vector). */
+  /**
+   * Aim = the camera's horizontal forward (aimX, aimZ; the sim normalises it) and, round 12, the camera pitch as a
+   * sine in aimY (read only by the straight zip; ghost records carry it quantised).
+   */
   aimX: number;
   aimY: number;
   aimZ: number;
@@ -28,10 +31,12 @@ export type InputFrame = {
   zipPressed: boolean;
   /** Round 9: slide press (C / touch SLIDE). */
   slidePressed: boolean;
+  /** Round 12: C / SLIDE held (tap = slide, hold = charge, release = launch; in the air a fresh press dives). */
+  slideHeld: boolean;
 };
 
 export const emptyInput = (): InputFrame => ({
-  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false, zipPressed: false, slidePressed: false,
+  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false, zipPressed: false, slidePressed: false, slideHeld: false,
 });
 
 // Per-step event bits (Body.events is reset at the start of every step).
@@ -58,8 +63,19 @@ export const EV_VAULT = 65536;
 export const EV_SLIDE = 131072;
 export const EV_ROLL = 262144;
 export const EV_BIGLAND = 524288;
-/** A web press with nothing ringed (the view plays a soft "no"). */
+/** A web press with nothing ringed (the view plays a soft "no"). Round 12: also a ZIP press with nothing to zip to. */
 export const EV_NOANCHOR = 1048576;
+/** Round 12 (docs/specs/2026-09-26-round12-spider-tag.md): perfect release, zip pop, charge launch, rebound kick, dive,
+ *  yank start / whiff, a flow pip, the charge starting (the whine). */
+export const EV_PERFECT = 1 << 21;
+export const EV_POP = 1 << 22;
+export const EV_CHARGE = 1 << 23;
+export const EV_REBOUND = 1 << 24;
+export const EV_DIVE = 1 << 25;
+export const EV_YANK = 1 << 26;
+export const EV_YANK_END = 1 << 27;
+export const EV_FLOW = 1 << 28;
+export const EV_CHARGE_START = 1 << 29;
 
 /** wallMode values. */
 export const WALL_RUN = 1;
@@ -157,6 +173,38 @@ export type Body = {
   liftOn: boolean;
   /** Round 11: a run-up topped out short of the rim: the kick off the wall comes as soon as you start falling. */
   upKick: boolean;
+  // ---- round 12 ----
+  /** Straight zip: target kind (ZIP_*), the aim direction it started along, jump-press buffer for the pop, zips left this airtime. */
+  zipKind: number;
+  zipAx: number;
+  zipAy: number;
+  zipAz: number;
+  popBuf: number;
+  zipLeft: number;
+  /** The roof a zip started from (it drags you across it instead of landing you back on it), or -1. */
+  zipFrom: number;
+  /** Web-yank: he is in yank range (the red dashed ring; updated only inside stepBody), yanking, seconds in, cooldown left. */
+  yankOk: boolean;
+  yankOn: boolean;
+  yankT: number;
+  yankCd: number;
+  /** Charge: seconds C held in a chargeable state (0 = not charging) and seconds carried into the air. */
+  chargeT: number;
+  chargeAirT: number;
+  /** Dive (C held from a fresh press in the air). */
+  diveOn: boolean;
+  /** Wall kicks chained without touching the ground or the rope. */
+  kicks: number;
+  /** Rebound: seconds since the last bonk, the speed into the face and its normal. */
+  rebT: number;
+  rebVin: number;
+  rebNx: number;
+  rebNz: number;
+  /** Tech moves this round (perfect releases, zip pops, rebounds, 3rd chained kicks, full-charge launches). */
+  tech: number;
+  /** Flow pips (0-3) and seconds since the last one. */
+  flow: number;
+  flowT: number;
 };
 
 /** What stepBody needs from the world. */
@@ -245,8 +293,33 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     parkour: 0,
     liftOn: false,
     upKick: false,
+    zipKind: 0,
+    zipAx: 0,
+    zipAy: 0,
+    zipAz: 0,
+    popBuf: 0,
+    zipLeft: ZIP_FULL,
+    zipFrom: -1,
+    yankOk: false,
+    yankOn: false,
+    yankT: 0,
+    yankCd: 0,
+    chargeT: 0,
+    chargeAirT: 0,
+    diveOn: false,
+    kicks: 0,
+    rebT: 1e3,
+    rebVin: 0,
+    rebNx: 0,
+    rebNz: 0,
+    tech: 0,
+    flow: 0,
+    flowT: 0,
   };
 }
+
+/** A new body's zips left: "full" (clamped to the tuning's zipCharges at the first zip). */
+export const ZIP_FULL = 99;
 
 const cp = (d: Vec3, s: Vec3) => { d.x = s.x; d.y = s.y; d.z = s.z; };
 
@@ -298,6 +371,11 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.parkour = src.parkour;
   dst.liftOn = src.liftOn;
   dst.upKick = src.upKick;
+  dst.zipKind = src.zipKind; dst.zipAx = src.zipAx; dst.zipAy = src.zipAy; dst.zipAz = src.zipAz; dst.popBuf = src.popBuf; dst.zipLeft = src.zipLeft; dst.zipFrom = src.zipFrom;
+  dst.yankOk = src.yankOk; dst.yankOn = src.yankOn; dst.yankT = src.yankT; dst.yankCd = src.yankCd;
+  dst.chargeT = src.chargeT; dst.chargeAirT = src.chargeAirT; dst.diveOn = src.diveOn; dst.kicks = src.kicks;
+  dst.rebT = src.rebT; dst.rebVin = src.rebVin; dst.rebNx = src.rebNx; dst.rebNz = src.rebNz;
+  dst.tech = src.tech; dst.flow = src.flow; dst.flowT = src.flowT;
   return dst;
 }
 
@@ -317,6 +395,10 @@ export function resetMoves(b: Body): void {
   b.relT = b.lastWallT = b.touchT = 1e3;
   b.lastRope = b.lastWall = b.touchWall = b.kickSolid = -1;
   b.liftOn = b.upKick = false;
+  b.zipKind = 0; b.popBuf = 0; b.zipLeft = ZIP_FULL;
+  b.yankOk = b.yankOn = false; b.yankT = b.yankCd = 0;
+  b.chargeT = b.chargeAirT = 0; b.diveOn = false; b.kicks = 0; b.rebT = 1e3;
+  b.flow = 0; b.flowT = 0;
 }
 
 /** FNV-1a over the full sim state (ringId included), round 9 fields after the older ones. */
@@ -335,6 +417,10 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.i32(b.ledgeMode).f64(b.ledgeT).i32(b.ledgeSolid).f64(b.ledgeX).f64(b.ledgeY).f64(b.ledgeZ).f64(b.ledgeNx).f64(b.ledgeNz);
   h.f64(b.slideT).f64(b.rollT).f64(b.slideBuf).i32(b.parkour);
   h.i32(b.liftOn ? 1 : 0).i32(b.upKick ? 1 : 0);
+  h.i32(b.zipKind).f64(b.zipAx).f64(b.zipAy).f64(b.zipAz).f64(b.popBuf).i32(b.zipLeft).i32(b.zipFrom);
+  h.i32(b.yankOk ? 1 : 0).i32(b.yankOn ? 1 : 0).f64(b.yankT).f64(b.yankCd);
+  h.f64(b.chargeT).f64(b.chargeAirT).i32(b.diveOn ? 1 : 0).i32(b.kicks).f64(b.rebT).f64(b.rebVin).f64(b.rebNx).f64(b.rebNz);
+  h.i32(b.tech).i32(b.flow).f64(b.flowT);
   return h;
 }
 
@@ -419,46 +505,150 @@ export const CORNER_SLIP = 0.4;
 const CORNER_LOOK = 0.12;
 const WALL_HUG = 0.25;
 
-/** A web zip target: kind 2 = roof ledge (roof + inward dir), 3 = a facade (solid + inward dir), 0 = none. */
-export type ZipAim = { kind: number; solid: number; roof: number; x: number; y: number; z: number; dx: number; dz: number };
-export const emptyZipAim = (): ZipAim => ({ kind: 0, solid: -1, roof: -1, x: 0, y: 0, z: 0, dx: 0, dz: 0 });
+/** Round 12 straight-zip target kinds (§4.4): a roof rim, a facade, a cable, a top face, a floating solid's underside. */
+export const ZIP_NONE = 0;
+export const ZIP_RIM = 2;
+export const ZIP_FACE = 3;
+export const ZIP_CABLE = 4;
+export const ZIP_TOP = 5;
+export const ZIP_UNDER = 6;
 
 /**
- * Where a web zip from `b` goes this step: the ringed anchor `a` (a rim of a landable roof = a ledge zip
- * onto it, a facade = up to the wall), else the first roof ledge along the horizontal aim within zipRange
- * (clear line of sight to just outside its edge). Pure (the HUD previews it); returns out.kind.
+ * A straight-zip target: kind, the solid (or RIG0 + rig index), the final point the pull ends at (x, y, z), the hit
+ * point (hx, hy, hz; the HUD's diamond), the face's outward normal (nx, nz; 0 for a cable / top / underside), the
+ * aim direction the zip goes along (dx, dy, dz, unit) and, for a rim, the roof's top.
  */
-export function zipTarget(b: Body, a: AnchorHit | null, aimX: number, aimZ: number, k: Tuning, w: SimWorld, out: ZipAim): number {
-  out.kind = 0; out.solid = -1; out.roof = -1;
-  const p = b.p, idx = w.index;
-  if (a !== null && a.solid >= 0) {
-    const s = idx.solids[a.solid];
-    out.solid = a.solid; out.dx = -a.nx; out.dz = -a.nz;
-    if (a.rim && s.landable) {
-      out.kind = 2; out.roof = a.solid;
-      out.x = a.ax - a.nx * LEDGE_IN; out.y = s.top + k.halfHeight + LEDGE_UP; out.z = a.az - a.nz * LEDGE_IN;
-      return 2;
-    }
-    const off = k.halfWidth + 0.1;
-    out.kind = 3;
-    out.x = a.ax + a.nx * off; out.y = a.rim ? a.ay - k.halfHeight - 0.4 : a.ay; out.z = a.az + a.nz * off;
-    return 3;
+export type ZipAim = {
+  kind: number; solid: number; x: number; y: number; z: number; hx: number; hy: number; hz: number;
+  nx: number; nz: number; dx: number; dy: number; dz: number; top: number;
+};
+export const emptyZipAim = (): ZipAim => ({ kind: 0, solid: -1, x: 0, y: 0, z: 0, hx: 0, hy: 0, hz: 0, nx: 0, nz: 0, dx: 0, dy: 0, dz: 0, top: 0 });
+
+/** The body's chest (the zip ray's start) sits this far above its centre. */
+export const CHEST = 0.3;
+/** Cable pieces for the zip's closest-approach test (the sag as a polyline). */
+const RIG_PIECES = 2;
+
+/** Fill a zip target on the anchor `a` (the bake's forced rim, or the ringed anchor the aim assist picks). */
+function zipOnAnchor(b: Body, a: AnchorHit, k: Tuning, w: SimWorld, out: ZipAim): number {
+  out.solid = a.solid; out.hx = a.ax; out.hy = a.ay; out.hz = a.az; out.nx = a.nx; out.nz = a.nz; out.top = 0;
+  if (a.solid >= RIG0) {
+    out.kind = ZIP_CABLE; out.x = a.ax; out.y = a.ay; out.z = a.az; out.nx = out.nz = 0;
+  } else {
+    const s = w.index.solids[a.solid];
+    if (a.rim && s.landable) return zipRim(b, s.id, a.ax, s.top, a.az, a.nx, a.nz, k, out);
+    if (a.nx === 0 && a.nz === 0) { out.kind = ZIP_UNDER; out.x = a.ax; out.y = a.ay - k.halfHeight - 0.2; out.z = a.az; }
+    else zipFace(a.ax, a.ay, a.az, a.nx, a.nz, k, out);
   }
-  const al = Math.sqrt(aimX * aimX + aimZ * aimZ);
-  if (al < 1e-9) return 0;
-  const dx = aimX / al, dz = aimZ / al;
-  const feet = p.y - k.halfHeight;
+  zipDir(b, out);
+  return out.kind;
+}
+
+/** A rim target: the final point just inside the rim above the roof (the pull first rises just outside it). */
+function zipRim(b: Body, solid: number, rx: number, top: number, rz: number, nx: number, nz: number, k: Tuning, out: ZipAim): number {
+  out.kind = ZIP_RIM; out.solid = solid; out.top = top; out.nx = nx; out.nz = nz;
+  out.hx = rx; out.hy = top; out.hz = rz;
+  out.x = rx - nx * LEDGE_IN; out.y = top + k.halfHeight + LEDGE_UP; out.z = rz - nz * LEDGE_IN;
+  zipDir(b, out);
+  return ZIP_RIM;
+}
+
+/** A facade target: the body stops just off the wall at the hit's height. */
+function zipFace(hx: number, hy: number, hz: number, nx: number, nz: number, k: Tuning, out: ZipAim): void {
+  const off = k.halfWidth + 0.1;
+  out.kind = ZIP_FACE; out.nx = nx; out.nz = nz;
+  out.x = hx + nx * off; out.y = hy - CHEST; out.z = hz + nz * off;
+}
+
+/** The unit direction from the chest to the zip's first point (a rim's: the point just outside it). */
+function zipDir(b: Body, out: ZipAim): void {
+  let tx = out.x, ty = out.y, tz = out.z;
+  if (out.kind === ZIP_RIM) { tx += out.nx * (LEDGE_IN + LEDGE_OUT); tz += out.nz * (LEDGE_IN + LEDGE_OUT); }
+  const dx = tx - b.p.x, dy = ty - b.p.y, dz = tz - b.p.z, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (l > 1e-9) { out.dx = dx / l; out.dy = dy / l; out.dz = dz / l; }
+}
+
+/**
+ * Round 12 straight zip (§4.1-4.2): where a zip from `b` goes this step. The aim = the camera's horizontal forward
+ * pitched up by zipLift (a sine; the pitch is inp.aimY, clamped to [zipAimMin, zipAimMax]); the target = the first
+ * thing on the ray from the chest within zipReach: a solid's face or top (floating solids included), or a cable
+ * passing within zipRigAssist of the ray; with nothing hit, the ringed anchor `a` when it lies within zipAssistCos of
+ * the aim. The bake's forced anchor (w.forceAnchor) is the target when set. Pure (the HUD previews it every frame);
+ * returns out.kind (ZIP_NONE: no zip - nothing ever attaches to open sky). Trig-free: sines and square roots.
+ */
+export function zipAim(b: Body, a: AnchorHit | null, aimX: number, aimY: number, aimZ: number, k: Tuning, w: SimWorld, out: ZipAim): number {
+  out.kind = ZIP_NONE; out.solid = -1;
+  const fa = w.forceAnchor;
+  if (fa !== undefined) return fa !== null && fa.solid >= 0 ? zipOnAnchor(b, fa, k, w, out) : ZIP_NONE;
+  const idx = w.index, p = b.p;
+  let ax = aimX, az = aimZ;
+  const al = Math.sqrt(ax * ax + az * az);
+  if (al < 1e-9) return ZIP_NONE;
+  ax /= al; az /= al;
+  // Pitch + lift as sines: sin(a + b) = sin a cos b + cos a sin b.
+  const s0 = aimY < -1 ? -1 : aimY > 1 ? 1 : aimY, c0 = Math.sqrt(1 - s0 * s0);
+  const sl = k.zipLift, cl = Math.sqrt(Math.max(0, 1 - sl * sl));
+  let sy = s0 * cl + c0 * sl;
+  if (sy < k.zipAimMin) sy = k.zipAimMin; else if (sy > k.zipAimMax) sy = k.zipAimMax;
+  const cy = Math.sqrt(Math.max(0, 1 - sy * sy));
+  const dx = ax * cy, dy = sy, dz = az * cy, R = k.zipReach;
+  const cx0 = p.x, cy0 = p.y + CHEST, cz0 = p.z, ex = cx0 + dx * R, ey = cy0 + dy * R, ez = cz0 + dz * R;
+  // The first solid on the ray (the roof stood on is skipped).
   const skip = b.grounded ? b.roofId : -1;
-  const roof = idx.ledgeAlong(p.x, p.z, dx, dz, k.zipRange, feet - k.zipDrop, feet + k.zipRise, skip);
-  if (roof < 0) return 0;
-  const t = idx.ledgeT;
-  const y = Math.max(idx.solids[roof].top + k.halfHeight + LEDGE_UP, p.y + 0.3);
-  const o = Math.max(0, t - LEDGE_OUT);
-  if (idx.segmentBlocked(p.x, p.y, p.z, p.x + dx * o, y, p.z + dz * o, skip, roof)) return 0;
-  out.kind = 2; out.roof = roof;
-  out.x = p.x + dx * (t + LEDGE_IN); out.y = y; out.z = p.z + dz * (t + LEDGE_IN);
-  out.dx = dx; out.dz = dz;
-  return 2;
+  let ts = Infinity;
+  if (segmentFace(idx, cx0, cy0, cz0, ex, ey, ez, skip, FH)) ts = FH.dist;
+  // The first cable within zipRigAssist of the ray (closest approach against the sagging cable's pieces).
+  let tr = Infinity, rq = -1, qx = 0, qy = 0, qz = 0;
+  const as = k.zipRigAssist;
+  const nr = idx.nearbyRigs(Math.min(cx0, ex) - as, Math.min(cz0, ez) - as, Math.max(cx0, ex) + as, Math.max(cz0, ez) + as);
+  for (let i = 0; i < nr; i++) {
+    const gi = idx.rout[i], g = idx.rigs[gi];
+    const gx = g.bx - g.ax, gy = g.by - g.ay, gz = g.bz - g.az, gl = Math.sqrt(gx * gx + gy * gy + gz * gz);
+    if (gl < 1e-6) continue;
+    const tin = k.rigEndInset / gl;
+    for (let j = 0; j < RIG_PIECES; j++) {
+      const u0 = j / RIG_PIECES, u1 = (j + 1) / RIG_PIECES;
+      const p0x = g.ax + gx * u0, p0y = g.ay + gy * u0 - 4 * g.sag * u0 * (1 - u0), p0z = g.az + gz * u0;
+      const p1x = g.ax + gx * u1, p1y = g.ay + gy * u1 - 4 * g.sag * u1 * (1 - u1), p1z = g.az + gz * u1;
+      // Closest points between the ray segment (t in [0, 1]) and the piece (u in [0, 1]).
+      const e1x = ex - cx0, e1y = ey - cy0, e1z = ez - cz0, e2x = p1x - p0x, e2y = p1y - p0y, e2z = p1z - p0z;
+      const rx = cx0 - p0x, ry = cy0 - p0y, rz = cz0 - p0z;
+      const A = e1x * e1x + e1y * e1y + e1z * e1z, E = e2x * e2x + e2y * e2y + e2z * e2z, F = e2x * rx + e2y * ry + e2z * rz;
+      const Bq = e1x * e2x + e1y * e2y + e1z * e2z, C = e1x * rx + e1y * ry + e1z * rz, den = A * E - Bq * Bq;
+      let t = den > 1e-9 ? (Bq * F - C * E) / den : 0;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      let u = (Bq * t + F) / E;
+      if (u < 0) { u = 0; t = -C / A; } else if (u > 1) { u = 1; t = (Bq - C) / A; }
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      const uu = u0 + (u1 - u0) * u;
+      if (uu < tin || uu > 1 - tin) continue;
+      const hx = cx0 + e1x * t, hy = cy0 + e1y * t, hz = cz0 + e1z * t;
+      const px = p0x + e2x * u, py = p0y + e2y * u, pz = p0z + e2z * u;
+      const ddx = hx - px, ddy = hy - py, ddz = hz - pz;
+      if (ddx * ddx + ddy * ddy + ddz * ddz > as * as || t >= tr) continue;
+      tr = t; rq = gi; qx = px; qy = py; qz = pz;
+    }
+  }
+  if (rq >= 0 && tr < ts) {
+    out.kind = ZIP_CABLE; out.solid = RIG0 + rq; out.x = out.hx = qx; out.y = out.hy = qy; out.z = out.hz = qz; out.nx = out.nz = 0;
+  } else if (ts < Infinity) {
+    const hx = cx0 + (ex - cx0) * ts, hy = cy0 + (ey - cy0) * ts, hz = cz0 + (ez - cz0) * ts;
+    const s = idx.solids[FH.solid];
+    out.solid = s.id; out.hx = hx; out.hy = hy; out.hz = hz;
+    if (FH.ny > 0) { out.kind = ZIP_TOP; out.x = hx; out.y = hy + k.halfHeight + 0.05; out.z = hz; out.nx = out.nz = 0; }
+    else if (FH.ny < 0) { out.kind = ZIP_UNDER; out.x = hx; out.y = hy - k.halfHeight - 0.2; out.z = hz; out.nx = out.nz = 0; }
+    else if (s.landable && s.top - hy <= k.zipRimReach) { zipRim(b, s.id, hx, s.top, hz, FH.nx, FH.nz, k, out); out.hy = hy; }
+    else zipFace(hx, hy, hz, FH.nx, FH.nz, k, out);
+  } else if (a !== null && a.solid >= 0) {
+    // Aim assist: the ringed anchor, when it lies within zipAssistCos of the aim.
+    const vx = a.ax - cx0, vy = a.ay - cy0, vz = a.az - cz0, vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    if (vl < 1e-6 || vl > R || (vx * dx + vy * dy + vz * dz) < k.zipAssistCos * vl) return ZIP_NONE;
+    return zipOnAnchor(b, a, k, w, out);
+  } else return ZIP_NONE;
+  if (out.kind === ZIP_RIM) return ZIP_RIM;
+  // (A face / cable / top point: straight at it from the body.)
+  zipDir(b, out);
+  return out.kind;
 }
 
 // Module scratch (the hot path never allocates).
@@ -503,6 +693,9 @@ function attach(b: Body, a: AnchorHit, k: Tuning, w: SimWorld): void {
   b.chainCount++;
   b.airJumps = k.airJumps;
   b.kickSolid = -1;
+  b.kicks = 0;
+  b.diveOn = false;
+  b.zipLeft = k.zipCharges;
   b.events |= EV_ATTACH;
 }
 
@@ -560,15 +753,21 @@ function release(b: Body, k: Tuning, boost: boolean, up: number = k.releaseUp): 
 function startZip(b: Body, a: ZipAim, k: Tuning): void {
   b.zipOn = true;
   b.zipT = 0;
+  b.zipKind = a.kind;
   b.zipSolid = a.solid;
-  b.zipRoof = a.kind === 2 ? a.roof : -1;
-  b.zipWall = a.kind === 3 ? a.solid : -1;
+  b.zipRoof = a.kind === ZIP_RIM ? a.solid : -1;
+  b.zipWall = a.kind === ZIP_FACE ? a.solid : -1;
   b.zipP.x = a.x; b.zipP.y = a.y; b.zipP.z = a.z;
-  b.zipDx = a.dx; b.zipDz = a.dz;
+  b.zipDx = -a.nx; b.zipDz = -a.nz;
+  b.zipAx = a.dx; b.zipAy = a.dy; b.zipAz = a.dz;
+  b.zipLeft = Math.min(b.zipLeft, k.zipCharges) - 1;
+  b.popBuf = 0;
+  b.zipFrom = b.grounded ? b.roofId : -1;
   if (b.ropeSolid >= 0) release(b, k, false);
   b.wallMode = 0;
   b.ledgeMode = 0;
   b.slideT = 0;
+  b.diveOn = false;
   b.grounded = false;
   b.coyote = 0;
   b.jumpBuf = 0;
@@ -577,57 +776,199 @@ function startZip(b: Body, a: ZipAim, k: Tuning): void {
   b.events |= EV_ZIP;
 }
 
+/** How a zip ends: at its target, early (a second ZIP / web press, zipMaxTime, a wall in the way), or on a landing. */
+const ZIP_ARRIVE = 0;
+const ZIP_EARLY = 1;
+const ZIP_LANDED = 2;
+
 /**
- * End a zip: `fling` = the auto-release (ledge: onto the roof; facade: a wall run along the aim when fast
- * enough, else forward + up), else a landing.
+ * End a zip (§4.3-4.4). Arriving: a rim = the ledge pop onto the roof; a facade = a wall run along the aim's side
+ * (fast enough), else a run-up (wall above), else a push off; a cable = attach to it with web held (the swing keeps the
+ * zip's speed), else a fling along the zip; a zip pop (Jump in the last zipPopWindow s or on arrival) instead at a
+ * rim or a facade. Early: zipKeep x the speed. Landed: nothing more.
  */
-function endZip(b: Body, k: Tuning, w: SimWorld, fling: boolean, aimX: number, aimZ: number): void {
+function endZip(b: Body, k: Tuning, w: SimWorld, how: number, inp: InputFrame): void {
   b.zipOn = false;
   b.zipCd = k.zipCooldown;
   b.events |= EV_ZIP_END;
   const v = b.v;
-  if (!fling) return;
-  if (b.zipRoof >= 0) {
+  if (how === ZIP_LANDED) return;
+  if (how === ZIP_EARLY || b.zipKind === ZIP_UNDER) {
+    v.x *= k.zipKeep; v.y *= k.zipKeep; v.z *= k.zipKeep;
+    return;
+  }
+  const pop = k.zipPopWindow > 0 && (b.popBuf > 0 || inp.jumpPressed);
+  // The aim's horizontal (pop / fling direction), without any part into the face.
+  let hx = b.zipAx, hz = b.zipAz;
+  const nx = -b.zipDx, nz = -b.zipDz;
+  const into = hx * nx + hz * nz;
+  if (into < 0 && b.zipKind === ZIP_FACE) { hx -= into * nx; hz -= into * nz; }
+  const hl = Math.sqrt(hx * hx + hz * hz);
+  if (hl > 1e-6) { hx /= hl; hz /= hl; }
+  if (b.zipKind === ZIP_RIM) {
     v.x = b.zipDx * k.zipLedgeSpeed;
     v.z = b.zipDz * k.zipLedgeSpeed;
     v.y = k.zipLedgeUp;
-  } else {
-    let walled = false;
-    if (b.zipWall >= 0 && k.wallRun) {
-      const s = w.index.solids[b.zipWall];
-      const nx = -b.zipDx, nz = -b.zipDz;
-      const ax = nx !== 0 && nz !== 0 ? 0 : 1; // corners: no wall run
-      const tx = -nz, tz = nx;
-      const al = Math.sqrt(aimX * aimX + aimZ * aimZ) || 1;
-      const along = (aimX * tx + aimZ * tz) / al;
-      const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-      if (ax && (along > 0.3 || along < -0.3) && sp >= k.wallRunMinSpeed && s.top - (b.p.y - k.halfHeight) >= k.wallRunMinBelowTop) {
-        const va0 = v.x * tx + v.z * tz;
-        const va = (along < 0 ? -1 : 1) * Math.max(k.wallRunSpeed, va0 < 0 ? -va0 : va0);
-        v.x = tx * va; v.z = tz * va; v.y = v.y > 0 ? v.y : 0;
-        startWall(b, k, w, b.zipWall, nx, nz, WALL_RUN);
-        walled = true;
-      }
+    if (pop) { v.x += hx * k.zipPopFwd; v.z += hz * k.zipPopFwd; v.y = k.zipPopUp; b.tech++; b.events |= EV_POP; flowPip(b, k); }
+  } else if (b.zipKind === ZIP_FACE) {
+    const s = w.index.solids[b.zipWall], feet = b.p.y - k.halfHeight;
+    const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    const tx = -nz, tz = nx;
+    const along = b.zipAx * tx + b.zipAz * tz;
+    const corner = nx !== 0 && nz !== 0;
+    if (pop) {
+      v.x = hx * k.zipPopFwd; v.z = hz * k.zipPopFwd; v.y = k.zipPopUp;
+      b.tech++; b.events |= EV_POP; flowPip(b, k);
+    } else if (k.wallRun && !corner && s !== undefined && (along > 0.3 || along < -0.3) && sp >= k.wallRunMinSpeed && s.top - feet >= k.wallRunMinBelowTop) {
+      const va0 = v.x * tx + v.z * tz;
+      const va = (along < 0 ? -1 : 1) * Math.max(k.wallRunSpeed, va0 < 0 ? -va0 : va0);
+      v.x = tx * va; v.z = tz * va; v.y = v.y > 0 ? v.y : 0;
+      startWall(b, k, w, b.zipWall, nx, nz, WALL_RUN);
+    } else if (k.wallRun && !corner && s !== undefined && s.top - feet >= k.wallRunMinBelowTop) {
+      startWall(b, k, w, b.zipWall, nx, nz, WALL_UP, sp);
+    } else {
+      v.x = nx * k.wallPushOff; v.z = nz * k.wallPushOff; v.y = Math.max(v.y, 0);
     }
-    if (!walled) {
-      const hs = Math.sqrt(v.x * v.x + v.z * v.z);
-      if (hs > 1e-6) { v.x += (v.x / hs) * k.zipFlingFwd; v.z += (v.z / hs) * k.zipFlingFwd; }
-      v.y = Math.max(v.y, 0) + k.zipFlingUp;
+  } else if (b.zipKind === ZIP_CABLE) {
+    if (inp.webHeld && b.zipSolid >= RIG0) {
+      // Zip-to-swing: the rope on the cable point, the zip's speed kept.
+      AH.solid = b.zipSolid; AH.ax = AH.px = b.zipP.x; AH.ay = AH.py = b.zipP.y; AH.az = AH.pz = b.zipP.z;
+      AH.nx = AH.nz = 0; AH.rim = false; AH.score = 0;
+      attach(b, AH, k, w);
+    } else {
+      const sp = Math.min(k.zipSpeed, k.speedCap > 0 ? k.speedCap : k.zipSpeed) * k.zipKeep;
+      v.x = b.zipAx * sp; v.y = b.zipAy * sp + k.zipFlingUp; v.z = b.zipAz * sp;
     }
   }
   capSpeed(v, k.speedCap);
+}
+
+// ---- round 12: yank, charge, tech ----------------------------------------------------------------
+
+/**
+ * §6.6: he is within yankRange (chase distance), inside the aim cone and in sight, and the yank is ready: a ZIP
+ * press now is a homing zip on him.
+ */
+function yankable(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): boolean {
+  const r = w.runner;
+  if (k.yankRange <= 0 || r === null || b.yankCd > 0 || b.zipOn || b.yankOn || b.ledgeMode > 0) return false;
+  const p = b.p;
+  if (chaseDist(p, r.p) > k.yankRange) return false;
+  let ax = inp.aimX, az = inp.aimZ;
+  const al = Math.sqrt(ax * ax + az * az);
+  if (al < 1e-9) return false;
+  ax /= al; az /= al;
+  const dx = r.p.x - p.x, dz = r.p.z - p.z, hl = Math.sqrt(dx * dx + dz * dz);
+  if (hl > 1e-6 && dx * ax + dz * az < k.aimCos * hl) return false;
+  return !w.index.segmentBlocked(p.x, p.y + CHEST, p.z, r.p.x, r.p.y + CHEST, r.p.z, b.grounded ? b.roofId : -1, r.roofId);
+}
+
+function startYank(b: Body, k: Tuning): void {
+  if (b.ropeSolid >= 0) release(b, k, false);
+  b.yankOn = true;
+  b.yankT = 0;
+  b.yankOk = false;
+  b.wallMode = 0;
+  b.ledgeMode = 0;
+  b.slideT = 0;
+  b.diveOn = false;
+  b.chargeT = 0;
+  b.grounded = false;
+  b.coyote = 0;
+  b.events |= EV_YANK;
+}
+
+/** A yank that ran out of time or lost sight of him: ends with its momentum, the cooldown starts. */
+function endYank(b: Body, k: Tuning): void {
+  b.yankOn = false;
+  b.yankCd = k.yankCooldown;
+  b.events |= EV_YANK_END;
+}
+
+/** Charge level (§5): 0 at chargeMin s of holding, 1 after chargeMin + chargeTime. */
+export function chargeLevel(t: number, k: Tuning): number {
+  if (t <= 0 || k.chargeTime <= 0) return t > k.chargeMin ? 1 : 0;
+  const c = (t - k.chargeMin) / k.chargeTime;
+  return c < 0 ? 0 : c > 1 ? 1 : c;
+}
+
+/** A charged launch: zips and the double jump refill; a full charge is a tech move. */
+function launched(b: Body, k: Tuning, c: number): void {
+  b.chargeT = 0;
+  b.chargeAirT = 0;
+  b.airJumps = k.airJumps;
+  b.zipLeft = k.zipCharges;
+  b.events |= EV_CHARGE;
+  if (c >= 1) { b.tech++; flowPip(b, k); }
+}
+
+/** Charged jump from a roof (or the coyote time after walking off it). */
+function groundLaunch(b: Body, k: Tuning, c: number, mx: number, mz: number, aimX: number, aimZ: number): void {
+  const v = b.v;
+  let hx = mx, hz = mz, hl = Math.sqrt(hx * hx + hz * hz);
+  if (hl < 0.1) { hx = aimX; hz = aimZ; hl = Math.sqrt(hx * hx + hz * hz); }
+  if (hl > 1e-9) { v.x += (hx / hl) * c * k.chargeFwd; v.z += (hz / hl) * c * k.chargeFwd; }
+  v.y = k.jumpSpeed + c * k.chargeUp;
+  b.grounded = false;
+  b.coyote = 0;
+  b.jumpBuf = 0;
+  b.slideT = 0;
+  b.events |= EV_JUMP;
+  launched(b, k, c);
+}
+
+/** §6.8 flow: a pip (at most 3), its drain clock reset. */
+function flowPip(b: Body, k: Tuning): void {
+  if (k.flowCap <= 0) return;
+  if (b.flow < 3) b.flow++;
+  b.flowT = 0;
+  b.events |= EV_FLOW;
 }
 
 /**
  * Round 11: on the rope, taut, past the bottom on the forward side (moving away from under the pivot), rising and
  * past swingSweetCos from straight down: a release here is well timed.
  */
-function sweetSpot(b: Body, k: Tuning): boolean {
+function sweetSpot(b: Body, k: Tuning, cos: number = k.swingSweetCos): boolean {
   const p = b.p, P = b.ropeP, v = b.v;
   if (!b.ropeTaut || v.y <= 0) return false;
   const rx = p.x - P.x, ry = p.y - P.y, rz = p.z - P.z;
   const rl = Math.sqrt(rx * rx + ry * ry + rz * rz), rh = Math.sqrt(rx * rx + rz * rz), vh = Math.sqrt(v.x * v.x + v.z * v.z);
-  return rl > 1e-6 && rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh && -ry / rl <= k.swingSweetCos;
+  return rl > 1e-6 && rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh && -ry / rl <= cos;
+}
+
+/**
+ * Letting go of the rope yourself (web up, or the C slingshot): round 11's timed lift past swingSweetCos, and round 12's
+ * perfect release (§6.1) past swingPerfectCos (the window up to the auto-release) - releasePerfect more along the
+ * velocity, EV_PERFECT (the web flashes, a ding).
+ */
+function ropeRelease(b: Body, k: Tuning): void {
+  const sweet = k.releaseSweet > 0 && sweetSpot(b, k);
+  const perfect = k.releasePerfect > 0 && sweetSpot(b, k, k.swingPerfectCos);
+  release(b, k, true);
+  const v = b.v;
+  if (sweet) v.y += k.releaseSweet;
+  if (perfect) {
+    const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
+    v.x += (v.x / sp) * k.releasePerfect; v.y += (v.y / sp) * k.releasePerfect; v.z += (v.z / sp) * k.releasePerfect;
+    b.tech++;
+    b.events |= EV_PERFECT;
+    flowPip(b, k);
+  }
+}
+
+/** §6.3: the head-on hit becomes a kick off the facade (normal nx, nz; vin = the speed into it). */
+function rebound(b: Body, k: Tuning, nx: number, nz: number, vin: number): void {
+  const v = b.v;
+  v.x = nx * vin * k.reboundKeep; v.z = nz * vin * k.reboundKeep; v.y = k.wallJumpUp;
+  b.bonkT = 0;
+  b.jumpBuf = 0;
+  b.rebT = 1e3;
+  b.kicks++;
+  b.tech++;
+  b.parkour++;
+  b.events |= EV_REBOUND;
+  flowPip(b, k);
 }
 
 /** wallAhead's target heading (horizontal unit). */
@@ -656,6 +997,9 @@ function wallAhead(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): num
   AV.x = tx * sg; AV.z = tz * sg;
   return k.swingAvoid;
 }
+
+/** Round 12 air carve: the stick turns the flight when within ~100 deg of it (cos 100 deg). */
+const CARVE_COS = -0.17364817766693033;
 
 /** Round 11 city edge: the heading bends this much inward (per unit along the edge). */
 const EDGE_IN = 0.25;
@@ -711,12 +1055,13 @@ function turnToward(v: Vec3, hx: number, hz: number, a: number): void {
   v.x = ux * hs; v.z = uz * hs;
 }
 
-function groundMove(b: Body, mx: number, mz: number, k: Tuning, dt: number): void {
+function groundMove(b: Body, mx: number, mz: number, k: Tuning, dt: number, cap = k.runSpeed): void {
   const v = b.v;
   const s = Math.sqrt(v.x * v.x + v.z * v.z);
   const ml = Math.sqrt(mx * mx + mz * mz);
-  // Momentum carry: speed above runSpeed is kept and decays at carryDecay (not at all while rolling).
-  const top = s > k.runSpeed ? (b.rollT > 0 ? s : Math.max(k.runSpeed, s - k.carryDecay * dt)) : k.runSpeed;
+  // Momentum carry: speed above runSpeed is kept and decays at carryDecay (not at all while rolling). Round 12:
+  // charging crouch-walks (cap = chargeWalk, no carry).
+  const top = cap < k.runSpeed ? cap : s > k.runSpeed ? (b.rollT > 0 ? s : Math.max(k.runSpeed, s - k.carryDecay * dt)) : k.runSpeed;
   const tx = mx * top, tz = mz * top;
   const rate = ml > 0.01 ? k.groundAccel : k.groundBrake;
   const dx = tx - v.x, dz = tz - v.z;
@@ -726,12 +1071,12 @@ function groundMove(b: Body, mx: number, mz: number, k: Tuning, dt: number): voi
 }
 
 /** Slide: speed decays at slideDecay, only the sideways part of the stick steers. */
-function slideMove(b: Body, mx: number, mz: number, k: Tuning, dt: number): void {
+function slideMove(b: Body, mx: number, mz: number, k: Tuning, dt: number, decay = k.slideDecay): void {
   const v = b.v;
   const s = Math.sqrt(v.x * v.x + v.z * v.z);
   if (s < 1e-6) return;
   const dx = v.x / s, dz = v.z / s;
-  const s1 = Math.max(0, s - k.slideDecay * dt);
+  const s1 = Math.max(0, s - decay * dt);
   const along = mx * dx + mz * dz;
   const a = k.slideSteer * dt;
   let nx = dx * s1 + (mx - along * dx) * a, nz = dz * s1 + (mz - along * dz) * a;
@@ -767,6 +1112,8 @@ function startWall(b: Body, k: Tuning, w: SimWorld, solid: number, nx: number, n
   if (nx !== 0) { b.wallLo = s.z0; b.wallHi = s.z1; } else { b.wallLo = s.x0; b.wallHi = s.x1; }
   b.touchWall = solid; b.touchT = 0; b.touchNx = nx; b.touchNz = nz;
   b.airJumps = k.airJumps;
+  b.zipLeft = k.zipCharges;
+  b.diveOn = false;
   b.slideT = 0;
   if (mode === WALL_UP) { v.x = 0; v.z = 0; v.y = Math.max(k.wallClimbSpeed, hit, v.y); } else if (v.y < k.wallRunKick) v.y = k.wallRunKick;
   b.parkour++;
@@ -788,7 +1135,10 @@ function wallJump(b: Body, k: Tuning, solid: number, nx: number, nz: number): vo
   const va = (v.x * tx + v.z * tz) * k.wallJumpKeep;
   v.x = nx * k.wallJumpOut + tx * va;
   v.z = nz * k.wallJumpOut + tz * va;
-  v.y = k.wallJumpUp;
+  // Round 12 kick chains (§6.4): each kick without touching the ground or the rope kicks higher (at most 3 times).
+  v.y = k.wallJumpUp + Math.min(b.kicks, 3) * k.kickChainUp;
+  if (k.kickChainUp > 0 && b.kicks === 2) { b.tech++; flowPip(b, k); }
+  b.kicks++;
   if (b.wallMode > 0) endWall(b, 0);
   b.kickSolid = solid;
   b.touchT = 1e3;
@@ -822,6 +1172,8 @@ function grabLedge(b: Body, k: Tuning, w: SimWorld, f: FaceHit): void {
   b.ledgeX = p.x; b.ledgeY = p.y; b.ledgeZ = p.z;
   b.ledgeNx = f.nx; b.ledgeNz = f.nz;
   b.airJumps = k.airJumps;
+  b.zipLeft = k.zipCharges;
+  b.diveOn = false;
   b.events |= EV_LEDGE;
 }
 
@@ -844,12 +1196,13 @@ function tryLedge(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number, force
 }
 
 /** Hang / climb / climb-jump: a scripted path (up to the rim, then CLIMB_IN inward), no physics. */
-function ledgeStep(b: Body, k: Tuning, w: SimWorld): void {
+function ledgeStep(b: Body, k: Tuning, w: SimWorld, charging: boolean): void {
   const s = w.index.solids[b.ledgeSolid], p = b.p, v = b.v, dt = k.dt, hh = k.halfHeight;
   b.ledgeT += dt;
   if (b.ledgeMode === LEDGE_HANG_MODE) {
     v.x = v.y = v.z = 0;
-    if (b.ledgeT >= k.ledgeHang) { b.ledgeMode = LEDGE_CLIMB; b.ledgeT = 0; }
+    // Round 12: the climb waits while C charges (up to chargeHangMax s).
+    if (b.ledgeT >= k.ledgeHang && !(charging && b.ledgeT < k.chargeHangMax)) { b.ledgeMode = LEDGE_CLIMB; b.ledgeT = 0; }
     return;
   }
   const up = Math.max(0, s.top + hh + 0.01 - b.ledgeY);
@@ -891,15 +1244,21 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   b.heldFor = held ? b.heldFor + dt : 0;
   b.coyote = Math.max(0, b.coyote - dt);
   b.jumpBuf = inp.jumpPressed ? k.jumpBuffer : Math.max(0, b.jumpBuf - dt);
-  const locked = b.bonkT > 0;
+  let locked = b.bonkT > 0;
   b.bonkT = Math.max(0, b.bonkT - dt);
   if (!b.zipOn) b.zipCd = Math.max(0, b.zipCd - dt);
+  if (!b.yankOn) b.yankCd = Math.max(0, b.yankCd - dt);
   b.relT += dt;
   b.lastWallT += dt;
   b.touchT += dt;
+  b.rebT += dt;
   b.rollT = Math.max(0, b.rollT - dt);
   b.slideBuf = Math.max(0, b.slideBuf - dt);
+  b.popBuf = Math.max(0, b.popBuf - dt);
+  if (b.zipOn && inp.jumpPressed) b.popBuf = k.zipPopWindow;
   if (k.slide && inp.slidePressed && !locked) b.slideBuf = k.slideBuffer;
+  // §6.8 flow: one pip drains every flowDecay s without a new one.
+  if (b.flow > 0) { b.flowT += dt; if (b.flowT >= k.flowDecay) { b.flow--; b.flowT = 0; } }
 
   let mx = locked ? 0 : inp.moveX, mz = locked ? 0 : inp.moveZ;
   const ml = Math.sqrt(mx * mx + mz * mz);
@@ -907,33 +1266,90 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
 
   const px = p.x, pz = p.z, feetBefore = p.y - hh;
 
+  // §6.3 rebound kick: a Jump press within reboundWindow after a head-on bonk kicks you off the facade instead.
+  if (locked && inp.jumpPressed && k.reboundWindow > 0 && b.rebT <= k.reboundWindow && !b.grounded) {
+    rebound(b, k, b.rebNx, b.rebNz, b.rebVin);
+    locked = false;
+    mx = inp.moveX; mz = inp.moveZ;
+  }
+
+  // A second ZIP press or a web press ends a zip early (zipKeep x the speed; a web press can grab right away).
+  // The same presses end a yank early (its momentum kept).
+  let zipUsed = false;
+  if (b.zipOn && (inp.zipPressed || inp.webPressed)) { endZip(b, k, w, ZIP_EARLY, inp); zipUsed = inp.zipPressed; }
+  if (b.yankOn && (inp.zipPressed || inp.webPressed)) { endYank(b, k); zipUsed = zipUsed || inp.zipPressed; }
+
   // Ring from this step's latched aim. On the rope it stays on the rope's anchor.
   const A = AH;
   if (b.ropeSolid >= 0) {
     b.ringId = b.ropeSolid;
     A.solid = -1;
-  } else if (b.zipOn || b.ledgeMode >= LEDGE_CLIMB) {
+  } else if (b.zipOn || b.yankOn || b.ledgeMode >= LEDGE_CLIMB) {
     b.ringId = RING_NONE;
     A.solid = -1;
   } else {
     b.ringId = pickRing(b, inp, k, w, A);
     if (b.ringId >= 0) setRing(b, A);
   }
+  b.yankOk = yankable(b, inp, k, w);
 
-  // Web zip (player only): the ringed anchor, else a roof ledge under the aim. A zip owns the step's
-  // actions until it ends (hold web through it to swing right after the release).
-  if (k.webZip && inp.zipPressed && !locked && !b.zipOn && b.ropeSolid < 0 && b.ledgeMode === 0 && b.zipCd <= 0 &&
-    zipTarget(b, b.ringId >= 0 ? A : null, inp.aimX, inp.aimZ, k, w, ZA) > 0) startZip(b, ZA, k);
+  // §5 charge (hold C): grows while chargeable (on a roof, the coyote time after it, a wall, a ledge hang, the rope);
+  // carried into the air it lasts chargeAir s. Letting go of C (or Jump while charging) launches at the charge level.
+  let launch = -1;
+  if (k.charge) {
+    const chargeable = b.grounded || b.coyote > 0 || b.wallMode > 0 || b.ledgeMode === LEDGE_HANG_MODE || b.ropeSolid >= 0;
+    if (inp.slideHeld && !locked && !b.diveOn && !b.zipOn && !b.yankOn && b.ledgeMode < LEDGE_CLIMB) {
+      if (chargeable) {
+        if (b.chargeT === 0) b.events |= EV_CHARGE_START;
+        b.chargeT += dt;
+        b.chargeAirT = 0;
+      } else if (b.chargeT > 0) {
+        b.chargeAirT += dt;
+        if (b.chargeAirT > k.chargeAir) b.chargeT = b.chargeAirT = 0;
+      }
+      if (inp.jumpPressed && b.chargeT > 0) { const c = chargeLevel(b.chargeT, k); if (c > 0 && chargeable) launch = c; }
+    } else if (b.chargeT > 0) {
+      const c = chargeLevel(b.chargeT, k);
+      if (!inp.slideHeld && c > 0 && chargeable) launch = c;
+      b.chargeT = b.chargeAirT = 0;
+    }
+  }
+
+  // ZIP press (E / Shift / touch ZIP): a yank when he is in yank range, else the straight zip (§4). Nothing to zip to,
+  // no zips left or cooling down: the grey X, nothing spent.
+  if (k.webZip && inp.zipPressed && !zipUsed && !locked && !b.zipOn && !b.yankOn && b.ledgeMode === 0) {
+    if (b.yankOk) startYank(b, k);
+    else if (b.zipCd <= 0 && Math.min(b.zipLeft, k.zipCharges) > 0 && zipAim(b, b.ringId >= 0 ? A : null, inp.aimX, inp.aimY, inp.aimZ, k, w, ZA) > 0) startZip(b, ZA, k);
+    else b.events |= EV_NOANCHOR;
+  }
+
+  // §6.5 dive: a fresh C press in the air with room under you (not on the rope, zipping or on a wall).
+  if (k.dive && inp.slidePressed && !locked && !b.grounded && b.coyote <= 0 && b.ropeSolid < 0 && !b.zipOn && !b.yankOn &&
+    b.wallMode === 0 && b.ledgeMode === 0 && b.chargeT === 0 && feetBefore - idx.groundBelow(p.x, p.z, p.y) >= k.diveMinDrop) {
+    b.diveOn = true;
+    if (v.y > -k.diveSpeed) v.y = -k.diveSpeed;
+    b.events |= EV_DIVE;
+  }
+  if (b.diveOn && (!inp.slideHeld || b.grounded || b.ropeSolid >= 0 || b.zipOn || b.yankOn || b.wallMode > 0 || b.ledgeMode > 0)) b.diveOn = false;
 
   // Actions (§3.8 table).
   const wantJump = !locked && (inp.jumpPressed || b.jumpBuf > 0);
   const canAttach = !locked && held && b.heldFor >= k.holdDelay && b.ringId >= 0 && b.ropeSolid < 0 &&
     (b.relT >= k.swingRehook || b.heldFor <= b.relT);
-  if (b.zipOn) {
-    // (the zip's pull and release are below)
+  if (b.zipOn || b.yankOn) {
+    // (the zip's / yank's pull and end are below)
   } else if (b.ledgeMode > 0) {
     if (b.ledgeMode === LEDGE_HANG_MODE && !locked) {
-      if (wantJump) { b.ledgeMode = LEDGE_CLIMBJUMP; b.ledgeT = 0; b.jumpBuf = 0; }
+      if (launch >= 0) {
+        // Charged hang launch: straight up, a little inward.
+        b.ledgeMode = 0;
+        v.x = -b.ledgeNx * k.ledgeExitSpeed * 0.5; v.z = -b.ledgeNz * k.ledgeExitSpeed * 0.5;
+        v.y = k.ledgeJumpUp + launch * k.chargeUp;
+        b.lastWall = b.ledgeSolid; b.lastWallT = 0;
+        b.jumpBuf = 0;
+        b.events |= EV_JUMP;
+        launched(b, k, launch);
+      } else if (wantJump) { b.ledgeMode = LEDGE_CLIMBJUMP; b.ledgeT = 0; b.jumpBuf = 0; }
       else if (canAttach) { b.ledgeMode = 0; attach(b, A, k, w); }
       else if (mx * b.ledgeNx + mz * b.ledgeNz > 0.5) {
         b.ledgeMode = 0;
@@ -943,18 +1359,28 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   } else if (b.wallMode > 0) {
     const out = mx * b.wallNx + mz * b.wallNz;
-    if (wantJump && b.wallSolid !== b.kickSolid) wallJump(b, k, b.wallSolid, b.wallNx, b.wallNz);
+    if (launch >= 0) {
+      // Charged wall launch: a wall jump plus the charge out and up.
+      const nx = b.wallNx, nz = b.wallNz;
+      wallJump(b, k, b.wallSolid, nx, nz);
+      v.x += nx * launch * k.chargeWallOut; v.z += nz * launch * k.chargeWallOut; v.y += launch * k.chargeWallUp;
+      launched(b, k, launch);
+    } else if (wantJump && b.wallSolid !== b.kickSolid) wallJump(b, k, b.wallSolid, b.wallNx, b.wallNz);
     else if (canAttach) { endWall(b, 0); attach(b, A, k, w); }
     else if (out > 0.5 || (b.wallMode === WALL_UP && -out < 0.3)) endWall(b, 0);
   } else if (b.grounded) {
     const hs = Math.sqrt(v.x * v.x + v.z * v.z);
     if (k.slide && !locked && b.slideT <= 0 && b.slideBuf > 0 && hs >= k.slideMinSpeed) startSlide(b, k);
     if (b.slideT > 0) {
-      slideMove(b, mx, mz, k, dt);
-      b.slideT = hs < 1 ? 0 : Math.max(0, b.slideT - dt);
-    } else groundMove(b, mx, mz, k, dt);
+      // Round 12: while C charges, a running slide carries on (no time-out, no decay down to run speed).
+      const charging = b.chargeT > 0;
+      slideMove(b, mx, mz, k, dt, charging && hs <= k.runSpeed ? 0 : k.slideDecay);
+      b.slideT = hs < 1 ? 0 : charging ? Math.max(dt, b.slideT) : Math.max(0, b.slideT - dt);
+    } else groundMove(b, mx, mz, k, dt, b.chargeT > 0 ? k.chargeWalk : k.runSpeed);
     const zip = k.zip && !locked && inp.webPressed && b.ringId >= 0;
-    if (wantJump || zip) {
+    if (launch >= 0) {
+      groundLaunch(b, k, launch, mx, mz, inp.aimX, inp.aimZ);
+    } else if (wantJump || zip) {
       if (b.slideT > 0) {
         const s = Math.sqrt(v.x * v.x + v.z * v.z);
         if (s > 1e-6) { v.x += (v.x / s) * k.slideJumpFwd; v.z += (v.z / s) * k.slideJumpFwd; }
@@ -963,6 +1389,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       v.y = k.jumpSpeed;
       b.grounded = false;
       b.jumpBuf = 0;
+      b.chargeT = 0;
       b.events |= EV_JUMP;
       if (zip) { attach(b, A, k, w); liftStart(b, k, w); }
     } else if (k.vault && !locked) {
@@ -985,6 +1412,14 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         }
       }
     }
+  } else if (launch >= 0 && b.coyote > 0) {
+    groundLaunch(b, k, launch, mx, mz, inp.aimX, inp.aimZ);
+  } else if (launch >= 0 && b.ropeSolid >= 0) {
+    // The slingshot (§5): let go with the charge along the velocity and up; the timed / perfect bonuses stack.
+    ropeRelease(b, k);
+    const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
+    v.x += (v.x / sp) * launch * k.chargeFling; v.y += (v.y / sp) * launch * k.chargeFling + launch * k.chargeFlingUp; v.z += (v.z / sp) * launch * k.chargeFling;
+    launched(b, k, launch);
   } else if (wantJump && b.coyote > 0) {
     v.y = k.jumpSpeed;
     b.coyote = 0;
@@ -1001,18 +1436,15 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   } else if (canAttach) {
     attach(b, A, k, w);
   } else if (b.ropeSolid >= 0 && !held) {
-    // Round 11: let go on the upswing past swingSweetCos (a well-timed release) = releaseSweet more up.
-    const sweet = k.releaseSweet > 0 && sweetSpot(b, k);
-    release(b, k, true);
-    if (sweet) v.y += k.releaseSweet;
+    ropeRelease(b, k);
   }
-  if (inp.webPressed && !locked && b.ringId === RING_NONE && b.ropeSolid < 0 && !b.zipOn) b.events |= EV_NOANCHOR;
+  if (inp.webPressed && !locked && b.ringId === RING_NONE && b.ropeSolid < 0 && !b.zipOn && !b.yankOn) b.events |= EV_NOANCHOR;
 
   // Forces.
   let scripted = false, reeling = false, air = 0;
   if (b.zipOn) {
-    // A zip is a straight pull (no gravity / wind): the velocity turns onto the line to the target (below a
-    // ledge: first to the point just outside its edge) at zipSpeed, the speed cap included.
+    // §4.3: a straight pull (no gravity / wind) at zipSpeed: the velocity turns onto the line to the target at
+    // zipPull (on it within ~4 steps). Below a rim: first to the point just outside its edge, then over it.
     b.zipT += dt;
     let tx = b.zipP.x, tz = b.zipP.z;
     if (b.zipRoof >= 0 && p.y - hh < idx.solids[b.zipRoof].top + 0.3) {
@@ -1028,8 +1460,14 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       v.y += (dy * sp - v.y) * f;
       v.z += (dz * sp - v.z) * f;
     }
+  } else if (b.yankOn) {
+    // §6.6 the yank: a homing zip at yankSpeed, re-aimed at him every step.
+    b.yankT += dt;
+    const r = w.runner!.p;
+    const dx = r.x - p.x, dy = r.y - p.y, dz = r.z - p.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d > 1e-6) { const sp = k.yankSpeed / d; v.x = dx * sp; v.y = dy * sp; v.z = dz * sp; }
   } else if (b.ledgeMode > 0) {
-    ledgeStep(b, k, w);
+    ledgeStep(b, k, w, b.chargeT > 0 && inp.slideHeld);
     scripted = true;
   } else if (b.wallMode === WALL_RUN) {
     // §3.2: light gravity (full while rising faster than the kick), along-face speed eased up to wallRunSpeed.
@@ -1061,7 +1499,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     if (b.wallT >= k.wallClimbTime) { endWall(b, 0); b.upKick = k.wallUpKick > 0; }
   } else if (!b.grounded) {
     const onRope = b.ropeSolid >= 0;
-    v.y -= k.gravity * (onRope ? k.swingGravity : 1) * dt;
+    v.y -= k.gravity * (onRope ? k.swingGravity : b.diveOn ? k.diveGravity : 1) * dt;
     if (w.wind !== undefined) { v.x += w.wind.x * dt; v.z += w.wind.z * dt; }
     if (onRope && b.liftOn) {
       // Round 11 lift: the rope pulls you in at webLift (at least that fast toward the pivot), lighter gravity.
@@ -1126,7 +1564,13 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       // Round 11: just flung toward a facade head-on, or flying out over the city's edge: the flight bends along
       // it (no air control into it).
       turnToward(v, AV.x, AV.z, air * dt);
-    } else if (k.airAccel > 0 && (mx !== 0 || mz !== 0)) {
+    } else if (!b.diveOn && (mx !== 0 || mz !== 0) && (k.airAccel > 0 || k.airTurn > 0)) {
+      // Round 12 air carve (§6.7): the horizontal velocity turns toward the stick at airTurn rad/s, speed kept, when
+      // the stick is within ~100 deg of the way you are going. (Diving: no air control at all.)
+      if (k.airTurn > 0) {
+        const hs = Math.sqrt(v.x * v.x + v.z * v.z), sl = Math.sqrt(mx * mx + mz * mz);
+        if (hs > 1 && sl > 0.1 && (v.x * mx + v.z * mz) >= CARVE_COS * hs * sl) turnToward(v, mx / sl, mz / sl, k.airTurn * dt);
+      }
       // Round 11: just off a facade, the stick no longer presses you into it (no sliding down the face).
       let ax = mx, az = mz;
       if (b.touchT < WALL_HUG && k.swingAvoid > 0) {
@@ -1142,7 +1586,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   }
   if (!scripted) {
-    capSpeed(v, k.speedCap);
+    // (§6.8 flow: each pip raises the cap by flowCap.)
+    capSpeed(v, k.speedCap > 0 ? k.speedCap + b.flow * k.flowCap : 0);
     // Integrate (semi-implicit Euler).
     p.x += v.x * dt;
     p.y += v.y * dt;
@@ -1210,11 +1655,17 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   }
 
-  // Zip auto-release near the target (or after zipMaxTime).
+  // The zip ends at its target (zipStop short; a facade: just off the wall), or early after zipMaxTime.
   if (b.zipOn) {
     const dx = b.zipP.x - p.x, dy = b.zipP.y - p.y, dz = b.zipP.z - p.z;
-    const r = b.zipWall >= 0 ? WALL_ZIP_END : k.zipRelease;
-    if (dx * dx + dy * dy + dz * dz <= r * r || b.zipT >= k.zipMaxTime) endZip(b, k, w, true, inp.aimX, inp.aimZ);
+    const r = b.zipKind === ZIP_FACE ? WALL_ZIP_END : k.zipStop;
+    if (dx * dx + dy * dy + dz * dz <= r * r) endZip(b, k, w, ZIP_ARRIVE, inp);
+    else if (b.zipT >= k.zipMaxTime) endZip(b, k, w, ZIP_EARLY, inp);
+  }
+  // The yank ends after yankTime, or when a solid comes between you (its momentum kept; the cooldown starts).
+  if (b.yankOn) {
+    const r = w.runner!.p;
+    if (b.yankT >= k.yankTime || idx.segmentBlocked(p.x, p.y + CHEST, p.z, r.x, r.y + CHEST, r.z, -1, w.runner!.roofId)) endYank(b, k);
   }
 
   // Collision: box vs ground-rooted AABBs (none while hanging / climbing: the path is scripted).
@@ -1227,6 +1678,25 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       const s = idx.solids[idx.out[i]];
       if (p.x + hw <= s.x0 || p.x - hw >= s.x1 || p.z + hw <= s.z0 || p.z - hw >= s.z1) continue;
       if (p.y - hh > s.top + 1e-6) continue;
+      // Round 12 floating solids (§3): skipped while the body is entirely below; hit from below = a head bump.
+      const y0 = s.y0 ?? 0;
+      if (y0 > 0) {
+        if (p.y + hh <= y0 + 1e-6) continue;
+        if (feetBefore + 2 * hh <= y0 + 1e-6 && v.y > 0) {
+          p.y = y0 - hh;
+          v.y = 0;
+          b.events |= EV_WALL;
+          if (b.zipOn) endZip(b, k, w, ZIP_EARLY, inp);
+          continue;
+        }
+      }
+      if (b.zipOn && s.id === b.zipFrom && feetBefore >= s.top - 1e-6) {
+        // A zip down and away from the roof you stood on drags you across it (and off its edge).
+        p.y = s.top + hh;
+        if (v.y < 0) v.y = 0;
+        supported = true;
+        continue;
+      }
       if (feetBefore >= s.top - 1e-6 && v.y <= 0) {
         p.y = s.top + hh;
         if (!b.grounded) b.landVy = v.y;
@@ -1241,7 +1711,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
           b.chainCount = 0;
           b.airJumps = k.airJumps;
           b.events |= EV_LAND;
-          if (b.zipOn) endZip(b, k, w, false, inp.aimX, inp.aimZ);
+          if (b.zipOn) endZip(b, k, w, ZIP_LANDED, inp);
         }
       } else {
         let nx = 0, nz = 0;
@@ -1271,6 +1741,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       }
     }
   }
+  // A zip that meets a facade: its own target face = arrived; anything else in the way ends it.
+  if (b.zipOn && contact >= 0) endZip(b, k, w, b.zipKind === ZIP_FACE && contact === b.zipWall ? ZIP_ARRIVE : ZIP_EARLY, inp);
   // A wall push can move the body away from the pivot: pay the rope out so |p - pivot| <= len holds.
   if (b.ropeSolid >= 0 && (b.events & EV_WALL) !== 0) {
     const P = b.ropeP;
@@ -1291,14 +1763,15 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.upKick = false;
   }
   // Airborne parkour: wall-run upkeep, facade contact (ledge / run-up / wall run / bonk), then proximity.
-  if (!b.grounded && !b.zipOn && b.ledgeMode === 0 && !scripted) {
+  if (!b.grounded && !b.zipOn && !b.yankOn && b.ledgeMode === 0 && !scripted) {
     const feet = p.y - hh;
     if (b.wallMode > 0) {
       const s = idx.solids[b.wallSolid];
       const c = b.wallNx !== 0 ? p.z : p.x;
       const va = b.wallMode === WALL_RUN ? v.x * -b.wallNz + v.z * b.wallNx : 1;
       if (b.wallMode === WALL_UP && tryLedge(b, k, w, mx, mz, true)) { /* grabbed the top */ }
-      else if (c < b.wallLo || c > b.wallHi || s.top - feet < 0.1 || contact >= 0 || (va < 1 && va > -1)) endWall(b, 0);
+      // (Round 12: a floating solid's side ends under its bottom.)
+      else if (c < b.wallLo || c > b.wallHi || s.top - feet < 0.1 || (s.y0 ?? 0) > feet + 0.2 || contact >= 0 || (va < 1 && va > -1)) endWall(b, 0);
     } else if (contact >= 0) {
       const s = idx.solids[contact];
       b.touchWall = contact; b.touchT = 0; b.touchNx = cnx; b.touchNz = cnz;
@@ -1315,8 +1788,15 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       else if (wallRunOk(b, k, contact, cnx, cnz, s.top, v0x, v0z, feet, b.ropeSolid >= 0 ? 0 : k.wallRunRatio)) startWall(b, k, w, contact, cnx, cnz, WALL_RUN);
       else if (k.bonk && vi > k.bonkMinSpeed && vi > k.bonkRatio * hs0 && mIn <= 0.7) {
         if (b.ropeSolid >= 0) release(b, k, false);
-        b.bonkT = k.bonkLock;
-        b.events |= EV_BONK;
+        // Round 12 rebound (§6.3): Jump in the jump buffer before the hit (or within reboundWindow after it) kicks you
+        // off the face instead of the bonk.
+        if (k.reboundWindow > 0 && b.jumpBuf > 0) rebound(b, k, cnx, cnz, vi);
+        else {
+          b.bonkT = k.bonkLock;
+          b.rebT = 0; b.rebVin = vi; b.rebNx = cnx; b.rebNz = cnz;
+          b.flow = 0;
+          b.events |= EV_BONK;
+        }
       } else if (k.wallPushOff > 0 && b.ropeSolid < 0 && v.y < 0) {
         // Round 11: falling along the face with nothing to take the contact (too fast for a wall run): push off it
         // (no slide down the facade with the camera on the wall).
@@ -1342,13 +1822,19 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     } else if (b.landVy < k.stumbleVy) {
       v.x *= k.stumbleKeep; v.z *= k.stumbleKeep;
       b.bonkT = Math.max(b.bonkT, k.stumbleLock);
+      b.flow = 0;
       b.events |= EV_BIGLAND;
-    } else if (k.slide && b.slideBuf > 0 && hs >= k.slideMinSpeed) startSlide(b, k);
+    } else if (k.slide && (b.slideBuf > 0 || (inp.slideHeld && b.diveOn)) && hs >= k.slideMinSpeed) startSlide(b, k);
+    b.diveOn = false;
   }
   if (b.grounded) {
     b.chainCount = 0;
     b.airJumps = k.airJumps;
     b.kickSolid = -1;
+    b.kicks = 0;
+    b.zipLeft = k.zipCharges;
+    // (§6.8: near-stopping on the ground drops every flow pip.)
+    if (b.flow > 0 && v.x * v.x + v.z * v.z < FLOW_STOP * FLOW_STOP) b.flow = 0;
     // Only real roofs are safe respawn points (never a rooftop prop).
     const s = idx.solids[b.roofId];
     if (s !== undefined && s.kind === "roof") {
@@ -1356,5 +1842,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       b.lastSafe.x = p.x; b.lastSafe.y = p.y; b.lastSafe.z = p.z;
     }
   }
-  if (p.y - hh < k.failFloor) b.events |= EV_FALL;
+  if (p.y - hh < k.failFloor) { b.events |= EV_FALL; b.flow = 0; }
 }
+
+/** §6.8: slower than this on the ground (m/s) loses the flow. */
+const FLOW_STOP = 4;

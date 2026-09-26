@@ -3,7 +3,7 @@
 // Yoink / tag / fall / timer checks -> stats. Pure TS outside React; the determinism rule applies.
 import { Fnv1a, Rand, type Vec3 } from "../sim/math.ts";
 import {
-  chaseDist, cloneBody, copyBody, createBody, hashBody, pickRing, resetMoves, stepBody, EV_FALL, RING_NONE, RING_RUNNER,
+  chaseDist, cloneBody, copyBody, createBody, hashBody, pickRing, resetMoves, stepBody, EV_FALL, EV_YANK_END, RING_NONE, RING_RUNNER,
   type Body, type InputFrame, type SimWorld,
 } from "../sim/player.ts";
 import { emptyAnchor } from "../world/cityQuery.ts";
@@ -35,13 +35,16 @@ export type RoundStats = {
   topSpeed: number;
   falls: number;
   closest: number;
-  catchKind: "tag" | "yoink" | "";
+  /** Round 12: "yank" = a tag made by the web-yank (the homing zip). */
+  catchKind: "tag" | "yoink" | "yank" | "";
   /** Seconds from GO to the catch (fall penalties included), or 0. */
   catchTime: number;
   /** Round 7: the lowest roof top (m) he has stood on this round (Vertigo's "street level" star). */
   runnerLow: number;
   /** Round 9: parkour moves (wall runs, wall jumps, ledge climbs, vaults, slides) this round. */
   parkour: number;
+  /** Round 12: tech moves (perfect releases, zip pops, rebounds, 3rd chained kicks, full-charge launches). */
+  tech?: number;
 };
 
 export type RoundOptions = {
@@ -134,7 +137,7 @@ export class Round {
   /** Chase distance d this step. */
   d = 0;
   events = 0;
-  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0, runnerLow: Infinity, parkour: 0 };
+  readonly stats: RoundStats = { maxChain: 0, topSpeed: 0, falls: 0, closest: Infinity, catchKind: "", catchTime: 0, runnerLow: Infinity, parkour: 0, tech: 0 };
   /** Runner pose before this step (render interpolation). */
   readonly prevRunner: Vec3 = { x: 0, y: 0, z: 0 };
 
@@ -148,9 +151,10 @@ export class Round {
     const params = { ...o.params };
     const add = tw?.add?.[o.difficulty];
     if (add) for (const k of Object.keys(add) as (keyof DifficultyParams)[]) params[k] += add[k] ?? 0;
-    this.tuning = { ...o.tuning, yoinkRange: params.yoinkRange + (o.yoinkBonus ?? 0) };
+    // Round 12: the web-yank range comes from the difficulty too (0 = none; the No YOINK mutator turns it off).
+    this.tuning = { ...o.tuning, yoinkRange: params.yoinkRange + (o.yoinkBonus ?? 0), yankRange: params.yankRange ?? 0 };
     if (mut & M_LOWGRAV) this.tuning.gravity = o.tuning.gravity * MECH.lowGravity;
-    if (mut & M_NOYOINK) this.tuning.yoink = false;
+    if (mut & M_NOYOINK) { this.tuning.yoink = false; this.tuning.yankRange = 0; }
     this.clock = this.clock0 = mut & M_SIXTY ? MECH.sixtyClock : ROUND.seconds;
     this.rng = new Rand(o.seed);
     const pack = o.pack;
@@ -237,6 +241,7 @@ export class Round {
     if (sp > st.topSpeed) st.topSpeed = sp;
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
     st.parkour = b.parkour;
+    st.tech = b.tech;
     if (this.d < st.closest) st.closest = this.d;
     if (r.roofId >= 0) { const top = this.model.solids[r.roofId].top; if (top < st.runnerLow) st.runnerLow = top; }
 
@@ -245,7 +250,7 @@ export class Round {
     const tag = dx * dx + dz * dz <= ROUND.tagRadius * ROUND.tagRadius && (dy < 0 ? -dy : dy) <= ROUND.tagDy;
     if (yoink || tag) {
       this.phase = "caught";
-      st.catchKind = yoink ? "yoink" : "tag";
+      st.catchKind = yoink ? "yoink" : b.yankOn || (b.events & EV_YANK_END) !== 0 ? "yank" : "tag";
       st.catchTime = this.clock0 - this.clock;
       this.events |= RV_CAUGHT | (yoink ? RV_YOINK : 0);
       return;
@@ -282,6 +287,7 @@ export class Round {
     if (sp > st.topSpeed) st.topSpeed = sp;
     if (b.chainCount > st.maxChain) st.maxChain = b.chainCount;
     st.parkour = b.parkour;
+    st.tech = b.tech;
     if (b.events & EV_FALL) {
       st.falls++;
       respawnNear(b, this.model, b.lastSafeRoof, b.lastSafe, ROUND.respawnInset, this.tuning.halfHeight);

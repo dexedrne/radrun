@@ -54,7 +54,7 @@ export type RoundHud = {
 
 export type Results = {
   caught: boolean;
-  kind: "tag" | "yoink" | "";
+  kind: "tag" | "yoink" | "yank" | "";
   time: number;
   closest: number;
   maxChain: number;
@@ -90,7 +90,7 @@ export type GhostInfo = {
   claimed: number;
   /** The replay's catch time / kind (null = the replay never caught him). */
   time: number | null;
-  kind: "tag" | "yoink" | "";
+  kind: "tag" | "yoink" | "yank" | "";
   source: "link" | "best";
 };
 

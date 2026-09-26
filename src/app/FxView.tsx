@@ -1,15 +1,24 @@
 // Plain R3F FX (priority -1), round 9: the reticle on the ringed building anchor (a ring pushed 0.3 m off
 // the face, facing the camera at a constant ~28 px, yellow; green while attached; a short tick along the
 // edge on a rim anchor), the web line from the RightHand (ropeFrom) to the anchor (or the web-zip target),
-// a grey X for a web press with nothing ringed, the web-zip ledge marker, and a blob shadow under the player.
-// No balloons: anchors are the buildings themselves.
+// a grey X for a web press with nothing ringed, and a blob shadow under the player. No balloons: anchors are the
+// buildings themselves. Round 12 (docs/specs/2026-09-26-round12-spider-tag.md §8): the zip diamond (where E goes this
+// frame: white, grey when out of zips or cooling down; larger on touch), the charge ring at your feet (fills, yellow
+// at full) and the web flashing white on a perfect release.
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Vector3 } from "three";
+import { DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, RingGeometry, Vector3 } from "three";
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
-import { emptyZipAim, zipTarget, EV_NOANCHOR } from "../sim/player.ts";
+import { chargeLevel, emptyZipAim, zipAim, EV_NOANCHOR, EV_PERFECT, EV_RELEASE, EV_AUTORELEASE } from "../sim/player.ts";
+import { emptyAnchor } from "../world/cityQuery.ts";
+import { useUi } from "../ui/store.ts";
+
+/** Round 12: the zip diamond's size (px; touch x1.6), the charge ring's pieces and the perfect flash (s). */
+const DIAMOND_PX = 16;
+const CHARGE_SEGS = 24;
+const PERFECT_FLASH = 0.18;
 
 /** Reticle size on screen (px), the web's thickness (m) and how long the "no anchor" X shows (s). */
 const RETICLE_PX = 28;
@@ -27,6 +36,13 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const ledge = useRef<Mesh>(null);
   const nope = useRef<Mesh>(null);
   const za = useMemo(emptyZipAim, []);
+  const ah = useMemo(emptyAnchor, []);
+  const charge = useRef<Mesh>(null);
+  const flash = useRef<Mesh>(null);
+  const chargeGeo = useMemo(() => Array.from({ length: CHARGE_SEGS + 1 }, (_, i) => new RingGeometry(0.55, 0.8, 40, 1, Math.PI / 2, (2 * Math.PI * i) / CHARGE_SEGS)), []);
+  const chargeMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.9, depthTest: false, side: DoubleSide }), []);
+  const diamondMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
+  const fl = useMemo(() => ({ t: 0, a: new Vector3(), b: new Vector3() }), []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
   const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0 }), []);
   /** Stretch a unit web cylinder from a to b. */
@@ -91,20 +107,55 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
         nm.scale.set(k, k, k);
       }
     }
-    // Web-zip ledge marker: where ZIP goes when nothing is ringed (ready, not on a rope / zipping).
+    // Round 12 zip diamond: where E goes this frame (the sim's own zipAim; the ringed anchor for the aim assist).
+    // White when a zip is ready, grey when out of zips or cooling down; hidden while zipping, yanking or when E yanks.
     const lm = ledge.current;
     if (lm) {
       const k = game.simTuning, f = game.frameInput;
       let show = false;
-      if (!hide && k && k.webZip && f && !b.zipOn && b.ropeSolid < 0 && b.ringId < 0 && b.zipCd <= 0) {
-        show = zipTarget(b, null, f.aimX, f.aimZ, k, game.world, za) === 2;
+      if (!hide && k && k.webZip && f && !b.zipOn && !b.yankOn && !b.yankOk && b.ledgeMode === 0) {
+        let a = null;
+        if (b.ringId >= 0) {
+          ah.solid = b.ringId; ah.ax = b.ringA.x; ah.ay = b.ringA.y; ah.az = b.ringA.z; ah.px = b.ringP.x; ah.py = b.ringP.y; ah.pz = b.ringP.z;
+          ah.nx = b.ringNx; ah.nz = b.ringNz; ah.rim = b.ringRim; a = ah;
+        }
+        show = zipAim(b, a, f.aimX, f.aimY, f.aimZ, k, game.world, za) > 0;
         if (show) {
-          lm.position.set(za.x, za.y - k.halfHeight + 0.08, za.z);
-          const s = 1 + 0.1 * Math.sin(tmp.t * 7);
-          lm.scale.set(s, s, s);
+          lm.position.set(za.hx + za.nx * 0.2, za.hy, za.hz + za.nz * 0.2);
+          lm.quaternion.copy(camQ);
+          const ready = b.zipCd <= 0 && Math.min(b.zipLeft, k.zipCharges) > 0;
+          diamondMat.color.set(ready ? "#ffffff" : "#8a8f99");
+          const d = camP.distanceTo(lm.position);
+          const kk = (pxWorld(d) * DIAMOND_PX * (useUi.getState().touch ? 1.6 : 1)) / 0.7;
+          lm.scale.set(kk, kk, kk);
         }
       }
       lm.visible = show;
+    }
+    // Round 12 charge ring: fills at your feet while C charges, yellow at full.
+    const cm = charge.current;
+    if (cm) {
+      const k = game.simTuning;
+      const on = !hide && !!k && b.chargeT > 0;
+      cm.visible = on;
+      if (on && k) {
+        const c = chargeLevel(b.chargeT, k);
+        const seg = Math.max(1, Math.round(c * CHARGE_SEGS));
+        if (cm.geometry !== chargeGeo[seg]) cm.geometry = chargeGeo[seg];
+        chargeMat.color.set(c >= 1 ? "#ffe14d" : "#ffffff");
+        chargeMat.opacity = c > 0 ? 0.9 : 0.35;
+        const g = b.grounded ? p.y - 0.9 + 0.05 : p.y - 0.9;
+        cm.position.set(p.x, g, p.z);
+      }
+    }
+    // Round 12 perfect release: the web just let go of flashes white (a thicker line) for a moment.
+    if (b.ropeSolid >= 0) { if (!ropeFrom?.(fl.a)) fl.a.set(p.x, p.y + 0.25, p.z); fl.b.set(b.ropeA.x, b.ropeA.y, b.ropeA.z); }
+    if ((game.frameEvents & EV_PERFECT) && (game.frameEvents & (EV_RELEASE | EV_AUTORELEASE))) fl.t = PERFECT_FLASH;
+    fl.t = Math.max(0, fl.t - delta);
+    const fm = flash.current;
+    if (fm) {
+      fm.visible = fl.t > 0 && !hide;
+      if (fm.visible) { place(fm, fl.a, fl.b); fm.scale.x = fm.scale.z = 1 + 2 * (fl.t / PERFECT_FLASH); }
     }
     // The web: from the character's RightHand (ropeFrom), else the body point, to the anchor / zip target.
     // Round 11: the part of the line within WEB_LENS_CLEAR of the lens is left out (up to two pieces).
@@ -174,9 +225,13 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
         <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
         <meshBasicMaterial color="#fafafa" />
       </mesh>
-      <mesh ref={ledge} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false}>
-        <ringGeometry args={[0.45, 0.7, 4]} />
-        <meshBasicMaterial color="#7fe7ff" transparent opacity={0.9} depthTest={false} side={DoubleSide} />
+      <mesh ref={ledge} material={diamondMat} renderOrder={10} visible={false}>
+        <ringGeometry args={[0.22, 0.35, 4]} />
+      </mesh>
+      <mesh ref={charge} material={chargeMat} geometry={chargeGeo[1]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false} />
+      <mesh ref={flash} visible={false}>
+        <cylinderGeometry args={[WEB_THICK, WEB_THICK, 1, 6]} />
+        <meshBasicMaterial color="#ffffff" toneMapped={false} />
       </mesh>
       <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[0.65, 20]} />
