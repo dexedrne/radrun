@@ -7,7 +7,8 @@
 // sim that plays them is in).
 import fs from "node:fs";
 import path from "node:path";
-import { modelFromCityPrefab } from "../src/world/level.ts";
+import { modelFromCityPrefab, structureInput } from "../src/world/level.ts";
+import { COVERAGE_TARGET, swingCoverage } from "../src/world/structures.ts";
 import { lintModel } from "../src/world/derive.ts";
 import { prefabBatchStats } from "../src/world/fromPrefab.ts";
 import { applyTuningJson } from "../src/sim/tuning.ts";
@@ -33,17 +34,33 @@ export function bakeChecksFailed(r: BakeReport): string[] {
   return bad;
 }
 
+/** The district a city.json belongs to (by its directory; Downtown otherwise). */
+export function districtOf(cityPath: string): string {
+  const dir = path.resolve(path.dirname(cityPath));
+  for (const id of DISTRICT_IDS) if (path.resolve(LEVELS, "..", DISTRICTS[id].dir) === dir) return id;
+  return "downtown";
+}
+
 export function runLevel(cityPath = path.join(LEVELS, "city.json"), outDir = path.dirname(cityPath), doBake = true): number {
   const prefab = JSON.parse(fs.readFileSync(cityPath, "utf8"));
-  const { model, warnings } = modelFromCityPrefab(prefab);
   const tuningPath = path.join(LEVELS, "tuning.json");
+  // (applyTuningJson also loads the "structures" knobs, so it runs before the model is derived.)
   const tuning = applyTuningJson(fs.existsSync(tuningPath) ? JSON.parse(fs.readFileSync(tuningPath, "utf8")) : null).player;
+  const district = districtOf(cityPath);
+  const decorPath0 = path.join(path.dirname(cityPath), "decor.json");
+  const decor = fs.existsSync(decorPath0) ? JSON.parse(fs.readFileSync(decorPath0, "utf8")) : null;
+  const { model, warnings } = modelFromCityPrefab(prefab, structureInput(district, decor));
   const lint = lintModel(model);
+  // G11 swing coverage (a stat; a warning under the district's target), next to the round 11 baseline.
+  const cov = swingCoverage(model, tuning), base = swingCoverage(model, tuning, false);
+  const target = COVERAGE_TARGET[district] ?? 90;
+  if (cov.pct < target) lint.warnings.push(`G11: swing coverage ${cov.pct.toFixed(1)} % < ${target} % (${district})`);
   const outPath = path.join(outDir, "city.model.json");
   fs.writeFileSync(outPath, JSON.stringify(model) + "\n");
   const cityStats = prefabBatchStats(prefab);
   console.log(`level: ${path.relative(process.cwd(), cityPath)} -> ${path.relative(process.cwd(), outPath)} (hash ${model.hash})`);
   console.log(`  ${JSON.stringify(lint.stats)}`);
+  console.log(`  G11 swing coverage (${district}): ${cov.pct.toFixed(1)} % of ${cov.samples} samples (round 11 baseline without structures ${base.pct.toFixed(1)} %; target >= ${target} %)`);
   console.log(`  city.json: ${cityStats.nodes} nodes, ${cityStats.geometrySignatures} geometry signature(s), ${cityStats.batchKeys} batch keys`);
   const decorPath = path.join(path.dirname(cityPath), "decor.json");
   if (fs.existsSync(decorPath)) {

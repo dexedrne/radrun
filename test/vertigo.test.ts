@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CityIndex, type CityModel, type Solid } from "../src/world/cityModel.ts";
-import { deriveModel, lintModel, RULES } from "../src/world/derive.ts";
+import { deriveModel, lintModel, modelHash, RULES } from "../src/world/derive.ts";
 import { DEFAULT_CONFIG, generate } from "../src/world/generate.ts";
 import { buildLinks, GRAPH } from "../src/route/graph.ts";
 import { EdgeBot, newParams, PH_DONE, PH_FAIL } from "../src/route/bot.ts";
@@ -100,8 +100,8 @@ test("Vertigo city: the spiral keeps its range, five 150-220 m needles, no ballo
   // Few anchors low down on purpose: coverage only warns.
   const lint = lintModel(model);
   assert.deepEqual(lint.errors, []);
-  // The generator agrees with the committed model.
-  assert.equal(generate(DISTRICTS.vertigo.config).model.hash, model.hash);
+  // The generator agrees with the committed model (round 12: the city.json solids, before the derived structures).
+  assert.equal(generate(DISTRICTS.vertigo.config).model.hash, modelHash({ solids: model.solids.filter(s => s.kind !== "fixture") }));
 });
 
 test("Vertigo: big height range, drop hops in his route, falls land clean", { skip: stale }, () => {

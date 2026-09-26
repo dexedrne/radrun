@@ -3,8 +3,10 @@
 // ahead (vault) and the grabbable ledge in front (ledge grab). Free functions: cityModel.ts is not touched.
 // Determinism rule: + - * / sqrt min max abs floor only, ascending solid-id iteration, no allocation in the
 // hot path (module scratch). idx.out is copied into a private scratch before segmentBlocked (which reuses it).
-// Every solid kind is treated the same way: only `landable` and `top` are read.
-import { slab, type CityIndex, type Solid } from "./cityModel.ts";
+// Every solid kind is treated the same way: only `landable`, `top` and (round 12) `y0` are read.
+// Round 12 (docs/specs/2026-09-26-round12-spider-tag.md §3): web-only cables (rigs, ids >= RIG0) are anchors
+// too, and floating solids (gantries, skybridges) are handled by every query.
+import { RIG0, slab, type CityIndex, type Solid } from "./cityModel.ts";
 import type { Tuning } from "../sim/tuning.ts";
 
 /** A web anchor on a building: visual point (a*), physics pivot (p*), face normal, rim/corner flag. */
@@ -21,8 +23,8 @@ export function copyAnchor(dst: AnchorHit, src: AnchorHit): AnchorHit {
 }
 
 /** A vertical side face of a solid near the body. lo / hi = its extent along the face tangent. */
-export type FaceHit = { solid: number; nx: number; nz: number; dist: number; top: number; lo: number; hi: number };
-export const emptyFace = (): FaceHit => ({ solid: -1, nx: 0, nz: 0, dist: 0, top: 0, lo: 0, hi: 0 });
+export type FaceHit = { solid: number; nx: number; nz: number; dist: number; top: number; lo: number; hi: number; ny: number };
+export const emptyFace = (): FaceHit => ({ solid: -1, nx: 0, nz: 0, dist: 0, top: 0, lo: 0, hi: 0, ny: 0 });
 
 /** Anchors less than this far out horizontally pass the aim cone (straight up). */
 export const CONE_FREE = 3;
@@ -43,9 +45,11 @@ function keep(idx: CityIndex, n: number): Int32Array {
  * a face on its far side).
  */
 export function anchorVisible(idx: CityIndex, x: number, y: number, z: number, ax: number, ay: number, az: number, solid: number, skipRoof: number): boolean {
+  // A rig (a cable in the open) only needs a clear line.
+  if (solid >= RIG0) return !idx.segmentBlocked(x, y, z, ax, ay, az, skipRoof, -1);
   const s = idx.solids[solid];
   const dx = ax - x, dy = ay - y, dz = az - z;
-  const t = slab(x, y, z, dx, dy, dz, s.x0, 0, s.z0, s.x1, s.top, s.z1);
+  const t = slab(x, y, z, dx, dy, dz, s.x0, s.y0 ?? 0, s.z0, s.x1, s.top, s.z1);
   if (t >= 0) {
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if ((1 - t) * len > 0.05) return false;
@@ -88,12 +92,16 @@ export function findAnchor(
   for (let i = 0; i < n; i++) {
     const s = idx.solids[ids[i]];
     if (s.top < minY) continue;
+    const y0 = s.y0 ?? 0;
     let qx = sx < s.x0 ? s.x0 : sx > s.x1 ? s.x1 : sx;
-    let qy = sy < 0 ? 0 : sy > s.top ? s.top : sy;
+    let qy = sy < y0 ? y0 : sy > s.top ? s.top : sy;
     let qz = sz < s.z0 ? s.z0 : sz > s.z1 ? s.z1 : sz;
     const inX = sx > s.x0 && sx < s.x1, inZ = sz > s.z0 && sz < s.z1;
-    let rim: boolean;
-    if (inX && inZ) {
+    let rim: boolean, under = false;
+    if (inX && inZ && y0 > 0 && sy <= y0) {
+      // Round 12: under a floating solid - its underside (normal (0, 0): the pivot is the point itself).
+      rim = false; under = true;
+    } else if (inX && inZ) {
       // Over the roof interior -> the nearest rim point; inside the box -> the nearest side face. Only sides
       // that face the body count (the far side is behind the building), unless none does.
       rim = sy >= s.top;
@@ -119,10 +127,10 @@ export function findAnchor(
     // Only a candidate that makes the top list is line-checked (ties keep the lower solid id: ascending ids).
     if (kept === top && sc >= TOPS[kept - 1].score) continue;
     if (!anchorVisible(idx, x, y, z, qx, qy, qz, s.id, skipRoof)) continue;
-    let nx = qx === s.x0 ? -1 : qx === s.x1 ? 1 : 0;
-    let nz = qz === s.z0 ? -1 : qz === s.z1 ? 1 : 0;
+    let nx = under ? 0 : qx === s.x0 ? -1 : qx === s.x1 ? 1 : 0;
+    let nz = under ? 0 : qz === s.z0 ? -1 : qz === s.z1 ? 1 : 0;
     if (nx !== 0 && nz !== 0) { nx *= S2; nz *= S2; }
-    else if (nx === 0 && nz === 0) {
+    else if (nx === 0 && nz === 0 && !under) {
       // (not reachable for a box: Q always ends on a side) - face the body.
       const l = hl > 1e-9 ? hl : 1;
       nx = -dx / l; nz = -dz / l;
@@ -133,13 +141,47 @@ export function findAnchor(
     const t = TOPS[j];
     t.solid = s.id; t.ax = qx; t.ay = qy; t.az = qz; t.nx = nx; t.nz = nz; t.rim = rim; t.score = sc;
   }
+  // Round 12 rigs (after the solids, ascending index): Q = the point of the cable nearest the ideal point (its
+  // chord parameter kept rigEndInset m from either end, y from the sag), the same filters, score - rigBonus.
+  const nr = idx.nearbyRigs(x - R, z - R, x + R, z + R);
+  for (let i = 0; i < nr; i++) {
+    const gi = idx.rout[i], g = idx.rigs[gi], bb = gi * 6, B = idx.rigBox;
+    if (B[bb + 4] < minY || B[bb] > x + R || B[bb + 3] < x - R || B[bb + 2] > z + R || B[bb + 5] < z - R) continue;
+    const cx = g.bx - g.ax, cy = g.by - g.ay, cz = g.bz - g.az;
+    const cl2 = cx * cx + cy * cy + cz * cz;
+    if (cl2 < 1e-9) continue;
+    const cl = Math.sqrt(cl2), tin = k.rigEndInset / cl;
+    if (tin >= 0.5) continue;
+    let t = ((sx - g.ax) * cx + (sy - g.ay) * cy + (sz - g.az) * cz) / cl2;
+    if (t < tin) t = tin; else if (t > 1 - tin) t = 1 - tin;
+    const qx = g.ax + cx * t, qy = g.ay + cy * t - 4 * g.sag * t * (1 - t), qz = g.az + cz * t;
+    const dy = qy - y;
+    if (dy < k.anchorMinAbove) continue;
+    const dx = qx - x, dz = qz - z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < rMin2 || d2 > rMax2) continue;
+    const hl = Math.sqrt(dx * dx + dz * dz);
+    if (hl >= CONE_FREE && dx * fx + dz * fz < cone * hl) continue;
+    const ex = qx - sx, ey = qy - sy, ez = qz - sz;
+    const id = RIG0 + gi;
+    let sc = Math.sqrt(ex * ex + ey * ey + ez * ez) - k.rigBonus;
+    if (id === ringSolid) sc -= k.hysteresis;
+    if (id === lastSolid) sc += k.anchorAlternate;
+    if (kept === top && sc >= TOPS[kept - 1].score) continue;
+    if (idx.segmentBlocked(x, y, z, qx, qy, qz, skipRoof, -1)) continue;
+    let j = kept < top ? kept++ : kept - 1;
+    while (j > 0 && TOPS[j - 1].score > sc) { copyAnchor(TOPS[j], TOPS[j - 1]); j--; }
+    const u = TOPS[j];
+    u.solid = id; u.ax = qx; u.ay = qy; u.az = qz; u.nx = 0; u.nz = 0; u.rim = false; u.score = sc;
+  }
   if (kept === 0) return false;
   let best = Infinity;
   const vx = vel ? vel.x : fx * speed, vy = vel ? vel.y : 0, vz = vel ? vel.z : fz * speed;
   for (let i = 0; i < kept; i++) {
     const c = TOPS[i];
     if (c.score >= best) break;
-    pivotFor(idx, k, x, z, c);
+    // A rig's pivot (and a floating solid's underside) is the anchor point itself.
+    if (c.solid >= RIG0 || (c.nx === 0 && c.nz === 0)) { c.px = c.ax; c.py = c.ay; c.pz = c.az; } else pivotFor(idx, k, x, z, c);
     let sc = c.score;
     if (top > 1 && !swingClear(idx, k, x, y, z, vx, vy, vz, c.px, c.py, c.pz, skipRoof)) sc += k.anchorArcPenalty;
     if (sc < best) { best = sc; copyAnchor(out, c); out.score = sc; }
@@ -208,7 +250,9 @@ export function swingClear(idx: CityIndex, k: Tuning, x: number, y: number, z: n
     }
     // The body's feet sweep the segment (its centre line, a little low): a side face met head-on = a slam.
     if (segmentFace(idx, x, y - feet * 0.5, z, nx, ny - feet * 0.5, nz, skipRoof, FA)) {
-      if (FA.nx === 0 && FA.nz === 0) return true; // onto a roof top
+      if (FA.ny > 0) return true; // onto a roof top
+      if (FA.ny < 0) return false; // round 12: up into a bridge's underside
+      if (FA.nx === 0 && FA.nz === 0) return true;
       const vin = -(vx * FA.nx + vz * FA.nz), va0 = vx * -FA.nz + vz * FA.nx, va = va0 < 0 ? -va0 : va0;
       return !(vin > va || va < k.wallRunMinSpeed);
     }
@@ -227,7 +271,8 @@ export function swingClear(idx: CityIndex, k: Tuning, x: number, y: number, z: n
 
 /**
  * Round 11: the first solid the segment a -> b enters (skip = an id to ignore) and the face it enters through:
- * out.solid, out.nx / nz (0, 0 = its top), out.dist = the parametric t. False when nothing is hit.
+ * out.solid, out.nx / nz (0, 0 = its top or, round 12, a floating solid's underside), out.ny (+1 top, -1 underside,
+ * 0 a side), out.dist = the parametric t. False when nothing is hit.
  */
 export function segmentFace(idx: CityIndex, ax: number, ay: number, az: number, bx: number, by: number, bz: number, skip: number, out: FaceHit): boolean {
   const n = idx.nearbySolids(ax < bx ? ax : bx, az < bz ? az : bz, ax > bx ? ax : bx, az > bz ? az : bz);
@@ -237,16 +282,18 @@ export function segmentFace(idx: CityIndex, ax: number, ay: number, az: number, 
   for (let i = 0; i < n; i++) {
     const s = idx.solids[idx.out[i]];
     if (s.id === skip) continue;
-    const t = slab(ax, ay, az, dx, dy, dz, s.x0, 0, s.z0, s.x1, s.top, s.z1);
+    const y0 = s.y0 ?? 0;
+    const t = slab(ax, ay, az, dx, dy, dz, s.x0, y0, s.z0, s.x1, s.top, s.z1);
     if (t < 0 || (best >= 0 && t >= best)) continue;
     best = t;
-    // The entry face: the one the entry point lies on (closest).
+    // The entry face: the one the entry point lies on (closest). Round 12: a floating solid's underside too.
     const hx = ax + dx * t, hy = ay + dy * t, hz = az + dz * t;
-    const e0 = hx - s.x0, e1 = s.x1 - hx, e2 = hz - s.z0, e3 = s.z1 - hz, e4 = s.top - hy;
-    const a0 = e0 < 0 ? -e0 : e0, a1 = e1 < 0 ? -e1 : e1, a2 = e2 < 0 ? -e2 : e2, a3 = e3 < 0 ? -e3 : e3, a4 = e4 < 0 ? -e4 : e4;
-    const m = Math.min(a0, a1, a2, a3, a4);
-    out.solid = s.id; out.dist = t; out.top = s.top;
-    if (m === a4) { out.nx = 0; out.nz = 0; }
+    const e0 = hx - s.x0, e1 = s.x1 - hx, e2 = hz - s.z0, e3 = s.z1 - hz, e4 = s.top - hy, e5 = y0 > 0 ? hy - y0 : Infinity;
+    const a0 = e0 < 0 ? -e0 : e0, a1 = e1 < 0 ? -e1 : e1, a2 = e2 < 0 ? -e2 : e2, a3 = e3 < 0 ? -e3 : e3, a4 = e4 < 0 ? -e4 : e4, a5 = e5 < 0 ? -e5 : e5;
+    const m = Math.min(a0, a1, a2, a3, a4, a5);
+    out.solid = s.id; out.dist = t; out.top = s.top; out.ny = 0;
+    if (m === a4) { out.nx = 0; out.nz = 0; out.ny = 1; }
+    else if (m === a5) { out.nx = 0; out.nz = 0; out.ny = -1; }
     else if (m === a0) { out.nx = -1; out.nz = 0; }
     else if (m === a1) { out.nx = 1; out.nz = 0; }
     else if (m === a2) { out.nx = 0; out.nz = -1; }
@@ -266,7 +313,7 @@ export function wallProbe(idx: CityIndex, x: number, feet: number, z: number, hw
   out.solid = -1;
   for (let i = 0; i < n; i++) {
     const s = idx.solids[idx.out[i]];
-    if (s.top <= feet + 0.2) continue;
+    if (s.top <= feet + 0.2 || (s.y0 ?? 0) > feet + 0.2) continue;
     if (z >= s.z0 && z <= s.z1) {
       const g0 = s.x0 - (x + hw), g1 = (x - hw) - s.x1;
       if (g0 >= -1e-6 && g0 <= reach && g0 < best) { best = g0; setFace(out, s, -1, 0, g0); }
@@ -298,7 +345,7 @@ export function obstacleAhead(idx: CityIndex, x: number, feet: number, z: number
   out.solid = -1;
   for (let i = 0; i < n; i++) {
     const s = idx.solids[idx.out[i]];
-    if (s.top <= feet + 0.1 || s.id === skip) continue;
+    if (s.top <= feet + 0.1 || s.id === skip || (s.y0 ?? 0) > feet + 0.2) continue;
     const bx0 = s.x0 - hw, bx1 = s.x1 + hw, bz0 = s.z0 - hw, bz1 = s.z1 + hw;
     if (x > bx0 && x < bx1 && z > bz0 && z < bz1) continue; // overlapping already (collision's job)
     let tx0 = -Infinity, tx1 = Infinity, tz0 = -Infinity, tz1 = Infinity;
@@ -328,7 +375,7 @@ export function ledgeAt(idx: CityIndex, x: number, feet: number, z: number, hw: 
   out.solid = -1;
   for (let i = 0; i < n; i++) {
     const s = idx.solids[idx.out[i]];
-    if (!s.landable || s.top < feet + lo || s.top > feet + hi) continue;
+    if (!s.landable || s.top < feet + lo || s.top > feet + hi || (s.y0 ?? 0) > feet + 0.2) continue;
     let g = Infinity;
     if (nx < -0.5) { if (z >= s.z0 && z <= s.z1) g = s.x0 - (x + hw); }
     else if (nx > 0.5) { if (z >= s.z0 && z <= s.z1) g = (x - hw) - s.x1; }
