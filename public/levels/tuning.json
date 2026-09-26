@@ -204,32 +204,32 @@
       "yankRange": 0
     },
     "normal": {
-      "base": 1,
+      "base": 1.2,
       "gStar": 40,
       "mMin": 0.8,
-      "mMax": 1.5,
+      "mMax": 1.9,
       "panicBudget": 30,
       "sigma": 0.15,
-      "yoinkRange": 5,
+      "yoinkRange": 2.5,
       "taunt": 1.4,
       "airMin": 0.9,
-      "airMax": 1.5,
-      "lead": 0,
-      "yankRange": 12
+      "airMax": 1.9,
+      "lead": 8,
+      "yankRange": 6
     },
     "degen": {
-      "base": 1.1,
+      "base": 1.4,
       "gStar": 50,
       "mMin": 0.85,
-      "mMax": 2,
-      "panicBudget": 20,
+      "mMax": 2.4,
+      "panicBudget": 45,
       "sigma": 0.08,
-      "yoinkRange": 4.5,
+      "yoinkRange": 3,
       "taunt": 0.9,
       "airMin": 0.9,
-      "airMax": 2,
-      "lead": 3,
-      "yankRange": 9
+      "airMax": 2.4,
+      "lead": 12,
+      "yankRange": 5
     }
   },
   "george": {

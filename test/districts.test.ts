@@ -99,10 +99,12 @@ test("districts: the page district comes from ?map= or a link's m=, else Downtow
 test("chase tweak: Downtown / no district is the classic round; a tweak keeps the rng draws and changes only its knobs", { skip: stale("downtown") }, () => {
   const m = model("downtown");
   const p = pack("downtown");
-  const base = { model: m, pack: p, difficulty: "normal" as const, params: difficulty.normal, tuning: player, chaser: "652" as const, runner: "4764" as const, countdown: false };
+  // (Round 12: Normal has a head start, and Downtown's tweak changes his pace, so the check runs without the lead: at
+  // GO the tweak must not move anything yet.)
+  const base = { model: m, pack: p, difficulty: "normal" as const, params: { ...difficulty.normal, lead: 0 }, tuning: player, chaser: "652" as const, runner: "4764" as const, countdown: false };
   for (const seed of [1, 7, 24, 36]) {
     const a = new Round({ ...base, seed }), b = new Round({ ...base, seed, district: "downtown" });
-    assert.equal(a.hash(), b.hash(), "Downtown has no tweak");
+    assert.equal(a.hash(), b.hash(), "Downtown's tweak moves nothing at GO");
     const c = new Round({ ...base, seed, chase: { spawnMin: 30, spawnSpan: 0, spawnOther: 0, add: { normal: { yoinkRange: -1, gStar: 5 } } } });
     assert.equal(c.rng.s, a.rng.s, "same number of rng draws");
     assert.equal(c.startJunction, a.startJunction);
@@ -121,7 +123,8 @@ test("chase tweak: every district's tweak builds valid rounds (first edge leaves
       for (let seed = 1; seed <= 20; seed++) {
         const r = new Round({ model: m, pack: p, difficulty: d, params: difficulty[d], tuning: player, chaser: "652", runner: "4764", seed, countdown: false, district: id });
         assert.ok(p.out[r.startJunction].includes(r.runner.next), `${id} ${d} seed ${seed}`);
-        assert.ok(r.tuning.yoinkRange > 2 && r.runner.params.base > 0.5, `${id} ${d}: sane runner parameters`);
+        // (Round 12: the yank took over the reach - the Yoink is 1-2.5 m on Normal / Degen now.)
+        assert.ok(r.tuning.yoinkRange >= 1 && r.tuning.yankRange >= 0 && r.runner.params.base > 0.5, `${id} ${d}: sane runner parameters`);
       }
     }
   }

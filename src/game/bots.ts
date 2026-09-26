@@ -310,6 +310,8 @@ export class SwingBot {
   private readonly anc = emptyAnchor();
   /** Round 12 leap: steps C has been held (0 = not leaping). */
   private leap = 0;
+  /** Debug: the rule behind the last let-go of the rope (scratch diagnostics). */
+  letGo = "";
 
   constructor(round: Round, seed: number, moves = false, tech = false) {
     this.moves = moves;
@@ -588,6 +590,7 @@ export class SwingBot {
         const h = b.ropeP;
         const past = (P.x - h.x) * tx + (P.z - h.z) * tz;
         held = !(d < SWING.dropRope || this.upTo(round) || (past >= 0 && b.v.y >= SWING.releaseVy && T.y <= P.y + SWING.climbTo));
+        if (!held) this.letGo = d < SWING.dropRope ? "direct:near" : this.upTo(round) ? "direct:up" : "direct:past";
       } else if (!b.grounded) {
         if (this.cool <= 0 && this.rescue(round, inp)) held = true;
         else this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
@@ -623,6 +626,7 @@ export class SwingBot {
         held = this.moves
           ? !(this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && this.perfect(round)))
           : !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
+        if (!held) this.letGo = this.upTo(round) ? "lane:up" : high ? "lane:high" : "lane:other";
       } else {
         this.setMove(inp, dx + lx, dz + lz);
         if (this.cool <= 0 && b.ledgeMode === 0) {
@@ -640,11 +644,11 @@ export class SwingBot {
     if (b.ropeSolid >= 0) {
       const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
       this.slowRope = sp < SWING.ropeStall ? this.slowRope + 1 : 0;
-      if (this.slowRope > SWING.ropeStallFor || stall) { held = false; this.slowRope = 0; }
+      if (this.slowRope > SWING.ropeStallFor || stall) { held = false; this.slowRope = 0; this.letGo = "stall"; }
     } else this.slowRope = 0;
     // Round 9 (moves): he is up on the roofs and a ledge toward him is in zip reach - let go now, zip next step.
     const climb = this.moves && this.climbZip(round, inp);
-    if (climb) held = false;
+    if (climb) { held = false; this.letGo = "climb"; }
     if (this.held && !held && b.ropeSolid >= 0) {
       this.cool = SWING.cooldown;
       this.relAhead = SWING.releaseAhead + SWING.releaseNoise * (this.rng.next() * 2 - 1);
@@ -701,7 +705,8 @@ export class SwingBot {
    */
   private climbZip(round: Round, inp: InputFrame): boolean {
     const b = round.player, P = b.p, T = this.T;
-    if (b.grounded || b.zipOn || b.zipCd > 0 || b.ledgeMode > 0 || T.y <= P.y + SWING.climbTo) return false;
+    // (Round 12: and a zip left this airtime - letting go of the rope with none left dropped it into the street.)
+    if (b.grounded || b.zipOn || b.zipCd > 0 || Math.min(b.zipLeft, round.tuning.zipCharges) <= 0 || b.ledgeMode > 0 || T.y <= P.y + SWING.climbTo) return false;
     const tx = T.x - P.x, tz = T.z - P.z, tl = Math.sqrt(tx * tx + tz * tz);
     if (tl < 1e-6 || tl > SWING.climbReach) return false;
     const ax = inp.aimX, az = inp.aimZ, ay = inp.aimY;

@@ -81,7 +81,9 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // Round 10: the cleaner swing (swing heading, open-air pivots, the fall cone) caught him too early: a faster
     // runner (Normal 1.2x sprinting to 1.7x, Degen 1.3x) and a 4 m Degen Yoink (npm run balance -- --only swing).
     // Round 11 (the table's 3 s Degen head start, the bot that drops back down to him): Degen 1.4x with a 3.5 m Yoink.
-    chase: { add: { normal: { base: 0.2, mMax: 0.2, airMax: 0.2 }, degen: { base: 0.3, yoinkRange: -1 } } },
+    // Round 12 (the straight zip, the leap and the yank; the table's head starts and short catch ranges): Degen 1.8x
+    // with a 2 m Yoink and a 3.5 m yank (npm run balance -- --only swing: 66 %, 44 s at 100 seeds).
+    chase: { add: { normal: { base: 0.2, mMax: 0.2, airMax: 0.2 }, degen: { base: 0.4, yoinkRange: -1, yankRange: -1.5 } } },
   },
   market: {
     id: "market",
@@ -107,8 +109,9 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       spawnMin: 26, spawnOther: 0,
       add: {
         chill: { gStar: 20, base: 0.1, mMax: 0.35, airMax: 0.35 },
-        normal: { gStar: 20, base: 0.3, mMax: 0.5, airMax: 0.5 },
-        degen: { gStar: 20, base: 0.2, mMax: 0.5, airMax: 0.5, yoinkRange: -1, panicBudget: 10 },
+        // Round 12: Normal 1.55x (the zipping bot caught him in ~25 s at 1.5x), Degen 1.7x with a 4 m yank.
+        normal: { gStar: 20, base: 0.35, mMax: 0.5, airMax: 0.5 },
+        degen: { gStar: 20, base: 0.3, mMax: 0.5, airMax: 0.5, yoinkRange: -1, panicBudget: 10, yankRange: -1 },
       },
     },
     look: {
@@ -171,7 +174,8 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       add: {
         chill: { base: -0.1, mMax: -0.15, airMax: -0.15, yoinkRange: 0.5 },
         normal: { base: -0.15, mMax: 0.1, airMax: 0.1 },
-        degen: { base: 0.15, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
+        // Round 12: Degen 1.5x against the new table (it was caught in ~50 % of rounds at 1.55x).
+        degen: { base: 0.1, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
       },
     },
     look: {
@@ -207,8 +211,10 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
       startHigh: 3, down: 0.6, spawnBelow: 5, spawnMin: 24,
       add: {
         chill: { base: 0.2, gStar: 20, sigma: -0.4 },
-        normal: { base: 0.25, mMax: -0.3, airMax: -0.3, panicBudget: -10, yoinkRange: -1 },
-        degen: { base: 0.05, mMin: -0.4, gStar: 15, mMax: -0.3, airMax: -0.3, panicBudget: 15, yoinkRange: -2 },
+        // Round 12: the yank reaches him down the ramps (every catch here was one): Normal 1.5x with a 3 m yank, Degen
+        // 1.75x with a 3 m yank, his full sprint and a 16 s head start (at 12 s the bot caught him in ~37 s).
+        normal: { base: 0.3, mMax: -0.2, airMax: -0.2, panicBudget: -10, yoinkRange: -1, yankRange: -3 },
+        degen: { base: 0.35, mMin: -0.4, gStar: 15, mMax: 0, airMax: 0, panicBudget: 15, yoinkRange: -2, yankRange: -2, lead: 4 },
       },
     },
     look: {
