@@ -5,7 +5,7 @@
 // board panels (the billboard art we already ship). At most 9 draw calls, nothing downloaded but one ad texture.
 // Low quality never hides a structure (they are gameplay): it only drops the signal glow, the board lighting
 // (panels go flat) and the cable highlights.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   BoxGeometry, Color, ConeGeometry, CylinderGeometry, InstancedMesh, Matrix4, MeshBasicMaterial, MeshStandardMaterial, Object3D,
@@ -96,8 +96,11 @@ function hostTop(solids: Solid[], f: Solid): number {
   return best;
 }
 
-export function StructuresView({ model, district }: { model: CityModel; district: DistrictId }) {
+export function StructuresView({ model: model0, district, source }: { model: CityModel; district: DistrictId; source?: { model: CityModel } }) {
   const pal = PALETTE[district] ?? PALETTE.downtown;
+  // (Round 12 ?tune: the sandbox re-derives its model; the view follows the source's current one.)
+  const [model, setModel] = useState(model0);
+  useFrame(() => { if (source && source.model !== model) setModel(source.model); });
   const built = useMemo(() => {
     const solids = model.solids, rigs: Rig[] = model.rigs ?? [];
     const { boxes, glass, tanks, boards, lights } = steelBoxes(solids, pal);

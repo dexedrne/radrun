@@ -187,9 +187,12 @@ export function readChallenge(search: string): Challenge {
  * parkour and ghost format 3 (older links open with the "made on an older build" note; their ghosts are not
  * raced). Bests and kept ghosts from before v4 count as the old city's. v=5 (round 11): the swing's timing lift,
  * web-from-a-roof lift, wall / city-edge avoidance, the thief's re-baked swing routes and Chill's head start (the
- * same runs replay differently); bests from before v5 are shown as the older build's.
+ * same runs replay differently); bests from before v5 are shown as the older build's. v=6 (round 12): the
+ * structures between the buildings (every city changed), the straight zip, the charge, the tech moves, the yank,
+ * the re-baked thief (pack v3) and ghost format 4 (the pitch column, C held); bests and ghosts from before v6 are
+ * the older build's ("old city").
  */
-export const LINK_VERSION = 5;
+export const LINK_VERSION = 6;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
 const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");

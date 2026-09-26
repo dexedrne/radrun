@@ -42,6 +42,7 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
     rigUpdate(game.rig, Math.min(delta, 0.1), {
       p: tmp.p, speed, grounded: b.grounded || b.ledgeMode > 0, hook, landed: (game.frameEvents & EV_LAND) !== 0,
       wall: onWall, wallNx: onWall ? b.wallNx : b.touchNx, wallNz: onWall ? b.wallNz : b.touchNz, nearWall: near, web,
+      zip: b.zipOn || b.yankOn, charge: b.chargeT > 0, dive: b.diveOn,
     }, game.camera, hit);
     const r = game.rig;
     const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;

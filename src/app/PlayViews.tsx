@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
   BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, LatheGeometry, Mesh, MeshBasicMaterial,
-  PlaneGeometry, Quaternion, SRGBColorSpace, Vector2, Vector3,
+  PlaneGeometry, Quaternion, RingGeometry, SRGBColorSpace, Vector2, Vector3,
 } from "three";
 import type { PlayGame } from "../game/play.ts";
 import { RESULTS_AFTER, RUG } from "../game/play.ts";
@@ -14,7 +14,7 @@ import { COUNTDOWN_STEPS, RV_CAUGHT, RV_ESCAPED, RV_FALL, RV_GO, RV_YOINK, type 
 import { RE_CORNERED, RE_GASSED, RE_PANIC, RE_TAUNT } from "../runner/runner.ts";
 import {
   EV_ATTACH, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_NOANCHOR, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_SNAP, EV_VAULT, EV_WALLJUMP,
-  EV_WALLRUN, EV_ZIP, EV_ZIP_END, RING_RUNNER,
+  EV_WALLRUN, EV_ZIP, EV_ZIP_END, RING_RUNNER, EV_POP, EV_CHARGE_START, EV_CHARGE, EV_PERFECT, EV_YANK, EV_REBOUND, EV_DIVE,
 } from "../sim/player.ts";
 import { pushFeed, showBanner, showBubble, useUi, type Results } from "../ui/store.ts";
 import { LINES, S, TAUNTS, medal } from "../ui/strings.ts";
@@ -158,7 +158,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const sayCountdown = useRef(true);
   useEffect(() => useUi.subscribe(s => { if (s.screen === "title" || s.screen === "campaign") menu.current = true; }), []);
   const beep = useRef(4);
-  const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120, gusting: false });
+  const audio = useRef({ layer: false, windAcc: 0, rms: -120, peak: -120, maxPeak: -120, gusting: false, tech: 0 });
   const ghostPhase = useRef("");
   /** Player event bits since the last 10 Hz tick (tips: double jump / zip done). */
   const tickEv = useRef(0);
@@ -221,6 +221,14 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (pe & EV_SLIDE) sfx.slide();
       if (pe & EV_ROLL) sfx.roll();
       if (pe & EV_NOANCHOR) sfx.noAnchor();
+      if (pe & EV_POP) sfx.pop();
+      if (pe & EV_CHARGE_START) sfx.chargeWhine();
+      if (pe & EV_CHARGE) sfx.launch(b.tech > audio.current.tech);
+      if (pe & EV_PERFECT) sfx.perfect();
+      if (pe & EV_YANK) sfx.yank();
+      if (pe & EV_REBOUND) sfx.rebound();
+      if (pe & EV_DIVE) sfx.dive();
+      audio.current.tech = b.tech;
       const g = r.nextGust();
       const gusting = !!g && g.level > 0;
       if (gusting && !audio.current.gusting) sfx.gust();
@@ -345,6 +353,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
           countdown: r.countdown / 120, fps: fps.current, holdR: st.round.holdR,
           chain: b.chainCount, maxChain: rs.maxChain, topSpeed: rs.topSpeed, falls: rs.falls, elapsed: r.clock0 - r.clock, runnerLow: rs.runnerLow, parkour: rs.parkour, wind,
           zip: r.tuning.webZip ? (b.zipOn ? 1 : Math.min(1, b.zipCd / Math.max(1e-6, r.tuning.zipCooldown))) : -1,
+          flow: r.tuning.flowCap > 0 ? b.flow : 0, tech: b.tech,
         },
       });
       const tev = tickEv.current;
@@ -355,6 +364,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         grounded: b.grounded, rope: b.ropeSolid >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
         djumped: (tev & EV_DJUMP) !== 0, zipped: (tev & EV_ZIP) !== 0, moves: r.tuning.webZip,
         wallRan: (tev & EV_WALLRUN) !== 0, kicked: (tev & EV_WALLJUMP) !== 0, slid: (tev & EV_SLIDE) !== 0, speed: Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z),
+        charged: (tev & EV_CHARGE) !== 0, charge: r.tuning.charge,
       });
     }
   }, FRAME.sim);
@@ -436,6 +446,11 @@ export function ChaseFx({ game }: { game: PlayGame }) {
   const rug = useMemo(makeRug, []);
   const trail = useMemo(makeTrail, []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ff3355", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
+  // Round 12: the red dashed yank ring (8 dashes) and his charge ring (in his colour).
+  const yank = useRef<Group>(null);
+  const dashes = useMemo(() => Array.from({ length: 8 }, (_, i) => new RingGeometry(1.0, 1.22, 8, 1, (i * Math.PI) / 4, Math.PI / 8)), []);
+  const hisCharge = useRef<Mesh>(null);
+  const hisChargeMat = useMemo(() => new MeshBasicMaterial({ color: "#ff8a3d", transparent: true, opacity: 0.85, depthTest: false, side: DoubleSide }), []);
   const tmp = useMemo(() => ({
     a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), t: 0, trailN: 0, trailHead: 0, trailAcc: 0,
     hand: new Vector3(), from: new Vector3(), camP: new Vector3(), camQ: new Quaternion(), bagT: -1, runId: -1,
@@ -466,6 +481,24 @@ export function ChaseFx({ game }: { game: PlayGame }) {
         if (!handWorld(s.runner, "right", tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         beam(ro, tmp.a, tmp.b);
       }
+    }
+    // Round 12: the red dashed yank ring (ZIP yanks him) - the solid YOINK ring still means Yoink range.
+    const ym = yank.current;
+    if (ym) {
+      ym.visible = inRound && r.phase === "chase" && r.player.yankOk && r.player.ringId !== RING_RUNNER;
+      if (ym.visible) {
+        ym.position.set(p.x, p.y + 0.1, p.z);
+        ym.quaternion.copy(state.camera.getWorldQuaternion(tmp.camQ));
+        ym.rotateZ(tmp.t * 1.5);
+        const k = 1.25 + 0.08 * Math.sin(tmp.t * 10);
+        ym.scale.set(k, k, k);
+      }
+    }
+    // Round 12: his charge ring at his feet (from EVT_CHARGE to the leap).
+    const hc = hisCharge.current;
+    if (hc) {
+      hc.visible = inRound && !r.over && (rigs.get(s.runner)?.chargeOn ?? false);
+      if (hc.visible) { hc.position.set(p.x, p.y - 0.85, p.z); const k = 0.9 + 0.2 * Math.sin(tmp.t * 12); hc.scale.set(k, k, k); }
     }
     // Red YOINK ring around him.
     const rm = ring.current;
@@ -593,6 +626,12 @@ export function ChaseFx({ game }: { game: PlayGame }) {
       </mesh>
       <mesh ref={ring} material={ringMat} renderOrder={11} visible={false}>
         <ringGeometry args={[1.0, 1.3, 36]} />
+      </mesh>
+      <group ref={yank} visible={false}>
+        {dashes.map((g, i) => <mesh key={i} geometry={g} material={ringMat} renderOrder={11} />)}
+      </group>
+      <mesh ref={hisCharge} material={hisChargeMat} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false}>
+        <ringGeometry args={[0.55, 0.8, 32]} />
       </mesh>
       <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[0.65, 20]} />

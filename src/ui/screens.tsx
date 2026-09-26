@@ -238,13 +238,14 @@ export function Title(props: {
         </div>
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {touch ? (
-            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = web the building ahead, let go on the way up = fling ·
-            JUMP (again in the air = double jump; on a wall = wall kick) · run along a wall = <b>wall run</b> · <b>SLIDE</b> = slide ·
-            <b>ZIP</b> = web-zip to the ringed building / the roof ahead · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
+            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = faster ·
+            <b>ZIP</b> = zip where you look (red dashed ring on him = <b>yank</b>) · JUMP (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
+            <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = dive · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
-            <><b>controls</b> · mouse look/aim · WASD run · Space jump (again in the air = double jump; on a wall = wall kick) · LMB hold = web the building ahead, let go on the way up = fling ·
-            run along a wall = <b>wall run</b> · C = <b>slide</b> · ledges and low walls are climbed / vaulted by themselves ·
-            E / Shift = <b>web-zip</b> to the ringed building or the roof ahead · red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
+            <><b>controls</b> · mouse look/aim · WASD run · LMB hold = <b>swing</b> (let go near the top = faster) ·
+            E / Shift = <b>zip where you look</b> (red dashed ring on him = <b>yank</b>) · Space jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
+            C tap = slide · C hold = <b>charge a leap</b> · C in the air = dive · ledges and low walls are climbed / vaulted by themselves ·
+            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
         </div>}
         <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 10 : 11, textShadow: "0 1px 2px #000" }}>
@@ -328,6 +329,12 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       ) : (
         <div style={{ ...box, top: safe("top", 10), left: "50%", transform: "translateX(-50%)", font: "800 30px ui-monospace, monospace", color: r.clock < 15 ? "#ff4d4d" : "#fff", textShadow: "0 2px 4px rgba(0,0,0,0.6)" }} data-testid="timer">
           {clockText(r.clock)}
+        </div>
+      )}
+      {/* round 12 flow: three small pips under the middle of the screen, nothing more */}
+      {(r.flow ?? 0) > 0 && screen === "chase" && (
+        <div style={{ ...box, top: "calc(50% + 26px)", left: "50%", transform: "translateX(-50%)", display: "flex", gap: 5 }} data-testid="flow-pips">
+          {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: 4, background: i < (r.flow ?? 0) ? "#ffe14d" : "rgba(255,255,255,0.18)" }} />)}
         </div>
       )}
       {/* the raced ghost: a chip under the timer + the floating tag GhostView positions */}

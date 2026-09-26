@@ -159,11 +159,12 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         style={round(80, { right: safe("right", 146), bottom: safe("bottom", 22), background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
-      {/* SLIDE (round 9): a speed-keeping slide on a roof; in the air it buffers the landing slide */}
+      {/* SLIDE (round 9): a speed-keeping slide on a roof; in the air it buffers the landing slide. Round 12: held = the
+          charge (the button wears the charge ring; let go = launch), a fresh press in the air = the dive. */}
       <div ref={slideBtn} data-testid="touch-slide"
-        onPointerDown={e => { stop(e); input.touchSlide(); press(slideBtn.current, true); }}
-        onPointerUp={e => { e.stopPropagation(); press(slideBtn.current, false); }}
-        onPointerCancel={() => press(slideBtn.current, false)}
+        onPointerDown={e => { stop(e); input.touchSlideDown(); press(slideBtn.current, true); if (slideBtn.current) slideBtn.current.style.outline = "3px solid #ffe14d"; }}
+        onPointerUp={e => { e.stopPropagation(); input.touchSlideUp(); press(slideBtn.current, false); if (slideBtn.current) slideBtn.current.style.outline = ""; }}
+        onPointerCancel={() => { input.touchSlideUp(); press(slideBtn.current, false); if (slideBtn.current) slideBtn.current.style.outline = ""; }}
         style={round(56, { right: safe("right", 236), bottom: safe("bottom", 26), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         SLIDE
       </div>

@@ -5,6 +5,9 @@ import { copyBody, createBody, emptyInput, resetMoves, stepBody, cloneBody, EV_B
 import { FixedStepper } from "../sim/stepper.ts";
 import { HOLD_DELAY_EASY, type CameraTuning, type DifficultyTable, type Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
+import { deriveModel } from "../world/derive.ts";
+import type { KeepOut } from "../world/structures.ts";
+import { structureKnobs } from "../sim/tuning.ts";
 import { InputLatch } from "../input/input.ts";
 import { createRig, rigFace, rigLook, type Rig } from "../camera/rig.ts";
 import type { Vec3 } from "../sim/math.ts";
@@ -26,7 +29,11 @@ export function respawnOnRoof(b: Body, model: CityModel, roofId: number, x: numb
 }
 
 export class Sandbox {
-  readonly model: CityModel;
+  /** Round 12: re-derived by the ?tune structure sliders (restructure). */
+  model: CityModel;
+  /** Round 12: the page's district and its decor keep-outs (restructure's inputs; boot sets them). */
+  district = "downtown";
+  keepOut: KeepOut[] = [];
   readonly world: SimWorld;
   /** Editable tuning (tuning.json / ?tune). */
   tuning: Tuning;
@@ -71,6 +78,16 @@ export class Sandbox {
     const easy = this.camera.easyGrab;
     this.simTuning = { ...this.tuning, holdDelay: easy ? Math.max(this.tuning.holdDelay, HOLD_DELAY_EASY) : this.tuning.holdDelay, zip: easy ? false : this.tuning.zip };
     this.input.easyGrab = easy;
+  }
+
+  /**
+   * Round 12 ?tune structure sliders: re-derive the structures between the buildings from the live knobs (the same
+   * rule as npm run level; a chase keeps its baked city.model.json). The body stays where it is.
+   */
+  restructure(): void {
+    const solids = this.model.solids.filter(s => s.kind !== "fixture");
+    this.model = deriveModel(this.model.config, solids, { knobs: structureKnobs(this.district), keepOut: this.keepOut });
+    this.world.index = new CityIndex(this.model);
   }
 
   restart(): void {

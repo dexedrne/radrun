@@ -21,14 +21,15 @@ npm run build        # production build (dev pages stripped) + draco cleanup
 npm run build:test   # build keeping the dev pages and ?bot (preview deployments)
 ```
 
-Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump (again in the air = double
-jump; on a wall = wall kick) · hold LMB to web the building ahead (the ring sits on a rim, corner or
-facade), let go just past the bottom, on the way up, to fling (LMB on a roof with a ring = the web pulls you
-up and off the edge into a swing) · C slide ·
-E / Shift web-zip to the ringed building or the roof ledge ahead · wall runs, run-ups, ledge grabs +
-climbs, vaults and landing rolls happen by themselves · red ring on him + LMB = YOINK · Q / RMB ease the
-camera toward him · R retry (hold 1 s mid-round) · M mute · Esc pause. Round 9 (webs on buildings, a
-real pendulum, parkour, the taller cities): `docs/specs/2026-09-25-round9-movement.md`, PLAY.md "Moving".
+Controls: PLAY captures the mouse · mouse look/aim · WASD run · hold LMB to swing on the building, cable or
+fixture ahead (let go near the top of the arc = a perfect release) · E / Shift zip straight where you look
+(two per airtime; on the red dashed ring = web-yank him) · Space jump (again in the air = double jump; on a
+wall = wall kick; end of a zip = pop; right at a wall slam = rebound) · C tap = slide, hold = charge a leap,
+in the air = dive · wall runs, run-ups, ledge grabs + climbs, vaults and landing rolls happen by themselves ·
+red ring on him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · M mute ·
+Esc pause. Round 9 (webs on buildings, a real pendulum, parkour, the taller cities):
+`docs/specs/2026-09-25-round9-movement.md`; round 12 (cables and fixtures between the buildings, the straight
+zip, the charge, the tech moves, the yank): `docs/specs/2026-09-26-round12-spider-tag.md`; PLAY.md "Moving".
 
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).

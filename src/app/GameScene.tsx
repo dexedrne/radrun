@@ -87,7 +87,7 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
   const prefab = useMemo(() => playPrefab(game, sandboxActors(game)), [game]);
   return (
     <SceneCanvas prefab={prefab}>
-      <StructuresView model={game.model} district={PAGE_DISTRICT} />
+      <StructuresView model={game.model} district={PAGE_DISTRICT} source={game} />
       <SimDriver game={game} />
       <PlayerView game={game} />
       <CameraView game={game} />
