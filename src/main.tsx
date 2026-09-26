@@ -1,9 +1,14 @@
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import PlayPage from "./app/PlayPage.tsx";
+import { startBridge } from "./radbro/bridge.ts";
+import { unlockAudio } from "./audio/engine.ts";
 
 window.addEventListener("error", e => console.error("[window.error]", e.message));
 window.addEventListener("unhandledrejection", e => console.error("[unhandledrejection]", String(e.reason)));
+
+// Framed on radbro.fun: tell the portal what this is; the first click focuses the frame + unlocks the audio.
+startBridge({ onFirstGesture: unlockAudio });
 
 const DEV = import.meta.env.MODE !== "production";
 const EditorPage = DEV ? lazy(() => import("./app/dev/EditorPage.tsx")) : null;

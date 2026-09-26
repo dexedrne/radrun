@@ -36,6 +36,7 @@ import { preloadVoices, voice } from "../audio/voice.ts";
 import { preloadTracks } from "../audio/tracks.ts";
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
+import { bridge, chaseResult, requestLock } from "../radbro/bridge.ts";
 import { NightLook } from "./cityLook.tsx";
 import { PAGE_DISTRICT, gotoDistrict } from "./district.ts";
 
@@ -81,7 +82,7 @@ const AUTOQ_OFF = params.get("autoq") === "0";
 const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" && !s.qualityChosen && !s.qualityAuto;
 /** Touch play never uses pointer lock (spec §4 "Touch"). */
 const isTouch = () => useUi.getState().touch;
-const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) canvasEl()?.requestPointerLock(); };
+const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) requestLock(canvasEl()); };
 
 function Scene({ game }: { game: PlayGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
@@ -235,7 +236,7 @@ export default function PlayPage() {
     rememberPicks(chaser, difficulty);
     unlockAudio();
     if (isTouch()) enterFullscreen();
-    else canvasEl()?.requestPointerLock();
+    else requestLock(canvasEl());
     begin(randomSeed(), false, ghostActive ? linkGhost : null);
   }, [begin, chaser, difficulty, ghostActive, linkGhost]);
 
@@ -244,7 +245,7 @@ export default function PlayPage() {
     rememberPicks(chaser, difficulty);
     unlockAudio();
     if (isTouch()) enterFullscreen();
-    else canvasEl()?.requestPointerLock();
+    else requestLock(canvasEl());
     void decodeGhost(game, bestGhost, "best").then(ch => { if (ch) begin(ch.spec.seed, false, ch); });
   }, [game, bestGhost, begin, chaser, difficulty]);
 
@@ -252,7 +253,7 @@ export default function PlayPage() {
     rememberPicks(chaser, difficulty);
     unlockAudio();
     if (isTouch()) enterFullscreen();
-    else canvasEl()?.requestPointerLock();
+    else requestLock(canvasEl());
     begin(randomSeed(), true);
   }, [begin, chaser, difficulty]);
 
@@ -264,7 +265,7 @@ export default function PlayPage() {
     rememberPicks(chaser, difficulty);
     unlockAudio();
     if (isTouch()) enterFullscreen();
-    else canvasEl()?.requestPointerLock();
+    else requestLock(canvasEl());
     useUi.setState({ campaignSel: n });
     begin(randomSeed(), false, null, level);
   }, [begin, chaser, difficulty]);
@@ -324,7 +325,7 @@ export default function PlayPage() {
     // A click on the canvas mid-round re-captures the mouse (e.g. a lock request the browser refused).
     const click = () => {
       const sc = useUi.getState().screen;
-      if (!BOT && !isTouch() && (sc === "countdown" || sc === "chase" || sc === "practice") && document.pointerLockElement !== el) el.requestPointerLock?.();
+      if (!BOT && !isTouch() && (sc === "countdown" || sc === "chase" || sc === "practice") && document.pointerLockElement !== el) requestLock(el);
     };
     // Phones: leaving the tab / locking the screen mid-round pauses.
     const vis = () => {
@@ -338,6 +339,14 @@ export default function PlayPage() {
     return () => { detach(); document.removeEventListener("visibilitychange", vis); el.removeEventListener("click", click); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
   }, [game, retry, setPaused]);
 
+  // radbro.fun (framed only): "run" at GO, then the round's result (a catch = clear, an escape = gameover).
+  useEffect(() => useUi.subscribe((s, prev) => {
+    const b = bridge();
+    if (!b.active) return;
+    if (s.screen === "chase" && prev.screen !== "chase") b.result("run");
+    if (s.results && !prev.results) { const r = chaseResult(s.results); b.result(r.status, r.score); }
+  }), []);
+
   // Results: free the mouse so the buttons work.
   useEffect(() => {
     if (screen === "results" && document.pointerLockElement) document.exitPointerLock();
@@ -347,7 +356,7 @@ export default function PlayPage() {
   useEffect(() => {
     if (!game || !TUNE) return;
     const el = canvasEl();
-    const click = () => el?.requestPointerLock();
+    const click = () => requestLock(el);
     el?.addEventListener("click", click);
     return () => el?.removeEventListener("click", click);
   }, [game]);
@@ -403,7 +412,7 @@ export default function PlayPage() {
         <Pause
           settings={settings}
           setSettings={setSettings}
-          onResume={() => (touch ? setPaused(false) : canvasEl()?.requestPointerLock())}
+          onResume={() => (touch ? setPaused(false) : requestLock(canvasEl()))}
           onRestart={() => { setPaused(false); retry(); }}
           onQuit={toMenu}
           practice={practice}

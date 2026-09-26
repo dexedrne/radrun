@@ -120,7 +120,10 @@ export function Title(props: {
   const availMut = unlockedMutators(progress) | props.freeMut;
   const stars = starCount(progress);
   const touch = useUi(s => s.touch);
-  const { compact, tiny, narrow } = useViewport();
+  const { compact, tiny, narrow, w, h } = useViewport();
+  // A short desktop window (a 1280x720 frame on radbro.fun, a 768 px laptop): all five Radbro cards in one
+  // row, so PLAY sits above the fold instead of under a second row of cards.
+  const oneRow = !compact && !narrow && h < 820 && w >= 1000;
   // Phones (landscape = compact, portrait = narrow): the controls strip folds into a small toggle next to
   // the credits (the touch buttons are labelled and the first-run tips teach them), blurbs hide and the
   // buttons shrink, so the whole title fits on one screen.
@@ -155,7 +158,7 @@ export function Title(props: {
   return (
     <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
       <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: safe("top", 10), right: safe("right", 12), zIndex: 21 }} />
-      <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
+      <div style={{ margin: "auto", textAlign: "center", maxWidth: oneRow ? 980 : 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />
         <HomeScreenTip />
         <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>

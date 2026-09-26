@@ -1,6 +1,7 @@
 // Touch-device detection, the phone quality default and fullscreen (spec §4 "Touch").
 // `?touch` / `?touch=1` forces touch controls on, `?touch=0` off; otherwise a coarse primary pointer
 // (phones, tablets) turns them on, and PlayPage also switches them on at the first touch.
+import { isFramed } from "../radbro/bridge.ts";
 
 export function detectTouch(search: string = location.search): boolean {
   const q = new URLSearchParams(search).get("touch");
@@ -44,8 +45,11 @@ export function isStandalone(): boolean {
   }
 }
 
-/** An iPhone browser tab: the only ways to full screen are a swipe (toolbars minimise) or Add to Home Screen. */
-export const iphoneTab = (): boolean => isIPhone() && !isStandalone();
+/**
+ * An iPhone browser tab: the only ways to full screen are a swipe (toolbars minimise) or Add to Home Screen.
+ * Not when framed (radbro.fun): the portal owns the page, so no swipe overlay, scroll room or home-screen tip.
+ */
+export const iphoneTab = (): boolean => isIPhone() && !isStandalone() && !isFramed();
 
 /** Fullscreen + landscape lock where the browser allows it (Android Chrome); silently ignored elsewhere. */
 export function enterFullscreen(): void {
