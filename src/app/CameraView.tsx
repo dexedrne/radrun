@@ -14,18 +14,25 @@ import { FRAME } from "./frame.ts";
  */
 export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: number }) {
   const prefab = usePrefab();
-  const tmp = useMemo(() => ({ m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 }, p: { x: 0, y: 0, z: 0 }, drop: 0 }), []);
+  const tmp = useMemo(() => ({
+    m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 },
+    p: { x: 0, y: 0, z: 0 }, drop: 0, web: { ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0 },
+  }), []);
   const hit: SegmentHit = useMemo(() => {
     const idx = game.world.index;
     return (ax, ay, az, bx, by, bz) => idx.segmentHit(ax, ay, az, bx, by, bz);
   }, [game]);
   useFrame((state, delta) => {
     const b = game.body;
-    let hook = null;
+    let hook = null, web = null;
     if (b.ropeSolid >= 0) {
       const h = b.ropeP;
       tmp.hook.x = h.x; tmp.hook.y = h.y; tmp.hook.z = h.z;
       hook = tmp.hook;
+      // Round 11: the drawn web (hand ~ body point -> the anchor on the facade): the arm keeps off it.
+      const w = tmp.web, a = b.ropeA;
+      w.ax = game.renderP.x; w.ay = game.renderP.y + 0.25; w.az = game.renderP.z; w.bx = a.x; w.by = a.y; w.bz = a.z;
+      web = w;
     }
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     tmp.drop += ((b.ropeSolid >= 0 ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
@@ -34,7 +41,7 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
     const onWall = b.wallMode > 0, near = !onWall && b.touchWall >= 0 && b.touchT < game.camera.nearWallFor;
     rigUpdate(game.rig, Math.min(delta, 0.1), {
       p: tmp.p, speed, grounded: b.grounded || b.ledgeMode > 0, hook, landed: (game.frameEvents & EV_LAND) !== 0,
-      wall: onWall, wallNx: onWall ? b.wallNx : b.touchNx, wallNz: onWall ? b.wallNz : b.touchNz, nearWall: near,
+      wall: onWall, wallNx: onWall ? b.wallNx : b.touchNx, wallNz: onWall ? b.wallNz : b.touchNz, nearWall: near, web,
     }, game.camera, hit);
     const r = game.rig;
     const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;

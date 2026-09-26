@@ -156,6 +156,9 @@ export class EdgeBot {
     inp.aimX = 1; inp.aimY = 0; inp.aimZ = 0;
     this.world.forceAnchor = null;
     const s = this.step;
+    // (The step that ends the approach already runs the line phase: a drop's pace applies from the next step, so
+    // the bake's pace sweep, which starts from that first line state, replays the same.)
+    const entering = this.phase === PH_APPROACH;
 
     if (this.phase === PH_APPROACH) {
       const l = this.link, p = this.params[this.hop];
@@ -172,7 +175,7 @@ export class EdgeBot {
       const l = this.link, p = this.params[this.hop];
       const err = p.lat - this.lateral();
       const c = Math.min(Math.max(err * 1.5, -0.6), 0.6);
-      const mag = l.kind === "drop" ? p.pace / 100 : 1;
+      const mag = l.kind === "drop" && !entering ? p.pace / 100 : 1;
       if (l.axis === "x") this.setMove(l.dir, c, mag); else this.setMove(c, l.dir, mag);
       if (s === p.jump) {
         if (zipHop(l, p)) { inp.zipPressed = true; this.world.forceAnchor = l.rim; } else inp.jumpPressed = true;

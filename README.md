@@ -23,7 +23,8 @@ npm run build:test   # build keeping the dev pages and ?bot (preview deployments
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · Space jump (again in the air = double
 jump; on a wall = wall kick) · hold LMB to web the building ahead (the ring sits on a rim, corner or
-facade), let go at the bottom of the arc to fling (LMB on a roof with a ring = jump + web) · C slide ·
+facade), let go just past the bottom, on the way up, to fling (LMB on a roof with a ring = the web pulls you
+up and off the edge into a swing) · C slide ·
 E / Shift web-zip to the ringed building or the roof ledge ahead · wall runs, run-ups, ledge grabs +
 climbs, vaults and landing rolls happen by themselves · red ring on him + LMB = YOINK · Q / RMB ease the
 camera toward him · R retry (hold 1 s mid-round) · M mute · Esc pause. Round 9 (webs on buildings, a

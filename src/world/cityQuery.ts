@@ -61,14 +61,19 @@ export function faceCoord(s: Solid, nx: number, nz: number): number {
 /**
  * §2.1 search. (x, y, z) body centre; (fx, fz) unit forward; speed = |v_xz|; ringSolid = hysteresis;
  * lastSolid (-1 = none) = the building let go of in the last 1.0 s; skipRoof = the roof stood on (-1 airborne);
- * cone = the aim cone's cosine (k.aimCos; round 10's falling fallback passes k.aimCosFall).
+ * cone = the aim cone's cosine (k.aimCos; round 10's falling fallback passes k.aimCosFall); vel = the body's
+ * velocity for the round 11 swing look-ahead (null: forward x speed, level).
  * For each solid in ropeMax, Q = the closest point of its box to the ideal point (roof interior -> the rim, a
  * point inside the box -> the nearest side face), filtered by height, rope length, aim cone and a clear line.
- * Fills out (pivot included, §2.2), returns false when nothing qualifies. Allocation-free.
+ * Round 11: the best few (ARC_TOP) are then looked at in score order with a coarse run of the swing each would
+ * give (swingClear): one that carries you head-on into a facade (its own building's, most often: a web to the
+ * face ahead) scores anchorArcPenalty worse. Fills out (pivot included, §2.2), returns false when nothing
+ * qualifies. Allocation-free.
  */
 export function findAnchor(
   idx: CityIndex, x: number, y: number, z: number, fx: number, fz: number, speed: number,
   k: Tuning, ringSolid: number, lastSolid: number, skipRoof: number, out: AnchorHit, cone: number = k.aimCos,
+  vel: { x: number; y: number; z: number } | null = null,
 ): boolean {
   const ahead = k.anchorAhead + k.anchorAheadPerSpeed * speed;
   const sx = x + fx * ahead, sy = y + k.anchorUp, sz = z + fz * ahead;
@@ -77,7 +82,8 @@ export function findAnchor(
   const ids = keep(idx, n);
   const minY = y + k.anchorMinAbove;
   const rMin2 = k.ropeMin * k.ropeMin, rMax2 = R * R;
-  let best = Infinity;
+  const top = k.anchorArcPenalty > 0 ? ARC_TOP : 1;
+  let kept = 0;
   out.solid = -1;
   for (let i = 0; i < n; i++) {
     const s = idx.solids[ids[i]];
@@ -110,9 +116,9 @@ export function findAnchor(
     if (rim) sc -= k.anchorRimBonus;
     if (s.id === ringSolid) sc -= k.hysteresis;
     if (s.id === lastSolid) sc += k.anchorAlternate;
-    if (sc >= best) continue;
+    // Only a candidate that makes the top list is line-checked (ties keep the lower solid id: ascending ids).
+    if (kept === top && sc >= TOPS[kept - 1].score) continue;
     if (!anchorVisible(idx, x, y, z, qx, qy, qz, s.id, skipRoof)) continue;
-    best = sc;
     let nx = qx === s.x0 ? -1 : qx === s.x1 ? 1 : 0;
     let nz = qz === s.z0 ? -1 : qz === s.z1 ? 1 : 0;
     if (nx !== 0 && nz !== 0) { nx *= S2; nz *= S2; }
@@ -121,24 +127,132 @@ export function findAnchor(
       const l = hl > 1e-9 ? hl : 1;
       nx = -dx / l; nz = -dz / l;
     }
-    out.solid = s.id; out.ax = qx; out.ay = qy; out.az = qz; out.nx = nx; out.nz = nz; out.rim = rim; out.score = sc;
+    // Insert into the sorted top list.
+    let j = kept < top ? kept++ : kept - 1;
+    while (j > 0 && TOPS[j - 1].score > sc) { copyAnchor(TOPS[j], TOPS[j - 1]); j--; }
+    const t = TOPS[j];
+    t.solid = s.id; t.ax = qx; t.ay = qy; t.az = qz; t.nx = nx; t.nz = nz; t.rim = rim; t.score = sc;
   }
-  if (out.solid < 0) return false;
-  // Pivot (round 10): pushed off the face into the open air in front of it (a ray along the normal just under
-  // the anchor): swingOutFree of that gap (0.5 = the middle of the street), at least swingOutMin but never past
-  // the middle and never further out than the body, at most swingOut. A web to a side building then swings
-  // you down the street (the arc crosses toward its middle), not into that building's wall; from a wall run
-  // on that face it carries you swingOutMin off it.
-  const ox = out.ax + out.nx * 0.05, oy = out.ay - 1, oz = out.az + out.nz * 0.05, reach = 2 * k.swingOut;
-  const t = idx.segmentHit(ox, oy, oz, ox + out.nx * reach, oy, oz + out.nz * reach, out.solid, -1);
+  if (kept === 0) return false;
+  let best = Infinity;
+  const vx = vel ? vel.x : fx * speed, vy = vel ? vel.y : 0, vz = vel ? vel.z : fz * speed;
+  for (let i = 0; i < kept; i++) {
+    const c = TOPS[i];
+    if (c.score >= best) break;
+    pivotFor(idx, k, x, z, c);
+    let sc = c.score;
+    if (top > 1 && !swingClear(idx, k, x, y, z, vx, vy, vz, c.px, c.py, c.pz, skipRoof)) sc += k.anchorArcPenalty;
+    if (sc < best) { best = sc; copyAnchor(out, c); out.score = sc; }
+  }
+  return true;
+}
+
+/** Round 11: how many of the best-scoring anchors get the swing look-ahead. */
+export const ARC_TOP = 4;
+const TOPS: AnchorHit[] = [emptyAnchor(), emptyAnchor(), emptyAnchor(), emptyAnchor()];
+
+/**
+ * Pivot (round 10): pushed off the face into the open air in front of it (a ray along the normal just under
+ * the anchor): swingOutFree of that gap (0.5 = the middle of the street), at least swingOutMin but never past
+ * the middle and never further out than the body at (x, z), at most swingOut. A web to a side building then
+ * swings you down the street (the arc crosses toward its middle), not into that building's wall; from a wall
+ * run on that face it carries you swingOutMin off it. Fills a.px / py / pz from a's anchor point and normal.
+ */
+export function pivotFor(idx: CityIndex, k: Tuning, x: number, z: number, a: AnchorHit): void {
+  const ox = a.ax + a.nx * 0.05, oy = a.ay - 1, oz = a.az + a.nz * 0.05, reach = 2 * k.swingOut;
+  const t = idx.segmentHit(ox, oy, oz, ox + a.nx * reach, oy, oz + a.nz * reach, a.solid, -1);
   const free = t >= 0 ? t * reach : reach;
   // ...and never further out than you are (a plaza or the city's edge must not pull you out over the open).
-  const dist = (x - out.ax) * out.nx + (z - out.az) * out.nz;
+  const dist = (x - a.ax) * a.nx + (z - a.az) * a.nz;
   const off = Math.min(k.swingOut, Math.max(Math.min(k.swingOutMin, 0.5 * free), Math.min(k.swingOutFree * free, dist > k.swingOutMin ? dist : k.swingOutMin)));
-  out.px = out.ax + out.nx * off;
-  out.py = out.ay;
-  out.pz = out.az + out.nz * off;
+  a.px = a.ax + a.nx * off;
+  a.py = a.ay;
+  a.pz = a.az + a.nz * off;
+}
+
+/** Round 11 swing look-ahead: step (s), horizon (s). */
+export const ARC_DT = 0.08;
+export const ARC_T = 1.2;
+const FA = emptyFace();
+
+/**
+ * Round 11: a coarse run of the swing a web to pivot (px, py, pz) gives from the body centre (x, y, z) moving
+ * (vx, vy, vz): ARC_DT steps under rope gravity with the rope (attach length, reeled toward the floor clamp)
+ * and its constraint, the slack flight included, until the fling (the auto-release rule), the pivot's height or
+ * ARC_T. False when that path meets a facade head-on (more speed into the face than along it, or less than
+ * wallRunMinSpeed along it: a slam, not a wall run). Landing on a roof top counts as clear; the roof stood on is
+ * skipped (a web from a roof lifts you off it first). Allocation-free.
+ */
+export function swingClear(idx: CityIndex, k: Tuning, x: number, y: number, z: number, vx: number, vy: number, vz: number, px: number, py: number, pz: number, skipRoof: number): boolean {
+  let rx = x - px, ry = y - py, rz = z - pz;
+  let L = Math.sqrt(rx * rx + ry * ry + rz * rz);
+  const floor = idx.groundBelow(px, pz, py);
+  const target = Math.min(L, Math.max(k.ropeMin, py - floor - k.swingFloorClear - k.halfHeight));
+  const g = k.gravity * k.swingGravity, dt = ARC_DT, feet = k.halfHeight;
+  // (A model without bounds - a test rig - has no city edge.)
+  const B = idx.model.bounds, edge = k.edgeAvoid > 0 && B !== undefined;
+  const out0 = edge && (x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1);
+  let taut = false;
+  for (let t = 0; t < ARC_T; t += dt) {
+    if (L > target) L = Math.max(target, L - k.swingReel * dt);
+    vy -= g * dt;
+    let nx = x + vx * dt, ny = y + vy * dt, nz = z + vz * dt;
+    rx = nx - px; ry = ny - py; rz = nz - pz;
+    const d = Math.sqrt(rx * rx + ry * ry + rz * rz);
+    if (d > L && d > 1e-6) {
+      const ux = rx / d, uy = ry / d, uz = rz / d;
+      nx = px + ux * L; ny = py + uy * L; nz = pz + uz * L;
+      const vr = vx * ux + vy * uy + vz * uz;
+      if (vr > 0) { vx -= vr * ux; vy -= vr * uy; vz -= vr * uz; }
+      taut = true;
+    }
+    // The body's feet sweep the segment (its centre line, a little low): a side face met head-on = a slam.
+    if (segmentFace(idx, x, y - feet * 0.5, z, nx, ny - feet * 0.5, nz, skipRoof, FA)) {
+      if (FA.nx === 0 && FA.nz === 0) return true; // onto a roof top
+      const vin = -(vx * FA.nx + vz * FA.nz), va0 = vx * -FA.nz + vz * FA.nx, va = va0 < 0 ? -va0 : va0;
+      return !(vin > va || va < k.wallRunMinSpeed);
+    }
+    x = nx; y = ny; z = nz;
+    // (Round 11: a swing that carries you out past the city's edge is no better than one into a wall.)
+    if (edge && !out0 && (x < B.x0 || x > B.x1 || z < B.z0 || z > B.z1)) return false;
+    if (y > py - k.autoReleaseBelow) return true;
+    if (taut && vy > 0) {
+      const hx = x - px, hz = z - pz, hh = Math.sqrt(hx * hx + hz * hz), vh = Math.sqrt(vx * vx + vz * vz);
+      const r = Math.sqrt(hh * hh + (y - py) * (y - py));
+      if (hh > 1e-6 && vh > 1 && hx * vx + hz * vz > 0.5 * hh * vh && r > 1e-6 && -(y - py) / r < k.swingReleaseCos) return true;
+    }
+  }
   return true;
+}
+
+/**
+ * Round 11: the first solid the segment a -> b enters (skip = an id to ignore) and the face it enters through:
+ * out.solid, out.nx / nz (0, 0 = its top), out.dist = the parametric t. False when nothing is hit.
+ */
+export function segmentFace(idx: CityIndex, ax: number, ay: number, az: number, bx: number, by: number, bz: number, skip: number, out: FaceHit): boolean {
+  const n = idx.nearbySolids(ax < bx ? ax : bx, az < bz ? az : bz, ax > bx ? ax : bx, az > bz ? az : bz);
+  const dx = bx - ax, dy = by - ay, dz = bz - az;
+  let best = -1;
+  out.solid = -1;
+  for (let i = 0; i < n; i++) {
+    const s = idx.solids[idx.out[i]];
+    if (s.id === skip) continue;
+    const t = slab(ax, ay, az, dx, dy, dz, s.x0, 0, s.z0, s.x1, s.top, s.z1);
+    if (t < 0 || (best >= 0 && t >= best)) continue;
+    best = t;
+    // The entry face: the one the entry point lies on (closest).
+    const hx = ax + dx * t, hy = ay + dy * t, hz = az + dz * t;
+    const e0 = hx - s.x0, e1 = s.x1 - hx, e2 = hz - s.z0, e3 = s.z1 - hz, e4 = s.top - hy;
+    const a0 = e0 < 0 ? -e0 : e0, a1 = e1 < 0 ? -e1 : e1, a2 = e2 < 0 ? -e2 : e2, a3 = e3 < 0 ? -e3 : e3, a4 = e4 < 0 ? -e4 : e4;
+    const m = Math.min(a0, a1, a2, a3, a4);
+    out.solid = s.id; out.dist = t; out.top = s.top;
+    if (m === a4) { out.nx = 0; out.nz = 0; }
+    else if (m === a0) { out.nx = -1; out.nz = 0; }
+    else if (m === a1) { out.nx = 1; out.nz = 0; }
+    else if (m === a2) { out.nx = 0; out.nz = -1; }
+    else { out.nx = 0; out.nz = 1; }
+  }
+  return out.solid >= 0;
 }
 
 /**
@@ -174,16 +288,17 @@ function setFace(out: FaceHit, s: Solid, nx: number, nz: number, gap: number): v
 
 /**
  * First side face the body (half width hw) meets moving from (x, z) along unit (dx, dz) within `look`,
- * among solids reaching into feet+0.1..feet+1.6 (vault / climb check). dist 0 = already touching.
+ * among solids reaching into feet+0.1..feet+1.6 (vault / climb check). dist 0 = already touching. `skip` = a solid to
+ * ignore (round 11: the wall you are running on).
  */
-export function obstacleAhead(idx: CityIndex, x: number, feet: number, z: number, dx: number, dz: number, look: number, hw: number, out: FaceHit): boolean {
+export function obstacleAhead(idx: CityIndex, x: number, feet: number, z: number, dx: number, dz: number, look: number, hw: number, out: FaceHit, skip = -1): boolean {
   const ex = x + dx * look, ez = z + dz * look;
   const n = idx.nearbySolids((x < ex ? x : ex) - hw, (z < ez ? z : ez) - hw, (x > ex ? x : ex) + hw, (z > ez ? z : ez) + hw);
   let best = Infinity;
   out.solid = -1;
   for (let i = 0; i < n; i++) {
     const s = idx.solids[idx.out[i]];
-    if (s.top <= feet + 0.1) continue;
+    if (s.top <= feet + 0.1 || s.id === skip) continue;
     const bx0 = s.x0 - hw, bx1 = s.x1 + hw, bz0 = s.z0 - hw, bz1 = s.z1 + hw;
     if (x > bx0 && x < bx1 && z > bz0 && z < bz1) continue; // overlapping already (collision's job)
     let tx0 = -Infinity, tx1 = Infinity, tz0 = -Infinity, tz1 = Infinity;

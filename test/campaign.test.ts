@@ -104,21 +104,22 @@ test("campaign: progress storage round-trips and survives junk / blocked storage
   assert.deepEqual(loadProgress(blocked), emptyProgress());
 });
 
-test("links: v4 links carry version, district and mutators; unversioned links are older Downtown links", () => {
-  // v4 = round 9 (the rebuilt cities, building-anchored swings, parkour); v3 = the double jump + web zip build
-  // (older links still read the same and open with the "older build" note).
-  assert.equal(LINK_VERSION, 4);
+test("links: v5 links carry version, district and mutators; unversioned links are older Downtown links", () => {
+  // v5 = round 11 (the swing's timing lift, the re-baked swing routes, Chill's head start); v4 = round 9 (the
+  // rebuilt cities, building-anchored swings, parkour); v3 = the double jump + web zip build (older links still
+  // read the same and open with the "older build" note).
+  assert.equal(LINK_VERSION, 5);
   const url = ghostUrl("652", "4764", "normal", 41.26, 777, "abcdEFGH_-12", M_WIND | M_SIXTY);
   const q = new URL(url).search;
   assert.equal(districtFromSearch(q), "docks");
   const c = readChallenge(q);
-  assert.equal(c.v, 4);
+  assert.equal(c.v, 5);
   assert.equal(c.mu, M_WIND | M_SIXTY);
   assert.equal(c.s, 777);
   assert.equal(c.t, 41.3);
   assert.equal(c.g, "abcdEFGH_-12");
   const plain = readChallenge(new URL(challengeUrl("652", "4764", "chill", 30)).search);
-  assert.equal(plain.v, 4);
+  assert.equal(plain.v, 5);
   assert.equal(plain.mu, 0);
   // A pre-round-4 link: no v, no m, no mu -> v1, Downtown, no mutators.
   const old = "?c=652&r=4764&d=normal&s=5&t=40.0&g=abcdEFGH_-12";

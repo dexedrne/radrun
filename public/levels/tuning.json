@@ -19,6 +19,7 @@
     "releaseUp": 3,
     "autoRelease": true,
     "autoReleaseBelow": 2.5,
+    "autoReleaseUp": 0,
     "bonk": true,
     "bonkMinSpeed": 14,
     "bonkRatio": 0.85,
@@ -35,6 +36,7 @@
     "anchorVelBias": 0.6,
     "anchorRimBonus": 2,
     "anchorAlternate": 3,
+    "anchorArcPenalty": 14,
     "swingOut": 12,
     "swingOutFree": 0.5,
     "swingOutMin": 4,
@@ -44,8 +46,18 @@
     "swingPump": 5,
     "swingKeepSpeed": 1.6,
     "swingReleaseCos": 0.64,
+    "releaseSweet": 11,
+    "swingSweetCos": 0.966,
+    "swingReelUp": 3,
+    "webLift": 14,
+    "webLiftClear": 1.5,
     "swingRehook": 0.18,
     "losSteps": 12,
+    "swingAvoid": 4,
+    "swingAvoidT": 0.7,
+    "swingAvoidAir": 0.6,
+    "edgeAvoid": 4,
+    "edgeMargin": 6,
     "wallRun": true,
     "wallRunReach": 0.6,
     "wallRunMinSpeed": 5,
@@ -61,6 +73,8 @@
     "wallClimbSpeed": 9,
     "wallClimbTime": 0.6,
     "wallClimbKeep": 0.55,
+    "wallUpKick": 6,
+    "wallPushOff": 3,
     "wallJumpOut": 7,
     "wallJumpUp": 9.5,
     "wallJumpKeep": 0.9,
@@ -126,7 +140,11 @@
     "reducedMotion": false,
     "easyGrab": false,
     "wallAway": 1.2,
-    "nearWallFor": 0.7
+    "nearWallFor": 0.7,
+    "armMin": 3,
+    "dodgeRate": 5,
+    "webClear": 0.8,
+    "wallCam": 1.4
   },
   "difficulty": {
     "chill": {
@@ -139,7 +157,8 @@
       "yoinkRange": 6.5,
       "taunt": 1.8,
       "airMin": 0.9,
-      "airMax": 1.25
+      "airMax": 1.25,
+      "lead": 4
     },
     "normal": {
       "base": 1,
@@ -151,7 +170,8 @@
       "yoinkRange": 5,
       "taunt": 1.4,
       "airMin": 0.9,
-      "airMax": 1.5
+      "airMax": 1.5,
+      "lead": 0
     },
     "degen": {
       "base": 1.1,
@@ -163,7 +183,8 @@
       "yoinkRange": 4.5,
       "taunt": 0.9,
       "airMin": 0.9,
-      "airMax": 2
+      "airMax": 2,
+      "lead": 3
     }
   },
   "george": {
@@ -177,7 +198,9 @@
     "rateMin": 0.7,
     "rateMax": 2.2,
     "runRateMin": 0.6,
-    "runRateMax": 4
+    "runRateMax": 4,
+    "airShow": 0.45,
+    "showRate": 25
   },
   "mechanics": {
     "snapTime": 1.6,

@@ -36,6 +36,8 @@ export type Tuning = {
   autoRelease: boolean;
   /** Auto-release (fling) once the body rises above the pivot minus this (m). */
   autoReleaseBelow: number;
+  /** Round 11: the auto-release's up kick (m/s; releaseUp is for a release you make yourself). */
+  autoReleaseUp: number;
   bonk: boolean;
   bonkMinSpeed: number;
   bonkRatio: number;
@@ -63,6 +65,11 @@ export type Tuning = {
   /** Score bonuses (m): rim / corner anchors, and a penalty for the building let go of in the last second. */
   anchorRimBonus: number;
   anchorAlternate: number;
+  /**
+   * Round 11: an anchor whose predicted swing arc (down under the pivot and up to the fling) runs into a facade
+   * scores this many metres worse (0 = off). Stops a web to the face ahead swinging you into that face.
+   */
+  anchorArcPenalty: number;
   // ---- pendulum (§2.2-2.4) ----
   /**
    * Physics pivot pushed off the face into the open air in front of it: swingOutFree x that gap (0.5 = the
@@ -83,10 +90,40 @@ export type Tuning = {
   swingKeepSpeed: number;
   /** Auto-release when past this cosine from straight down, rising, on the forward side. */
   swingReleaseCos: number;
+  /**
+   * Round 11 timing: letting go yourself on the upswing once past swingSweetCos from straight down (and before
+   * the auto-release) adds releaseSweet m/s up: a well-timed release holds your height, holding on to the
+   * auto-release (or letting go at the bottom) sinks slowly. 0 = off.
+   */
+  releaseSweet: number;
+  swingSweetCos: number;
+  /** Round 11: on the upswing, stick along the swing, the rope reels in at this speed (m/s; a pump that lifts you). */
+  swingReelUp: number;
+  /**
+   * Round 11 web from a roof: the rope reels you in at webLift m/s (0 = off: the round 10 hop) until its arc clears
+   * the roof's edge by webLiftClear m - you are pulled up and off the roof into the swing.
+   */
+  webLift: number;
+  webLiftClear: number;
   /** A held web re-attaches this long after a release (s). */
   swingRehook: number;
   /** Line-of-sight check to the anchor every this many steps (the web snaps when blocked). */
   losSteps: number;
+  /**
+   * Round 11 wall avoidance: on the rope (and swingAvoidAir s after a fling) a facade the horizontal velocity would
+   * meet head-on within swingAvoidT s bends the swing along it at up to swingAvoid (1/s; 0 = off), speed kept, so
+   * a swing at the end of an avenue turns down the cross street (or into a wall run) instead of slamming the wall.
+   */
+  swingAvoid: number;
+  swingAvoidT: number;
+  swingAvoidAir: number;
+  /**
+   * Round 11 city edge: airborne (on the rope or not) and heading out past the city's edge (less edgeMargin m)
+   * within swingAvoidT s, the flight bends along the edge at up to edgeAvoid (1/s; 0 = off), so a chain down an
+   * avenue that runs out of city turns along its edge instead of dropping off the world. Player only.
+   */
+  edgeAvoid: number;
+  edgeMargin: number;
   // ---- wall run / run-up / wall jump (§3.2-3.3) ----
   wallRun: boolean;
   wallRunReach: number;
@@ -104,6 +141,13 @@ export type Tuning = {
   wallClimbTime: number;
   /** Run-up keeps momentum: it starts at max(wallClimbSpeed, wallClimbKeep x the speed you hit the wall at), easing down under light gravity. */
   wallClimbKeep: number;
+  /** Round 11: a run-up that tops out with no ledge in reach kicks off the wall this fast (m/s out; 0 = slide down). */
+  wallUpKick: number;
+  /**
+   * Round 11: falling into a facade off the rope with no wall run, run-up, ledge or bonk to take it (too fast a fall
+   * for a wall run), you push off it at this speed (m/s out) instead of sliding down the face (0 = slide).
+   */
+  wallPushOff: number;
   wallJumpOut: number;
   wallJumpUp: number;
   wallJumpKeep: number;
@@ -203,6 +247,7 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   releaseUp: 3,
   autoRelease: true,
   autoReleaseBelow: 2.5,
+  autoReleaseUp: 0,
   bonk: true,
   bonkMinSpeed: 14,
   bonkRatio: 0.85,
@@ -222,6 +267,7 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   anchorVelBias: 0.6,
   anchorRimBonus: 2,
   anchorAlternate: 3,
+  anchorArcPenalty: 14,
   swingOut: 12,
   swingOutFree: 0.5,
   swingOutMin: 4,
@@ -231,8 +277,18 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   swingPump: 5,
   swingKeepSpeed: 1.6,
   swingReleaseCos: 0.64,
+  releaseSweet: 11,
+  swingSweetCos: 0.966,
+  swingReelUp: 3,
+  webLift: 14,
+  webLiftClear: 1.5,
   swingRehook: 0.18,
   losSteps: 12,
+  swingAvoid: 4,
+  swingAvoidT: 0.7,
+  swingAvoidAir: 0.6,
+  edgeAvoid: 4,
+  edgeMargin: 6,
   wallRun: true,
   wallRunReach: 0.6,
   wallRunMinSpeed: 5,
@@ -248,6 +304,8 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   wallClimbSpeed: 9,
   wallClimbTime: 0.6,
   wallClimbKeep: 0.55,
+  wallUpKick: 6,
+  wallPushOff: 3,
   wallJumpOut: 7,
   wallJumpUp: 9.5,
   wallJumpKeep: 0.9,
@@ -309,10 +367,17 @@ export const SLIDE_OFF = { slide: false } as const satisfies Partial<Tuning>;
 
 /**
  * Runner bake preset: no air control, no rope steer, no Yoink, no double jump / slide. Web zip stays on: his
- * baked zip-up hops (route/graph.ts) press it with a forced rim anchor, and nothing else ever does.
+ * baked zip-up hops (route/graph.ts) press it with a forced rim anchor, and nothing else ever does. Round 11: none
+ * of the player's swing-feel helpers either (timed-release lift, upswing reel, web-from-a-roof lift, wall / edge
+ * avoidance, wall kicks, the arc look-ahead): his baked swings keep round 10's pendulum, the auto-release flinging
+ * with releaseUp as before.
  */
 export function runnerFrom(player: Readonly<Tuning>): Tuning {
-  return { ...player, airAccel: 0, ropeSteer: 0, yoink: false, airJumps: 0, slide: false, webZip: true };
+  return {
+    ...player, airAccel: 0, ropeSteer: 0, yoink: false, airJumps: 0, slide: false, webZip: true,
+    releaseSweet: 0, swingReelUp: 0, autoReleaseUp: player.releaseUp, webLift: 0, swingAvoid: 0, edgeAvoid: 0,
+    wallUpKick: 0, wallPushOff: 0, anchorArcPenalty: 0,
+  };
 }
 /** Player-only keys the runner never uses (double jump + slide): left out of the bake's tuning hash. */
 export const RUNNER_UNUSED_KEYS: readonly (keyof Tuning)[] = [
@@ -326,14 +391,20 @@ export type DifficultyParams = {
   base: number; gStar: number; mMin: number; mMax: number; panicBudget: number; sigma: number; yoinkRange: number; taunt: number;
   /** Airborne playback-rate clamp (spec 0.9-1.1). */
   airMin: number; airMax: number;
+  /**
+   * Round 11 head start (s): when the chase starts he is already this long (at his base pace) down his first run,
+   * and for this long he keeps running as if you were gStar back (no waiting for you, no taunt stop). Chill 4 (the
+   * round is not over in a few seconds), Degen 3 (fewer lucky early catches), Normal 0.
+   */
+  lead: number;
 };
 export type DifficultyTable = Record<Difficulty, DifficultyParams>;
 /** Spec §7 defaults; public/levels/tuning.json "difficulty" overrides them (set from tools/balance). */
 export const DIFFICULTY: Readonly<DifficultyTable> = Object.freeze({
-  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1 },
-  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1 },
+  chill: { base: 0.9, gStar: 20, mMin: 0.7, mMax: 1.1, panicBudget: 8, sigma: 0.6, yoinkRange: 6.5, taunt: 1.8, airMin: 0.9, airMax: 1.1, lead: 4 },
+  normal: { base: 1.0, gStar: 24, mMin: 0.8, mMax: 1.2, panicBudget: 15, sigma: 0.15, yoinkRange: 5, taunt: 1.4, airMin: 0.9, airMax: 1.1, lead: 0 },
   /** Round 3: faster, smarter, shorter taunts, 4 m Yoink (tuned against the swinging bot, tools/balance). */
-  degen: { base: 1.2, gStar: 50, mMin: 0.85, mMax: 2.0, panicBudget: 30, sigma: 0.08, yoinkRange: 4, taunt: 0.9, airMin: 0.9, airMax: 2.0 },
+  degen: { base: 1.2, gStar: 50, mMin: 0.85, mMax: 2.0, panicBudget: 30, sigma: 0.08, yoinkRange: 4, taunt: 0.9, airMin: 0.9, airMax: 2.0, lead: 3 },
 });
 
 export const MEDALS = {
@@ -377,12 +448,12 @@ export const ROUND = {
 /** Fields tuning.json may override (numbers and booleans only; dt / body size are fixed). */
 export const TUNABLE_KEYS = [
   "gravity", "speedCap", "runSpeed", "groundAccel", "groundBrake", "carryDecay", "airAccel", "jumpSpeed",
-  "coyoteTime", "jumpBuffer", "aimCos", "aimCosFall", "hysteresis", "ropeSteer", "swingAlign", "releaseBoost", "releaseUp", "autoRelease", "autoReleaseBelow", "bonk",
+  "coyoteTime", "jumpBuffer", "aimCos", "aimCosFall", "hysteresis", "ropeSteer", "swingAlign", "releaseBoost", "releaseUp", "autoRelease", "autoReleaseBelow", "autoReleaseUp", "bonk",
   "bonkMinSpeed", "bonkRatio", "bonkLock", "holdDelay", "zip", "yoinkRange",
-  "ropeMin", "ropeMax", "anchorMinAbove", "anchorAhead", "anchorAheadPerSpeed", "anchorUp", "anchorVelBias", "anchorRimBonus", "anchorAlternate",
-  "swingOut", "swingOutFree", "swingOutMin", "swingFloorClear", "swingReel", "swingGravity", "swingPump", "swingKeepSpeed", "swingReleaseCos", "swingRehook", "losSteps",
+  "ropeMin", "ropeMax", "anchorMinAbove", "anchorAhead", "anchorAheadPerSpeed", "anchorUp", "anchorVelBias", "anchorRimBonus", "anchorAlternate", "anchorArcPenalty",
+  "swingOut", "swingOutFree", "swingOutMin", "swingFloorClear", "swingReel", "swingGravity", "swingPump", "swingKeepSpeed", "swingReleaseCos", "releaseSweet", "swingSweetCos", "swingReelUp", "webLift", "webLiftClear", "swingRehook", "losSteps", "swingAvoid", "swingAvoidT", "swingAvoidAir", "edgeAvoid", "edgeMargin",
   "wallRun", "wallRunReach", "wallRunMinSpeed", "wallRunRatio", "wallRunMinBelowTop", "wallRunFallMax", "wallRunTime", "wallRunSpeed",
-  "wallRunAccel", "wallRunGravity", "wallRunKick", "wallRunCooldown", "wallClimbSpeed", "wallClimbTime", "wallClimbKeep", "wallJumpOut", "wallJumpUp",
+  "wallRunAccel", "wallRunGravity", "wallRunKick", "wallRunCooldown", "wallClimbSpeed", "wallClimbTime", "wallClimbKeep", "wallUpKick", "wallPushOff", "wallJumpOut", "wallJumpUp",
   "wallJumpKeep", "wallJumpGrace",
   "ledgeGrab", "ledgeLow", "ledgeHigh", "ledgeMaxVy", "ledgeHang", "ledgeClimbTime", "ledgeExitSpeed", "ledgeJumpUp",
   "vault", "vaultMax", "vaultLook", "vaultMinSpeed", "vaultClear",
@@ -416,6 +487,15 @@ export type CameraTuning = {
   /** Round 10: next to a facade (wall run, and nearWallFor s after leaving one) the look point sits this far (m) off it. */
   wallAway: number;
   nearWallFor: number;
+  /**
+   * Round 11: a facade that pulls the arm in under armMin m swings the camera round the Radbro (yaw / up) to where it
+   * has room, at dodgeRate (1/s); on the rope it also keeps webClear m off the web line (0 = off).
+   */
+  armMin: number;
+  dodgeRate: number;
+  webClear: number;
+  /** Round 11: on a wall run (and nearWallFor s after) the camera keeps this far (m) off the wall's face (0 = off). */
+  wallCam: number;
 };
 
 export const CAMERA: Readonly<CameraTuning> = Object.freeze({
@@ -438,6 +518,10 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   easyGrab: false,
   wallAway: 1.2,
   nearWallFor: 0.7,
+  armMin: 3,
+  dodgeRate: 5,
+  webClear: 0.8,
+  wallCam: 1.4,
 });
 
 export type TuningJson = {

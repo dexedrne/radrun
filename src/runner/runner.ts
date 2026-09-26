@@ -80,6 +80,8 @@ export class Runner {
    */
   down = 0;
   private ahead: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
+  /** Round 11 head start: steps left in which he keeps running as if you were gStar back (never waits / taunts). */
+  calm = 0;
 
   constructor(pack: Pack, params: RunnerParams, rng: Rand, startJunction: number, firstEdge: number) {
     this.pack = pack;
@@ -92,6 +94,27 @@ export class Runner {
     const e = pack.edges[firstEdge];
     this.headX = e.exitX;
     this.headZ = e.exitZ;
+  }
+
+  /**
+   * Round 11 head start: skip the start turn and put him `sec` s (at his base pace, never past 80 % of the run) down
+   * his first edge; for the first `sec` s of the chase he then keeps running (calm). Called once, before the first
+   * step (no rng draw).
+   */
+  headStart(sec: number): void {
+    if (!(sec > 0) || this.mode !== RM_TURN || this.edge >= 0) return;
+    this.calm = Math.round(sec * 120);
+    const e = this.pack.edges[this.next];
+    this.mode = RM_EDGE;
+    this.edge = this.next;
+    this.picks[0] = this.edge;
+    this.headX = this.headZ = 0;
+    this.t = Math.min(e.duration * 0.8, sec * this.params.base);
+    sampleEdge(e, this.t, this.pose);
+    this.p.x = this.pose.x;
+    this.p.y = this.pose.y;
+    this.p.z = this.pose.z;
+    this.roofId = this.pose.phase === PHASE_GROUND ? this.pose.ref : -1;
   }
 
   private placeAtJunction(j: number): void {
@@ -172,6 +195,9 @@ export class Runner {
   /** One fixed step: rubber band, then playback / dwell. `d` = chase distance to the player. */
   step(player: Vec3, d: number): void {
     this.events = 0;
+    // Round 11 head start: while calm, you read as no further back than gStar (no slowing down to wait for you, no
+    // taunt stop): he keeps his lead.
+    if (this.calm > 0) { this.calm--; if (d > this.params.gStar) d = this.params.gStar; }
     const wasPanic = this.band.panic, wasGassed = this.band.gassed;
     const flinch = d < RUNNER_RULES.flinchBelow && this.headsAt(player);
     this.rate = stepBand(this.band, this.params, d, flinch, this.airborne, DT);
@@ -230,6 +256,7 @@ export class Runner {
     h.i32(this.mode).i32(this.edge).f64(this.t).i32(this.junction).i32(this.prevJunction).i32(this.dwell).i32(this.next);
     h.i32(this.picks[0]).i32(this.picks[1]).f64(this.band.m).f64(this.band.budget).i32(this.band.gassed ? 1 : 0);
     h.f64(this.p.x).f64(this.p.y).f64(this.p.z).i32(this.roofId).i32(this.rng.s);
+    h.i32(this.calm);
     return h;
   }
 }

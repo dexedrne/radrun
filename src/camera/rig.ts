@@ -6,6 +6,10 @@ import type { CameraTuning } from "../sim/tuning.ts";
 
 export const PITCH_MIN = -0.5235987755982988; // -30 deg
 export const PITCH_MAX = 0.9599310885968813; // +55 deg
+/** The body's half width (m): a wall the Radbro runs on is this far behind his centre. */
+const BODY_HALF = 0.35;
+/** rigUpdate's scratch arm direction. */
+const DIR: Vec3 = { x: 0, y: 0, z: 0 };
 
 export type Rig = {
   yaw: number;
@@ -28,12 +32,21 @@ export type Rig = {
   wallOff: number;
   wallNx: number;
   wallNz: number;
+  /**
+   * Round 11: the arm's eased yaw / pitch offsets (rad) around the look point: when a facade pulls the arm in under
+   * armMin, the camera swings round to where it has room (and off the web line) instead of sitting on the wall.
+   */
+  dodgeYaw: number;
+  dodgePitch: number;
+  /** Round 11: the camera's distance to the Radbro's chest (m) this frame (the close-camera fade reads it). */
+  bodyDist: number;
 };
 
 export function createRig(yaw: number, pitch = 0.12): Rig {
   const r: Rig = {
     yaw, pitch, sy: 0, cy: 1, fwd: { x: 0, y: 0, z: -1 }, arm: 6, fov: 62, kickT: 0,
     pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6, side: 1, wallOff: 0, wallNx: 0, wallNz: 0,
+    dodgeYaw: 0, dodgePitch: 0, bodyDist: 6,
   };
   rigLook(r, 0, 0, 0, false);
   return r;
@@ -82,7 +95,24 @@ export type RigInput = {
    * normal in wallNx / wallNz. The look point eases wallAway m off it, the shoulder stays on the open side.
    */
   nearWall?: boolean;
+  /** Round 11: the web line (hand -> anchor) while on the rope: the camera keeps webClear m off it. */
+  web?: { ax: number; ay: number; az: number; bx: number; by: number; bz: number } | null;
 };
+
+/** Round 11: the arm directions (yaw, pitch offsets, rad) tried when the arm is pulled in under armMin. */
+const DODGES: ReadonlyArray<readonly [number, number]> = [
+  [0, 0.35], [0.45, 0], [-0.45, 0], [0.45, 0.35], [-0.45, 0.35], [0, 0.7], [0.9, 0], [-0.9, 0], [0.9, 0.35], [-0.9, 0.35], [1.4, 0.2], [-1.4, 0.2],
+];
+
+/** Distance from point c to segment a-b. */
+function segDist(cx: number, cy: number, cz: number, w: NonNullable<RigInput["web"]>): number {
+  const dx = w.bx - w.ax, dy = w.by - w.ay, dz = w.bz - w.az;
+  const l2 = dx * dx + dy * dy + dz * dz || 1;
+  let t = ((cx - w.ax) * dx + (cy - w.ay) * dy + (cz - w.az) * dz) / l2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const px = w.ax + dx * t - cx, py = w.ay + dy * t - cy, pz = w.az + dz * t - cz;
+  return Math.sqrt(px * px + py * py + pz * pz);
+}
 
 /** segmentHit(a, b) -> parametric t in [0,1] of the first solid hit, or -1. */
 export type SegmentHit = (ax: number, ay: number, az: number, bx: number, by: number, bz: number) => number;
@@ -126,22 +156,70 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   }
   const bx = tx + rx * sh, bz = tz + rz * sh;
   r.target.x = bx; r.target.y = ty; r.target.z = bz;
-  let dx = -r.fwd.x * r.arm, dy = -r.fwd.y * r.arm, dz = -r.fwd.z * r.arm;
-  let used = r.arm;
-  if (hit) {
-    // From the (clear) look point back along the arm: the camera stops 0.3 m short of the first facade.
-    const t = hit(bx, ty, bz, bx + dx, ty + dy, bz + dz);
-    if (t >= 0) {
-      const want = Math.max(0.6, t * r.arm - 0.3);
-      const f = want / r.arm;
-      dx *= f; dy *= f; dz *= f;
-      used = want;
+  // Arm length free along the arm at yaw / pitch offsets (the camera stops 0.3 m short of the first facade), and
+  // a penalty when that camera spot sits on the web line.
+  const arm = r.arm, web = s.web ?? null, webClear = cam.webClear;
+  const armAt = (oy: number, op: number, out: Vec3): number => {
+    const y = r.yaw + oy, pp = Math.min(PITCH_MAX, r.pitch + op), cp = Math.cos(pp);
+    out.x = Math.sin(y) * cp; out.y = -Math.sin(pp); out.z = Math.cos(y) * cp;
+    if (!hit) return arm;
+    const t = hit(bx, ty, bz, bx + out.x * arm, ty + out.y * arm, bz + out.z * arm);
+    return t >= 0 ? Math.max(0.6, t * arm - 0.3) : arm;
+  };
+  const onWeb = (d: Vec3, l: number): boolean => web !== null && webClear > 0 && segDist(bx + d.x * l, ty + d.y * l, bz + d.z * l, web) < webClear;
+  // The room a camera spot gives: the arm, or less when that spot is nearer the Radbro's chest (the look point leans
+  // up to ropeBiasMax toward the pivot on the rope, so a short arm along the lean can end right at his head).
+  const cx = s.p.x, cy = s.p.y + 0.3, cz = s.p.z;
+  const room = (d: Vec3, l: number): number => {
+    const ex = bx + d.x * l - cx, ey = ty + d.y * l - cy, ez = bz + d.z * l - cz;
+    const c = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    return c < l ? c : l;
+  };
+  const need = Math.min(cam.armMin, arm);
+  let wantY = r.dodgeYaw, wantP = r.dodgePitch;
+  if (hit && cam.armMin > 0) {
+    const l0 = armAt(0, 0, DIR);
+    if (room(DIR, l0) >= need && !onWeb(DIR, l0)) { wantY = 0; wantP = 0; }
+    else {
+      const lc = armAt(r.dodgeYaw, r.dodgePitch, DIR);
+      if (room(DIR, lc) < need || onWeb(DIR, lc)) {
+        // Blocked (or on the web): the free direction nearest the aim wins.
+        let best = -Infinity;
+        for (const [oy, op] of DODGES) {
+          const l = armAt(oy, op, DIR);
+          const sc = Math.min(room(DIR, l), arm) - (onWeb(DIR, l) ? arm : 0) - 1.2 * (oy < 0 ? -oy : oy) - 1.5 * op;
+          if (sc > best) { best = sc; wantY = oy; wantP = op; }
+        }
+      }
     }
   }
+  // Eased at dodgeRate; 4x as fast while the room sits under half of armMin (a facade right behind the Radbro).
+  const lNow = hit !== null && cam.armMin > 0 ? armAt(r.dodgeYaw, r.dodgePitch, DIR) : arm;
+  const cramped = hit !== null && cam.armMin > 0 && room(DIR, lNow) < 0.5 * need;
+  const ke = Math.min(1, cam.dodgeRate * dt * (cramped ? 4 : 1));
+  r.dodgeYaw += (wantY - r.dodgeYaw) * ke;
+  r.dodgePitch += (wantP - r.dodgePitch) * ke;
+  const used = armAt(r.dodgeYaw, r.dodgePitch, DIR);
   r.armUsed = used;
-  r.pos.x = bx + dx;
-  r.pos.y = ty + dy;
-  r.pos.z = bz + dz;
+  r.pos.x = bx + DIR.x * used;
+  r.pos.y = ty + DIR.y * used;
+  r.pos.z = bz + DIR.z * used;
+  // Round 11: on a wall run (and just off a wall) the camera itself keeps wallCam m off the wall's face (the face is
+  // the body's half width behind the Radbro), eased in with the look point's offset, so it never rides the facade.
+  if (cam.wallCam > 0 && cam.wallAway > 0 && r.wallOff > 1e-3) {
+    const f = Math.min(1, r.wallOff / cam.wallAway);
+    const off = (r.pos.x - s.p.x) * r.wallNx + (r.pos.z - s.p.z) * r.wallNz + BODY_HALF;
+    // (Far behind the wall's plane the camera is round the wall's end, not on its face: leave it there.)
+    if (off > -cam.wallCam && off < cam.wallCam) {
+      let push = (cam.wallCam - off) * f;
+      // (Never through another facade: stop 0.3 m short of one.)
+      const t = hit ? hit(r.pos.x, r.pos.y, r.pos.z, r.pos.x + r.wallNx * push, r.pos.y, r.pos.z + r.wallNz * push) : -1;
+      if (t >= 0) push = Math.max(0, t * push - 0.3);
+      r.pos.x += r.wallNx * push;
+      r.pos.z += r.wallNz * push;
+    }
+  }
+  { const ex = r.pos.x - cx, ey = r.pos.y - cy, ez = r.pos.z - cz; r.bodyDist = Math.sqrt(ex * ex + ey * ey + ez * ez); }
 
   // FOV: widen with speed (unless reduced motion), eased; -3 deg landing kick for 0.1 s.
   const span = Math.max(1e-3, cam.fovSpeedHi - cam.fovSpeedLo);

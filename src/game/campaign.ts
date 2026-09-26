@@ -50,10 +50,11 @@ export const LEVELS: readonly Level[] = [
   { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_SNAP | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Snapping webs and wind at altitude." },
   { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_SNAP | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 32 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
   // Round 7: Vertigo, the descending chase (swing bot, 300 seeds: L13 catch 97 % / no falls 94 % / chain 5 63 %;
-  // L14 72 % / above 45 m 37 % / chain 5 71 %; L15 62 % / above 40 m 27 % / no falls 40 %).
+  // L14 72 % / above 45 m 37 % / chain 5 71 %; L15 62 % / above 40 m 27 % / no falls 40 %). Round 11: his swing
+  // routes take him below 40 m in almost every Degen round, so Street Level's line is 32 m (~25 % again).
   { n: 13, name: "Top Floor", map: "vertigo", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "noFalls" }, { kind: "chain", n: 5 }], blurb: "He starts at the top of the spiral. Step off the cliffs after him." },
   { n: 14, name: "Free Fall", map: "vertigo", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "above", y: 45 }, { kind: "chain", n: 5 }], blurb: "Dive after him and web the needles on the way down." },
-  { n: 15, name: "Street Level", map: "vertigo", difficulty: "degen", mutators: M_SNAP, goals: [catchIt, { kind: "above", y: 40 }, { kind: "noFalls" }], blurb: "Degen runner, snapping webs. Catch him high." },
+  { n: 15, name: "Street Level", map: "vertigo", difficulty: "degen", mutators: M_SNAP, goals: [catchIt, { kind: "above", y: 32 }, { kind: "noFalls" }], blurb: "Degen runner, snapping webs. Catch him high." },
 ];
 export const TOTAL_STARS = LEVELS.length * 3;
 

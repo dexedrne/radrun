@@ -368,9 +368,10 @@ export function ActorsView({ game }: { game: PlayGame }) {
       }
       rig.root.position.set(px, py, pz);
       rig.root.quaternion.slerp(tmp.q, Math.min(1, 14 * rawDelta));
-      // Camera closer than 2 m: the local Radbro fades to 40% (spec §8).
+      // Camera closer than 2 m: the local Radbro fades to 40% (spec §8). Round 11: the camera's own distance to him
+      // (the look point leans toward the pivot on the rope, so the arm alone understates it).
       if (isChaser) {
-        const want = r.phase === "chase" && game.rig.armUsed < 2 ? 0.4 : 1;
+        const want = r.phase === "chase" && game.rig.bodyDist < 2 ? 0.4 : 1;
         if (want !== rig.fade) {
           rig.fade = want;
           for (const m of rig.materials) { m.transparent = want < 1; m.opacity = want; m.needsUpdate = true; }

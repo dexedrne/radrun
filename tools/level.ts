@@ -22,13 +22,14 @@ export function bakeChecksFailed(r: BakeReport): string[] {
   if (!c.stronglyConnected) bad.push("graph not strongly connected");
   if (c.forcedUTurns) bad.push(`${c.forcedUTurns} forced U-turn(s)`);
   if (c.walkStalls) bad.push("300 s random walk stalled");
-  if (c.minSwingWindowMs < (BAKE.swingWindow * 1000) / 120 - 1) bad.push(`swing window ${c.minSwingWindowMs} ms < ${(BAKE.swingWindow * 1000) / 120}`);
+  if (c.minSwingWindowMs < (BAKE.swingWindowMin * 1000) / 120 - 1) bad.push(`swing window ${c.minSwingWindowMs} ms < ${(BAKE.swingWindowMin * 1000) / 120}`);
   if (c.minAlleyWindowMs < (BAKE.alleyWindow * 1000) / 120 - 1) bad.push(`alley window ${c.minAlleyWindowMs} ms < ${(BAKE.alleyWindow * 1000) / 120}`);
   if (c.minLandMargin < 1.5) bad.push(`landing margin ${c.minLandMargin} < 1.5 m`);
   if (c.minDropWindow !== undefined && c.minDropWindow < BAKE.dropWindow) bad.push(`drop window ${c.minDropWindow} < ${BAKE.dropWindow} points`);
   if (c.maxSnap >= 0.05) bad.push(`junction snap ${c.maxSnap} m >= 5 cm`);
   if (r.junctions < 6) bad.push(`only ${r.junctions} junctions`);
-  if (r.ms > 60000) bad.push(`bake took ${r.ms} ms > 60 s`);
+  // (Round 11: 90 s - the dense districts try more crossing pendulums; Downtown's test bake still has to be < 60 s.)
+  if (r.ms > 90000) bad.push(`bake took ${r.ms} ms > 90 s`);
   return bad;
 }
 

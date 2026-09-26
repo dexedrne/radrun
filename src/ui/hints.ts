@@ -37,8 +37,9 @@ export type HintInput = {
 export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string {
   const web = touch ? "WEB" : easyGrab ? "Space" : "LMB";
   switch (id) {
-    case "swing": return `hold ${web} to web the building ahead (the yellow ring) and swing`;
-    case "fling": return `let go of ${web} at the bottom of the arc to fling forward`;
+    // Round 11: a web from a roof pulls you up and off it into the swing; a release on the way up keeps your height.
+    case "swing": return `hold ${web} to web the building ahead (the yellow ring): it pulls you off the roof into a swing`;
+    case "fling": return `let go of ${web} just past the bottom, on the way up, to fling forward and keep your height`;
     case "chain": return "chain swings down the avenues to go fast: web the next building before you land";
     case "yoink": return touch ? "red ring on him = tap WEB to YOINK" : `red ring on him = ${easyGrab ? "tap Space" : "click"} to YOINK`;
     case "djump": return touch ? "tap JUMP again in the air to double jump" : easyGrab ? "tap Space in the air (nothing ringed) to double jump" : "press Space again in the air to double jump";

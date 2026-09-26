@@ -153,6 +153,10 @@ export type Body = {
   slideBuf: number;
   /** Parkour moves done (wall runs, wall jumps, ledge climbs, vaults, slides) - round stats. */
   parkour: number;
+  /** Round 11: a web from a roof is reeling you up off it (the rope pulls you in until it is short enough to clear the edge). */
+  liftOn: boolean;
+  /** Round 11: a run-up topped out short of the rim: the kick off the wall comes as soon as you start falling. */
+  upKick: boolean;
 };
 
 /** What stepBody needs from the world. */
@@ -239,6 +243,8 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     rollT: 0,
     slideBuf: 0,
     parkour: 0,
+    liftOn: false,
+    upKick: false,
   };
 }
 
@@ -290,6 +296,8 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.ledgeX = src.ledgeX; dst.ledgeY = src.ledgeY; dst.ledgeZ = src.ledgeZ; dst.ledgeNx = src.ledgeNx; dst.ledgeNz = src.ledgeNz;
   dst.slideT = src.slideT; dst.rollT = src.rollT; dst.slideBuf = src.slideBuf;
   dst.parkour = src.parkour;
+  dst.liftOn = src.liftOn;
+  dst.upKick = src.upKick;
   return dst;
 }
 
@@ -308,6 +316,7 @@ export function resetMoves(b: Body): void {
   b.slideT = b.rollT = b.slideBuf = 0;
   b.relT = b.lastWallT = b.touchT = 1e3;
   b.lastRope = b.lastWall = b.touchWall = b.kickSolid = -1;
+  b.liftOn = b.upKick = false;
 }
 
 /** FNV-1a over the full sim state (ringId included), round 9 fields after the older ones. */
@@ -325,6 +334,7 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.i32(b.touchWall).f64(b.touchT).f64(b.touchNx).f64(b.touchNz).i32(b.kickSolid);
   h.i32(b.ledgeMode).f64(b.ledgeT).i32(b.ledgeSolid).f64(b.ledgeX).f64(b.ledgeY).f64(b.ledgeZ).f64(b.ledgeNx).f64(b.ledgeNz);
   h.f64(b.slideT).f64(b.rollT).f64(b.slideBuf).i32(b.parkour);
+  h.i32(b.liftOn ? 1 : 0).i32(b.upKick ? 1 : 0);
   return h;
 }
 
@@ -380,10 +390,11 @@ export function pickRing(b: Body, inp: InputFrame, k: Tuning, w: SimWorld, out: 
   if (fl < 1e-9) return RING_NONE;
   const last = b.relT < ALTERNATE_FOR ? b.lastRope : -1;
   const ring = b.ringId >= 0 ? b.ringId : -1;
-  if (findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out)) return out.solid;
+  // Round 11: the swing look-ahead runs from your velocity (a web from a roof: the lift's).
+  if (findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out, k.aimCos, b.v)) return out.solid;
   // Round 10: falling with nothing in the aim cone (the end of an avenue, a crossing): the wider fall cone.
   if (!b.grounded && b.v.y < 0 && k.aimCosFall < k.aimCos &&
-    findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, -1, out, k.aimCosFall)) return out.solid;
+    findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, -1, out, k.aimCosFall, b.v)) return out.solid;
   return RING_NONE;
 }
 
@@ -403,6 +414,10 @@ const VAULT_EDGE = 0.1;
 const VAULT_LOOK_T = 0.3;
 /** Side hits with at most this much overlap on the other axis slide past the corner instead of stopping. */
 export const CORNER_SLIP = 0.4;
+/** Round 11: a wall run turns an inside corner this many seconds (of run speed) before it; the stick stops pressing
+ * you into a facade for this long after touching it. */
+const CORNER_LOOK = 0.12;
+const WALL_HUG = 0.25;
 
 /** A web zip target: kind 2 = roof ledge (roof + inward dir), 3 = a facade (solid + inward dir), 0 = none. */
 export type ZipAim = { kind: number; solid: number; roof: number; x: number; y: number; z: number; dx: number; dz: number };
@@ -481,6 +496,7 @@ function attach(b: Body, a: AnchorHit, k: Tuning, w: SimWorld): void {
   b.ropeTaut = false;
   b.ropeSteps = 0;
   b.ropeUp = false;
+  b.liftOn = false;
   b.wallMode = 0;
   b.ledgeMode = 0;
   b.slideT = 0;
@@ -490,19 +506,54 @@ function attach(b: Body, a: AnchorHit, k: Tuning, w: SimWorld): void {
   b.events |= EV_ATTACH;
 }
 
+/**
+ * Round 11 web from a roof (just attached, still over the roof stood on): the rope a pendulum from here needs to
+ * clear that roof's edge (webLiftClear above it where the arc crosses the edge, or over the roof if the pivot is
+ * above it) becomes the target, and the rope reels you in to it at webLift m/s - a yank up and off the edge into
+ * the swing, instead of a hop back onto the roof on a loose web.
+ */
+function liftStart(b: Body, k: Tuning, w: SimWorld): void {
+  if (k.webLift <= 0 || b.ropeSolid < 0) return;
+  const s = w.index.solids[b.roofId];
+  if (s === undefined) return;
+  const p = b.p, P = b.ropeP;
+  let dx = P.x - p.x, dz = P.z - p.z;
+  const D = Math.sqrt(dx * dx + dz * dz);
+  const top = s.top + k.halfHeight + k.webLiftClear;
+  let L: number;
+  if (P.x > s.x0 && P.x < s.x1 && P.z > s.z0 && P.z < s.z1) L = P.y - top; // the arc's bottom is over the roof
+  else if (D > 1e-6) {
+    dx /= D; dz /= D;
+    // Where the body -> pivot line leaves the roof, and how far that is from under the pivot.
+    let t = Infinity;
+    if (dx > 1e-9) t = Math.min(t, (s.x1 - p.x) / dx); else if (dx < -1e-9) t = Math.min(t, (s.x0 - p.x) / dx);
+    if (dz > 1e-9) t = Math.min(t, (s.z1 - p.z) / dz); else if (dz < -1e-9) t = Math.min(t, (s.z0 - p.z) / dz);
+    const De = D - (t > 0 ? t : 0);
+    const h = P.y - top;
+    L = h > 0 ? Math.sqrt(h * h + De * De) : 0;
+  } else L = P.y - top;
+  const target = Math.max(k.ropeMin, L);
+  if (target < b.ropeTarget) b.ropeTarget = target;
+  b.liftOn = b.ropeLen > b.ropeTarget + LIFT_DONE;
+}
+
+/** The lift is over this close (m) to its rope length. */
+const LIFT_DONE = 0.05;
+
 /** Let go: boost along the velocity + a little up (boost = false: a snap / bonk / wall contact drop). */
-function release(b: Body, k: Tuning, boost: boolean): void {
+function release(b: Body, k: Tuning, boost: boolean, up: number = k.releaseUp): void {
   const v = b.v;
   if (boost) {
     const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
     v.x += (v.x / sp) * k.releaseBoost;
     v.y += (v.y / sp) * k.releaseBoost;
     v.z += (v.z / sp) * k.releaseBoost;
-    if (v.y > -4) v.y += k.releaseUp;
+    if (v.y > -4) v.y += up;
   }
   b.lastRope = b.ropeSolid;
   b.relT = 0;
   b.ropeSolid = -1;
+  b.liftOn = false;
   b.events |= EV_RELEASE;
 }
 
@@ -565,6 +616,99 @@ function endZip(b: Body, k: Tuning, w: SimWorld, fling: boolean, aimX: number, a
     }
   }
   capSpeed(v, k.speedCap);
+}
+
+/**
+ * Round 11: on the rope, taut, past the bottom on the forward side (moving away from under the pivot), rising and
+ * past swingSweetCos from straight down: a release here is well timed.
+ */
+function sweetSpot(b: Body, k: Tuning): boolean {
+  const p = b.p, P = b.ropeP, v = b.v;
+  if (!b.ropeTaut || v.y <= 0) return false;
+  const rx = p.x - P.x, ry = p.y - P.y, rz = p.z - P.z;
+  const rl = Math.sqrt(rx * rx + ry * ry + rz * rz), rh = Math.sqrt(rx * rx + rz * rz), vh = Math.sqrt(v.x * v.x + v.z * v.z);
+  return rl > 1e-6 && rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh && -ry / rl <= k.swingSweetCos;
+}
+
+/** wallAhead's target heading (horizontal unit). */
+const AV = { x: 0, z: 0 };
+
+/**
+ * Round 11 wall avoidance: the facade the horizontal velocity meets within swingAvoidT s (a wall, not a low ledge),
+ * when the meeting is head-on (more speed into it than along it, or too little along it for a wall run). Returns
+ * the turn rate (1/s; 0 = nothing to avoid) and puts the heading along the facade in AV: the side the velocity
+ * already leans to, else the stick's, else the rope pivot's side.
+ */
+function wallAhead(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): number {
+  const v = b.v;
+  const hs = Math.sqrt(v.x * v.x + v.z * v.z);
+  if (k.swingAvoid <= 0 || hs < 3) return 0;
+  const ux = v.x / hs, uz = v.z / hs, feet = b.p.y - k.halfHeight;
+  if (!obstacleAhead(w.index, b.p.x, feet, b.p.z, ux, uz, hs * k.swingAvoidT, k.halfWidth, FH)) return 0;
+  if (FH.top - feet < k.wallRunMinBelowTop) return 0;
+  const tx = -FH.nz, tz = FH.nx;
+  const vin = -(v.x * FH.nx + v.z * FH.nz), va = v.x * tx + v.z * tz, aa = va < 0 ? -va : va;
+  if (vin <= aa && aa >= k.wallRunMinSpeed) return 0;
+  let sg = va > 0.5 ? 1 : va < -0.5 ? -1 : 0;
+  if (sg === 0) { const st = mx * tx + mz * tz; sg = st > 0.1 ? 1 : st < -0.1 ? -1 : 0; }
+  if (sg === 0 && b.ropeSolid >= 0) sg = (b.ropeP.x - b.p.x) * tx + (b.ropeP.z - b.p.z) * tz < 0 ? -1 : 1;
+  if (sg === 0) sg = 1;
+  AV.x = tx * sg; AV.z = tz * sg;
+  return k.swingAvoid;
+}
+
+/** Round 11 city edge: the heading bends this much inward (per unit along the edge). */
+const EDGE_IN = 0.25;
+
+/**
+ * Round 11 city edge: airborne with the horizontal velocity crossing the city's bounds (less edgeMargin) within
+ * swingAvoidT s, the flight / swing bends along the edge, a little inward (inward at a corner). Returns the turn
+ * rate (1/s; 0 = nothing to avoid) and the heading in AV (the side the velocity leans to, else the stick's, else
+ * toward the middle). Player only (the runner's tuning has edgeAvoid 0).
+ */
+function edgeAhead(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): number {
+  const B = w.index.model.bounds;
+  if (k.edgeAvoid <= 0 || B === undefined) return 0;
+  const v = b.v, hs = Math.sqrt(v.x * v.x + v.z * v.z);
+  if (hs < 3) return 0;
+  const m = k.edgeMargin, T = k.swingAvoidT;
+  const px = b.p.x, pz = b.p.z, fx = px + v.x * T, fz = pz + v.z * T;
+  // Heading out past an edge soon (or already out past it and not heading back in).
+  const ox = (v.x > 0 && fx > B.x1 - m) || (px > B.x1 && v.x > -1) ? 1 : (v.x < 0 && fx < B.x0 + m) || (px < B.x0 && v.x < 1) ? -1 : 0;
+  const oz = (v.z > 0 && fz > B.z1 - m) || (pz > B.z1 && v.z > -1) ? 1 : (v.z < 0 && fz < B.z0 + m) || (pz < B.z0 && v.z < 1) ? -1 : 0;
+  if (ox === 0 && oz === 0) return 0;
+  let hx: number, hz: number;
+  if (ox !== 0 && oz !== 0) { hx = -ox; hz = -oz; }
+  else if (ox !== 0) {
+    // Along the edge: the way the velocity (else the stick) leans, unless that runs into the corner.
+    let sg = v.z > 0.5 ? 1 : v.z < -0.5 ? -1 : mz > 0.1 ? 1 : mz < -0.1 ? -1 : 0;
+    if (sg === 0 || (sg > 0 && pz > B.z1 - m) || (sg < 0 && pz < B.z0 + m)) sg = pz < (B.z0 + B.z1) / 2 ? 1 : -1;
+    hx = -ox * EDGE_IN; hz = sg;
+  } else {
+    let sg = v.x > 0.5 ? 1 : v.x < -0.5 ? -1 : mx > 0.1 ? 1 : mx < -0.1 ? -1 : 0;
+    if (sg === 0 || (sg > 0 && px > B.x1 - m) || (sg < 0 && px < B.x0 + m)) sg = px < (B.x0 + B.x1) / 2 ? 1 : -1;
+    hx = sg; hz = -oz * EDGE_IN;
+  }
+  const hl = Math.sqrt(hx * hx + hz * hz);
+  AV.x = hx / hl; AV.z = hz / hl;
+  return k.edgeAvoid;
+}
+
+/** Round 11: in the air off the rope - a facade just after a fling (swingAvoidAir s), else the city edge. */
+function airAvoid(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): number {
+  const a = b.relT < k.swingAvoidAir ? wallAhead(b, k, w, mx, mz) : 0;
+  return a > 0 ? a : edgeAhead(b, k, w, mx, mz);
+}
+
+/** Turn the horizontal velocity toward the unit heading (hx, hz) by about `a` rad, speed kept. */
+function turnToward(v: Vec3, hx: number, hz: number, a: number): void {
+  const hs = Math.sqrt(v.x * v.x + v.z * v.z);
+  if (hs < 1e-6) return;
+  let ux = v.x / hs + hx * a, uz = v.z / hs + hz * a;
+  const ul = Math.sqrt(ux * ux + uz * uz);
+  if (ul < 1e-9) return;
+  ux /= ul; uz /= ul;
+  v.x = ux * hs; v.z = uz * hs;
 }
 
 function groundMove(b: Body, mx: number, mz: number, k: Tuning, dt: number): void {
@@ -820,7 +964,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       b.grounded = false;
       b.jumpBuf = 0;
       b.events |= EV_JUMP;
-      if (zip) attach(b, A, k, w);
+      if (zip) { attach(b, A, k, w); liftStart(b, k, w); }
     } else if (k.vault && !locked) {
       // §3.5: a low solid right ahead -> hop it, horizontal speed kept. The hop starts at vaultLook, or earlier
       // when the rise needs more run-up (so the feet clear the front edge by VAULT_EDGE at this speed).
@@ -857,12 +1001,15 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   } else if (canAttach) {
     attach(b, A, k, w);
   } else if (b.ropeSolid >= 0 && !held) {
+    // Round 11: let go on the upswing past swingSweetCos (a well-timed release) = releaseSweet more up.
+    const sweet = k.releaseSweet > 0 && sweetSpot(b, k);
     release(b, k, true);
+    if (sweet) v.y += k.releaseSweet;
   }
   if (inp.webPressed && !locked && b.ringId === RING_NONE && b.ropeSolid < 0 && !b.zipOn) b.events |= EV_NOANCHOR;
 
   // Forces.
-  let scripted = false;
+  let scripted = false, reeling = false, air = 0;
   if (b.zipOn) {
     // A zip is a straight pull (no gravity / wind): the velocity turns onto the line to the target (below a
     // ledge: first to the point just outside its edge) at zipSpeed, the speed cap included.
@@ -893,18 +1040,39 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     const aa = va < 0 ? -va : va, sg = va < 0 ? -1 : 1;
     if (aa < k.wallRunSpeed) va = sg * Math.min(k.wallRunSpeed, aa + k.wallRunAccel * dt);
     v.x = tx * va; v.z = tz * va;
-    if (b.wallT >= k.wallRunTime) endWall(b, 2);
+    // Round 11: an inside corner ahead (a wall across the run) turns the run onto it, out along the new face,
+    // instead of stopping dead in the corner and sliding down it.
+    const run = va < 0 ? -va : va;
+    if (k.swingAvoid > 0 && run > 1 && obstacleAhead(idx, p.x, p.y - hh, p.z, tx * sg, tz * sg, Math.max(0.6, run * CORNER_LOOK), hw, FH, b.wallSolid) &&
+      FH.solid !== b.wallSolid && FH.top - (p.y - hh) >= k.wallRunMinBelowTop && FH.nx * tx * sg + FH.nz * tz * sg < -0.7) {
+      const ox = b.wallNx, oz = b.wallNz, keepVy = v.y;
+      v.x = ox * run; v.z = oz * run;
+      startWall(b, k, w, FH.solid, FH.nx, FH.nz, WALL_RUN);
+      v.y = keepVy > k.wallRunKick ? keepVy : k.wallRunKick;
+      b.parkour--; // (the same run, turned)
+    } else if (b.wallT >= k.wallRunTime) endWall(b, 2);
   } else if (b.wallMode === WALL_UP) {
     b.wallT += dt;
     // Up the wall at the entry speed, easing down under wall-run gravity to wallClimbSpeed (round 10).
     v.x = 0; v.z = 0; v.y = Math.max(k.wallClimbSpeed, v.y - k.gravity * k.wallRunGravity * dt);
-    // Time up: it ends like a wall run, still rising (a ledge grab can follow on the way up: ~9 m reach).
-    if (b.wallT >= k.wallClimbTime) endWall(b, 0);
+    // Time up: it ends like a wall run, still rising (a ledge grab can follow on the way up: ~9 m reach). Round 11:
+    // then a kick off the wall once you start falling (wallUpKick), so a run-up that tops out short of the rim does
+    // not slide down the face.
+    if (b.wallT >= k.wallClimbTime) { endWall(b, 0); b.upKick = k.wallUpKick > 0; }
   } else if (!b.grounded) {
     const onRope = b.ropeSolid >= 0;
     v.y -= k.gravity * (onRope ? k.swingGravity : 1) * dt;
     if (w.wind !== undefined) { v.x += w.wind.x * dt; v.z += w.wind.z * dt; }
-    if (onRope) {
+    if (onRope && b.liftOn) {
+      // Round 11 lift: the rope pulls you in at webLift (at least that fast toward the pivot), lighter gravity.
+      const P = b.ropeP;
+      const rx = p.x - P.x, ry = p.y - P.y, rz = p.z - P.z;
+      const rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      if (rl > 1e-6) {
+        const vr = (v.x * rx + v.y * ry + v.z * rz) / rl;
+        if (vr > -k.webLift) { const a = (-k.webLift - vr) / rl; v.x += rx * a; v.y += ry * a; v.z += rz * a; }
+      }
+    } else if (onRope) {
       // §2.3: pump along the swing through the bottom half (below the pivot, descending); steer only
       // across the swing plane (nothing along the arc).
       const P = b.ropeP;
@@ -921,6 +1089,14 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
             const a = k.swingPump * dt;
             v.x += ux * a; v.y += uy * a; v.z += uz * a;
           }
+          // Round 11 upswing reel: rising on the forward side with the stick along the swing, the rope pulls you in.
+          // (Only until the sweet spot: holding on past it earns nothing more.)
+          if (k.swingReelUp > 0 && b.ropeTaut && ry < 0 && v.y > 0 && -ny > k.swingSweetCos && (rx * v.x + rz * v.z) > 0 &&
+            mx * v.x + mz * v.z > 0.3 * Math.sqrt(v.x * v.x + v.z * v.z) && b.ropeLen > k.ropeMin && vr > -k.swingReelUp) {
+            const a = -k.swingReelUp - vr;
+            v.x += nx * a; v.y += ny * a; v.z += nz * a;
+            reeling = true;
+          }
           if (k.ropeSteer > 0 && (mx !== 0 || mz !== 0) && tl > 0.5) {
             // side = n x u (unit: n and u are orthonormal).
             const sx = ny * uz - nz * uy, sy = nz * ux - nx * uz, sz = nx * uy - ny * ux;
@@ -929,10 +1105,14 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
           }
         }
       }
-      // Round 10 swing heading: the horizontal velocity turns toward the stick (speed kept), so the sideways
-      // swing of a web to a side building dies out instead of carrying you into a wall.
+      // Round 11: a facade ahead (head-on) bends the swing along it; else round 10's swing heading: the horizontal
+      // velocity turns toward the stick (speed kept), so the sideways swing of a web to a side building dies out
+      // instead of carrying you into a wall.
       const sl = mx * mx + mz * mz;
-      if (k.swingAlign > 0 && sl > 0.09) {
+      let avoid = wallAhead(b, k, w, mx, mz);
+      if (avoid <= 0) avoid = edgeAhead(b, k, w, mx, mz);
+      if (avoid > 0) turnToward(v, AV.x, AV.z, avoid * dt);
+      else if (k.swingAlign > 0 && sl > 0.09) {
         const hsv = Math.sqrt(v.x * v.x + v.z * v.z), il = 1 / Math.sqrt(sl);
         const hx = mx * il, hz = mz * il, al = v.x * hx + v.z * hz;
         if (hsv > 1 && al > 0) {
@@ -942,10 +1122,20 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
           if (nl > 1e-6) { ax *= hsv / nl; az *= hsv / nl; v.x = ax; v.z = az; }
         }
       }
+    } else if ((air = airAvoid(b, k, w, mx, mz)) > 0) {
+      // Round 11: just flung toward a facade head-on, or flying out over the city's edge: the flight bends along
+      // it (no air control into it).
+      turnToward(v, AV.x, AV.z, air * dt);
     } else if (k.airAccel > 0 && (mx !== 0 || mz !== 0)) {
+      // Round 11: just off a facade, the stick no longer presses you into it (no sliding down the face).
+      let ax = mx, az = mz;
+      if (b.touchT < WALL_HUG && k.swingAvoid > 0) {
+        const into = ax * b.touchNx + az * b.touchNz;
+        if (into < 0) { ax -= into * b.touchNx; az -= into * b.touchNz; }
+      }
       const s0 = Math.sqrt(v.x * v.x + v.z * v.z);
-      v.x += mx * k.airAccel * dt;
-      v.z += mz * k.airAccel * dt;
+      v.x += ax * k.airAccel * dt;
+      v.z += az * k.airAccel * dt;
       const s1 = Math.sqrt(v.x * v.x + v.z * v.z);
       const lim = Math.max(s0, k.runSpeed);
       if (s1 > lim) { v.x *= lim / s1; v.z *= lim / s1; }
@@ -972,6 +1162,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     const P = b.ropeP;
     const dx = p.x - P.x, dy = p.y - P.y, dz = p.z - P.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    // The upswing reel takes the rope in with you (it stays taut); so does the lift, down to its target.
+    if (reeling && dist < b.ropeLen) b.ropeLen = Math.max(k.ropeMin, dist);
+    if (b.liftOn) {
+      if (dist < b.ropeLen) b.ropeLen = Math.max(b.ropeTarget, dist);
+      if (b.ropeLen <= b.ropeTarget + LIFT_DONE) b.liftOn = false;
+    }
     if (dist > b.ropeLen) {
       const nx = dx / dist, ny = dy / dist, nz = dz / dist;
       p.x = P.x + nx * b.ropeLen;
@@ -1006,7 +1202,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       const away = rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh;
       if (b.ropeTaut && v.y > 0 && away) b.ropeUp = true;
       if (p.y > P.y - k.autoReleaseBelow || (v.y > 0 && away && cosDown < k.swingReleaseCos) || (b.ropeUp && v.y <= 0)) {
-        release(b, k, true);
+        // Round 11: the auto-release flings with autoReleaseUp (a release you time yourself gets releaseUp + sweet).
+        release(b, k, true, k.autoReleaseUp);
         b.events |= EV_AUTORELEASE;
         capSpeed(v, k.speedCap);
       }
@@ -1087,6 +1284,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.slideT = 0;
   }
 
+  // Round 11: a topped-out run-up kicks off the wall as the fall starts (anything else that happens first cancels it).
+  if (b.upKick && (b.grounded || b.ropeSolid >= 0 || b.zipOn || b.ledgeMode > 0 || b.wallMode > 0)) b.upKick = false;
+  else if (b.upKick && v.y <= 0) {
+    v.x += b.touchNx * k.wallUpKick; v.z += b.touchNz * k.wallUpKick;
+    b.upKick = false;
+  }
   // Airborne parkour: wall-run upkeep, facade contact (ledge / run-up / wall run / bonk), then proximity.
   if (!b.grounded && !b.zipOn && b.ledgeMode === 0 && !scripted) {
     const feet = p.y - hh;
@@ -1114,6 +1317,11 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         if (b.ropeSolid >= 0) release(b, k, false);
         b.bonkT = k.bonkLock;
         b.events |= EV_BONK;
+      } else if (k.wallPushOff > 0 && b.ropeSolid < 0 && v.y < 0) {
+        // Round 11: falling along the face with nothing to take the contact (too fast for a wall run): push off it
+        // (no slide down the facade with the camera on the wall).
+        const vo = v.x * cnx + v.z * cnz;
+        if (vo < k.wallPushOff) { v.x += (k.wallPushOff - vo) * cnx; v.z += (k.wallPushOff - vo) * cnz; }
       }
     } else if (b.ropeSolid < 0) {
       if (!tryLedge(b, k, w, mx, mz, false) && wallProbe(idx, p.x, feet, p.z, hw, k.wallRunReach, FH)) {

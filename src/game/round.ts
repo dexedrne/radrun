@@ -166,6 +166,8 @@ export class Round {
     const spawnMin = tw?.spawnMin ?? 22, spawnSpan = tw?.spawnSpan ?? 4, other = tw?.spawnOther ?? 3;
     this.runner = new Runner(pack, params, this.rng, this.startJunction, first);
     this.runner.down = tw?.down ?? 0;
+    // Round 11: his head start (Chill): already that far down his first run when the chase starts.
+    this.runner.headStart(params.lead ?? 0);
     this.spawn = playerSpawn(this.model, pack, this.startJunction, first, spawnMin + spawnSpan * this.rng.next(), other, tw?.spawnBelow ?? 0);
     this.player = createBody(this.spawn.x, this.spawn.y, this.spawn.z, this.spawn.roofId);
     this.prevPlayer = cloneBody(this.player);

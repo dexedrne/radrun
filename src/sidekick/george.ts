@@ -29,6 +29,12 @@ export const GEORGE = {
   jumpFor: 0.15,
   landFor: 0.3,
   happyFor: 1.6,
+  // Round 11 (a cleaner view): he tucks away (shrinks out of sight) while the sample he follows is a swing, wall run,
+  // ledge hang or zip, or once he has been airborne longer than airShow s (a long fall, a drop down a facade), and
+  // pops back in on the ground behind you. showRate = how fast he shrinks / grows (1/s; 25 = gone in ~0.15 s, so
+  // he never leaps past the camera or over your head first).
+  airShow: 0.45,
+  showRate: 25,
 };
 
 /** The built-in values (GEORGE itself is live: `?tune` and tuning.json's "george" section change it). */
@@ -36,7 +42,7 @@ export const GEORGE_DEFAULTS: Readonly<typeof GEORGE> = Object.freeze({ ...GEORG
 
 /** Fields `?tune` shows and tuning.json's "george" section may override. `delay` is in 120 Hz steps. */
 export const GEORGE_TUNABLE = [
-  "maxTrail", "delay", "side", "idleBelow", "walkBelow", "trotBelow", "rateMin", "rateMax", "runRateMin", "runRateMax",
+  "maxTrail", "delay", "side", "idleBelow", "walkBelow", "trotBelow", "rateMin", "rateMax", "runRateMin", "runRateMax", "airShow", "showRate",
 ] as const satisfies readonly (keyof typeof GEORGE)[];
 export type GeorgeTunable = (typeof GEORGE_TUNABLE)[number];
 
@@ -47,7 +53,7 @@ export function setGeorge(k: GeorgeTunable, v: number): void {
 
 export type GeorgeClip = "Sit_Idle" | "Idle" | "Walk" | "Trot" | "Run" | "Jump" | "Leap_Air" | "Land" | "Happy" | "Sulk";
 
-/** One player snapshot: body point, grounded, on-rope, roof id. */
+/** One player snapshot: body point, grounded, on-rope (round 11: or wall-running / hanging / zipping), roof id. */
 export type GeorgeSample = { x: number; y: number; z: number; grounded: boolean; rope: boolean; roofId: number };
 
 /** Ground speed of each locomotion clip in metres per second at rate 1 and the render scale. */
@@ -61,6 +67,8 @@ export class George {
   private readonly bz = new Float64Array(GEORGE.cap);
   private readonly bg = new Uint8Array(GEORGE.cap);
   private readonly br = new Int32Array(GEORGE.cap);
+  /** Round 11: the sample was on the rope (or a wall / ledge / zip). */
+  private readonly bf = new Uint8Array(GEORGE.cap);
   private head = 0;
   count = 0;
   /** Age (steps) of the sample he follows this step (<= GEORGE.delay). */
@@ -78,6 +86,9 @@ export class George {
   /** Seconds in the current one-shot (Jump / Land / Happy), else 0. */
   shotT = 0;
   airborne = false;
+  /** Round 11: seconds airborne, and how visible he is (0 = tucked away, 1 = shown; the view scales him by it). */
+  airT = 0;
+  show = 1;
   sitting = true;
   beat: "" | "sit" | "happy" | "sulk" = "sit";
   lastGroundX = 0; lastGroundY = 0; lastGroundZ = 0; lastGroundRoof = -1;
@@ -116,6 +127,8 @@ export class George {
     this.speed = 0;
     this.w = 1;
     this.airborne = false;
+    this.airT = 0;
+    this.show = 1;
     this.sitting = true;
     this.clip = "Sit_Idle";
     this.rate = 1;
@@ -134,6 +147,7 @@ export class George {
     this.bx[h] = s.x; this.by[h] = s.y; this.bz[h] = s.z;
     this.bg[h] = s.grounded && !s.rope ? 1 : 0;
     this.br[h] = s.roofId;
+    this.bf[h] = s.rope ? 1 : 0;
     this.head = (h + 1) % GEORGE.cap;
     if (this.count < GEORGE.cap) this.count++;
     const dt = GEORGE.dt;
@@ -143,6 +157,8 @@ export class George {
       // Not enough history yet (or a sitting beat): sit where he is.
       this.sitting = true;
       this.speed = 0;
+      this.airT = 0;
+      this.showToward(1);
       this.pickClip(false, false);
       return;
     }
@@ -176,6 +192,8 @@ export class George {
     }
     const wasAir = this.airborne;
     this.airborne = !grounded;
+    this.airT = grounded ? 0 : this.airT + dt;
+    this.showToward(this.bf[si] === 1 || this.airT > GEORGE.airShow ? 0 : 1);
     this.x = q.x; this.y = y; this.z = q.z;
     if (grounded) { this.lastGroundX = q.x; this.lastGroundY = y; this.lastGroundZ = q.z; this.lastGroundRoof = this.br[si]; }
     const mx = this.x - this.px, mz = this.z - this.pz;
@@ -186,6 +204,14 @@ export class George {
     this.pickClip(!wasAir && this.airborne, wasAir && !this.airborne);
   }
 
+  /** Ease `show` toward 0 / 1 at showRate. */
+  private showToward(t: number): void {
+    const k = GEORGE.showRate * GEORGE.dt;
+    this.show += (t - this.show) * (k < 1 ? k : 1);
+    if (t === 0 && this.show < 0.01) this.show = 0;
+    if (t === 1 && this.show > 0.99) this.show = 1;
+  }
+
   /** The player fell: George waits at his last grounded point, sitting (hidden by the fade). */
   fall(): void {
     this.x = this.px = this.lastGroundX;
@@ -194,6 +220,8 @@ export class George {
     this.sitting = true;
     this.count = 0;
     this.head = 0;
+    this.airT = 0;
+    this.show = 1;
     this.clip = "Sit_Idle";
   }
 

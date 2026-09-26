@@ -64,6 +64,20 @@ export const GRAPH = {
   midOptions: 6,
   /** The tall-anchor search for them: this high over the street's middle. */
   midSearchUp: 34,
+  /**
+   * Round 11: crossing pendulums on any tall building near the street's middle (not only the anchors findAnchor
+   * rings): the pivot this high over the takeoff roof (or the building's top), at most wideOptions of them.
+   */
+  midRise: 26,
+  wideOptions: 6,
+  /**
+   * ...and for a level crossing (the arc need not lift him) a building this much over the takeoff will do, for a
+   * downhill one (he swings down across) wideUpDown.
+   */
+  wideUpLow: 6,
+  wideUpDown: 1,
+  /** The building's nearest point at most this far (horizontal) from the pivot (a tower on the crossing's corner). */
+  wideReach: 26,
 } as const;
 
 /**
@@ -201,7 +215,37 @@ function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k:
       if (mids.some(q => q.anchor.px === m.px && q.anchor.pz === m.pz && q.anchor.ay === m.ay)) continue;
       mids.push({ lat, anchor: m });
     }
-    swings.unshift(...mids);
+    // Round 11: more crossing pendulums - any building tall enough near the street's middle can hold one (the
+    // anchor searches above only see what findAnchor rings from the takeoff). Its anchor is the point of that
+    // building nearest the pivot spot midRise m over the takeoff roof (under its top), the pivot over the street's
+    // middle straight ahead of the takeoff; closest to that ideal height first.
+    const wide: SwingOption[] = [];
+    const lat0 = Math.min(Math.max((e.lo + e.hi) / 2, e.lo + GRAPH.swingLatInset), e.hi - GRAPH.swingLatInset);
+    const mx0 = e.axis === "x" ? midA : lat0, mz0 = e.axis === "x" ? lat0 : midA;
+    const R = GRAPH.wideReach;
+    const n = idx.nearbySolids(mx0 - R, mz0 - R, mx0 + R, mz0 + R);
+    const ids = Array.from(idx.out.subarray(0, n));
+    const wideUp = dh < -GRAPH.alleyHopMax ? GRAPH.wideUpDown : dh <= 0 ? GRAPH.wideUpLow : GRAPH.midPivotUp;
+    for (const sid of ids) {
+      const s = m.solids[sid];
+      if (s.top < from.top + wideUp) continue;
+      const ay = Math.min(s.top, from.top + GRAPH.midRise);
+      const ax = Math.min(Math.max(mx0, s.x0), s.x1), az = Math.min(Math.max(mz0, s.z0), s.z1);
+      const hx = mx0 - ax, hz = mz0 - az;
+      if (hx * hx + hz * hz > R * R || hx * hx + hz * hz < 1) continue;
+      let nx = ax === s.x0 ? -1 : ax === s.x1 ? 1 : 0, nz = az === s.z0 ? -1 : az === s.z1 ? 1 : 0;
+      if (nx !== 0 && nz !== 0) { nx *= 0.7071067811865476; nz *= 0.7071067811865476; }
+      if (nx === 0 && nz === 0) continue;
+      if (idx.segmentBlocked(ax + nx * 0.05, ay - 0.5, az + nz * 0.05, mx0, ay - 0.5, mz0, sid, -1)) continue;
+      const a = emptyAnchor();
+      a.solid = sid; a.ax = ax; a.ay = ay; a.az = az; a.nx = nx; a.nz = nz; a.rim = ay >= s.top;
+      a.px = mx0; a.py = ay; a.pz = mz0;
+      if ([...mids, ...wide].some(q => q.anchor.px === a.px && q.anchor.pz === a.pz && q.anchor.ay === a.ay)) continue;
+      a.score = Math.abs(ay - (from.top + GRAPH.midRise)) + 0.1 * Math.sqrt(hx * hx + hz * hz);
+      wide.push({ lat: lat0, anchor: a });
+    }
+    wide.sort((p, q) => p.anchor.score - q.anchor.score || p.anchor.solid - q.anchor.solid);
+    swings.unshift(...mids, ...wide.slice(0, GRAPH.wideOptions));
     if (!swings.length && !zipOk) return null;
     return { ...base, kind: "street", anchor: swings[0]?.anchor ?? null, rim: zipOk ? rim : null, swings };
   }

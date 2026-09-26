@@ -62,7 +62,7 @@ export type Results = {
   falls: number;
   medal: string;
   best: number | null;
-  /** A best from before round 9's rebuilt cities (link v < 4), listed as the old city's; null when none or best is set. */
+  /** A best from an older build (link v < LINK_VERSION: round 9's rebuilt cities, round 11's swing), listed as the older build's; null when none or best is set. */
   oldBest?: number | null;
   newBest: boolean;
   runner: string;

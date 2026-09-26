@@ -18,8 +18,9 @@ const tuning = applyTuningJson(JSON.parse(fs.readFileSync(lv("tuning.json"), "ut
 const pack = decodePack(fs.readFileSync(lv("runner.pack.bin")));
 const index = new CityIndex(model);
 
+// (No head start: these rules want him standing on his start junction at GO.)
 const mk = (seed: number, difficulty: Difficulty = "normal") =>
-  new Round({ model, index, pack, difficulty, params: tuning.difficulty[difficulty], tuning: tuning.player, chaser: "652", runner: "4764", seed, countdown: false });
+  new Round({ model, index, pack, difficulty, params: { ...tuning.difficulty[difficulty], lead: 0 }, tuning: tuning.player, chaser: "652", runner: "4764", seed, countdown: false });
 
 const at = (x: number, y: number, z: number): Kinematic => ({ p: { x, y, z }, v: { x: 0, y: 0, z: 0 }, grounded: false, phase: 1, roofId: -1 });
 

@@ -14,18 +14,28 @@ import { emptyZipAim, zipTarget, EV_NOANCHOR } from "../sim/player.ts";
 /** Reticle size on screen (px), the web's thickness (m) and how long the "no anchor" X shows (s). */
 const RETICLE_PX = 28;
 const WEB_THICK = 0.035;
+/** Round 11: the web is never drawn within this many m of the lens (a white bar across the screen). */
+const WEB_LENS_CLEAR = 1.2;
 const NO_ANCHOR_FOR = 0.3;
 
 export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean }) {
   const ring = useRef<Mesh>(null);
   const tick = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
+  const rope2 = useRef<Mesh>(null);
   const shadow = useRef<Mesh>(null);
   const ledge = useRef<Mesh>(null);
   const nope = useRef<Mesh>(null);
   const za = useMemo(emptyZipAim, []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
-  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0 }), []);
+  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0 }), []);
+  /** Stretch a unit web cylinder from a to b. */
+  const place = (m: Mesh, a: Vector3, b: Vector3) => {
+    const len = a.distanceTo(b);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(tmp.up, tmp.d.copy(b).sub(a).normalize());
+    m.scale.set(1, len, 1);
+  };
 
   useFrame((state, delta) => {
     const b = game.body;
@@ -97,17 +107,34 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       lm.visible = show;
     }
     // The web: from the character's RightHand (ropeFrom), else the body point, to the anchor / zip target.
-    const ro = rope.current;
+    // Round 11: the part of the line within WEB_LENS_CLEAR of the lens is left out (up to two pieces).
+    const ro = rope.current, r2 = rope2.current;
+    if (r2) r2.visible = false;
     if (ro) {
       ro.visible = (attached || b.zipOn) && !hide;
       if (ro.visible) {
         const h = b.zipOn ? b.zipP : b.ropeA;
         if (!ropeFrom?.(tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
-        const len = tmp.a.distanceTo(tmp.b);
-        ro.position.copy(tmp.a).add(tmp.b).multiplyScalar(0.5);
-        ro.quaternion.setFromUnitVectors(tmp.up, tmp.b.sub(tmp.a).normalize());
-        ro.scale.set(1, len, 1);
+        // |a + t (b - a) - cam|^2 = R^2 -> the t range inside the sphere.
+        const dx = tmp.b.x - tmp.a.x, dy = tmp.b.y - tmp.a.y, dz = tmp.b.z - tmp.a.z;
+        const fx = tmp.a.x - camP.x, fy = tmp.a.y - camP.y, fz = tmp.a.z - camP.z;
+        const A = dx * dx + dy * dy + dz * dz, B = 2 * (fx * dx + fy * dy + fz * dz), C = fx * fx + fy * fy + fz * fz - WEB_LENS_CLEAR * WEB_LENS_CLEAR;
+        const disc = B * B - 4 * A * C;
+        let t0 = 2, t1 = 2;
+        if (A > 1e-9 && disc > 0) { const q = Math.sqrt(disc); t0 = (-B - q) / (2 * A); t1 = (-B + q) / (2 * A); }
+        if (t1 <= 0 || t0 >= 1) place(ro, tmp.a, tmp.b); // clear of the lens
+        else {
+          const lo = Math.max(0, t0), hi = Math.min(1, t1);
+          let used = false;
+          if (lo > 0.01) { tmp.c.copy(tmp.a).lerp(tmp.b, lo); place(ro, tmp.a, tmp.c); used = true; }
+          if (hi < 0.99) {
+            tmp.c.copy(tmp.a).lerp(tmp.b, hi);
+            const m = used ? r2 : ro;
+            if (m) { place(m, tmp.c, tmp.b); m.visible = true; used = true; }
+          }
+          if (!used) ro.visible = false;
+        }
       }
     }
     // Blob shadow on the ground below (pure groundBelow).
@@ -140,6 +167,10 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
         </mesh>
       </mesh>
       <mesh ref={rope} visible={false}>
+        <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
+        <meshBasicMaterial color="#fafafa" />
+      </mesh>
+      <mesh ref={rope2} visible={false}>
         <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
         <meshBasicMaterial color="#fafafa" />
       </mesh>

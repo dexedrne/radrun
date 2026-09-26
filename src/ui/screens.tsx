@@ -238,11 +238,11 @@ export function Title(props: {
         </div>
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {touch ? (
-            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = web the building ahead, let go at the bottom = fling ·
+            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = web the building ahead, let go on the way up = fling ·
             JUMP (again in the air = double jump; on a wall = wall kick) · run along a wall = <b>wall run</b> · <b>SLIDE</b> = slide ·
             <b>ZIP</b> = web-zip to the ringed building / the roof ahead · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
-            <><b>controls</b> · mouse look/aim · WASD run · Space jump (again in the air = double jump; on a wall = wall kick) · LMB hold = web the building ahead, let go at the bottom = fling ·
+            <><b>controls</b> · mouse look/aim · WASD run · Space jump (again in the air = double jump; on a wall = wall kick) · LMB hold = web the building ahead, let go on the way up = fling ·
             run along a wall = <b>wall run</b> · C = <b>slide</b> · ledges and low walls are climbed / vaulted by themselves ·
             E / Shift = <b>web-zip</b> to the ringed building or the roof ahead · red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
@@ -538,7 +538,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
             <div style={{ font: `900 ${big}px ui-monospace, monospace`, letterSpacing: 2 }}>{r.kind === "yoink" ? "YOINKED" : "TAGGED"} in {r.time.toFixed(1)} s</div>
             <div style={{ marginTop: 8, display: "inline-block", padding: "4px 14px", borderRadius: 20, fontWeight: 900, color: "#111", background: MEDAL_COLOR[r.medal] }}>{r.medal}</div>
             <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9 }}>
-              {r.newBest ? (r.best === null ? (r.oldBest != null ? `first catch in the new city - best (old city ${r.oldBest.toFixed(1)} s)` : "first catch - personal best") : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}
+              {r.newBest ? (r.best === null ? (r.oldBest != null ? `first catch on this build - best (older build ${r.oldBest.toFixed(1)} s)` : "first catch - personal best") : `new best (${(delta ?? 0).toFixed(1)} s)`) : r.best !== null ? `best ${r.best.toFixed(1)} s (+${(delta ?? 0).toFixed(1)})` : ""}
             </div>
           </>
         ) : (

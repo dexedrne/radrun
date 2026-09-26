@@ -22,7 +22,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Mouse | look / aim (PLAY captures the mouse; click the canvas if the browser refused) |
 | WASD | run |
 | Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing, a rope grab, a wall run or a ledge grab recharges it); on a wall (or just off one) = **wall kick**; hanging on a ledge = climb-jump |
-| LMB hold | **web the building ahead**: the yellow ring sits on a rim, a corner or a facade of the building your aim (and your speed) points at, and glides along it as you turn. Hold to swing, let go at the bottom of the arc to fling forward (hold through the fling to web the next building). LMB on a roof with a ring = jump + web. No ring = nothing tall enough ahead: run, vault, zip or drop off instead |
+| LMB hold | **web the building ahead**: the yellow ring sits on a rim, a corner or a facade of the building your aim (and your speed) points at, and glides along it as you turn. Hold to swing; let go on the way up, just past the bottom of the arc, to fling forward and keep your height (hold through the fling to web the next building). LMB on a roof with a ring = the web pulls you up and off the edge into the swing. No ring = nothing tall enough ahead: run, vault, zip or drop off instead |
 | C | **slide** (while running fast; Space out of a slide = slide-jump; press it in the air to slide on landing) |
 | E / Shift | **web zip**: a straight, fast pull to the ringed point (a rim = up and onto that roof; a facade = up to the wall, into a wall run when you are fast), or, with nothing ringed, onto the roof ledge you are aiming at (a cyan marker shows it). 1.5 s cooldown: the thin ring around the reticle fills back up |
 | (by themselves) | **wall run** (hit a facade at an angle while airborne), **run-up** (hit it head-on with the stick into it: ~5 m up the wall, then a ledge grab if the top is in reach), **ledge grab + climb** (a roof edge within reach in front of you), **vault** (a low rooftop box ahead while running), **landing roll** (a hard landing with the stick forward) |
@@ -78,7 +78,7 @@ Low quality for smoother play — change in Settings". That choice is remembered
 itself, and once you pick Low or High in Settings it never touches the setting again. `?autoq=0` turns
 it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
 
-## Moving (rounds 9-10)
+## Moving (rounds 9-11)
 
 **The swing.** There are no grab points: webs stick to the buildings themselves. Every step the game looks
 for the building face nearest an ideal point about 10 m (+ 0.5 s x your speed) ahead of you and 24 m up,
@@ -86,16 +86,52 @@ at least 5 m above you, 8-42 m away, inside the aim cone and in clear sight; a p
 the roof's edge, so the ring is always on a rim, a corner or a wall, never on open sky or the middle of a
 roof. On a low roof with nothing tall nearby there is no ring at all; falling with nothing in the cone, the
 search widens to about 100 degrees either side (round 10), so a crossing or the end of an avenue is not a
-drop to the street. The rope then works as a real pendulum around a pivot out in the street's open air
-(round 10: half-way across to the facing building, at most as far out as you are, 4-12 m off the wall), so a
-web to a side building swings you down the street instead of into its wall. Gravity pulls harder on the
-rope (x1.35), the speed you had when the rope goes taut is kept (up to 1.6x), you gain speed through the
-bottom of the arc (pump) and none on the way up, and **the swing goes where you push the stick** (round 10:
-its sideways drift dies out in about 0.4 s, speed kept). It lets go by itself past about 50 degrees on the
-far side (the fling) or near the pivot's height. The only reel keeps the arc 6 m above the street. A web
-snaps only when the rope itself (you to the pivot) is blocked. One speed cap, 32 m/s. A chain down an
-avenue from a roof edge runs about 22 m/s, ~25 m and 1 s per swing, sinking ~3 m per swing (round 9: 14 m/s,
-11 m per swing, 1 swing in 7 into a wall).
+drop to the street. **Round 11: the ring prefers anchors whose swing clears the walls.** The four best
+anchors each get a quick run of the swing they would give (1.2 s ahead); one whose arc carries you head-on
+into a facade (most often the anchor's own building: a web to the face ahead) or out past the edge of the
+city scores 14 m worse (`anchorArcPenalty`). The rope then works as a real pendulum around a pivot out in
+the street's open air (round 10: half-way across to the facing building, at most as far out as you are,
+4-12 m off the wall), so a web to a side building swings you down the street instead of into its wall.
+Gravity pulls harder on the rope (x1.35), the speed you had when the rope goes taut is kept (up to 1.6x),
+you gain speed through the bottom of the arc (pump), and **the swing goes where you push the stick** (round
+10: its sideways drift dies out in about 0.4 s, speed kept). A web snaps only when the rope itself (you to the
+pivot) is blocked. One speed cap, 32 m/s.
+
+**Timing (round 11).** Let go on the way up, from about 15 degrees past the bottom of the arc (the sweet
+spot) until the auto-release: the fling gets 11 m/s more up (`releaseSweet`), so a timed chain keeps its
+height. Holding on, the swing lets go by itself past about 50 degrees or near the pivot's height, with no
+extra kick; letting go at the bottom flings you flat and fast and you sink. On the upswing, with the stick
+along the swing, the rope reels in a little (3 m/s, up to the sweet spot). A chain down an avenue (Node probe
+from every street-facing roof edge, 10 s): released on the way up +0.4 to +0.8 m per swing, holding the web
+the whole time about -0.5 m, released at the bottom about -5 m per swing (round 10: -3 m per swing for the
+`?bot=swing` release, -7 m at the bottom).
+
+**Web from a roof (round 11).** Webbing while you stand on a roof pulls you up and off it: the rope reels in
+at 14 m/s until its arc clears the roof's edge by 1.5 m (`webLift`, `webLiftClear`), so the first swing
+starts like the rest of the chain instead of a 1 m hop back onto the roof on a loose web (99 % of ringed
+presses from a roof edge now leave the roof; round 10: 5 %).
+
+**No more wall slams (round 11).** On the rope, and for 0.6 s after you let go, a facade you would meet
+head-on within 0.7 s bends the swing along it at up to 4 rad/s, speed kept (`swingAvoid*`): into the cross
+street or a wall run, not flat into the wall. A run-up that tops out short of the rim kicks you off the
+wall (6 m/s, `wallUpKick`); falling along a facade off the rope with nothing to catch you pushes you off it
+(3 m/s, `wallPushOff`) instead of a slide down the face; a wall run into an inside corner turns onto the new
+face. Flying out past the city's edge (on the rope or not) bends you along it (`edgeAvoid`, `edgeMargin`), so
+an avenue that runs out of city is not a drop off the world. Hold-forward chains (Node probe, the `?bot=swing`
+policy, 30 seeds x 40 s): a swing ends on a wall about once in 200-600 swings in Downtown and the Towers
+(round 10: once in 15-50), no slides down a face, and 8-14 falls per 1000 s (round 10: 42-64, all of them
+off the edge of the city).
+
+**Camera (round 11).** It keeps 3 m (`armMin`) between itself and the Radbro: when a facade behind him (or
+the rope lean toward the pivot) would pull it closer, it swings round him (sideways or up) to where there is
+room, at `dodgeRate`; on the rope it also keeps 0.8 m off the web line (`webClear`), and the web is never
+drawn within 1.2 m of the lens. On a wall run (and just after) it keeps 1.4 m off the wall's face
+(`wallCam`). The Radbro fades only when the camera itself is within 2 m of him.
+
+**George (round 11)** tucks away (shrinks out of sight in 0.1 s) while the moment he is following is a swing,
+a wall run, a ledge hang or a zip, or once he has been in the air 0.45 s (`airShow`, `showRate` in the
+`george` section), and pops back in on the ground behind you. He no longer floats beside or over you
+through swings and falls.
 
 **Parkour.** Between swings you can wall-run (1.4 s along a facade at 11 m/s, light gravity), kick off a
 wall (Space; alternating between two walls climbs out of an alley), run up a wall head-on (~9 m of reach
@@ -107,13 +143,16 @@ are climbed), slide (C / SLIDE) and roll out of a hard landing. Everything you s
 or taller is solid. You fall only when you actually reach the street (feet below 2 m): respawn on the last
 roof, -3 s. Every number is a `tuning.json` key with a `?tune` slider (see "tuning.json").
 
-**The thief moves the same way** (the same sim, baked into his tracks): he swings across streets on building
-anchors (round 10: a pendulum with its pivot over the middle of the street, tried first), wall-runs the
-notches between roofs, runs up walls and climbs ledges (steps up to 9 m), and vaults props. He **web-zips**
-only where nothing else works: onto roofs too high to swing or climb to, and across streets with nothing
-tall to web. Round 10 hop mix (kept routes): Downtown 52 % swings / 14 % zips (round 9: 17 / 50), Night
-Market 42 / 25, Docks 57 / 2, Towers 27 / 32 (6 / 54), Vertigo 32 / 25. He never slides, double-jumps or
-steers in the air.
+**The thief moves the same way** (the same sim, baked into his tracks, with round 10's pendulum: none of the
+round 11 helpers above): he swings across streets on building anchors (round 10: a pendulum with its pivot
+over the middle of the street, tried first; round 11: any building near the street's middle can hold one,
+also a tower on the crossing's corner, and a level or downhill crossing needs only a building a little
+above him), wall-runs the notches between roofs, runs up walls and climbs ledges (steps up to 9 m), and
+vaults props. He **web-zips** only where nothing else works: up the podium walls too high to swing or climb
+to, and the few crossings with nothing to web. Round 11: a street swing that bakes with a 100 ms release
+window (a zip's) beats the zip across. Hop mix of his kept routes, swings / zips: Downtown 61 % / 7 %
+(round 10: 52 / 14), Night Market 58 / 6 (42 / 25), Docks 56 / 1 (57 / 2), Towers 45 / 15 (27 / 32),
+Vertigo 45 / 11 (32 / 25). He never slides, double-jumps or steers in the air.
 
 ## Sound
 
@@ -167,8 +206,9 @@ chain, best chain, top speed and falls. Hold R (desktop) = back to the start roo
 Resume / Back to start / Settings / Back to title.
 
 **First-run tips** pop up under your Radbro (above it on touch) the moment they matter, once each:
-"hold LMB/WEB to web the building ahead" (a building is ringed), "let go at the bottom of the arc to fling
-forward" (you are on the rope), "chain swings down the avenues to go fast" (after your first let-go),
+"hold LMB/WEB to web the building ahead (the yellow ring): it pulls you off the roof into a swing" (a
+building is ringed; round 11 wording), "let go just past the bottom, on the way up, to fling forward and keep
+your height" (you are on the rope), "chain swings down the avenues to go fast" (after your first let-go),
 "wall run! press Space / tap JUMP to kick off the wall" (your first wall run), "red ring on him = click /
 tap WEB to YOINK" (the first red ring in a real round), then "press Space / tap JUMP again in the air to
 double jump" (airborne), "press E or Shift / tap ZIP to web-zip" (on a roof with a ring) and "press C / tap
@@ -387,7 +427,7 @@ live (crossed out once lost, ticked once met), and the results show which you go
 | 13-15 | Top Floor, Free Fall, Street Level | Vertigo | chill, normal, **degen** | -, -, snap |
 
 Vertigo's stars: Top Floor = no falls + chain 5; Free Fall = before street level (45 m) + chain 5; Street
-Level = before street level (40 m) + no falls. (Level 10 was called "Vertigo" before round 7.) Round 9:
+Level = before street level (32 m; round 11, was 40 m) + no falls. (Level 10 was called "Vertigo" before round 7.) Round 9:
 Neon Alleys asks for 6 parkour moves (instead of a time) and Last Call for 4 (instead of the close call).
 
 Unlocks: the next level once you catch him in the previous one; a district in free play once you catch him

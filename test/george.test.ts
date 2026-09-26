@@ -109,3 +109,29 @@ test("george: gait by speed", () => {
   g.gait(9);
   assert.ok(g.rate > 2.5 && g.rate <= GEORGE.runRateMax);
 });
+
+test("george (round 11): tucked away while you swing or fall long, shown for a short hop, back on the ground", () => {
+  const g = new George(model);
+  g.place(0, top + 0.9, 0, 0, 1, 0);
+  g.setBeat("");
+  let x = 0, i = 0;
+  const run = (n: number, sample: (i: number) => { y: number; grounded: boolean; rope: boolean }) => {
+    for (let k = 0; k < n; k++, i++) { x += 6 * GEORGE.dt; const s = sample(i); g.step({ x, y: s.y, z: 0, grounded: s.grounded, rope: s.rope, roofId: s.grounded ? 0 : -1 }); }
+  };
+  run(200, () => ({ y: top + 0.9, grounded: true, rope: false }));
+  assert.equal(g.show, 1);
+  // A short hop (0.3 s in the air): he stays in view.
+  let minShow = 1;
+  for (let k = 0; k < 36; k++) { run(1, () => ({ y: top + 1.5, grounded: false, rope: false })); minShow = Math.min(minShow, g.show); }
+  run(120, () => ({ y: top + 0.9, grounded: true, rope: false }));
+  assert.equal(minShow, 1, "a short hop keeps him shown");
+  // A swing: once the sample he follows is on the rope he shrinks out of sight...
+  run(240, k => ({ y: top + 3 + Math.sin(k / 30), grounded: false, rope: true }));
+  assert.equal(g.show, 0);
+  // ...and a long fall keeps him away; he pops back in once his sample is on a roof again.
+  run(120, () => ({ y: top + 4, grounded: false, rope: false }));
+  assert.equal(g.show, 0);
+  run(200, () => ({ y: top + 0.9, grounded: true, rope: false }));
+  assert.equal(g.show, 1);
+  assert.equal(g.y, top);
+});

@@ -37,7 +37,7 @@ test("committed pack matches the city and passes the bake checks", () => {
   assert.equal(kept.length, pack.edges.length);
   for (const e of kept) {
     for (const h of e.hops) {
-      assert.ok(h.window >= (jumpHop(h.kind) ? BAKE.alleyWindow : h.kind === "drop" ? BAKE.dropWindow : BAKE.swingWindow), `${h.kind} window ${h.window}`);
+      assert.ok(h.window >= (jumpHop(h.kind) ? BAKE.alleyWindow : h.kind === "drop" ? BAKE.dropWindow : BAKE.swingWindowMin), `${h.kind} window ${h.window}`);
       if (!h.climbed) assert.ok(h.margin >= 1.5, `landing margin ${h.margin}`);
     }
     assert.ok(e.residual < 0.05, `snap ${e.residual}`);

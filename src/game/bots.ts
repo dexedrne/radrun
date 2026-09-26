@@ -52,6 +52,10 @@ export class Bot {
     }
     const jn = pack.junctions[j];
     this.tx = jn.x; this.ty = jn.y; this.tz = jn.z; this.tRoof = jn.roof;
+    // Round 11: with a head start he is already down his first run: the follower heads for where he is (his trail
+    // starts there).
+    const r = round.runner;
+    if (opts.kind === "follow" && r.mode === RM_EDGE) { this.tx = r.p.x; this.ty = r.p.y; this.tz = r.p.z; this.tRoof = r.roofId; }
   }
 
   /**
@@ -192,6 +196,11 @@ export const SWING = {
   releaseNoise: 0.6,
   releaseVy: -3,
   releaseTan: 0.4,
+  /**
+   * Round 11 (the timing lift): more than highAbove m above his predicted spot, a lane swing lets go as soon as it
+   * rises (before the sweet spot: no lift), so the bot comes down to him instead of chaining ever higher.
+   */
+  highAbove: 6,
   /** A ringed anchor is worth a web when its pivot is this far ahead along the lane (m). */
   anchorAhead: 3,
   /** He is "up on the roofs" when this far above you (m): swings let go level with him (see upTo). */
@@ -213,9 +222,22 @@ export const SWING = {
   /** Vertigo: no gain on him for stuckFor steps -> the other plan (lanes / straight at him) for laneFor steps. */
   stuckFor: 360,
   laneFor: 480,
+  /**
+   * Round 11 stall watchdog (every district): on the rope this slowly (m/s) for ropeStallFor steps -> let go (a dead
+   * pendulum under a tower never flings); still inside a stallBox m box for stallFor steps (and not closing in on him)
+   * -> let go of the rope and switch plans (lanes <-> straight at him) for laneFor steps.
+   */
+  ropeStall: 2.5,
+  ropeStallFor: 90,
+  stallBox: 30,
+  stallFor: 480,
+  /** (A stall only counts when d did not drop by this many m since it entered the box.) */
+  stallGain: 5,
+  /** ...and for escapeFor steps no web at all: it runs / drops straight at him (a fall respawns it near him). */
+  escapeFor: 240,
 };
 
-export type SwingStats = { swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number };
+export type SwingStats = { swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number; stalls: number };
 
 const sign = (v: number) => (v < 0 ? -1 : 1);
 const GAP_STREET = 0;
@@ -237,7 +259,7 @@ export class SwingBot {
   red = 0;
   relAhead: number = SWING.releaseAhead;
   readonly T: Vec3 = { x: 0, y: 0, z: 0 };
-  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0 };
+  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0 };
   private pose: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
   private wasRope = false;
   /** Steps left sliding along a wall side (tower in the way), and that side's axis. */
@@ -248,6 +270,14 @@ export class SwingBot {
   private since = 0;
   private laneFor = 0;
   private wasDirect = false;
+  /** Round 11 stall watchdog: steps on a near-still rope; the box centre and the steps spent inside it. */
+  private slowRope = 0;
+  private stallX = NaN;
+  private stallY = 0;
+  private stallZ = 0;
+  private stallN = 0;
+  private stallD = 0;
+  private escape = 0;
 
   /** Round 7: the city is a Vertigo skyline (big height steps). */
   readonly vertigo: boolean;
@@ -492,6 +522,36 @@ export class SwingBot {
       else if (this.since > SWING.stuckFor) { this.laneFor = this.wasDirect ? SWING.laneFor : -SWING.laneFor; this.bestD = d; this.since = 0; }
       if (this.laneFor < 0 || (this.laneFor === 0 && T.y < P.y - SWING.dropChase)) direct = true;
     }
+    // Round 11 stall watchdog (every district): stuck in one small box for stallFor steps -> the other plan for a
+    // while (and let go of the rope below).
+    let stall = false;
+    const ex = P.x - this.stallX, ey = P.y - this.stallY, ez = P.z - this.stallZ, eb = SWING.stallBox / 2;
+    if (d < SWING.engage || !(ex >= -eb && ex <= eb && ey >= -eb && ey <= eb && ez >= -eb && ez <= eb)) { this.stallX = P.x; this.stallY = P.y; this.stallZ = P.z; this.stallN = 0; this.stallD = d; }
+    else if (++this.stallN > SWING.stallFor && d > this.stallD - SWING.stallGain) {
+      stall = true;
+      this.stats.stalls++;
+      this.stallN = 0;
+      this.laneFor = this.wasDirect ? SWING.laneFor : -SWING.laneFor;
+      this.bestD = d; this.since = 0;
+      this.escape = SWING.escapeFor;
+    }
+    if (this.escape > 0) {
+      // Escape: no web, straight at him (jumping off the roof edge that way).
+      this.escape--;
+      this.lane = -1;
+      this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
+      this.setMove(inp, tx, tz);
+      if (b.grounded && this.edge(round, inp.moveX, inp.moveZ).dist < SWING.edgeAt) inp.jumpPressed = true;
+      this.held = false;
+      inp.webHeld = false;
+      inp.zipPressed = false;
+      inp.slidePressed = false;
+      return null;
+    }
+    if (!this.vertigo && this.laneFor !== 0) {
+      if (this.laneFor > 0) this.laneFor--; else this.laneFor++;
+      if (this.laneFor < 0) direct = true;
+    }
     if (!direct) { this.plan(P); if (this.lane < 0) direct = true; }
     this.wasDirect = direct;
     if (direct) {
@@ -533,7 +593,8 @@ export class SwingBot {
         const ha = al === 0 ? b.ropeP.x : b.ropeP.z;
         const past = (pa - ha) * this.dir;
         const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z);
-        held = !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && b.v.y >= SWING.releaseTan * hs && T.y <= P.y + SWING.climbTo));
+        const high = P.y > T.y + SWING.highAbove;
+        held = !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
       } else {
         this.setMove(inp, dx + lx, dz + lz);
         if (this.cool <= 0 && b.ledgeMode === 0) {
@@ -547,6 +608,12 @@ export class SwingBot {
         if (!held && this.vertigo) this.steerLand(round, inp);
       }
     }
+    // Round 11: a near-still pendulum (hanging under the anchor) or a stall: let go.
+    if (b.ropeSolid >= 0) {
+      const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
+      this.slowRope = sp < SWING.ropeStall ? this.slowRope + 1 : 0;
+      if (this.slowRope > SWING.ropeStallFor || stall) { held = false; this.slowRope = 0; }
+    } else this.slowRope = 0;
     // Round 9 (moves): he is up on the roofs and a ledge toward him is in zip reach - let go now, zip next step.
     const climb = this.moves && this.climbZip(round, inp);
     if (climb) held = false;

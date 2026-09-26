@@ -259,7 +259,7 @@ export class PlayGame {
     g.setBeat(round.phase === "countdown" ? "sit" : round.phase === "caught" ? "happy" : round.phase === "escaped" ? "sulk" : "");
     const b = round.player;
     if (round.events & RV_RESPAWN) g.place(b.p.x, b.p.y, b.p.z, b.roofId, -rig.sy, -rig.cy);
-    else g.step({ x: b.p.x, y: b.p.y, z: b.p.z, grounded: b.grounded, rope: b.ropeSolid >= 0 || b.wallMode > 0 || b.ledgeMode > 0, roofId: b.roofId });
+    else g.step({ x: b.p.x, y: b.p.y, z: b.p.z, grounded: b.grounded, rope: b.ropeSolid >= 0 || b.wallMode > 0 || b.ledgeMode > 0 || b.zipOn, roofId: b.roofId });
   }
 
   /** Once per rendered frame: look, fixed steps, interpolation. Returns steps run. */

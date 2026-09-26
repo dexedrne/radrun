@@ -21,11 +21,17 @@ const PLAYER_GROUPS: [string, Slider<keyof Tuning>[]][] = [
     ["ropeMin", 4, 15, 0.25], ["ropeMax", 20, 60, 0.5], ["anchorMinAbove", 2, 12, 0.25], ["anchorAhead", 0, 25, 0.5],
     ["anchorAheadPerSpeed", 0, 1.5, 0.05], ["anchorUp", 6, 35, 0.5], ["anchorVelBias", 0, 1.5, 0.05], ["anchorRimBonus", 0, 8, 0.25],
     ["anchorAlternate", 0, 8, 0.25], ["hysteresis", 0, 8, 0.25], ["aimCos", 0, 0.9, 0.01], ["aimCosFall", -1, 0.9, 0.01],
+    ["anchorArcPenalty", 0, 30, 0.5],
   ]],
   ["pendulum", [
     ["swingOut", 0, 20, 0.25], ["swingOutFree", 0, 1, 0.05], ["swingOutMin", 0, 10, 0.25], ["swingFloorClear", 2, 15, 0.25], ["swingReel", 0, 25, 0.5], ["swingGravity", 1, 2.5, 0.05],
     ["swingPump", 0, 15, 0.25], ["swingKeepSpeed", 1, 2.5, 0.05], ["swingReleaseCos", 0.2, 1, 0.01], ["swingRehook", 0, 0.5, 0.01],
     ["releaseBoost", 0, 8, 0.25], ["releaseUp", 0, 8, 0.25], ["autoReleaseBelow", 0, 6, 0.1], ["ropeSteer", 0, 15, 0.25], ["swingAlign", 0, 10, 0.25], ["losSteps", 1, 60, 1],
+  ]],
+  ["round 11: timing, web from a roof, walls", [
+    ["releaseSweet", 0, 15, 0.25], ["swingSweetCos", 0.6, 1, 0.005], ["autoReleaseUp", 0, 8, 0.25], ["swingReelUp", 0, 10, 0.25],
+    ["webLift", 0, 30, 0.5], ["webLiftClear", 0, 5, 0.1], ["swingAvoid", 0, 12, 0.25], ["swingAvoidT", 0, 2, 0.05], ["swingAvoidAir", 0, 2, 0.05], ["edgeAvoid", 0, 12, 0.25], ["edgeMargin", 0, 20, 0.5],
+    ["wallUpKick", 0, 12, 0.25], ["wallPushOff", 0, 8, 0.25],
   ]],
   ["wall run / wall jump", [
     ["wallRunReach", 0.2, 1.5, 0.05], ["wallRunMinSpeed", 2, 12, 0.25], ["wallRunRatio", 0.3, 3, 0.05], ["wallRunMinBelowTop", 0, 4, 0.1],
@@ -56,7 +62,7 @@ const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
   ["fov", 55, 75, 1], ["sensitivity", 0.0005, 0.006, 0.0001], ["armGround", 3, 10, 0.25], ["armAir", 3, 12, 0.25],
   ["armRope", 3, 14, 0.25], ["armWall", 3, 12, 0.25], ["armBlend", 0.5, 10, 0.5], ["shoulder", 0, 1.5, 0.05], ["ropeBias", 0, 0.6, 0.05],
   ["ropeBiasMax", 0, 8, 0.25], ["fovBoost", 0, 25, 1], ["fovSpeedLo", 0, 20, 0.5], ["fovSpeedHi", 10, 45, 0.5], ["fovEase", 0.5, 10, 0.5],
-  ["wallAway", 0, 3, 0.1], ["nearWallFor", 0, 2, 0.05],
+  ["wallAway", 0, 3, 0.1], ["nearWallFor", 0, 2, 0.05], ["armMin", 0, 6, 0.1], ["dodgeRate", 0.5, 20, 0.5], ["webClear", 0, 2, 0.05], ["wallCam", 0, 4, 0.1],
 ];
 const TOGGLES: (keyof CameraTuning)[] = ["invertY", "reducedMotion", "easyGrab"];
 
@@ -67,6 +73,7 @@ export type Tunable = { tuning: Tuning; camera: CameraTuning; difficulty: Diffic
 const GEORGE_SLIDERS: Slider<GeorgeTunable>[] = [
   ["maxTrail", 0.5, 8, 0.1], ["delay", 6, 200, 1], ["side", 0, 2, 0.05], ["idleBelow", 0, 1, 0.01], ["walkBelow", 0.1, 2, 0.01],
   ["trotBelow", 0.3, 6, 0.05], ["rateMin", 0.2, 1.5, 0.05], ["rateMax", 1, 5, 0.1], ["runRateMin", 0.2, 1.5, 0.05], ["runRateMax", 1, 8, 0.1],
+  ["airShow", 0, 3, 0.05], ["showRate", 1, 40, 0.5],
 ];
 
 const MECH_SLIDERS: Slider<keyof MechTuning>[] = [
@@ -76,7 +83,7 @@ const MECH_SLIDERS: Slider<keyof MechTuning>[] = [
 ];
 const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
   ["base", 0.6, 1.4, 0.01], ["gStar", 8, 60, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 2.5, 0.01], ["panicBudget", 0, 60, 0.5],
-  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 2.5, 0.01],
+  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 2.5, 0.01], ["lead", 0, 6, 0.1],
 ];
 
 export default function TunePanel({ game }: { game: Tunable }) {

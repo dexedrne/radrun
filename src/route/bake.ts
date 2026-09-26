@@ -22,6 +22,11 @@ export const BAKE = {
    */
   alleyWindow: 12,
   swingWindow: 36,
+  /**
+   * Round 11: a street hop with no swing option at swingWindow still swings when one bakes with at least this
+   * window (a zip's): the widest such option beats the zip across (he swings wherever a street swing works).
+   */
+  swingWindowMin: 12,
   alleySweep: 120,
   swingSweep: 360,
   keepPerJunction: 3,
@@ -192,6 +197,7 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
       // release step; the first option with a long enough window wins.
       const start = bot.clone();
       let best: { bot: EdgeBot; run: [number, number]; J: number } | null = null;
+      let narrow: { bot: EdgeBot; run: [number, number]; J: number } | null = null;
       for (let alt = 0; alt < link.swings.length && !best; alt++) {
         const b = alt === 0 ? bot : start.clone();
         b.params[h].alt = alt;
@@ -214,12 +220,16 @@ export function bakeEdge(model: CityModel, world: SimWorld, runner: Tuning, junc
         const w = run ? run[1] - run[0] + 1 : 0;
         window = Math.max(window, w);
         if (run && w >= BAKE.swingWindow) best = { bot: b, run, J };
+        else if (run && w >= BAKE.swingWindowMin && (!narrow || w > narrow.run[1] - narrow.run[0] + 1)) narrow = { bot: b, run, J };
       }
+      // Round 11: no option at the full window - the widest narrower one still beats a zip across.
+      if (!best && narrow) best = narrow;
       if (best) {
         if (best.bot !== bot) { bot = best.bot; bot.onStep = onStep; }
         const { run, J } = best;
         window = run[1] - run[0] + 1;
-        const off = Math.min(run[1] - run[0], Math.max(24, Math.floor((run[1] - run[0] + 1) / 4)));
+        // (A narrow window (round 11) releases in its middle.)
+        const off = window >= BAKE.swingWindow ? Math.min(run[1] - run[0], Math.max(24, Math.floor((run[1] - run[0] + 1) / 4))) : (run[1] - run[0]) >> 1;
         param = J + 2 + run[0] + off;
         bot.params[h].release = param;
       } else {

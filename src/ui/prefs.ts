@@ -185,9 +185,11 @@ export function readChallenge(search: string): Challenge {
  * the Vertigo district and the sky anchors over the Towers (older Towers ghosts drift and show the
  * "made on an older build" note). v=4 (round 9): the rebuilt 40-230 m cities, building-anchored swings,
  * parkour and ghost format 3 (older links open with the "made on an older build" note; their ghosts are not
- * raced). Bests and kept ghosts from before v4 count as the old city's.
+ * raced). Bests and kept ghosts from before v4 count as the old city's. v=5 (round 11): the swing's timing lift,
+ * web-from-a-roof lift, wall / city-edge avoidance, the thief's re-baked swing routes and Chill's head start (the
+ * same runs replay differently); bests from before v5 are shown as the older build's.
  */
-export const LINK_VERSION = 4;
+export const LINK_VERSION = 5;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
 const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");

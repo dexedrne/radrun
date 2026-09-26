@@ -41,7 +41,7 @@ function Hud({ game }: { game: Sandbox }) {
       </div>
       {hints && (
         <div style={{ ...panel, left: 8, bottom: 8, opacity: 0.85 }}>
-          mouse look · WASD run · Space jump / wall kick · LMB (hold) web the building ahead, let go at the bottom to fling · run along a wall to wall-run · C slide · R restart · Esc pause
+          mouse look · WASD run · Space jump / wall kick · LMB (hold) web the building ahead, let go on the way up to fling · run along a wall to wall-run · C slide · R restart · Esc pause
           {game.camera.easyGrab ? " · easy grab: hold Space to swing" : ""}
         </div>
       )}

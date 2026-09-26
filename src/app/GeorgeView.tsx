@@ -166,7 +166,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     const on = game.mode === "round";
     const node = glb ? glb.root : cat.root;
     node.visible = on;
-    if (shadow.current) shadow.current.visible = on && !lowQuality();
+    if (shadow.current) shadow.current.visible = on && !lowQuality() && g.show > 0.02;
     // The campaign hat: read once per round start (the campaign screen may have changed it).
     if (on && !tmp.wasOn) {
       tmp.hat = loadProgress().hat;
@@ -194,8 +194,9 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     // Mid-swing he leaps along your arc ~0.5 s behind you, i.e. right past the camera: hide him there.
     const c = state.camera.getWorldPosition(tmp.c); // world: the camera sits under the prefab node
     const cd = (c.x - x) * (c.x - x) + (c.y - y - 0.3) * (c.y - y - 0.3) + (c.z - z) * (c.z - z);
-    node.visible = cd > 3.2 * 3.2;
-    node.scale.setScalar(GEORGE_RENDER.scale);
+    // Round 11: tucked away while you swing / wall-run / fall (the follow model's show), popping back in on the ground.
+    node.visible = cd > 3.2 * 3.2 && g.show > 0.02;
+    node.scale.setScalar(GEORGE_RENDER.scale * g.show);
     if (glb) {
       if (g.clip !== tmp.clip) {
         const from = tmp.clip;
@@ -213,7 +214,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
       const rest = glb ? glbRest : catRest;
       if (head && rest) {
         node.updateMatrixWorld(true);
-        placeHats(hats, head, rest, GEORGE_RENDER.scale);
+        placeHats(hats, head, rest, GEORGE_RENDER.scale * g.show);
         hats.visible = true;
       }
     }
@@ -221,6 +222,7 @@ export function GeorgeView({ game }: { game: PlayGame }) {
     if (sh) {
       const gy = game.index.groundBelow(x, z, y + 0.05);
       sh.position.set(x, gy + 0.03, z);
+      sh.scale.setScalar(Math.max(0.01, g.show));
     }
   }, FRAME.actors);
   return (

@@ -80,7 +80,8 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     look: DOWNTOWN_LOOK,
     // Round 10: the cleaner swing (swing heading, open-air pivots, the fall cone) caught him too early: a faster
     // runner (Normal 1.2x sprinting to 1.7x, Degen 1.3x) and a 4 m Degen Yoink (npm run balance -- --only swing).
-    chase: { add: { normal: { base: 0.2, mMax: 0.2, airMax: 0.2 }, degen: { base: 0.2, yoinkRange: -0.5 } } },
+    // Round 11 (the table's 3 s Degen head start, the bot that drops back down to him): Degen 1.4x with a 3.5 m Yoink.
+    chase: { add: { normal: { base: 0.2, mMax: 0.2, airMax: 0.2 }, degen: { base: 0.3, yoinkRange: -1 } } },
   },
   market: {
     id: "market",
@@ -100,12 +101,13 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // Round 6: the dense blocks squeezed the spawn, and his twisty runs let a swinger cut corners: a longer
     // head start, and he sprints earlier and harder here. Round 9 (the zipping swing bot, npm run balance --
     // --map market): a little faster on Normal; the Degen / Chill deltas keep round 6's runner against the
-    // round 9 table (degen base 1.1, Yoink 4.5; chill mMax 1.25).
+    // round 9 table (degen base 1.1, Yoink 4.5; chill mMax 1.25). Round 11 (his swing routes, the bot that drops
+    // back down to him): Normal 1.3x (the bot caught him in ~20 s at 1.15x).
     chase: {
       spawnMin: 26, spawnOther: 0,
       add: {
         chill: { gStar: 20, base: 0.1, mMax: 0.35, airMax: 0.35 },
-        normal: { gStar: 20, base: 0.15, mMax: 0.5, airMax: 0.5 },
+        normal: { gStar: 20, base: 0.3, mMax: 0.5, airMax: 0.5 },
         degen: { gStar: 20, base: 0.2, mMax: 0.5, airMax: 0.5, yoinkRange: -1, panicBudget: 10 },
       },
     },
@@ -132,13 +134,14 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // 3 m Degen Yoink. Round 9: Degen runs faster (1.3x) and gasses out after 5 s of sprint; the zipping
     // swing bot still catches him early here (median ~35 s, under the 40 s band; a longer head start only
     // made it earlier). Round 10 (his routes swing instead of zipping): Normal 0.9x sprinting to 1.7x; Degen
-    // 1.4x with the table's 4.5 m Yoink and a 15 s panic budget.
+    // 1.4x with the table's 4.5 m Yoink and a 15 s panic budget. Round 11 (the bot that drops back down to him):
+    // Degen 1.6x (it caught him in ~31 s at 1.4x).
     chase: {
       spawnMin: 26, spawnOther: 0,
       add: {
         chill: { base: -0.05, yoinkRange: 0.5 },
         normal: { gStar: 20, base: -0.1, mMax: 0.2, airMax: 0.2 },
-        degen: { base: 0.3, mMax: 0.4, airMax: 0.4, panicBudget: -5 },
+        degen: { base: 0.5, mMax: 0.4, airMax: 0.4, panicBudget: -5 },
       },
     },
     look: {
@@ -162,12 +165,13 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
     // Round 9 (the zipping swing bot on the 66-124 m canyons, npm run balance -- --map towers): a slower
     // runner than Downtown's (Degen 0.9x with a 5 m Yoink and a 10 s panic budget, so he gasses out and the
     // long chases end in a catch). Round 10 (the cleaner swing, his swing-first routes): Normal 0.85x,
-    // sprinting to 1.6x, the classic 5 m Yoink; Degen 1.15x with the table's 4.5 m Yoink.
+    // sprinting to 1.6x, the classic 5 m Yoink; Degen 1.15x with the table's 4.5 m Yoink. Round 11 (the bot that
+    // drops back down to him): Degen 1.25x (caught in ~38 s at 1.15x).
     chase: {
       add: {
         chill: { base: -0.1, mMax: -0.15, airMax: -0.15, yoinkRange: 0.5 },
         normal: { base: -0.15, mMax: 0.1, airMax: 0.1 },
-        degen: { base: 0.05, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
+        degen: { base: 0.15, gStar: 10, mMax: 0.25, airMax: 0.25, panicBudget: -10 },
       },
     },
     look: {

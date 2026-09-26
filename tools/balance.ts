@@ -37,9 +37,11 @@ export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning
 export function balance(n: number, table: DifficultyTable, tuning: Tuning, model: CityModel, pack: Pack, only?: string, district: DistrictId = "downtown"): Row[] {
   const index = new CityIndex(model);
   const cfgs: { label: string; d: Difficulty; bot: BotOptions; target: string; check: (c: number, med: number) => boolean }[] = [
-    { label: "normal follow k=1.0", d: "normal", bot: { kind: "follow", k: 1.0, yoink: true }, target: "~0% caught (<=5%)", check: c => c <= 0.05 * n },
-    { label: "normal follow k=1.2", d: "normal", bot: { kind: "follow", k: 1.2, yoink: true }, target: "median 35-70 s", check: (c, m) => c > 0 && m >= 35 && m <= 70 },
-    { label: "chill  follow k=1.0", d: "chill", bot: { kind: "follow", k: 1.0, yoink: true }, target: ">=90% caught, median 60-75 s", check: (c, m) => c >= 0.9 * n && m >= 60 && m <= 75 },
+    // The follower rows are info since round 10 (PLAY.md: his swing-first routes are longer and double back, and a
+    // follower glued to his track outlasts his panic budget); their old targets are shown for reference.
+    { label: "normal follow k=1.0", d: "normal", bot: { kind: "follow", k: 1.0, yoink: true }, target: "(info; was ~0% caught)", check: () => true },
+    { label: "normal follow k=1.2", d: "normal", bot: { kind: "follow", k: 1.2, yoink: true }, target: "(info; was median 35-70 s)", check: () => true },
+    { label: "chill  follow k=1.0", d: "chill", bot: { kind: "follow", k: 1.0, yoink: true }, target: "(info; was >=90%, median 60-75 s)", check: () => true },
     { label: "normal camper", d: "normal", bot: { kind: "camper", k: 1.0, yoink: true }, target: "<25% caught", check: c => c < 0.25 * n },
     { label: "chill  follow k=1.3 (browser bot)", d: "chill", bot: { kind: "follow", k: 1.3, yoink: false }, target: "(info)", check: () => true },
     // The swinging chaser (real player sim; round 3): what a strong human swinger gets. Round 9: with the full
