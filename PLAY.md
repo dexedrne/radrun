@@ -30,7 +30,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
 | M | mute / unmute (same as the speaker button on the title and the HUD) |
-| Esc | pause (Settings: quality, sensitivity, music / sound-effects / voice volume, mute, FOV, invert Y, reduced motion, easy grab) |
+| Esc | pause (Settings: quality, sensitivity, music / sound-effects / voice volume, mute, FOV, invert Y, reduced motion, easy grab; the controller settings once a pad has been used) |
+| (a gamepad) | everything, menus included: see **Controller** below |
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
@@ -53,6 +54,55 @@ Touch helps your aim: the cone widens to 85 degrees (desktop 70), anchor picking
 are going, and the Yoink range is 1 m longer. The first tap goes fullscreen (and locks landscape where the
 browser allows it). There is no pointer lock, and leaving the tab pauses. On phones the canvas renders at up
 to 1.25x the CSS pixel size (1.5x on tablets and desktop). Touch values are `TOUCH` in `src/sim/tuning.ts`.
+
+### Controller (round 14)
+
+Any pad the browser reports with the standard mapping works: DualSense / DualShock (USB or Bluetooth), Xbox pads,
+most others. Plug it in (or pair it) and press a button; it works on radbro.fun too (the frame allows gamepads).
+The **last device you used decides the prompts**: a pad switches every hint, tip, controls list and menu to
+**PlayStation glyphs** (Cross, Circle, Square, Triangle, L1 / R1 / L2 / R2, Options, Create) when its name looks like a
+Sony pad, **Xbox glyphs** (A, B, X, Y, LB / RB / LT / RT, Menu, View) otherwise; a key press, a click or a real mouse
+move switches back to the keyboard prompts. More than one pad: the one pressed last plays.
+
+| PlayStation | Xbox | |
+|---|---|---|
+| left stick | left stick | run (a light push = a jog: the stick is analog) |
+| right stick | right stick | look / aim (held at the rim it speeds up for a quick about-face) |
+| R2 (hold) | RT (hold) | **swing**; let go near the top = perfect release; on the red ring = **YOINK** |
+| Cross | A | jump; again in the air = double jump; on a wall = wall kick; end of a zip = zip pop; right at a wall slam = rebound |
+| Circle | B | tap = slide, hold = **charge a leap**, in the air = dive (the C key) |
+| R1 or L2 | RB or LT | **zip where you look**; on the red dashed ring = the **yank** (E / Shift) |
+| L1 or R3 | LB or RS click | ease the camera toward him (Q) |
+| Triangle (hold 1 s) | Y (hold 1 s) | retry mid-round (practice: back to the start roof) |
+| Options | Menu | pause |
+| Create | View | mute |
+
+Easy grab (pause -> Settings) works on the pad too: Cross / A is the Space key (tap = jump, hold = swing).
+
+**Menus** (title, campaign, pause and its settings, results, loading errors, SPIDER-TAG menu, results and pause, the
+online lobby): a yellow ring shows the focus; the d-pad or the left stick moves it to the nearest control that way,
+**Cross / A** presses it, **Circle / B** is back (pause: resume; results: menu; campaign, SPIDER-TAG and online:
+back), **Options / Menu** resumes from the pause and starts a campaign level, **Triangle / Y** on the results =
+retry / rematch. On a slider, left / right changes it. The first press after using the keyboard or mouse only shows
+the ring (so it never starts a round by surprise). A legend in the bottom-right corner shows the menu buttons.
+The online room code: Cross on the code box opens an on-screen picker (Cross types the ringed character, Square
+deletes, Circle cancels, Options = done). A pad never captures the mouse (a pad press can't grant the pointer lock
+and needs none); Esc still pauses, and a click on the canvas captures the mouse again.
+
+**Settings** (pause -> Settings -> controller, shown once a pad has been used; remembered in the browser with the
+other settings): stick look speed (0.3-2.5x), stick dead zone (4-35 %, radial: the direction is kept), invert Y for
+the right stick (separate from the mouse's), vibration on / off (dual-rumble where the browser supports it: light on
+webs, zips, yanks and hard landings, firmer on bonks, falls and catches; in SPIDER-TAG on tags). The stick shaping
+is `PAD` in `src/input/gamepad.ts`; the button layout is its `LAYOUT` table (the prompts and the controls lists are
+built from it).
+
+**Replays and online stay the same:** the pad writes the same input as the keyboard, mouse and touch (the left stick
+is the move a touch stick gives, the right stick turns the same camera), so it records the same quantised input word:
+ghost format 4, share links v6, runner packs v3 and the SPIDER-TAG online inputs did not change, and a run made on a
+pad replays exactly like any other. A full-tilt stick is exactly full speed in every direction (same as W / W+D).
+
+**Sound:** browsers only start audio after a click or a key press in the page; a pad press does not count. Playing
+with only a pad, the menus say so ("sound starts after one click or key press"); click once anywhere.
 
 **iPhone: play it from the Home Screen.** Safari on iPhone can't go fullscreen from a web page, and in
 landscape its toolbars take a big slice off the top. Two fixes:

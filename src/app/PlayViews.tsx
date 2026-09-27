@@ -34,6 +34,7 @@ import { handWorld, rigs } from "./ActorsView.tsx";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
 import { hints } from "../ui/hints.ts";
+import { pollPads, rumble } from "../input/padRuntime.ts";
 import { MECH } from "../sim/tuning.ts";
 import { LEVELS, evaluate, loadProgress, recordLevel, saveProgress, starCount } from "../game/campaign.ts";
 
@@ -164,6 +165,8 @@ export function PlayDriver({ game }: { game: PlayGame }) {
   const tickEv = useRef(0);
   const autoQ = useRef(new AutoQuality());
   useFrame((_, delta) => {
+    // The pad first, so a press this frame reaches this frame's steps.
+    pollPads();
     game.frame(delta);
     frames.current++;
     fps.current = fps.current * 0.95 + (1 / Math.max(delta, 1e-3)) * 0.05;
@@ -201,17 +204,17 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       // He says it right after GO (the announcer has the countdown), not on every retry; the bubble with it.
       if (sayCountdown.current) runnerLine(who, "countdown", S.countdownBubble, { delay: 0.55, maxWait: 0.6 });
     }
-    if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); voice.announce("rekt"); }
+    if (ev & RV_FALL) { showBanner(S.fall); pushFeed(S.fall); useUi.setState({ fade: performance.now() }); sfx.fall(); voice.announce("rekt"); rumble.hit(); }
     const b = r.player;
     const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
     if (r.phase === "chase") {
       if (pe & EV_DJUMP) sfx.djump();
       else if (pe & EV_JUMP) sfx.jump();
-      if (pe & EV_ATTACH) sfx.thwip();
-      if (pe & EV_ZIP) sfx.zip();
+      if (pe & EV_ATTACH) { sfx.thwip(); rumble.web(); }
+      if (pe & EV_ZIP) { sfx.zip(); rumble.zip(); }
       if (pe & (EV_RELEASE | EV_ZIP_END)) sfx.fling(sp);
-      if ((pe & EV_LAND) && !(ev & RV_FALL)) sfx.land(-b.landVy);
-      if (pe & EV_BONK) sfx.bonk();
+      if ((pe & EV_LAND) && !(ev & RV_FALL)) { sfx.land(-b.landVy); rumble.land(-b.landVy); }
+      if (pe & EV_BONK) { sfx.bonk(); rumble.bonk(); }
       if (pe & EV_SNAP) sfx.snap();
       if (pe & EV_WALLRUN) sfx.wallRun();
       if (pe & EV_WALLJUMP) sfx.wallJump();
@@ -225,7 +228,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       if (pe & EV_CHARGE_START) sfx.chargeWhine();
       if (pe & EV_CHARGE) sfx.launch(b.tech > audio.current.tech);
       if (pe & EV_PERFECT) sfx.perfect();
-      if (pe & EV_YANK) sfx.yank();
+      if (pe & EV_YANK) { sfx.yank(); rumble.zip(); }
       if (pe & EV_REBOUND) sfx.rebound();
       if (pe & EV_DIVE) sfx.dive();
       audio.current.tech = b.tech;
@@ -266,6 +269,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
         sfx.meow(true);
       }
       else {
+        rumble.big();
         showBanner(yoink ? `${S.yoink}!` : "TAGGED!");
         showBubble(LINES.caught[who]);
         if (ev & RV_YOINK) sfx.yoink();

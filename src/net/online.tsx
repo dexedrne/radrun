@@ -19,7 +19,7 @@ import { BUILD_ID } from "./build.ts";
 import { OnlineSession } from "./session.ts";
 import { SELFTEST_HASH, selfTestHash } from "./selftest.ts";
 import { Transport, createRoom, relayBase } from "./transport.ts";
-import { NET_VERSION, cleanName, isRoomCode, type Compat, type PlayerInfo, type RoomConfig, type ServerMsg, type StartMsg } from "./wire.ts";
+import { CODE_ALPHABET, CODE_LEN, NET_VERSION, cleanName, isRoomCode, type Compat, type PlayerInfo, type RoomConfig, type ServerMsg, type StartMsg } from "./wire.ts";
 
 const DEV = import.meta.env.MODE !== "production";
 const params = new URLSearchParams(location.search);
@@ -272,11 +272,11 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         {base && phase === "home" && (
           <>
             <div style={{ fontSize: 13, opacity: 0.85, margin: "8px 0 14px" }}>1v1 with a friend: one of you creates a room and sends the code or the link.</div>
-            <button style={{ ...btn(true), fontSize: 18, padding: "10px 30px" }} onClick={() => void connect(null)} data-testid="online-create">CREATE ROOM</button>
+            <button style={{ ...btn(true), fontSize: 18, padding: "10px 30px" }} onClick={() => void connect(null)} data-testid="online-create" data-pad-default="">CREATE ROOM</button>
             <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}>
-              <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))} placeholder="CODE" maxLength={5}
+              <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))} placeholder="CODE" maxLength={CODE_LEN} data-pad-chars={CODE_ALPHABET}
                 style={{ width: 110, font: "700 20px ui-monospace, monospace", letterSpacing: 4, textAlign: "center", padding: "8px", borderRadius: 8, border: "2px solid #9fe6ff", background: "rgba(0,0,0,0.3)", color: "#fff" }} data-testid="online-code" />
-              <button style={{ ...btn(false), opacity: isRoomCode(joinCode) ? 1 : 0.5 }} disabled={!isRoomCode(joinCode)} onClick={() => { setCode(joinCode); void connect(joinCode); }} data-testid="online-join">JOIN</button>
+              <button style={{ ...btn(false), opacity: isRoomCode(joinCode) ? 1 : 0.5 }} disabled={!isRoomCode(joinCode)} onClick={() => { setCode(joinCode); void connect(joinCode); }} data-testid="online-join" data-pad-btn="START">JOIN</button>
             </div>
           </>
         )}
@@ -315,13 +315,13 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
               ))}
             </div>
             {err && <div style={{ marginTop: 8, color: "#ffd23f", fontSize: 12 }}>{err}</div>}
-            <button style={{ ...btn(!ready), marginTop: 14, fontSize: 18, padding: "10px 34px", opacity: players.length === 2 && !wrongDistrict ? 1 : 0.5 }} disabled={players.length < 2 || !!wrongDistrict} onClick={toggleReady} data-testid="online-ready">
+            <button style={{ ...btn(!ready), marginTop: 14, fontSize: 18, padding: "10px 34px", opacity: players.length === 2 && !wrongDistrict ? 1 : 0.5 }} disabled={players.length < 2 || !!wrongDistrict} onClick={toggleReady} data-testid="online-ready" data-pad-default="" data-pad-btn="START">
               {ready ? "NOT READY" : "READY"}
             </button>
           </>
         )}
         <div style={{ marginTop: 16 }}>
-          <button style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} onClick={exit} data-testid="online-back">← back</button>
+          <button style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} onClick={exit} data-testid="online-back" data-pad-btn="EAST">← back</button>
         </div>
       </div>
     </div>

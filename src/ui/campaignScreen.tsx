@@ -53,8 +53,8 @@ export function CampaignScreen(props: { onStart: (n: number) => void; onBack: ()
         </div>
         <LevelCard level={level} progress={progress} compact={compact} />
         <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap", marginTop: compact ? 6 : 12 }}>
-          <button onClick={props.onBack} style={btn(false)} data-testid="campaign-back">Back</button>
-          <button onClick={() => open && props.onStart(level.n)} disabled={!open || !props.ready} data-testid="campaign-start"
+          <button onClick={props.onBack} style={btn(false)} data-testid="campaign-back" data-pad-btn="EAST">Back</button>
+          <button onClick={() => open && props.onStart(level.n)} disabled={!open || !props.ready} data-testid="campaign-start" data-pad-default="" data-pad-btn="START"
             style={{ ...btn(true), fontSize: compact ? 15 : 18, padding: compact ? "8px 22px" : "12px 30px", opacity: open && props.ready ? 1 : 0.5 }}>
             {open ? `START ${level.n}. ${level.name.toUpperCase()}` : `catch him in level ${level.n - 1} first`}
           </button>

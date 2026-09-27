@@ -181,7 +181,9 @@ export class TagGame {
     this.slotEvents.fill(0);
     const m = this.match;
     if (this.mode === "menu" || !m) { this.menuT += delta; return 0; }
-    if (!this.paused) rigLook(this.rig, dx, dy, this.camera.sensitivity, this.camera.invertY);
+    // The pad's right stick (rad, already scaled): the same camera, so the same yaw / pitch in the input word.
+    const [px, py] = this.input.takePadLook();
+    if (!this.paused) { rigLook(this.rig, dx, dy, this.camera.sensitivity, this.camera.invertY); if (px !== 0 || py !== 0) rigLook(this.rig, px, py, 1, false); }
     if (this.paused && !this.link) return 0;
     this.matchT += delta;
     if (m.over) this.overT += delta;

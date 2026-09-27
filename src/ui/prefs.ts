@@ -2,6 +2,7 @@
 import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
 import { PAGE_DISTRICT } from "../app/district.ts";
+import { PAD_DEAD, PAD_DEFAULTS, PAD_SENS, type PadSettings } from "../input/gamepad.ts";
 
 const KEY = "rugrun.v1";
 
@@ -34,6 +35,8 @@ export type Quality = "low" | "high";
 export type Settings = {
   sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; quality: Quality;
   music: number; sfx: number; voice: number; muted: boolean; qualityChosen: boolean; qualityAuto: boolean;
+  /** Round 14 controller: right-stick look speed, invert Y (the pad's own), stick dead zone, rumble. */
+  padSens: number; padInvertY: boolean; padDead: number; padRumble: boolean;
 };
 
 function load(): Stored {
@@ -68,8 +71,17 @@ export function loadSettings(cam: CameraTuning): Settings {
     muted: s.muted === true,
     qualityChosen: s.qualityChosen === true,
     qualityAuto: s.qualityAuto === true,
+    padSens: range(s.padSens, PAD_SENS.min, PAD_SENS.max, PAD_DEFAULTS.sens),
+    padInvertY: s.padInvertY === true,
+    padDead: range(s.padDead, PAD_DEAD.min, PAD_DEAD.max, PAD_DEFAULTS.dead),
+    padRumble: s.padRumble !== false,
   };
 }
+
+const range = (v: unknown, lo: number, hi: number, d: number): number => (typeof v === "number" && isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
+
+/** The pad module's settings from the stored ones. */
+export const padSettingsOf = (s: Settings): PadSettings => ({ sens: s.padSens, invertY: s.padInvertY, dead: s.padDead, rumble: s.padRumble });
 
 /** The stored quality (read before the canvas exists). Default High; on touch devices High already
  * caps the pixel ratio (1.25 on phones, 1.5 on tablets; see input/touch.ts canvasDpr). */

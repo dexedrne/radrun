@@ -6,6 +6,7 @@
 //   in seconds, or the stars a campaign level's run earned), "gameover" when he escapes.
 // Framed, the first click also focuses the frame (so the keys reach the game) and unlocks the audio.
 // Opened on its own (not framed), none of this does anything.
+import { RADRUN_PAD_GUIDE } from "../ui/padPrompts.ts";
 
 export type GameInfo = {
   game: string;
@@ -45,6 +46,8 @@ export const RADRUN: GameInfo = {
     "Left button on the red ring: YOINK",
     "R: retry",
     "Esc: pause",
+    // Round 14: a gamepad (DualSense / Xbox; the menus work on it too).
+    ...RADRUN_PAD_GUIDE,
   ],
   viewport: { width: 1280, height: 720 },
 };

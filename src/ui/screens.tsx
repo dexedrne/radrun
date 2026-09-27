@@ -14,6 +14,9 @@ import { MUTATORS } from "../game/mutators.ts";
 import { CampaignHud, CampaignResult } from "./campaignScreen.tsx";
 import { HomeScreenTip } from "./iphoneFullscreen.tsx";
 import { safe, safePad } from "./safe.ts";
+import { PadText } from "./pad.tsx";
+import { radrunPadControls, radrunPadHud } from "./padPrompts.ts";
+import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -120,6 +123,7 @@ export function Title(props: {
   const availMut = unlockedMutators(progress) | props.freeMut;
   const stars = starCount(progress);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
   const { compact, tiny, narrow, w, h } = useViewport();
   // A short desktop window (a 1280x720 frame on radbro.fun, a 768 px laptop): all five Radbro cards in one
   // row, so PLAY sits above the fold instead of under a second row of cards.
@@ -133,7 +137,7 @@ export function Title(props: {
   const img = tiny ? 50 : compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
   const titlePx = tiny ? 26 : compact ? 32 : narrow ? 40 : 72;
   const playBtn = (
-    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: compact ? "8px 28px" : small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play">
+    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: compact ? "8px 28px" : small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play" data-pad-default="">
       {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
     </button>
   );
@@ -247,7 +251,9 @@ export function Title(props: {
           {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{tagBtn}{bestBtn}</div>}
         </div>
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
-          {touch ? (
+          {pad ? (
+            <><b>controller</b>{radrunPadControls().map(([k, d]) => <span key={k + d}> · <PadText text={k} /> {d}</span>)}</>
+          ) : touch ? (
             <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = faster ·
             <b>ZIP</b> = zip where you look (red dashed ring on him = <b>yank</b>) · JUMP (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
             <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = dive · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
@@ -285,8 +291,8 @@ export function Loading({ onRetry, onMenu }: { onRetry: () => void; onMenu: () =
           <div style={{ marginTop: 10, fontSize: 12 }}>
             <div style={{ color: "#ff8a8a", wordBreak: "break-all" }}>failed to load {load.error}</div>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8 }}>
-              <button style={btn(true)} onClick={onRetry}>Retry</button>
-              <button style={btn()} onClick={onMenu}>Menu</button>
+              <button style={btn(true)} onClick={onRetry} data-pad-default="">Retry</button>
+              <button style={btn()} onClick={onMenu} data-pad-btn="EAST">Menu</button>
             </div>
           </div>
         )}
@@ -309,6 +315,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const touch = useUi(s => s.touch);
   const ghost = useUi(s => s.ghost);
   const tip = useUi(s => s.hint);
+  const pad = useUi(s => s.pad);
   const { narrow } = useViewport();
   useEffect(() => {
     const t = setInterval(() => setNow(performance.now()), 100);
@@ -429,7 +436,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         {/* touch: the first-run TIP pill covers the same ground, and both would stack on a short screen */}
         {hints && !(touch && tip) && (
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
-            {practice
+            {pad ? <PadText text={radrunPadHud(practice, easyGrab)} /> : practice
               ? (touch
                 ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · SLIDE = slide · II = menu"
                 : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · C slide · E/Shift zip · hold R = back to start · Esc = menu`)
@@ -455,6 +462,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
 export function HintPill() {
   const hint = useUi(s => s.hint);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
   const { compact } = useViewport();
   if (!hint) return null;
   // Touch: above the character (the stick and the WEB / JUMP buttons own the bottom of the screen).
@@ -462,7 +470,7 @@ export function HintPill() {
     <div style={{ position: "fixed", zIndex: 12, pointerEvents: "none", left: "50%", top: touch ? "24%" : compact ? "70%" : "74%", transform: "translateX(-50%)", maxWidth: touch ? "min(620px, 64vw)" : "min(620px, 86vw)", width: "max-content" }}>
       <div key={hint.id} data-testid={`hint-${hint.id}`}
         style={{ background: "rgba(14,16,30,0.86)", borderLeft: `4px solid ${hint.id === "yoink" ? "#ff3355" : "#ffd23f"}`, padding: compact ? "6px 12px" : "9px 16px", borderRadius: 8, font: `700 ${compact ? 13 : 15}px ui-monospace, monospace`, boxShadow: "0 4px 18px rgba(0,0,0,0.4)", textAlign: "center" }}>
-        <span style={{ color: hint.id === "yoink" ? "#ff3355" : "#ffd23f", marginRight: 8, letterSpacing: 2 }}>TIP</span>{hint.text}
+        <span style={{ color: hint.id === "yoink" ? "#ff3355" : "#ffd23f", marginRight: 8, letterSpacing: 2 }}>TIP</span>{pad && hint.padText ? <PadText text={hint.padText} /> : hint.text}
       </div>
     </div>
   );
@@ -474,16 +482,18 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
   const [open, setOpen] = useState(false);
   const [tipsReset, setTipsReset] = useState(false);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
+  const padSeen = useUi(s => s.padSeen);
   const s = props.settings;
   const set = (patch: Partial<Settings>) => props.setSettings({ ...s, ...patch });
   return (
-    <div style={{ ...scroller, zIndex: 30, background: "rgba(8,10,20,0.55)" }}>
+    <div style={{ ...scroller, zIndex: 30, background: "rgba(8,10,20,0.55)" }} data-pad-modal="">
       <div style={{ ...panel, margin: "auto", minWidth: "min(300px, 86vw)", textAlign: "center", boxSizing: "border-box" }} data-testid="pause">
         <div style={{ font: "900 28px ui-monospace, monospace", letterSpacing: 4 }}>{props.practice ? S.practice : S.paused}</div>
         <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
-          <button style={btn(true)} onClick={props.onResume}>Resume</button>
+          <button style={btn(true)} onClick={props.onResume} data-testid="resume" data-pad-default="" data-pad-btn="START EAST">{pad ? <PadText text="Resume {START}" /> : "Resume"}</button>
           <button style={btn()} onClick={props.onRestart}>{props.practice ? "Back to start" : "Restart"}</button>
-          <button style={btn()} onClick={() => setOpen(!open)}>Settings</button>
+          <button style={btn()} onClick={() => setOpen(!open)} data-testid="settings">Settings</button>
           <button style={btn()} onClick={props.onQuit} data-testid="quit">{props.practice ? "Back to title" : "Quit"}</button>
         </div>
         {open && (
@@ -506,7 +516,16 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             <label>FOV {s.fov}°<input type="range" min={55} max={75} step={1} value={s.fov} onChange={e => set({ fov: Number(e.target.value) })} style={{ width: "100%" }} /></label>
             <label><input type="checkbox" checked={s.invertY} onChange={e => set({ invertY: e.target.checked })} /> invert Y</label>
             <label><input type="checkbox" checked={s.reducedMotion} onChange={e => set({ reducedMotion: e.target.checked })} /> reduced motion</label>
-            {!touch && <label><input type="checkbox" checked={s.easyGrab} onChange={e => set({ easyGrab: e.target.checked })} /> easy grab (tap Space = jump, hold Space = swing)</label>}
+            {!touch && <label><input type="checkbox" checked={s.easyGrab} onChange={e => set({ easyGrab: e.target.checked })} /> easy grab ({pad ? <PadText text="tap {SOUTH} = jump, hold {SOUTH} = swing" /> : "tap Space = jump, hold Space = swing"})</label>}
+            {(padSeen || pad) && (
+              <div style={{ display: "grid", gap: 6, marginTop: 4, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.18)" }} data-testid="pad-settings">
+                <b style={{ fontSize: 12 }}>controller</b>
+                <label>stick look speed {s.padSens.toFixed(2)}x<input type="range" min={PAD_SENS.min} max={PAD_SENS.max} step={0.05} value={s.padSens} onChange={e => set({ padSens: Number(e.target.value) })} style={{ width: "100%" }} data-testid="pad-sens" /></label>
+                <label>stick dead zone {Math.round(s.padDead * 100)}%<input type="range" min={PAD_DEAD.min} max={PAD_DEAD.max} step={0.01} value={s.padDead} onChange={e => set({ padDead: Number(e.target.value) })} style={{ width: "100%" }} data-testid="pad-dead" /></label>
+                <label><input type="checkbox" checked={s.padInvertY} onChange={e => set({ padInvertY: e.target.checked })} data-testid="pad-invert" /> invert Y (right stick)</label>
+                <label><input type="checkbox" checked={s.padRumble} onChange={e => set({ padRumble: e.target.checked })} data-testid="pad-rumble" /> vibration</label>
+              </div>
+            )}
             <button style={{ ...btn(false), padding: "5px 12px", fontSize: 12 }} data-testid="tips-reset" onClick={() => { hints.reset(); setTipsReset(true); }}>
               {tipsReset ? "tips will show again" : "show tips again"}
             </button>
@@ -522,6 +541,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
 export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; onNext?: (n: number) => void; onLevels?: () => void }) {
   const r = useUi(s => s.results);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
   const { compact } = useViewport();
   const [copied, setCopied] = useState("");
   if (!r) return null;
@@ -571,12 +591,12 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
         <CampaignResult />
         <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
           {r.campaign && r.campaign.stars[0] && r.campaign.n < LEVELS.length && props.onNext && (
-            <button style={{ ...btn(true), background: "#ffd23f", color: "#111" }} onClick={() => props.onNext?.(r.campaign!.n + 1)} data-testid="next-level">Next level</button>
+            <button style={{ ...btn(true), background: "#ffd23f", color: "#111" }} onClick={() => props.onNext?.(r.campaign!.n + 1)} data-testid="next-level" data-pad-default="">Next level</button>
           )}
           {r.campaign && props.onLevels && <button style={btn()} onClick={props.onLevels} data-testid="levels">Levels</button>}
           {r.caught && <button style={btn()} onClick={share} data-testid="share" title={r.ghostCode ? "copy a ghost link: friends race your run" : "copy a challenge link"}>{r.ghostCode ? "Share ghost" : "Share"}</button>}
-          <button style={btn(true)} onClick={props.onRetry} data-testid="retry">{touch ? "Retry" : "Retry (R)"}</button>
-          <button style={btn()} onClick={props.onMenu} data-testid="menu">Menu</button>
+          <button style={btn(true)} onClick={props.onRetry} data-testid="retry" data-pad-btn="NORTH" data-pad-default={r.campaign && r.campaign.stars[0] && r.campaign.n < LEVELS.length && props.onNext ? undefined : ""}>{pad ? <PadText text="Retry {NORTH}" /> : touch ? "Retry" : "Retry (R)"}</button>
+          <button style={btn()} onClick={props.onMenu} data-testid="menu" data-pad-btn="EAST">Menu</button>
         </div>
         {copied && <div style={{ marginTop: 8, fontSize: 11, opacity: 0.85, wordBreak: "break-all", userSelect: "text", maxHeight: 84, overflowY: "auto" }} data-testid="share-text">{copied}</div>}
       </div>

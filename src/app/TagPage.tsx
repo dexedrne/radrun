@@ -33,7 +33,10 @@ import { requestLock } from "../radbro/bridge.ts";
 import { btn, layer, panel, scroller } from "../ui/screens.tsx";
 import { RADBRO_COLOR } from "../ui/strings.ts";
 import { TouchControls } from "../ui/TouchControls.tsx";
-import { applySettings, loadSettings } from "../ui/prefs.ts";
+import { applySettings, loadSettings, padSettingsOf } from "../ui/prefs.ts";
+import { padActive, pollPads, rumble, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
+import { PadText } from "../ui/pad.tsx";
+import { keysOf } from "../ui/padPrompts.ts";
 import { setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx, sfx } from "../audio/sfx.ts";
 import { safe } from "../ui/safe.ts";
@@ -129,12 +132,12 @@ export async function loadRadbros(ids: RadbroId[]): Promise<boolean> {
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 function localSfx(ev: number): void {
-  if (ev & EV_ATTACH) sfx.thwip();
-  if (ev & (EV_ZIP | EV_YANK)) sfx.zip();
+  if (ev & EV_ATTACH) { sfx.thwip(); rumble.web(); }
+  if (ev & (EV_ZIP | EV_YANK)) { sfx.zip(); rumble.zip(); }
   if (ev & EV_JUMP) sfx.jump();
   if (ev & EV_DJUMP) sfx.djump();
-  if (ev & EV_LAND) sfx.land(6);
-  if (ev & EV_BONK) sfx.bonk();
+  if (ev & EV_LAND) { sfx.land(6); rumble.land(9); }
+  if (ev & EV_BONK) { sfx.bonk(); rumble.bonk(); }
   if (ev & EV_WALLRUN) sfx.wallRun();
   if (ev & EV_WALLJUMP) sfx.wallJump();
   if (ev & EV_LEDGE) sfx.ledge();
@@ -149,6 +152,7 @@ function localSfx(ev: number): void {
 function TagDriver({ game }: { game: TagGame }) {
   const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0, shown: [] as string[], go: false }), []);
   useFrame((_, delta) => {
+    pollPads();
     game.frame(delta);
     const m = game.match;
     if (!m) return;
@@ -171,8 +175,8 @@ function TagDriver({ game }: { game: TagGame }) {
       if (st.shown.length > 16) st.shown.shift();
       st.tags++;
       const kind = m.lastTagKind === TAG_KIND_YOINK ? "YOINKED" : m.lastTagKind === TAG_KIND_YANK ? "YANKED" : "TAGGED";
-      if (m.lastTagTo === game.local) { sfx.bonk(); flash(`${kind}!`, "you hold the bag · web-tangled", "#ff3355"); }
-      else if (m.lastTagFrom === game.local) { sfx.yoink(); sfx.jingle(); flash("TAG!", `${ui.names[m.lastTagTo] ?? "?"} holds the bag`, "#8dff8a"); }
+      if (m.lastTagTo === game.local) { sfx.bonk(); rumble.big(); flash(`${kind}!`, "you hold the bag · web-tangled", "#ff3355"); }
+      else if (m.lastTagFrom === game.local) { sfx.yoink(); sfx.jingle(); rumble.hit(); flash("TAG!", `${ui.names[m.lastTagTo] ?? "?"} holds the bag`, "#8dff8a"); }
       else flash(`${ui.names[m.lastTagTo] ?? "?"} ${kind.toLowerCase()}`, `by ${ui.names[m.lastTagFrom] ?? "?"}`, "#ffd23f");
     }
     const final = game.link ? game.link.final : m.over;
@@ -255,6 +259,7 @@ const pick = (on: boolean, color = "#ffd23f"): React.CSSProperties => ({ ...btn(
 
 function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots: number; setBots: (n: number) => void; level: BotLevel; setLevel: (l: BotLevel) => void; ready: boolean; onPlay: () => void; onOnline: () => void }) {
   const small = innerHeight < 560 || innerWidth < 700;
+  const pad = useUi(s => s.pad);
   const size = small ? 54 : 88;
   return (
     <div style={{ ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.2), rgba(10,12,30,0.6))" }} data-testid="tag-menu">
@@ -279,7 +284,7 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
             {" · "}3:00 match
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
-            <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: 20, padding: "10px 40px", opacity: props.ready ? 1 : 0.5 }} data-testid="tag-play">
+            <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: 20, padding: "10px 40px", opacity: props.ready ? 1 : 0.5 }} data-testid="tag-play" data-pad-default="">
               {props.ready ? "PLAY vs BOTS" : "loading city…"}
             </button>
             <button onClick={props.onOnline} disabled={!props.ready} style={{ ...btn(false), fontSize: 16, padding: "10px 22px", borderColor: "#9fe6ff", color: "#cdf3ff", opacity: props.ready ? 1 : 0.5 }} data-testid="tag-online">
@@ -287,13 +292,19 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
             </button>
           </div>
         </div>
-        <div style={{ ...panel, marginTop: 10, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }}>
+        {pad ? (
+          <div style={{ ...panel, marginTop: 10, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }} data-testid="tag-pad-help">
+            <b>holding the bag</b>: <PadText text={`get within 1.5 m, or ${keysOf("web")} when your ring on them turns red (Yoink, 3.5 m), or ${keysOf("zip")} in yank range (9 m) to zip onto them.`} /><br />
+            <b>tagged</b>: <PadText text={`you're web-tangled for 1.5 s and can't tag them straight back for 3 s. ${keysOf("face")} looks at the bagholder.`} /><br />
+            <PadText text={`{LS} run · {RS} look · hold ${keysOf("web")} swing · ${keysOf("jump")} jump · hold ${keysOf("slide")} charge-jump · ${keysOf("pause")} pause`} />
+          </div>
+        ) : <div style={{ ...panel, marginTop: 10, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }}>
           <b>holding the bag</b>: get within 1.5 m, or <b>click</b> when your ring on them turns red (Yoink, 3.5 m), or <b>E</b> in yank range (9 m) to zip onto them.<br />
           <b>tagged</b>: you're web-tangled for 1.5 s and can't tag them straight back for 3 s. <b>Q</b> / right mouse looks at the bagholder.<br />
           every move from the chase works: swing, zip, wall run, ledge grab, slide, <b>C</b> hold to charge-jump.
-        </div>
+        </div>}
         <div style={{ marginTop: 10 }}>
-          <button onClick={() => gotoDistrict(PAGE_DISTRICT)} style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} data-testid="tag-back">← back to RadRun</button>
+          <button onClick={() => gotoDistrict(PAGE_DISTRICT)} style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} data-testid="tag-back" data-pad-btn="EAST">← back to RadRun</button>
         </div>
       </div>
     </div>
@@ -310,6 +321,7 @@ function Hud({ onLeave }: { onLeave?: () => void }) {
   const [now, setNow] = useState(performance.now());
   useEffect(() => { const iv = setInterval(() => setNow(performance.now()), 100); return () => clearInterval(iv); }, []);
   const slots = useTag(s => s.slots);
+  const pad = useUi(s => s.pad);
   if (!hud) return null;
   const you = hud.rows[hud.local];
   const holding = hud.holder === hud.local;
@@ -352,7 +364,7 @@ function Hud({ onLeave }: { onLeave?: () => void }) {
         <div style={{ position: "absolute", top: "40%", width: "100%", padding: "0 16px", boxSizing: "border-box", textAlign: "center", textShadow: "0 1px 3px #000" }} data-testid="tag-wait">
           <div style={{ fontSize: 20 }}>waiting for the other player · {Math.ceil(hud.wait)} s</div>
           <div style={{ fontSize: 12, opacity: 0.8 }}>their game stopped sending (a slow connection or a hidden tab); the match goes on when it's back</div>
-          {hud.wait >= STALL_LEAVE_S && onLeave && <button style={{ ...btn(false), marginTop: 8, fontSize: 13, pointerEvents: "auto" }} onClick={onLeave} data-testid="tag-wait-leave">LEAVE MATCH</button>}
+          {hud.wait >= STALL_LEAVE_S && onLeave && <button style={{ ...btn(false), marginTop: 8, fontSize: 13, pointerEvents: "auto" }} onClick={onLeave} data-testid="tag-wait-leave">{pad ? <PadText text="LEAVE MATCH {START}" /> : "LEAVE MATCH"}</button>}
         </div>
       )}
       {hud.wait >= STALL_SHOW_S && hud.phase === PH_OVER && (
@@ -374,6 +386,7 @@ function Results({ onRematch, onMenu }: { onRematch: () => void; onMenu: () => v
   const agreed = useTag(s => s.agreed);
   const netStatus = useTag(s => s.netStatus);
   const netGone = useTag(s => s.netGone);
+  const pad = useUi(s => s.pad);
   if (!hud) return null;
   const rows = [...hud.rows].sort((a, b) => a.bag - b.bag || a.falls - b.falls || b.tags - a.tags || a.slot - b.slot);
   const win = rows[0];
@@ -398,8 +411,8 @@ function Results({ onRematch, onMenu }: { onRematch: () => void; onMenu: () => v
         {agreed !== null && <div style={{ fontSize: 11, marginTop: 8, color: agreed ? "#8dff8a" : "#ff8a8a" }} data-testid="tag-agreed">{agreed ? "both players' results match" : "results differ between players (desync)"}</div>}
         {hud.online && netStatus && <div style={{ fontSize: 13, marginTop: 8, color: "#ffd23f" }} data-testid="tag-net-status">{netStatus}</div>}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
-          <button style={btn(true)} onClick={onRematch} data-testid="tag-rematch">{netGone ? "BACK TO THE ROOM" : "REMATCH"}</button>
-          <button style={btn(false)} onClick={onMenu} data-testid="tag-menu-btn">MENU</button>
+          <button style={btn(true)} onClick={onRematch} data-testid="tag-rematch" data-pad-default="" data-pad-btn="NORTH">{netGone ? "BACK TO THE ROOM" : "REMATCH"}{pad && <PadText text=" {NORTH}" />}</button>
+          <button style={btn(false)} onClick={onMenu} data-testid="tag-menu-btn" data-pad-btn="EAST">MENU</button>
         </div>
       </div>
     </div>
@@ -423,11 +436,11 @@ function Loading() {
 
 function PauseOverlay({ onResume, onQuit }: { onResume: () => void; onQuit: () => void }) {
   return (
-    <div style={{ ...layer, display: "grid", placeItems: "center", background: "rgba(10,12,30,0.5)" }}>
-      <div style={{ ...panel, textAlign: "center", minWidth: 240 }}>
+    <div style={{ ...layer, display: "grid", placeItems: "center", background: "rgba(10,12,30,0.5)" }} data-pad-modal="">
+      <div style={{ ...panel, textAlign: "center", minWidth: 240 }} data-testid="tag-pause">
         <div style={{ fontWeight: 900, letterSpacing: 3, marginBottom: 12 }}>PAUSED</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-          <button style={btn(true)} onClick={onResume}>RESUME</button>
+          <button style={btn(true)} onClick={onResume} data-pad-default="" data-pad-btn="START EAST">RESUME</button>
           <button style={btn(false)} onClick={onQuit}>QUIT</button>
         </div>
       </div>
@@ -456,6 +469,7 @@ export default function TagPage() {
   const screen = useTag(s => s.screen);
   const ready = useUi(s => s.sceneReady);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
   const [radbro, setRadbro] = useState<RadbroId>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").radbro as RadbroId) || "652"; } catch { return "652"; } });
   const [bots, setBots] = useState(() => { try { return Number(JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").bots) || 1; } catch { return 1; } });
   const [level, setLevel] = useState<BotLevel>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").level as BotLevel) || "normal"; } catch { return "normal"; } });
@@ -469,6 +483,7 @@ export default function TagPage() {
       applySettings(g.camera, s);
       setAudioVolumes(s.music, s.sfx, s.voice);
       setMuted(s.muted);
+      setPadSettings(padSettingsOf(s));
       g.autoLevel = AUTO;
       g.retune();
       setGame(g);
@@ -478,7 +493,7 @@ export default function TagPage() {
   useEffect(() => { if (game && ready && screen === "boot") useTag.setState({ screen: online ? "online" : "menu" }); }, [game, ready, screen, online]);
   useEffect(() => { const onTouch = () => { if (!useUi.getState().touch) useUi.setState({ touch: true }); }; addEventListener("touchstart", onTouch, { passive: true }); return () => removeEventListener("touchstart", onTouch); }, []);
 
-  const lock = useCallback(() => { if (!useUi.getState().touch && !AUTO) requestLock(canvasEl()); }, []);
+  const lock = useCallback(() => { if (!useUi.getState().touch && !AUTO && !padActive()) requestLock(canvasEl()); }, []);
 
   const play = useCallback(async (seed = randomSeed()) => {
     if (!game) return;
@@ -522,11 +537,30 @@ export default function TagPage() {
       if (locked) { game.paused = false; setPaused(false); }
     });
     const click = () => { if (useTag.getState().screen === "match" && !useUi.getState().touch && document.pointerLockElement !== el) requestLock(el); };
-    const kd = (e: KeyboardEvent) => { if (e.code === "KeyR" && !e.repeat && useTag.getState().screen === "results") rematch(); };
+    const kd = (e: KeyboardEvent) => {
+      if (e.code === "KeyR" && !e.repeat && useTag.getState().screen === "results") rematch();
+      // Esc with no captured mouse (a match started from a pad): pause offline.
+      if (e.code === "Escape" && !e.repeat && !document.pointerLockElement && !AUTO && !game.link && useTag.getState().screen === "match" && !game.match?.over) { game.paused = true; setPaused(true); }
+    };
     el.addEventListener("click", click);
     addEventListener("keydown", kd);
     return () => { detach(); el.removeEventListener("click", click); removeEventListener("keydown", kd); };
   }, [game, rematch]);
+
+  // Gamepad (round 14): your Radbro in a live match, the menus otherwise; Options pauses offline (online: leaves a
+  // match that has waited 5 s on the other player), Triangle / Y at the results = rematch (a menu binding).
+  useEffect(() => {
+    if (!game) return;
+    return setPadHooks({
+      latch: () => (!AUTO && useTag.getState().screen === "match" && !game.paused && !game.match?.over ? game.input : null),
+      pause: () => {
+        if (game.link) { if ((useTag.getState().hud?.wait ?? 0) >= STALL_LEAVE_S) toMenu(); return; }
+        game.paused = true;
+        setPaused(true);
+        if (document.pointerLockElement) document.exitPointerLock();
+      },
+    });
+  }, [game, toMenu]);
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
   if (!game) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
@@ -538,13 +572,13 @@ export default function TagPage() {
       {screen === "loading" && <Loading />}
       {(inMatch || screen === "results") && <Hud onLeave={toMenu} />}
       {screen === "results" && <Results onRematch={rematch} onMenu={toMenu} />}
-      {touch && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
+      {touch && !pad && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
       {online && (
         <Suspense fallback={screen === "online" ? <div style={{ ...layer, display: "grid", placeItems: "center" }}><div style={panel}>loading online…</div></div> : null}>
           <Online game={game} radbro={radbro} setRadbro={setRadbro} room={ROOM} district={PAGE_DISTRICT} onExit={toMenu} />
         </Suspense>
       )}
-      {paused && inMatch && <PauseOverlay onResume={() => (touch ? (game.paused = false, setPaused(false)) : requestLock(canvasEl()))} onQuit={toMenu} />}
+      {paused && inMatch && <PauseOverlay onResume={() => (touch || padActive() ? (game.paused = false, setPaused(false)) : requestLock(canvasEl()))} onQuit={toMenu} />}
     </>
   );
 }

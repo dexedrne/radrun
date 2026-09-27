@@ -271,7 +271,9 @@ export class PlayGame {
       return 0;
     }
     const round = this.round;
-    if (!this.paused) rigLook(this.rig, dx, dy, this.camera.sensitivity, this.camera.invertY);
+    // The pad's right stick (rad, already scaled): the same camera, so the same yaw / pitch in the input word.
+    const [px, py] = this.input.takePadLook();
+    if (!this.paused) { rigLook(this.rig, dx, dy, this.camera.sensitivity, this.camera.invertY); if (px !== 0 || py !== 0) rigLook(this.rig, px, py, 1, false); }
     if (this.paused) return 0;
     this.roundT += delta;
     // Catch: 1.2 s of 0.35x slow-mo (spec §3), then normal speed.

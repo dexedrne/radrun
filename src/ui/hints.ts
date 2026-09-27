@@ -14,6 +14,7 @@
 //   charge - on a roof (after the fling tip)                -> done at a charged launch
 import { hintsSeen, markHintSeen, resetHintsSeen } from "./prefs.ts";
 import { useUi } from "./store.ts";
+import { keysOf } from "./padPrompts.ts";
 
 export type HintId = "swing" | "fling" | "chain" | "yoink" | "djump" | "zip" | "wallrun" | "slide" | "charge";
 
@@ -40,7 +41,9 @@ export type HintInput = {
   charge?: boolean;
 };
 
-export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string {
+/** The tip in words; `pad` = the gamepad version, with {TOKENS} that <PadText> draws as glyphs (round 14). */
+export function hintText(id: HintId, touch: boolean, easyGrab: boolean, pad = false): string {
+  if (pad) return padHintText(id, easyGrab);
   const web = touch ? "WEB" : easyGrab ? "Space" : "LMB";
   switch (id) {
     // Round 11: a web from a roof pulls you up and off it into the swing; a release on the way up keeps your height.
@@ -55,6 +58,21 @@ export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string 
     case "charge": return touch ? "hold SLIDE: charge a leap, let go to launch" : "hold C: charge a leap, let go to launch";
     case "wallrun": return touch ? "wall run! tap JUMP to kick off the wall" : "wall run! press Space to kick off the wall";
     case "slide": return touch ? "tap SLIDE while running fast to slide and keep your speed" : "press C while running fast to slide and keep your speed";
+  }
+}
+
+function padHintText(id: HintId, easyGrab: boolean): string {
+  const web = easyGrab ? keysOf("jump") : keysOf("web"), jump = keysOf("jump"), slide = keysOf("slide");
+  switch (id) {
+    case "swing": return `hold ${web} to web the building ahead (the yellow ring): it pulls you off the roof into a swing`;
+    case "fling": return `let go of ${web} near the top of the swing: faster (a white flash = perfect)`;
+    case "chain": return hintText(id, false, easyGrab);
+    case "yoink": return `red ring on him = ${web} to YOINK`;
+    case "djump": return `press ${jump} again in the air to double jump`;
+    case "zip": return `${keysOf("zip")}: zip where you look (the white diamond)`;
+    case "charge": return `hold ${slide}: charge a leap, let go to launch`;
+    case "wallrun": return `wall run! press ${jump} to kick off the wall`;
+    case "slide": return `press ${slide} while running fast to slide and keep your speed`;
   }
 }
 
@@ -102,7 +120,7 @@ export class Hints {
   private show(id: HintId, s: HintInput): void {
     this.cur = id;
     this.shown = 0;
-    useUi.setState({ hint: { id, text: hintText(id, s.touch, s.easyGrab) } });
+    useUi.setState({ hint: { id, text: hintText(id, s.touch, s.easyGrab), padText: hintText(id, false, s.easyGrab, true) } });
   }
 
   private finish(): void {

@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { RadbroId } from "../game/round.ts";
 import { detectTouch } from "../input/touch.ts";
 import { loadQuality, type Quality } from "./prefs.ts";
+import type { PadKind } from "../input/gamepad.ts";
 
 export type Hud = {
   speed: number;
@@ -105,6 +106,12 @@ export type UiState = {
   locked: boolean;
   /** Touch controls on (coarse pointer, ?touch, or the first touch on the page). */
   touch: boolean;
+  /**
+   * Round 14: the last device used is a gamepad of this kind (PlayStation or Xbox glyphs), or null (keyboard /
+   * mouse / touch prompts). padSeen: a pad was used on this page (pause -> Settings shows the controller block).
+   */
+  pad: PadKind | null;
+  padSeen: boolean;
   backend: string;
   /** Graphics quality (pause -> Settings; remembered in localStorage). */
   quality: Quality;
@@ -124,7 +131,7 @@ export type UiState = {
   /** LOADING progress 0..1 and the failed asset, if any. */
   load: { progress: number; error: string | null };
   /** First-run tip shown right now (ui/hints.ts), or null. */
-  hint: { id: string; text: string } | null;
+  hint: { id: string; text: string; padText?: string } | null;
   /** The ghost raced in the current round, or null. */
   ghost: GhostInfo | null;
   /** Small notice (auto quality), cleared by time. */
@@ -143,6 +150,8 @@ export const useUi = create<UiState>(() => ({
   sceneReady: false,
   locked: false,
   touch: detectTouch(),
+  pad: null,
+  padSeen: false,
   backend: "",
   quality: loadQuality(),
   hud: { speed: 0, phase: "ground", ring: -1, chain: 0, topSpeed: 0, maxChain: 0, falls: 0, bonks: 0, fps: 0, steps: 0, parkour: 0 },

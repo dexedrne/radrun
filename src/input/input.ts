@@ -27,6 +27,19 @@ export class InputLatch {
   touchWeb = false;
   touchFace = false;
   touchSlideHeld = false;
+  /**
+   * Round 14 gamepad (input/gamepad.ts padToLatch): the left stick (camera-space, like the touch stick), the right
+   * stick's look since the last frame (rad; the frame turns the camera with it) and the held buttons. The pad's
+   * Cross / A is the Space key for easy grab.
+   */
+  padX = 0;
+  padY = 0;
+  padLookX = 0;
+  padLookY = 0;
+  padWeb = false;
+  padJumpHeld = false;
+  padSlideHeld = false;
+  padFace = false;
   /** Easy grab: Space press also counts as a web press (Yoink), Space held = web held. */
   easyGrab = false;
   /** Optional per-step recording (replays / tests). */
@@ -86,9 +99,24 @@ export class InputLatch {
   touchSlideUp(): void {
     this.touchSlideHeld = false;
   }
+  /** A gamepad press (the pad's own button edge): the same edges as Space / LMB / E / C. */
+  padPress(what: "jump" | "web" | "zip" | "slide"): void {
+    if (what === "jump") { this.jumpEdge = true; if (this.easyGrab) this.webEdge = true; }
+    else if (what === "web") this.webEdge = true;
+    else if (what === "zip") this.zipEdge = true;
+    else this.slideEdge = true;
+  }
+  /** The pad left play (menus, pause): nothing it held stays held. */
+  padRelease(): void {
+    this.padX = this.padY = this.padLookX = this.padLookY = 0;
+    this.padWeb = this.padJumpHeld = this.padSlideHeld = this.padFace = false;
+  }
   /** C / SLIDE held right now. */
   get slideHeldNow(): boolean {
-    return this.keys.has("KeyC") || this.touchSlideHeld;
+    return this.keys.has("KeyC") || this.touchSlideHeld || this.padSlideHeld;
+  }
+  private get webHeldNow(): boolean {
+    return this.lmb || this.touchWeb || this.padWeb || (this.easyGrab && (this.keys.has("Space") || this.padJumpHeld));
   }
   clear(): void {
     this.keys.clear();
@@ -97,6 +125,7 @@ export class InputLatch {
     this.lmb = this.rmb = false;
     this.jumpEdge = this.webEdge = this.zipEdge = this.slideEdge = false;
     this.mouseDX = this.mouseDY = 0;
+    this.padRelease();
   }
   /** Mouse deltas since the last call (applied to the camera once per frame). */
   takeLook(): [number, number] {
@@ -104,15 +133,21 @@ export class InputLatch {
     this.mouseDX = this.mouseDY = 0;
     return d;
   }
+  /** The right stick's look since the last call (rad: yaw right, pitch down; sensitivity and invert already in). */
+  takePadLook(): [number, number] {
+    const d: [number, number] = [this.padLookX, this.padLookY];
+    this.padLookX = this.padLookY = 0;
+    return d;
+  }
   get towardRunner(): boolean {
-    return this.keys.has("KeyQ") || this.rmb || this.touchFace;
+    return this.keys.has("KeyQ") || this.rmb || this.touchFace || this.padFace;
   }
 
   private get fwd(): number {
-    return (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) + this.stickY;
+    return (this.keys.has("KeyW") || this.keys.has("ArrowUp") ? 1 : 0) - (this.keys.has("KeyS") || this.keys.has("ArrowDown") ? 1 : 0) + this.stickY + this.padY;
   }
   private get right(): number {
-    return (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0) + this.stickX;
+    return (this.keys.has("KeyD") || this.keys.has("ArrowRight") ? 1 : 0) - (this.keys.has("KeyA") || this.keys.has("ArrowLeft") ? 1 : 0) + this.stickX + this.padX;
   }
 
   /**
@@ -121,7 +156,7 @@ export class InputLatch {
    * replays bit-exactly. Consumes the press edges like consume().
    */
   sample(rec: InputRec, yaw: number, pitch = 0): InputRec {
-    const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
+    const webHeldNow = this.webHeldNow;
     // (Round 12: the camera pitch rides along as a sine, and C held.)
     recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge,
       this.slideHeldNow || this.slideEdge, Math.sin(pitch));
@@ -149,7 +184,7 @@ export class InputLatch {
     f.aimX = aimX;
     f.aimY = aimY;
     f.aimZ = aimZ;
-    const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
+    const webHeldNow = this.webHeldNow;
     f.jumpPressed = this.jumpEdge;
     f.webPressed = this.webEdge;
     f.webHeld = webHeldNow || this.webEdge;

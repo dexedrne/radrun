@@ -32,6 +32,11 @@ Esc pause. Round 9 (webs on buildings, a real pendulum, parkour, the taller citi
 `docs/specs/2026-09-25-round9-movement.md`; round 12 (cables and fixtures between the buildings, the straight
 zip, the charge, the tech moves, the yank): `docs/specs/2026-09-26-round12-spider-tag.md`; PLAY.md "Moving".
 
+Controller (round 14): a DualSense / DualShock or an Xbox pad plays everything, menus included (left stick run,
+right stick look, R2 swing, Cross / A jump, Circle / B slide / charge / dive, R1 or L2 zip, Options pause); the
+prompts switch to PlayStation or Xbox glyphs when a pad is used and back when a key, a click or the mouse is.
+PLAY.md "Controller".
+
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
 

@@ -10,7 +10,8 @@ import type { RadbroId } from "../game/round.ts";
 import type { Difficulty } from "../sim/tuning.ts";
 import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
-import { LINK_VERSION, applySettings, getBestGhost, lastPicks, loadSettings, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
+import { LINK_VERSION, applySettings, getBestGhost, lastPicks, loadSettings, padSettingsOf, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
+import { padActive, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
 import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
 import { CampaignScreen } from "../ui/campaignScreen.tsx";
 import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaign.ts";
@@ -77,13 +78,15 @@ async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["so
   if (!dec) return null;
   return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older);
 }
-const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); };
+const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); setPadSettings(padSettingsOf(s)); };
 /** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */
 const AUTOQ_OFF = params.get("autoq") === "0";
 const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" && !s.qualityChosen && !s.qualityAuto;
-/** Touch play never uses pointer lock (spec §4 "Touch"). */
+/** Touch play never uses pointer lock (spec §4 "Touch"); neither does a pad (its presses can't grant the lock, and it needs none). */
 const isTouch = () => useUi.getState().touch;
-const lockMouse = () => { if (!isTouch() && document.pointerLockElement !== canvasEl()) requestLock(canvasEl()); };
+const lockMouse = () => { if (!isTouch() && !padActive() && document.pointerLockElement !== canvasEl()) requestLock(canvasEl()); };
+/** PLAY / PRACTICE / a level: fullscreen on touch, else the mouse (not when the pad pressed it). */
+const grabInput = () => { if (isTouch()) enterFullscreen(); else if (!padActive()) requestLock(canvasEl()); };
 
 function Scene({ game }: { game: PlayGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
@@ -141,6 +144,7 @@ export default function PlayPage() {
   const paused = useUi(s => s.paused);
   const ready = useUi(s => s.sceneReady);
   const touch = useUi(s => s.touch);
+  const pad = useUi(s => s.pad);
   const rHeld = useRef<number | null>(null);
   const muteRef = useRef<() => void>(() => undefined);
   const autoLow = useUi(s => s.autoLow);
@@ -237,8 +241,7 @@ export default function PlayPage() {
   const onPlay = useCallback(() => {
     rememberPicks(chaser, difficulty);
     unlockAudio();
-    if (isTouch()) enterFullscreen();
-    else requestLock(canvasEl());
+    grabInput();
     begin(randomSeed(), false, ghostActive ? linkGhost : null);
   }, [begin, chaser, difficulty, ghostActive, linkGhost]);
 
@@ -246,16 +249,14 @@ export default function PlayPage() {
     if (!game || !bestGhost) return;
     rememberPicks(chaser, difficulty);
     unlockAudio();
-    if (isTouch()) enterFullscreen();
-    else requestLock(canvasEl());
+    grabInput();
     void decodeGhost(game, bestGhost, "best").then(ch => { if (ch) begin(ch.spec.seed, false, ch); });
   }, [game, bestGhost, begin, chaser, difficulty]);
 
   const onPractice = useCallback(() => {
     rememberPicks(chaser, difficulty);
     unlockAudio();
-    if (isTouch()) enterFullscreen();
-    else requestLock(canvasEl());
+    grabInput();
     begin(randomSeed(), true);
   }, [begin, chaser, difficulty]);
 
@@ -266,8 +267,7 @@ export default function PlayPage() {
     if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
     rememberPicks(chaser, difficulty);
     unlockAudio();
-    if (isTouch()) enterFullscreen();
-    else requestLock(canvasEl());
+    grabInput();
     useUi.setState({ campaignSel: n });
     begin(randomSeed(), false, null, level);
   }, [begin, chaser, difficulty]);
@@ -310,6 +310,12 @@ export default function PlayPage() {
     });
     const kd = (e: KeyboardEvent) => {
       if (e.code === "KeyM" && !e.repeat) { muteRef.current(); return; }
+      // Esc with no captured mouse (a round started from a pad): pause, like Esc releasing the capture does.
+      if (e.code === "Escape" && !e.repeat && !document.pointerLockElement && !BOT) {
+        const sc = useUi.getState().screen;
+        if (sc === "countdown" || sc === "chase" || sc === "practice") setPaused(true);
+        return;
+      }
       if (e.code !== "KeyR" || e.repeat) return;
       const sc = useUi.getState().screen;
       if (sc === "results") retry();
@@ -340,6 +346,23 @@ export default function PlayPage() {
     addEventListener("keyup", ku);
     return () => { detach(); document.removeEventListener("visibilitychange", vis); el.removeEventListener("click", click); removeEventListener("keydown", kd); removeEventListener("keyup", ku); clearInterval(iv); };
   }, [game, retry, setPaused]);
+
+  // Gamepad (round 14): the Radbro in a live round, the menus otherwise; Options pauses, hold Triangle / Y = hold R.
+  useEffect(() => {
+    if (!game) return;
+    return setPadHooks({
+      latch: () => {
+        const sc = useUi.getState().screen;
+        return !BOT && !game.paused && (sc === "countdown" || sc === "chase" || sc === "practice") ? game.input : null;
+      },
+      pause: () => { setPaused(true); if (document.pointerLockElement) document.exitPointerLock(); },
+      retry: held => {
+        if (held) rHeld.current = performance.now();
+        else if (rHeld.current !== null) { rHeld.current = null; useUi.setState(s => ({ round: { ...s.round, holdR: 0 } })); }
+      },
+      mute: () => muteRef.current(),
+    });
+  }, [game, setPaused]);
 
   // radbro.fun (framed only): "run" at GO, then the round's result (a catch = clear, an escape = gameover).
   useEffect(() => useUi.subscribe((s, prev) => {
@@ -406,7 +429,7 @@ export default function PlayPage() {
       {screen === "campaign" && <CampaignScreen onStart={startLevel} onBack={() => useUi.setState({ screen: "title" })} ready={ready} />}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}
-      {touch && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
+      {touch && !pad && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} onNext={startLevel} onLevels={toLevels} />}
       <Toast />
       {!BOT && <SwipeUp show={screen === "title" || screen === "campaign" || screen === "results" || (paused && inRound)} />}
@@ -414,7 +437,7 @@ export default function PlayPage() {
         <Pause
           settings={settings}
           setSettings={setSettings}
-          onResume={() => (touch ? setPaused(false) : requestLock(canvasEl()))}
+          onResume={() => (touch || padActive() ? setPaused(false) : requestLock(canvasEl()))}
           onRestart={() => { setPaused(false); retry(); }}
           onQuit={toMenu}
           practice={practice}

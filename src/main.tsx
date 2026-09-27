@@ -3,12 +3,16 @@ import { createRoot } from "react-dom/client";
 import PlayPage from "./app/PlayPage.tsx";
 import { startBridge } from "./radbro/bridge.ts";
 import { unlockAudio } from "./audio/engine.ts";
+import { startPads } from "./input/padRuntime.ts";
+import { PadRoot } from "./ui/pad.tsx";
 
 window.addEventListener("error", e => console.error("[window.error]", e.message));
 window.addEventListener("unhandledrejection", e => console.error("[unhandledrejection]", String(e.reason)));
 
 // Framed on radbro.fun: tell the portal what this is; the first click focuses the frame + unlocks the audio.
 startBridge({ onFirstGesture: unlockAudio });
+// Gamepads (round 14): polled every frame, hot-plug, the last device used decides the prompts.
+startPads();
 
 const DEV = import.meta.env.MODE !== "production";
 const EditorPage = DEV ? lazy(() => import("./app/dev/EditorPage.tsx")) : null;
@@ -34,4 +38,4 @@ function App() {
   return <PlayPage />;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<><App /><PadRoot /></>);
