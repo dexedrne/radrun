@@ -522,9 +522,10 @@ export function pickRing(b: Body, inp: InputFrame, k: Tuning, w: SimWorld, out: 
   if (fl < 1e-9) return RING_NONE;
   const last = b.relT < ALTERNATE_FOR ? b.lastRope : -1;
   const ring = b.ringId >= 0 ? b.ringId : -1;
-  // Web length from your height: high over the ground below, the ideal point goes up and ahead (a longer rope).
+  // Web length from your height: high over the ground below, the ideal point goes up and ahead (a longer rope). Not with
+  // snapping webs (a long arc would snap before it flings you: short webs, as before).
   let up = 0, ah = 0;
-  if (k.anchorHeightGain > 0 || k.anchorHeightAhead > 0) {
+  if ((k.anchorHeightGain > 0 || k.anchorHeightAhead > 0) && w.snapSteps === undefined) {
     const h = p.y - k.halfHeight - w.index.groundBelow(p.x, p.z, p.y) - k.anchorHeightFree;
     if (h > 0) { up = Math.min(k.anchorHeightGain * h, Math.max(0, k.anchorUpMax - k.anchorUp)); ah = k.anchorHeightAhead * h; }
   }

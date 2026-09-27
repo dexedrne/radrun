@@ -63,8 +63,8 @@ A dive from 75 m over a street reaches 46 m/s (a fall: 32); webbing out of it sw
 
 `rig.ts`: in the air the arm pulls back up to `speedArm` (1) m with speed; the look point's height trails the body's by up
 to `lagYMax` m (eased at `lagY` /s), so the camera rides the arcs instead of bobbing with each one; sideways it leads the
-body's motion across the view by `lookAhead` s (at most `lookAheadMax` m) so there is room ahead; diving adds `diveFov`
-deg; the speed FOV now spans 10-34 m/s (+18 deg). The view direction is still exactly the aim (the look point and the
+body's motion across the view by `lookAhead` s (at most `lookAheadMax` m) so there is room ahead; diving adds `diveFov` (3)
+deg with the arm at `armDive` 6.5 m (was 8: the dive read too small); the speed FOV now spans 10-34 m/s (+18 deg). The view direction is still exactly the aim (the look point and the
 camera move together), the horizon never rolls, and reduced motion turns all of it off.
 
 ## 4. Animation (view only)

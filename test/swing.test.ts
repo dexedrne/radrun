@@ -86,10 +86,10 @@ test("ghost format 5 = the web-slinger swing; a format-4 record decodes as the r
 });
 
 /** A web from high over the street at `y`, flying +x at 16 m/s: the rope length at the attach. */
-function ropeFrom(k: Tuning, y: number): number {
+function ropeFrom(k: Tuning, y: number, w: SimWorld = bw): number {
   const b = createBody(4, y, 37, -1);
   b.grounded = false; b.v.x = 16;
-  steps(b, k, bw, 60, f => { f.aimX = 1; f.moveX = 1; f.webHeld = true; f.webPressed = true; });
+  steps(b, k, w, 60, f => { f.aimX = 1; f.moveX = 1; f.webHeld = true; f.webPressed = true; });
   return b.ropeSolid >= 0 ? b.ropeLen : NaN;
 }
 
@@ -101,6 +101,9 @@ test("web length from your height: high over the street the web goes to a rim fu
   const lo = createBody(4, 12, 37, -1);
   assert.ok(lo.p.y - PLAYER.halfHeight < PLAYER.anchorHeightFree);
   assert.equal(ropeFrom(PLAYER, 12), ropeFrom(flat, 12));
+  // Snapping webs (the mutator): short webs, as before (a long arc would snap before it flings you).
+  const snap: SimWorld = { ...bw, snapSteps: 192 };
+  assert.equal(ropeFrom(PLAYER, 70, snap), ropeFrom(flat, 70, snap));
 });
 
 /** One swing off a web taken at 45 m flying +x at 14 m/s (held to the end): max speed on the rope and the release point. */

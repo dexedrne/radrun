@@ -152,8 +152,8 @@ C / Circle / SLIDE dive, every round 12 move as before); the swing itself got th
 - **The dive.** C in the air (6+ m under you), held: head first, faster than a fall (up to 46 m/s; a fall stops at 32),
   and the stick turns it. **Web out of a dive** (or within 0.4 s of it) and the swing keeps the dive's speed when the
   web goes taut; the speed over 32 m/s is carried and wears off at 5 m/s each second: the dive-into-swing.
-- **Camera.** In the air it pulls back a little with speed and the FOV widens (to +18 degrees at 34 m/s, +5 more
-  diving); it rides the swing's rise and fall instead of bobbing with every arc, leads your motion across the view so
+- **Camera.** In the air it pulls back a little with speed and the FOV widens (to +18 degrees at 34 m/s, +3 more
+  diving, with the camera a little closer: 6.5 m, was 8); it rides the swing's rise and fall instead of bobbing with every arc, leads your motion across the view so
   there is room ahead, never rolls, and the aim is still exactly where it points. Reduced motion turns this off.
 - **Animation** (view only, procedural on the Radbro rigs over their clip packs): the **head-first dive** (body along
   the flight, arms swept back, legs together), a **skydive spread** on a long fall (belly down, arms and legs out,
@@ -926,7 +926,7 @@ Double jump and slide: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.
 | web-slinger swing (round 15, player only) | `anchorHeightGain` 0.35 / `anchorHeightAhead` 0.3 / `anchorHeightFree` 12 / `anchorUpMax` 34 (web length from your height), `swingSurge` 8 / `swingSurgeCos` 0.8 (the surge), `swingReelPerSpeed` 0.7 (the floor-clamp reel per m/s), `releasePerfectUp` 2.5, `autoReleaseKeep` 0 (the share of `releaseBoost` a held-to-the-end fling gets); retuned: `swingReleaseCos` 0.53 (58 degrees; the thief keeps 0.64), `swingPerfectCos` 0.85 (32 degrees), `releasePerfect` 4.5, `releaseSweet` 6 |
 | corner swing (player only) | `cornerSwing`, `cornerReach` 13, `cornerMinSpeed` 9, `cornerStick` 0.6 (the stick's sine off your way), `cornerGravity` 0.3, `cornerBoost` 3, `cornerMaxT` 1.4, `cornerExitCos` 0.97 |
 | dive (player only) | `diveCap` 46 (the speed cap while diving), `diveTurn` 0.9 (rad/s), `diveCarryDecay` 5, `diveKeep` 2.5 / `diveSwingT` 0.4 (the dive-into-swing) |
-| web-slinger camera | `speedArm` 2, `lagY` 4 / `lagYMax` 1.6, `lookAhead` 0.06 / `lookAheadMax` 1.4, `diveFov` 5; the speed FOV now `fovBoost` 18 over `fovSpeedLo` 10 - `fovSpeedHi` 34 |
+| web-slinger camera | `speedArm` 1, `lagY` 4 / `lagYMax` 1.6, `lookAhead` 0.06 / `lookAheadMax` 1.4, `diveFov` 3, `armDive` 6.5 (was 8); the speed FOV now `fovBoost` 18 over `fovSpeedLo` 10 - `fovSpeedHi` 34 |
 | difficulty | `yankRange` per difficulty (Chill 0 = no yank, Normal 12, Degen 9: the owner's ranges; the district tweaks never change it) |
 | structures | `structures.default` + `structures.<district>`: `cables`, `cableTier1` / `cableTier2`, `cableMin`, `cableSag`, `rigApart`, `cablePairs` (1 = one cable per street pair at its centre, 2 = one near each end) / `cableInset`, `gantry`, `gantryMin` / `gantryMax` / `gantryMinL`, `skybridge` / `skybridgeLo` / `skybridgeHi`, `tanks` / `tankLo` / `tankHi`, `boards` / `boardLo` / `boardHi`, `stacks` / `stackBelowLo` / `stackBelowHi` (the §2.2 district table is the default) |
 

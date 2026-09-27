@@ -28,9 +28,9 @@ test("campaign: 15 levels, 45 stars, stable numbering, every district and mutato
 });
 
 test("campaign: star evaluation", () => {
-  const l1 = LEVELS[0]; // catch / under 18 (round 12) / no falls
+  const l1 = LEVELS[0]; // catch / under 22 (the web-slinger swing; round 12: 18) / no falls
   assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 15 }), 75), [true, true, true]);
-  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 19, falls: 1 }), 71), [true, false, false]);
+  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 23, falls: 1 }), 67), [true, false, false]);
   assert.deepEqual(evaluate(l1, "escaped", stats(), 0), [false, false, false], "no stars without the catch");
   const l2 = LEVELS[1]; // chain 4
   assert.equal(evaluate(l2, "caught", stats({ maxChain: 4 }), 40)[2], true);

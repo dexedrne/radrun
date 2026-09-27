@@ -211,7 +211,7 @@
     "wallCam": 1.4,
     "zipFov": 6,
     "armZip": 6.5,
-    "armDive": 8,
+    "armDive": 6.5,
     "chargeArm": 0.5,
     "chargeFov": 3,
     "speedArm": 1,
@@ -219,7 +219,7 @@
     "lagYMax": 1.6,
     "lookAhead": 0.06,
     "lookAheadMax": 1.4,
-    "diveFov": 5
+    "diveFov": 3
   },
   "difficulty": {
     "chill": {
