@@ -348,6 +348,16 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
   };
 }
 
+/**
+ * View helper: the point the body hangs from this step - the rope's anchor on the building, or a corner swing's web on
+ * the corner post - into `out`, or null (no web). Never read by the sim.
+ */
+export function hangPoint(b: Body, out: Vec3): Vec3 | null {
+  if (b.ropeSolid >= 0) { out.x = b.ropeA.x; out.y = b.ropeA.y; out.z = b.ropeA.z; return out; }
+  if (b.cornerOn) { out.x = b.cornerX; out.y = b.cornerY; out.z = b.cornerZ; return out; }
+  return null;
+}
+
 /** A new body's zips left: "full" (clamped to the tuning's zipCharges at the first zip). */
 export const ZIP_FULL = 99;
 
@@ -1327,6 +1337,9 @@ const CORNER_EARLY = 1;
 const CORNER_UP = 4;
 /** A corner let go of is not taken again for this long (s). */
 const CORNER_AGAIN = 0.5;
+/** A corner swing starts only this far (m) over the ground below, and holds you up: v.y eases to 0 at this rate (1/s). */
+const CORNER_CLEAR = 5;
+const CORNER_HOLD = 4;
 
 /**
  * The corner a corner swing would take this step (fills b.corner* without starting it), or false: flying (or on the
@@ -1342,6 +1355,7 @@ function cornerFind(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): bo
   const fx = v.x / hs, fz = v.z / hs, ux = mx / ml, uz = mz / ml;
   const side = fx * uz - fz * ux, along = fx * ux + fz * uz;
   if ((side < 0 ? -side : side) < k.cornerStick || along < -0.5) return false;
+  if (p.y - k.halfHeight - w.index.groundBelow(p.x, p.z, p.y) < CORNER_CLEAR) return false;
   // n: across the way you go, toward the stick.
   const nx = side > 0 ? -fz : fz, nz = side > 0 ? fx : -fx;
   const idx = w.index, R = k.cornerReach, hw = k.halfWidth;
@@ -1678,6 +1692,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     // Corner swing: a level orbit (the web on the post holds you up; light gravity), speed kept by the constraint below.
     b.cornerT += dt;
     v.y -= k.gravity * k.cornerGravity * dt;
+    v.y -= v.y * Math.min(1, CORNER_HOLD * dt);
   } else if (!b.grounded) {
     const onRope = b.ropeSolid >= 0;
     v.y -= k.gravity * (onRope ? k.swingGravity : b.diveOn ? k.diveGravity : 1) * dt;

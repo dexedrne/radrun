@@ -6,7 +6,7 @@
 // Aim = horizontal unit vector chest -> runner chest. yoink: press web on each step after one whose
 // snapshot had ringId = RUNNER.
 // The swinger (SwingBot, round 3) plays with the REAL player sim instead: see below.
-import { chargeLevel, chaseDist, emptyZipAim, pickRing, zipAim, CHEST, EV_BONK, EV_LAND, EV_PERFECT, EV_YANK, RING_RUNNER, ZIP_RIM, ZIP_TOP, type InputFrame } from "../sim/player.ts";
+import { chargeLevel, chaseDist, emptyZipAim, pickRing, zipAim, CHEST, EV_BONK, EV_CORNER, EV_DIVE, EV_LAND, EV_PERFECT, EV_YANK, RING_RUNNER, ZIP_RIM, ZIP_TOP, type InputFrame } from "../sim/player.ts";
 import { footGap as rectGap } from "../world/derive.ts";
 import { emptyAnchor } from "../world/cityQuery.ts";
 import { DT } from "../sim/tuning.ts";
@@ -265,6 +265,8 @@ export type SwingStats = {
   swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number; stalls: number;
   /** Round 12: web presses with nothing ringed, zips, leaps, yanks, perfect releases. */
   noRing: number; zips: number; leaps: number; yanks: number; perfect: number;
+  /** The web-slinger swing: corner swings, dives. */
+  corners: number; dives: number;
 };
 
 const sign = (v: number) => (v < 0 ? -1 : 1);
@@ -289,7 +291,7 @@ export class SwingBot {
   /** Spider-tag (set by its tag bot): also yank him running away while the yank still reaches, like the tech bot. Off in the chase. */
   yankAway = false;
   readonly T: Vec3 = { x: 0, y: 0, z: 0 };
-  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0, noRing: 0, zips: 0, leaps: 0, yanks: 0, perfect: 0 };
+  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0, noRing: 0, zips: 0, leaps: 0, yanks: 0, perfect: 0, corners: 0, dives: 0 };
   private pose: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
   private wasRope = false;
   /** Steps left sliding along a wall side (tower in the way), and that side's axis. */
@@ -824,6 +826,8 @@ export class SwingBot {
     if (b.events & EV_BONK) this.stats.bonks++;
     if (b.events & EV_YANK) this.stats.yanks++;
     if (b.events & EV_PERFECT) this.stats.perfect++;
+    if (b.events & EV_CORNER) this.stats.corners++;
+    if (b.events & EV_DIVE) this.stats.dives++;
     this.wasRope = b.ropeSolid >= 0;
   }
 }
