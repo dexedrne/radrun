@@ -15,5 +15,5 @@
     "resolveJsonModule": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "tools", "test", "vite.config.ts"]
+  "include": ["src", "tools", "test", "relay", "vite.config.ts"]
 }

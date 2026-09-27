@@ -2,7 +2,7 @@
 // lowest bag time wins. ONLINE lazily loads the net chunk (net/online.tsx: the lobby, the relay transport and the
 // rollback link) only when pressed or when the page is opened from a room link (?tag&room=CODE).
 // One canvas, mounted once; a match is a fresh TagMatch outside React (nothing remounts).
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import type { Vector3 } from "three";
 import { TagGame } from "../game/tagGame.ts";
@@ -14,7 +14,7 @@ import { Rand } from "../sim/math.ts";
 import {
   EV_ATTACH, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_NOANCHOR, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN, EV_YANK, EV_ZIP,
 } from "../sim/player.ts";
-import { PH_COUNTDOWN, PH_OVER, TAG_KIND_YANK, TAG_KIND_YOINK, TV_GO, TV_TAG } from "../game/tagMatch.ts";
+import { PH_COUNTDOWN, PH_OVER, TAG_KIND_YANK, TAG_KIND_YOINK } from "../game/tagMatch.ts";
 import { applyTuningJson, type TuningJson } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
 import { DISTRICTS, TUNING_URL } from "../world/districts.ts";
@@ -47,6 +47,8 @@ const SECS = DEV && params.has("secs") ? Math.max(10, Number(params.get("secs"))
 const ROOM = params.get("room");
 /** The working name; the public name is still the owner's call (DESIGN §8 decision 15). */
 export const TAG_NAME = "SPIDER-TAG";
+/** The online lobby + relay transport + rollback: a separate chunk, fetched only when ONLINE is pressed (or a room link). */
+const Online = lazy(() => import("../net/online.tsx"));
 
 export type TagScreen = "boot" | "menu" | "loading" | "match" | "results" | "online";
 export type HudRow = { slot: number; radbro: RadbroId; name: string; bag: number; holder: boolean; you: boolean; frozen: boolean; tags: number; falls: number };
@@ -136,21 +138,24 @@ function localSfx(ev: number): void {
 
 /** Fixed steps each frame, SFX, flashes, the 10 Hz HUD push and window.__tag. */
 function TagDriver({ game }: { game: TagGame }) {
-  const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0 }), []);
+  const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0, shownTag: -1, go: false }), []);
   useFrame((_, delta) => {
     game.frame(delta);
     const m = game.match;
     if (!m) return;
     const ui = useTag.getState();
-    if (game.runId !== st.runId) { st.runId = game.runId; st.beep = 4; st.tags = 0; }
+    if (game.runId !== st.runId) { st.runId = game.runId; st.beep = 4; st.tags = 0; st.shownTag = -1; st.go = false; }
     localSfx(game.frameEvents);
     // Countdown beeps, GO.
     if (m.phase === PH_COUNTDOWN) {
       const left = Math.ceil(m.countdown / 120);
       if (left < st.beep && left > 0) { st.beep = left; sfx.beep(); }
     }
-    if (game.matchEvents & TV_GO) { sfx.beep(true); flash(m.holder === game.local ? "YOU HOLD THE BAG" : "RUN!", m.holder === game.local ? "tag someone to pass it" : `${ui.names[m.holder] ?? "?"} holds the bag`, m.holder === game.local ? "#ff3355" : "#9fe6ff"); }
-    if (game.matchEvents & TV_TAG) {
+    // GO and tags are presented from the match state, not from step events: online, a tag first seen in a rollback
+    // re-sim (the other player's press arrived late) still flashes, and one a rollback undoes never flashes twice.
+    if (!st.go && m.phase !== PH_COUNTDOWN) { st.go = true; sfx.beep(true); flash(m.holder === game.local ? "YOU HOLD THE BAG" : "RUN!", m.holder === game.local ? "tag someone to pass it" : `${ui.names[m.holder] ?? "?"} holds the bag`, m.holder === game.local ? "#ff3355" : "#9fe6ff"); }
+    if (m.lastTagStep > st.shownTag) {
+      st.shownTag = m.lastTagStep;
       st.tags++;
       const kind = m.lastTagKind === TAG_KIND_YOINK ? "YOINKED" : m.lastTagKind === TAG_KIND_YANK ? "YANKED" : "TAGGED";
       if (m.lastTagTo === game.local) { sfx.bonk(); flash(`${kind}!`, "you hold the bag · web-tangled", "#ff3355"); }
@@ -496,6 +501,11 @@ export default function TagPage() {
       {(inMatch || screen === "results") && <Hud />}
       {screen === "results" && <Results onRematch={rematch} onMenu={toMenu} />}
       {touch && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
+      {online && (
+        <Suspense fallback={screen === "online" ? <div style={{ ...layer, display: "grid", placeItems: "center" }}><div style={panel}>loading online…</div></div> : null}>
+          <Online game={game} radbro={radbro} setRadbro={setRadbro} room={ROOM} district={PAGE_DISTRICT} onExit={toMenu} />
+        </Suspense>
+      )}
       {paused && inMatch && <PauseOverlay onResume={() => (touch ? (game.paused = false, setPaused(false)) : requestLock(canvasEl()))} onQuit={toMenu} />}
     </>
   );

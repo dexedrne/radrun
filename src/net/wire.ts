@@ -10,14 +10,17 @@
 // DESIGN §3.4 planned a 31-bit word; round 12 added the pitch column and the C-held bit, so a step is 5 bytes.
 //
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
-import { B_JUMP, B_SLIDE, B_WEB_PRESSED, B_ZIP, type InputRec } from "../game/ghost.ts";
+import type { InputRec } from "../game/ghost.ts";
 
 /** Bumped on any change to the wire format or the online match rules. */
 export const NET_VERSION = 1;
 
 const LO = 4294967296;
-/** Button bits that are one-step edges: a prediction never repeats them. */
-export const PRESS_BITS = B_JUMP | B_WEB_PRESSED | B_ZIP | B_SLIDE;
+/**
+ * Button bits that are one-step edges (the ghost record's B_JUMP | B_WEB_PRESSED | B_ZIP | B_SLIDE; test/wire.test.ts
+ * checks them): a prediction never repeats them. Spelled out so the relay bundle never pulls in the sim.
+ */
+export const PRESS_BITS = 1 | 2 | 8 | 16;
 
 const s8 = (v: number) => ((v & 0xff) << 24) >> 24;
 
@@ -239,7 +242,7 @@ export type ClientMsg =
   | { t: "hello"; compat: Compat; name: string; radbro: string; touch: boolean; easy: boolean; district: string; token?: string }
   | { t: "pick"; radbro: string }
   | { t: "config"; seconds?: number }
-  | { t: "ready"; ready: boolean }
+  | { t: "ready"; ready: boolean; rtt?: number }
   | { t: "end"; step: number; hash: number; bag: number[] };
 
 export type StartMsg = {
@@ -250,6 +253,8 @@ export type StartMsg = {
   slots: { slot: number; name: string; radbro: string; touch: boolean; easy: boolean }[];
   config: RoomConfig;
   round: number;
+  /** Steps of input delay for everyone in this match (from the players' round trips). */
+  inputDelay: number;
 };
 
 export type ServerMsg =

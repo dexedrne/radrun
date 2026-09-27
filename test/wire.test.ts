@@ -8,7 +8,7 @@ import {
 import {
   CODE_ALPHABET, cleanName, decodeAck, decodeDesync, decodeFill, decodeInput, decodePing, decodePong, decodeRelayInput, decodeSlotHash,
   encodeAck, encodeDesync, encodeFill, encodeInput, encodePing, encodePong, encodeRelayInput, encodeSlotHash, isRoomCode, packWord,
-  predictWord, roomCode, unpackWord, MAX_INPUT_COUNT,
+  predictWord, roomCode, unpackWord, MAX_INPUT_COUNT, PRESS_BITS,
 } from "../src/net/wire.ts";
 import { mulberry32 } from "../src/sim/math.ts";
 
@@ -26,6 +26,10 @@ test("word: every record field round-trips, extremes included", () => {
     assert.ok(Number.isInteger(w) && w >= 0 && w < 2 ** 40);
     assert.deepEqual(unpackWord(w, out), c);
   }
+});
+
+test("the press bits are the ghost record's edge buttons", () => {
+  assert.equal(PRESS_BITS, B_JUMP | B_WEB_PRESSED | B_ZIP | B_SLIDE);
 });
 
 test("prediction: clears jump / web press / zip / slide press, keeps web held, C held, aim and move", () => {

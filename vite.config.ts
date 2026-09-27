@@ -6,6 +6,16 @@ import { execFileSync } from "node:child_process";
 
 const LEVEL_FILES = new Set(["city.json", "decor.json", "tuning.json"]);
 
+/** Build id for online play (DESIGN §3.6): clients on different builds are told to reload instead of desyncing. */
+function buildId(): string {
+  if (process.env.VITE_BUILD_ID) return process.env.VITE_BUILD_ID;
+  try {
+    return execFileSync("git", ["rev-parse", "--short=10", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return "dev";
+  }
+}
+
 /**
  * Dev-only: POST /__rugrun/save?file=<city|decor|tuning>.json[&map=<district>] writes the district's
  * level file (Downtown: public/levels/, others public/levels/<map>/; tuning.json is always shared).
@@ -57,6 +67,7 @@ function devSave(): Plugin {
 
 export default defineConfig({
   plugins: [react(), devSave()],
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
   server: { port: 4870, strictPort: false },
   preview: { port: 4871 },
   build: { chunkSizeWarningLimit: 4000 },
