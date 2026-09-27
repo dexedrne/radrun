@@ -580,7 +580,7 @@ export function zipAim(b: Body, a: AnchorHit | null, aimX: number, aimY: number,
   out.kind = ZIP_NONE; out.solid = -1;
   const fa = w.forceAnchor;
   if (fa !== undefined) return fa !== null && fa.solid >= 0 ? zipOnAnchor(b, fa, k, w, out) : ZIP_NONE;
-  const idx = w.index, p = b.p;
+  const p = b.p;
   let ax = aimX, az = aimZ;
   const al = Math.sqrt(ax * ax + az * az);
   if (al < 1e-9) return ZIP_NONE;
@@ -591,9 +591,54 @@ export function zipAim(b: Body, a: AnchorHit | null, aimX: number, aimY: number,
   let sy = s0 * cl + c0 * sl;
   if (sy < k.zipAimMin) sy = k.zipAimMin; else if (sy > k.zipAimMax) sy = k.zipAimMax;
   const cy = Math.sqrt(Math.max(0, 1 - sy * sy));
-  const dx = ax * cy, dy = sy, dz = az * cy, R = k.zipReach;
-  const cx0 = p.x, cy0 = p.y + CHEST, cz0 = p.z, ex = cx0 + dx * R, ey = cy0 + dy * R, ez = cz0 + dz * R;
-  // The first solid on the ray (the roof stood on is skipped).
+  const dx = ax * cy, dy = sy, dz = az * cy;
+  const cx0 = p.x, cy0 = p.y + CHEST, cz0 = p.z;
+  if (zipRay(b, cx0, cy0, cz0, dx, dy, dz, k, w, out) < Infinity) return zipFinish(b, out);
+  if (a !== null && a.solid >= 0) {
+    // Aim assist: the ringed anchor, when it lies within zipAssistCos of the aim.
+    const vx = a.ax - cx0, vy = a.ay - cy0, vz = a.az - cz0, vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    if (vl > 1e-6 && vl <= k.zipReach && (vx * dx + vy * dy + vz * dz) >= k.zipAssistCos * vl) return zipOnAnchor(b, a, k, w, out);
+  }
+  // Round 12 fix, the zip fan: nothing on the ray and nothing ringed near it (falling in a canyon while looking at him,
+  // say) - the same ray cast at half and then the full zipFanCos angle off the aim, 8 ways round (up first, then the
+  // upper diagonals, the sides, the lower ones, down); the first ring with a hit takes its first hit in that order.
+  // Still never open sky. Basis: r = the horizontal right of the aim, u = up across it (both unit, both _|_ d).
+  if (k.zipFanCos >= 1 || k.zipFanCos <= 0) return ZIP_NONE;
+  const fs = Math.sqrt(Math.max(0, 1 - k.zipFanCos * k.zipFanCos));
+  const rx = -az, rz = ax, ux = -ax * dy, uy = cy, uz = -az * dy;
+  for (let ring = 0; ring < 2; ring++) {
+    // tan of the half angle, then of the full one (trig-free: tan(t / 2) = sin t / (1 + cos t)).
+    const tn = ring === 0 ? fs / (1 + k.zipFanCos) : fs / k.zipFanCos, inv = 1 / Math.sqrt(1 + tn * tn);
+    for (let i = 0; i < 8; i++) {
+      const cu = FAN_U[i], cr = FAN_R[i];
+      const ex = (dx + tn * (cu * ux + cr * rx)) * inv, ey = (dy + tn * cu * uy) * inv, ez = (dz + tn * (cu * uz + cr * rz)) * inv;
+      if (zipRay(b, cx0, cy0, cz0, ex, ey, ez, k, w, out) < Infinity) return zipFinish(b, out);
+    }
+  }
+  out.kind = ZIP_NONE; out.solid = -1;
+  return ZIP_NONE;
+}
+
+/** The zip fan's 8 ways round the aim (up / right components): up, the upper diagonals, the sides, the lower ones, down. */
+const FAN_U = [1, 0.7071067811865476, 0.7071067811865476, 0, 0, -0.7071067811865476, -0.7071067811865476, -1];
+const FAN_R = [0, 0.7071067811865476, -0.7071067811865476, 1, -1, 0.7071067811865476, -0.7071067811865476, 0];
+
+/** A rim target needs no more; a face / cable / top point: straight at it from the body. */
+function zipFinish(b: Body, out: ZipAim): number {
+  if (out.kind === ZIP_RIM) return ZIP_RIM;
+  zipDir(b, out);
+  return out.kind;
+}
+
+/**
+ * One zip ray from the chest (cx0, cy0, cz0) along unit (dx, dy, dz) within zipReach: the first solid face or top on it
+ * (floating solids included; the roof stood on is skipped), or the first cable passing within zipRigAssist of it,
+ * whichever is nearer. Fills `out` (kind, solid, points, normal; not the direction) and returns the hit's parameter
+ * along the ray (0..1), Infinity when nothing is hit.
+ */
+function zipRay(b: Body, cx0: number, cy0: number, cz0: number, dx: number, dy: number, dz: number, k: Tuning, w: SimWorld, out: ZipAim): number {
+  const idx = w.index, R = k.zipReach;
+  const ex = cx0 + dx * R, ey = cy0 + dy * R, ez = cz0 + dz * R;
   const skip = b.grounded ? b.roofId : -1;
   let ts = Infinity;
   if (segmentFace(idx, cx0, cy0, cz0, ex, ey, ez, skip, FH)) ts = FH.dist;
@@ -630,25 +675,18 @@ export function zipAim(b: Body, a: AnchorHit | null, aimX: number, aimY: number,
     }
   }
   if (rq >= 0 && tr < ts) {
-    out.kind = ZIP_CABLE; out.solid = RIG0 + rq; out.x = out.hx = qx; out.y = out.hy = qy; out.z = out.hz = qz; out.nx = out.nz = 0;
-  } else if (ts < Infinity) {
-    const hx = cx0 + (ex - cx0) * ts, hy = cy0 + (ey - cy0) * ts, hz = cz0 + (ez - cz0) * ts;
-    const s = idx.solids[FH.solid];
-    out.solid = s.id; out.hx = hx; out.hy = hy; out.hz = hz;
-    if (FH.ny > 0) { out.kind = ZIP_TOP; out.x = hx; out.y = hy + k.halfHeight + 0.05; out.z = hz; out.nx = out.nz = 0; }
-    else if (FH.ny < 0) { out.kind = ZIP_UNDER; out.x = hx; out.y = hy - k.halfHeight - 0.2; out.z = hz; out.nx = out.nz = 0; }
-    else if (s.landable && s.top - hy <= k.zipRimReach) { zipRim(b, s.id, hx, s.top, hz, FH.nx, FH.nz, k, out); out.hy = hy; }
-    else zipFace(hx, hy, hz, FH.nx, FH.nz, k, out);
-  } else if (a !== null && a.solid >= 0) {
-    // Aim assist: the ringed anchor, when it lies within zipAssistCos of the aim.
-    const vx = a.ax - cx0, vy = a.ay - cy0, vz = a.az - cz0, vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
-    if (vl < 1e-6 || vl > R || (vx * dx + vy * dy + vz * dz) < k.zipAssistCos * vl) return ZIP_NONE;
-    return zipOnAnchor(b, a, k, w, out);
-  } else return ZIP_NONE;
-  if (out.kind === ZIP_RIM) return ZIP_RIM;
-  // (A face / cable / top point: straight at it from the body.)
-  zipDir(b, out);
-  return out.kind;
+    out.kind = ZIP_CABLE; out.solid = RIG0 + rq; out.x = out.hx = qx; out.y = out.hy = qy; out.z = out.hz = qz; out.nx = out.nz = 0; out.top = 0;
+    return tr;
+  }
+  if (ts === Infinity) return Infinity;
+  const hx = cx0 + (ex - cx0) * ts, hy = cy0 + (ey - cy0) * ts, hz = cz0 + (ez - cz0) * ts;
+  const s = idx.solids[FH.solid];
+  out.solid = s.id; out.hx = hx; out.hy = hy; out.hz = hz; out.top = 0;
+  if (FH.ny > 0) { out.kind = ZIP_TOP; out.x = hx; out.y = hy + k.halfHeight + 0.05; out.z = hz; out.nx = out.nz = 0; }
+  else if (FH.ny < 0) { out.kind = ZIP_UNDER; out.x = hx; out.y = hy - k.halfHeight - 0.2; out.z = hz; out.nx = out.nz = 0; }
+  else if (s.landable && s.top - hy <= k.zipRimReach) { zipRim(b, s.id, hx, s.top, hz, FH.nx, FH.nz, k, out); out.hy = hy; }
+  else zipFace(hx, hy, hz, FH.nx, FH.nz, k, out);
+  return ts;
 }
 
 // Module scratch (the hot path never allocates).

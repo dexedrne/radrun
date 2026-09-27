@@ -208,6 +208,15 @@ export type Tuning = {
   rigBonus: number;
   rigEndInset: number;
   /**
+   * Round 12 fix: a cable point more than rigSideFree m off your line scores rigSide worse per m (a side street's cable
+   * at a crossing swings you into the facades), and one less than rigNearAhead m ahead scores rigNear worse per m short
+   * (nearly overhead: a drop, not a swing).
+   */
+  rigSide: number;
+  rigSideFree: number;
+  rigNear: number;
+  rigNearAhead: number;
+  /**
    * Straight zip (§4): reach (m); the aim is the camera forward pitched up by zipLift (a sine), clamped to
    * [zipAimMin, zipAimMax] (sines); a cable within zipRigAssist m of the ray counts as hit; with nothing hit the
    * ringed anchor within zipAssistCos of the aim is the target. The pull ends zipStop m short; an early end keeps
@@ -219,6 +228,11 @@ export type Tuning = {
   zipAimMax: number;
   zipRigAssist: number;
   zipAssistCos: number;
+  /**
+   * Round 12 fix, the zip fan: with nothing on the aim ray and nothing ringed near it, the ray is cast again at half and
+   * then the full angle whose cosine this is, 8 ways round the aim (1 = off).
+   */
+  zipFanCos: number;
   zipStop: number;
   zipKeep: number;
   zipCharges: number;
@@ -403,12 +417,17 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   zipLedgeUp: 4,
   rigBonus: 4,
   rigEndInset: 2,
+  rigSide: 1,
+  rigSideFree: 4,
+  rigNear: 2,
+  rigNearAhead: 12,
   zipReach: 45,
   zipLift: 0.14,
   zipAimMin: -0.34,
   zipAimMax: 0.77,
   zipRigAssist: 1.2,
   zipAssistCos: 0.966,
+  zipFanCos: 0.94,
   zipStop: 1,
   zipKeep: 0.85,
   zipCharges: 2,
@@ -479,7 +498,7 @@ export function runnerFrom(player: Readonly<Tuning>): Tuning {
 export const TECH_KEYS: readonly (keyof Tuning)[] = [
   "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
   "yankRange", "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
-  "zipPopWindow", "zipPopUp", "zipPopFwd", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos",
+  "zipPopWindow", "zipPopUp", "zipPopFwd", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipFanCos",
 ];
 /** Player-only keys the runner never uses (double jump, slide, round 12 tech): left out of the bake's tuning hash. */
 export const RUNNER_UNUSED_KEYS: readonly (keyof Tuning)[] = [
@@ -566,8 +585,8 @@ export const TUNABLE_KEYS = [
   "rollMinVy", "rollTime", "stumbleVy", "stumbleKeep", "stumbleLock", "failFloor",
   "airJumps", "doubleJumpSpeed", "webZip", "zipSpeed", "zipPull", "zipCooldown",
   "zipMaxTime", "zipFlingUp", "zipLedgeSpeed", "zipLedgeUp",
-  "rigBonus", "rigEndInset",
-  "zipReach", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipStop", "zipKeep", "zipCharges", "zipRimReach", "zipPopWindow", "zipPopUp", "zipPopFwd",
+  "rigBonus", "rigEndInset", "rigSide", "rigSideFree", "rigNear", "rigNearAhead",
+  "zipReach", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipFanCos", "zipStop", "zipKeep", "zipCharges", "zipRimReach", "zipPopWindow", "zipPopUp", "zipPopFwd",
   "charge", "chargeMin", "chargeTime", "chargeWalk", "chargeUp", "chargeFwd", "chargeWallOut", "chargeWallUp", "chargeHangMax", "chargeFling", "chargeFlingUp", "chargeAir",
   "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
   "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
@@ -659,6 +678,9 @@ export type StructureKnobs = {
   cableSag: number;
   /** Same-tier cables at least this far apart along a street run (m). */
   rigApart: number;
+  /** Round 12 fix: cables per street pair (1 = one at its span's centre; 2 = one at each end, cableInset m in from the corners). */
+  cablePairs: number;
+  cableInset: number;
   gantry: boolean;
   gantryMin: number;
   gantryMax: number;
@@ -677,7 +699,7 @@ export type StructureKnobs = {
   stackBelowHi: number;
 };
 export const STRUCTURES_DEFAULT: Readonly<StructureKnobs> = Object.freeze({
-  cables: 1, cableTier1: 0.55, cableTier2: 0.85, cableMin: 12, cableSag: 0.25, rigApart: 12,
+  cables: 1, cableTier1: 0.55, cableTier2: 0.85, cableMin: 12, cableSag: 0.25, rigApart: 8, cablePairs: 2, cableInset: 2.5,
   gantry: true, gantryMin: 13, gantryMax: 16, gantryMinL: 30,
   skybridge: 0.12, skybridgeLo: 0.35, skybridgeHi: 0.6,
   tanks: 0.1, tankLo: 7, tankHi: 10, boards: 0.15, boardLo: 6, boardHi: 8,
@@ -686,9 +708,9 @@ export const STRUCTURES_DEFAULT: Readonly<StructureKnobs> = Object.freeze({
 /** §2.2 district table (Downtown = the defaults). */
 export const STRUCTURES_DISTRICT: Readonly<Record<string, Partial<StructureKnobs>>> = Object.freeze({
   towers: { cableTier1: 0.45, cableTier2: 0.75, skybridge: 0.2, tanks: 0.05, boards: 0.1, stacks: 0.12 },
-  market: { cables: 0.7, cableTier1: 0.85, cableTier2: 0, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0.1 },
-  docks: { cables: 0.5, cableTier1: 0.85, cableTier2: 0, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0 },
-  vertigo: { cables: 0.6, cableTier1: 0.6, cableTier2: 0, gantry: false, skybridge: 0.08, tanks: 0.1, boards: 0, stacks: 0 },
+  market: { cables: 0.7, cableTier1: 0.85, cableTier2: 0, rigApart: 12, cablePairs: 1, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0.1 },
+  docks: { cables: 1, cableTier1: 0.85, cableTier2: 0, gantry: false, skybridge: 0, tanks: 0.25, boards: 0.15, stacks: 0 },
+  vertigo: { cables: 0.6, cableTier1: 0.6, cableTier2: 0, rigApart: 12, cablePairs: 1, gantry: false, skybridge: 0.08, tanks: 0.1, boards: 0, stacks: 0 },
 });
 /** The live structure knobs: `default` + per-district overrides (tuning.json "structures" replaces them). */
 export const STRUCTURES: { default: StructureKnobs; [district: string]: Partial<StructureKnobs> } = {

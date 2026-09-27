@@ -56,10 +56,10 @@ const PLAYER_GROUPS: [string, Slider<keyof Tuning>[]][] = [
   ["round 12: straight zip (E)", [
     ["zipSpeed", 8, 45, 0.5], ["zipPull", 2, 120, 1], ["zipCooldown", 0, 3, 0.05], ["zipMaxTime", 0.3, 3, 0.05], ["zipFlingUp", 0, 12, 0.25],
     ["zipLedgeSpeed", 0, 20, 0.25], ["zipLedgeUp", 0, 10, 0.25], ["zipReach", 15, 70, 0.5], ["zipLift", 0, 0.5, 0.01], ["zipAimMin", -0.9, 0, 0.01],
-    ["zipAimMax", 0, 0.95, 0.01], ["zipRigAssist", 0, 3, 0.05], ["zipAssistCos", 0.8, 1, 0.002], ["zipStop", 0.3, 3, 0.05], ["zipKeep", 0, 1.2, 0.05],
+    ["zipAimMax", 0, 0.95, 0.01], ["zipRigAssist", 0, 3, 0.05], ["zipAssistCos", 0.8, 1, 0.002], ["zipFanCos", 0.8, 1, 0.002], ["zipStop", 0.3, 3, 0.05], ["zipKeep", 0, 1.2, 0.05],
     ["zipCharges", 1, 5, 1], ["zipRimReach", 0, 5, 0.1], ["zipPopWindow", 0, 0.6, 0.01], ["zipPopUp", 0, 22, 0.25], ["zipPopFwd", 0, 14, 0.25],
   ]],
-  ["round 12: rig anchors (cables)", [["rigBonus", 0, 10, 0.25], ["rigEndInset", 0, 6, 0.1]]],
+  ["round 12: rig anchors (cables)", [["rigBonus", 0, 10, 0.25], ["rigEndInset", 0, 6, 0.1], ["rigSide", 0, 4, 0.05], ["rigSideFree", 0, 12, 0.25], ["rigNear", 0, 3, 0.05], ["rigNearAhead", 0, 20, 0.5]]],
   ["round 12: charge (hold C)", [
     ["chargeMin", 0, 0.4, 0.01], ["chargeTime", 0.2, 1.5, 0.01], ["chargeWalk", 0, 9, 0.25], ["chargeUp", 0, 25, 0.25], ["chargeFwd", 0, 16, 0.25],
     ["chargeWallOut", 0, 14, 0.25], ["chargeWallUp", 0, 16, 0.25], ["chargeHangMax", 0, 4, 0.05], ["chargeFling", 0, 16, 0.25], ["chargeFlingUp", 0, 10, 0.25],
@@ -82,7 +82,7 @@ const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
 /** Round 12 structure knobs (§9; per district, re-derived in the sandbox; Save -> npm run level -- --all bakes them). */
 const STRUCTURE_SLIDERS: Slider<keyof StructureKnobs>[] = [
   ["cables", 0, 1, 0.01], ["cableTier1", 0.3, 0.95, 0.01], ["cableTier2", 0, 0.95, 0.01], ["cableMin", 8, 30, 0.5], ["cableSag", 0, 1.5, 0.05],
-  ["rigApart", 6, 30, 0.5], ["gantryMin", 10, 20, 0.25], ["gantryMax", 10, 24, 0.25], ["gantryMinL", 15, 60, 0.5], ["skybridge", 0, 0.5, 0.01],
+  ["rigApart", 6, 30, 0.5], ["cablePairs", 1, 2, 1], ["cableInset", 1, 8, 0.25], ["gantryMin", 10, 20, 0.25], ["gantryMax", 10, 24, 0.25], ["gantryMinL", 15, 60, 0.5], ["skybridge", 0, 0.5, 0.01],
   ["skybridgeLo", 0.2, 0.7, 0.01], ["skybridgeHi", 0.3, 0.8, 0.01], ["tanks", 0, 0.6, 0.01], ["tankLo", 5, 12, 0.25], ["tankHi", 6, 14, 0.25],
   ["boards", 0, 0.6, 0.01], ["boardLo", 4, 10, 0.25], ["boardHi", 5, 12, 0.25], ["stacks", 0, 0.5, 0.01], ["stackBelowLo", 2, 10, 0.25], ["stackBelowHi", 3, 15, 0.25],
 ];
@@ -104,8 +104,8 @@ const MECH_SLIDERS: Slider<keyof MechTuning>[] = [
   ["lowGravity", 0.3, 1, 0.05], ["sixtyClock", 20, 90, 5],
 ];
 const DIFF_SLIDERS: Slider<keyof DifficultyParams>[] = [
-  ["base", 0.6, 1.4, 0.01], ["gStar", 8, 60, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 2.5, 0.01], ["panicBudget", 0, 60, 0.5],
-  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 2.5, 0.01], ["lead", 0, 6, 0.1],
+  ["base", 0.6, 2.5, 0.01], ["gStar", 8, 100, 0.5], ["mMin", 0.5, 1, 0.01], ["mMax", 1, 3.2, 0.01], ["panicBudget", 0, 80, 0.5],
+  ["sigma", 0, 1.5, 0.05], ["yoinkRange", 2, 10, 0.1], ["taunt", 0, 3, 0.1], ["airMin", 0.6, 1, 0.01], ["airMax", 1, 3.2, 0.01], ["lead", 0, 30, 0.1],
   ["yankRange", 0, 25, 0.5],
 ];
 

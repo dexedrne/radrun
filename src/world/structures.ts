@@ -18,6 +18,8 @@ export const SRULES = {
   underTop: 3,
   /** No cable this close (m, along the street) to a skybridge or gantry. */
   fixtureClear: 10,
+  /** Any two cables on a street at least this far apart (m; G9), and cablePairs 2 needs this much between a pair's two. */
+  pairMin: 6,
   /** Floating fixtures: bottom at least this high (m). */
   floatMin: 12,
   /** Street runs: two pairs are on the same street when their centre lines are this close (m) and their gaps overlap. */
@@ -176,20 +178,27 @@ export function deriveStructures(solids: Solid[], adjacency: Adjacency[], knobs:
     const placed: { s: number; tier: number }[] = [];
     run.stations.forEach((x, i) => {
       if (kind[i]) return;
-      const sx = run.axis === "x" ? x.c : x.s, sz = run.axis === "x" ? x.s : x.c;
-      if (!(knobs.cables > 0 && H(sx, sz, 4) < knobs.cables)) return;
-      const tier = knobs.cableTier2 > 0 ? i % 2 : 0;
-      const f = tier === 0 ? knobs.cableTier1 : knobs.cableTier2;
-      if (placed.some(p => p.tier === tier && Math.abs(p.s - x.s) < knobs.rigApart - EPS)) return;
-      if (fl.some(q => Math.abs(q.s - x.s) - q.half < SRULES.fixtureClear)) return;
-      const h = Math.min(Math.max(x.L * f + (2 * H(sx, sz, 5) - 1) * 0.04 * x.L, knobs.cableMin), x.L - SRULES.underTop);
-      if (h <= 0) return;
-      const y = r3(h);
-      rigs.push(run.axis === "x"
-        ? { kind: "cable", ax: r3(x.edge), ay: y, az: r3(x.s), bx: r3(x.far), by: y, bz: r3(x.s), sag: knobs.cableSag }
-        : { kind: "cable", ax: r3(x.s), ay: y, az: r3(x.edge), bx: r3(x.s), by: y, bz: r3(x.far), sag: knobs.cableSag });
-      cableEnds.push(run.axis === "x" ? { x: x.edge, z: x.s } : { x: x.s, z: x.edge }, run.axis === "x" ? { x: x.far, z: x.s } : { x: x.s, z: x.far });
-      placed.push({ s: x.s, tier });
+      // Where this pair's cables go along the street: its span's centre (the spec's one station per pair), or with
+      // cablePairs 2 (round 12 fix) both ends of the span, cableInset m in from the corners - a cable on each side of
+      // every crossing and alley, so the canyons get one every ~9-26 m instead of every 23-40 m.
+      const span = x.hi - x.lo;
+      const at = knobs.cablePairs >= 2 && span >= 2 * knobs.cableInset + SRULES.pairMin ? [x.lo + knobs.cableInset, x.hi - knobs.cableInset] : [x.s];
+      for (const s of at) {
+        const sx = run.axis === "x" ? x.c : s, sz = run.axis === "x" ? s : x.c;
+        if (!(knobs.cables > 0 && H(sx, sz, 4) < knobs.cables)) continue;
+        const tier = knobs.cableTier2 > 0 ? i % 2 : 0;
+        const f = tier === 0 ? knobs.cableTier1 : knobs.cableTier2;
+        if (placed.some(p => (p.tier === tier && Math.abs(p.s - s) < knobs.rigApart - EPS) || Math.abs(p.s - s) < SRULES.pairMin - EPS)) continue;
+        if (fl.some(q => Math.abs(q.s - s) - q.half < SRULES.fixtureClear)) continue;
+        const h = Math.min(Math.max(x.L * f + (2 * H(sx, sz, 5) - 1) * 0.04 * x.L, knobs.cableMin), x.L - SRULES.underTop);
+        if (h <= 0) continue;
+        const y = r3(h);
+        rigs.push(run.axis === "x"
+          ? { kind: "cable", ax: r3(x.edge), ay: y, az: r3(s), bx: r3(x.far), by: y, bz: r3(s), sag: knobs.cableSag }
+          : { kind: "cable", ax: r3(s), ay: y, az: r3(x.edge), bx: r3(s), by: y, bz: r3(x.far), sag: knobs.cableSag });
+        cableEnds.push(run.axis === "x" ? { x: x.edge, z: s } : { x: s, z: x.edge }, run.axis === "x" ? { x: x.far, z: s } : { x: s, z: x.far });
+        placed.push({ s, tier });
+      }
     });
   }
 

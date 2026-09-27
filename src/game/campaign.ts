@@ -39,18 +39,20 @@ const catchIt: Objective = { kind: "catch" };
 // cities (100 seeds per level; where it catches in fewer rounds than that, the star takes about 9 in 10 of
 // its catches); L4 and L9 swap a time / close-call star for parkour moves. Round 12 (the straight zip, the leap, the
 // yank; 150 seeds per level with the full-kit bot): time stars re-set, the web-catch star takes a yank too, and L10
-// swaps its chain star for tech moves (perfect releases, zip pops, rebounds, kick chains, full leaps).
+// swaps its chain star for tech moves (perfect releases, zip pops, rebounds, kick chains, full leaps). Round 12 fixes
+// (the owner's yank ranges, the cable-swinging thief, the round 12 fix table): L3 under 60, L5 under 88 (the bot
+// catches him in ~61 % of its no-Yoink rounds), L7 under 60, L10 under 70.
 export const LEVELS: readonly Level[] = [
   { n: 1, name: "First Pour", map: "downtown", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "under", s: 18 }, { kind: "noFalls" }], blurb: "He swiped your bag. Learn the ropes." },
   { n: 2, name: "Rush Hour", map: "downtown", difficulty: "normal", mutators: 0, goals: [catchIt, { kind: "under", s: 60 }, { kind: "chain", n: 4 }], blurb: "Normal speed. Chain your swings down the avenues." },
-  { n: 3, name: "Snap Quiz", map: "downtown", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 50 }], blurb: "Webs snap after 1.6 s. Keep them short." },
+  { n: 3, name: "Snap Quiz", map: "downtown", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 60 }], blurb: "Webs snap after 1.6 s. Keep them short." },
   { n: 4, name: "Neon Alleys", map: "market", difficulty: "chill", mutators: 0, goals: [catchIt, { kind: "parkour", n: 6 }, { kind: "noFalls" }], blurb: "Low roofs, few anchors. Vault, climb and wall-kick." },
-  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 80 }], blurb: "No lasso tonight. You have to touch him." },
+  { n: 5, name: "Hands Only", map: "market", difficulty: "normal", mutators: M_NOYOINK, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "under", s: 88 }], blurb: "No lasso tonight. You have to touch him." },
   { n: 6, name: "Lights Out", map: "market", difficulty: "normal", mutators: M_NIGHT, goals: [catchIt, { kind: "yoink" }, { kind: "under", s: 55 }], blurb: "The market after dark." },
-  { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 75 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
+  { n: 7, name: "Sea Breeze", map: "docks", difficulty: "normal", mutators: M_WIND, goals: [catchIt, { kind: "under", s: 60 }, { kind: "noFalls" }], blurb: "Gusts off the water. Watch the arrow." },
   { n: 8, name: "Moon Jump", map: "docks", difficulty: "normal", mutators: M_WIND | M_LOWGRAV, goals: [catchIt, { kind: "chain", n: 5 }, { kind: "yoink" }], blurb: "Low gravity, long flights, same wind." },
   { n: 9, name: "Last Call", map: "docks", difficulty: "normal", mutators: M_WIND | M_SIXTY, goals: [catchIt, { kind: "under", s: 50 }, { kind: "parkour", n: 4 }], blurb: "Sixty seconds on the clock." },
-  { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "under", s: 55 }, { kind: "tech", n: 3 }], blurb: "Tall roofs, deep drops, snapping webs. Let go on time, pop off your zips." },
+  { n: 10, name: "Altitude", map: "towers", difficulty: "normal", mutators: M_SNAP, goals: [catchIt, { kind: "under", s: 70 }, { kind: "tech", n: 3 }], blurb: "Tall roofs, deep drops, snapping webs. Let go on time, pop off your zips." },
   { n: 11, name: "High Winds", map: "towers", difficulty: "normal", mutators: M_SNAP | M_WIND, goals: [catchIt, { kind: "noFalls" }, { kind: "yoink" }], blurb: "Snapping webs and wind at altitude." },
   { n: 12, name: "Rugpull", map: "towers", difficulty: "degen", mutators: M_SNAP | M_WIND | M_ONELIFE, goals: [catchIt, { kind: "under", s: 35 }, { kind: "yoink" }], blurb: "Degen runner. One life. Don't fall." },
   // Round 7: Vertigo, the descending chase (swing bot, 300 seeds: L13 catch 97 % / no falls 94 % / chain 5 63 %;

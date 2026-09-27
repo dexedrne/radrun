@@ -20,8 +20,9 @@ export type BotKind = "follow" | "camper" | "swing";
 /** k: follower speed factor (follow / camper); ignored by the swinger. */
 /**
  * moves (swing bot): the full kit - double jumps, slides, round 12's straight zip, charged leaps and the yank, and it
- * swings to the auto-release (tools/balance's banded rows). tech (round 12, info row): also lets go in the perfect
- * window.
+ * swings to the auto-release (tools/balance's banded rows). tech (round 12): also the timing moves - it lets go in the
+ * perfect window when he is above it, turns a bonk into a rebound kick, dives at him when he is well below, and
+ * yanks him running away while the yank still reaches.
  */
 export type BotOptions = { kind: BotKind; k: number; yoink: boolean; moves?: boolean; tech?: boolean };
 
@@ -222,6 +223,14 @@ export const SWING = {
   leapUp: 6,
   leapHold: 6.5,
   leapLate: 2.5,
+  /** Round 12 fix, the tech bot: it lets go in the perfect window (its timed lift) only when he is more than this above it. */
+  perfectBelow: 2,
+  /** ...and it yanks him running away when he is within this share of the yank's reach against his speed away. */
+  yankReach: 0.8,
+  /** ...and it dives when falling with him more than diveAbove m below and within diveReach m across, until diveStop m over him. */
+  diveAbove: 10,
+  diveStop: 5,
+  diveReach: 40,
   /** Round 12: falling with nothing ringed, zip along the lane / at him pitched this much up (a sine). */
   airZipUp: 0.35,
   /** Red ring -> click reaction, steps (uniform). */
@@ -624,7 +633,7 @@ export class SwingBot {
         // Round 12: the full-kit bot holds on to the auto-release like a Normal human; the tech bot lets go in the
         // perfect window. The classic bot keeps round 11's early release.
         held = this.moves
-          ? !(this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && this.perfect(round)))
+          ? !(this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && T.y > P.y + SWING.perfectBelow && this.perfect(round)))
           : !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
         if (!held) this.letGo = this.upTo(round) ? "lane:up" : high ? "lane:high" : "lane:other";
       } else {
@@ -663,6 +672,7 @@ export class SwingBot {
     inp.aimY = 0;
     if (this.moves) this.useMoves(round, inp, d, held);
     if (climb) { inp.zipPressed = b.ropeSolid < 0; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false; this.setAim(inp, this.zx, this.zz); inp.aimY = this.zy; }
+    if (this.tech) this.techMoves(round, inp);
     if (inp.webPressed && this.ring(round, inp) < 0 && b.ropeSolid < 0) this.stats.noRing++;
     // YOINK: a red ring held for the reaction time -> click.
     if (this.ring(round, inp) === RING_RUNNER) {
@@ -688,6 +698,24 @@ export class SwingBot {
     const dx = x - P.x, dy = y - (P.y + CHEST), dz = z - P.z, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
     this.setAim(inp, dx, dz);
     inp.aimY = l > 1e-6 ? this.pitchFor(round, dy / l) : 0;
+  }
+
+  /**
+   * Round 12 fix, the tech bot's other timing moves: Jump right after a head-on bonk (the rebound kick instead of the
+   * stop) and the dive at him when he is well below. (Not the zip pop: popping off its zips made it catch less - the
+   * rim's ledge pop carries it on faster - so skill here is knowing when not to.)
+   */
+  private techMoves(round: Round, inp: InputFrame): void {
+    const b = round.player, k = round.tuning, P = b.p, T = this.T;
+    if (b.bonkT > 0 && b.rebT <= k.reboundWindow && !b.grounded) { inp.jumpPressed = true; return; }
+    // The dive: falling toward him when he is well below and not far off (C held until it is nearly down to him).
+    if (k.dive && !b.grounded && b.ropeSolid < 0 && !b.zipOn && !b.yankOn && b.wallMode === 0 && b.ledgeMode === 0 && !inp.webPressed) {
+      const hx = T.x - P.x, hz = T.z - P.z, below = P.y - T.y;
+      if (below > (b.diveOn ? SWING.diveStop : SWING.diveAbove) && hx * hx + hz * hz < SWING.diveReach * SWING.diveReach && (b.diveOn || b.v.y < 0)) {
+        inp.slideHeld = true;
+        inp.slidePressed = !b.diveOn;
+      }
+    }
   }
 
   /** Round 12 tech bot: on the rope, rising on the forward side, past swingPerfectCos (the perfect window). */
@@ -733,7 +761,11 @@ export class SwingBot {
     if (b.yankOk && !b.zipOn && !b.yankOn) {
       const pr = round.prevRunner, rvx = r.p.x - pr.x, rvz = r.p.z - pr.z;
       const ex = P.x - r.p.x, ez = P.z - r.p.z, el = Math.sqrt(ex * ex + ez * ez) || 1, rs = Math.sqrt(rvx * rvx + rvz * rvz);
-      if ((rvx * ex + rvz * ez) / el >= -0.5 * rs) {
+      // Round 12 fix, the tech bot also yanks him running away when the yank still gets there (its reach against his
+      // speed away from it, with a margin).
+      const away = -(rvx * ex + rvz * ez) / el / k.dt;
+      const reach = this.tech && el <= (k.yankSpeed - (away > 0 ? away : 0)) * k.yankTime * SWING.yankReach;
+      if ((rvx * ex + rvz * ez) / el >= -0.5 * rs || reach) {
         this.aimAt(round, inp, r.p.x, r.p.y, r.p.z);
         inp.zipPressed = true; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false;
         this.leap = 0;

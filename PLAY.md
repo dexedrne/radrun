@@ -24,7 +24,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing, a rope grab, a wall run or a ledge grab recharges it); on a wall (or just off one) = **wall kick** (round 12: each kick without touching the ground or the rope goes 0.8 m/s higher, three times); hanging on a ledge = climb-jump; **at the end of a zip = zip pop** (round 12); **right as you slam a wall = rebound kick** (round 12) |
 | LMB hold | **swing**: the yellow ring sits on a rim, a corner, a facade, or (round 12) a **cable across the street** or a gantry / skybridge / tank / billboard - whatever your aim (and your speed) points at - and glides along it as you turn. Hold to swing; let go **near the top of the arc** (35-50 degrees past the bottom) for a **perfect release**: the web flashes white, a ding, +3 m/s (round 12; just past the bottom still lifts you, round 11's timed release). LMB on a roof with a ring = the web pulls you up and off the edge into the swing. No ring = nothing tall enough ahead: run, vault, zip, leap or drop off instead |
 | C | round 12: **tap = slide** (while running fast; Space out of a slide = slide-jump), **hold = charge a leap** (a ring fills at your feet, yellow at full after 0.7 s; let go - or press Space - to launch: from a roof up to ~10 m up and 30 m across, from a wall run / run-up a big wall jump, from a ledge hang straight up, on the rope a **slingshot**), **in the air = dive** (a fresh press with 6+ m under you: straight down fast; web out of it for the biggest swings; land holding C to slide into a charge) |
-| E / Shift | round 12: **zip where you look** - a straight pull at 30 m/s along the camera (tilted up 8 degrees) to the first thing it hits within 45 m: a rim = up and the **ledge pop** onto that roof at 12 m/s; a facade = a wall run (fast, at an angle), else a run-up, else a push off; a **cable** = a fling past it along the zip, or with LMB held you swing on it; a roof top = you land. A **white diamond** shows the target every frame (grey = out of zips / cooling down). Nothing hit = the ringed anchor if it is within 15 degrees of the aim, else **no zip** (the grey X; nothing spent). **Two zips per airtime** (landing, a rope grab, a wall run or a ledge grab refills them), 0.35 s apart; a second E or LMB ends a zip early. When the **red dashed ring** is on him (within 12 m on Normal / 9 m on Degen, in the aim cone, in sight; no yank on Chill), E is the **web-yank**: a homing zip at him for 0.7 s (a miss: 2.5 s before the next) |
+| E / Shift | round 12: **zip where you look** - a straight pull at 30 m/s along the camera (tilted up 8 degrees) to the first thing it hits within 45 m: a rim = up and the **ledge pop** onto that roof at 12 m/s; a facade = a wall run (fast, at an angle), else a run-up, else a push off; a **cable** = a fling past it along the zip, or with LMB held you swing on it; a roof top = you land. A **white diamond** shows the target every frame (grey = out of zips / cooling down). Nothing hit = the ringed anchor if it is within 15 degrees of the aim, else the **zip fan** (the same ray again 10 and 20 degrees off the aim, 8 ways round, up first: falling down a canyon while you look at him still finds a facade, a rim or a cable), else **no zip** (the grey X; nothing spent). **Two zips per airtime** (landing, a rope grab, a wall run or a ledge grab refills them), 0.35 s apart; a second E or LMB ends a zip early. When the **red dashed ring** is on him (within 12 m on Normal / 9 m on Degen, in the aim cone, in sight; no yank on Chill), E is the **web-yank**: a homing zip at him for 0.7 s (a miss: 2.5 s before the next) |
 | (by themselves) | **wall run** (hit a facade at an angle while airborne), **run-up** (hit it head-on with the stick into it: ~5 m up the wall, then a ledge grab if the top is in reach), **ledge grab + climb** (a roof edge within reach in front of you), **vault** (a low rooftop box ahead while running), **landing roll** (a hard landing with the stick forward) |
 | LMB on the red ring (on him, in range, in sight) | YOINK |
 | Q / RMB | ease the camera toward him |
@@ -162,31 +162,50 @@ thief uses the same kit.
 
 **Structures between the buildings** (`src/world/structures.ts`, derived by `npm run level` from city.json like
 the adjacency; city.json is never touched, move a building and re-run level and they follow):
-- **cables** across every street (one per facing pair, alternating two height tiers, always at least 3 m under
-  the lower roof: a roof you run on never meets one), no collision, web them anywhere along their length (the
-  ring glides along the cable, 2 m clear of its ends);
+- **cables** across every street (always at least 3 m under the lower roof: a roof you run on never meets one), no
+  collision, web them anywhere along their length (the ring glides along the cable, 2 m clear of its ends). Downtown,
+  the Towers and the Docks hang **two per facing pair**, one 2.5 m in from each end of the pair's span (`cablePairs`
+  2, `cableInset`), so there is one on each side of every crossing and alley (every ~9-26 m instead of 23-40 m);
+  Market (the parkour district, the owner's call: the spec's density) and Vertigo keep one per pair. Height tiers
+  alternate per pair (`cableTier1` / `cableTier2`); no two cables on a street closer than 6 m;
 - **sign gantries** (one per street, 13-16 m up, landable, a wall-run side) and **skybridges** (glass, 4 m wide,
-  floating over the street: land on them, wall-run their sides, bump your head on them);
+  floating over the street: land on them, wall-run their sides, bump your head on them). A web to one goes to its
+  **underside** and the pivot is that point (you swing under it and on down the street; the facade rule's push put the
+  pivot in front of it and swung you into its face);
 - **rooftop water tanks** (7-10 m tall, in a roof corner) and **billboard frames** along street edges, both
   landable and good anchors above the low roofs; **scaffolding / fire escapes** on a few street facades.
-- Counts: Downtown 81 cables / 27 gantries / 6 skybridges / 9 tanks / 8 boards; Market 135 / - / - / 21 / 7 (+5
-  fire escapes); Docks 34 / - / - / 13 / 2; Towers 111 / 31 / 17 / 5 / 1; Vertigo 68 / - / 5 / 9 / -. Per-district
+- Counts: Downtown 158 cables / 27 gantries / 6 skybridges / 9 tanks / 8 boards; Market 135 / - / - / 21 / 7 (+5
+  fire escapes); Docks 104 / - / - / 13 / 2; Towers 222 / 31 / 17 / 5 / 1; Vertigo 68 / - / 5 / 9 / -. Per-district
   knobs: tuning.json `structures` (and the ?tune sliders, which re-derive them live in `?sandbox`).
+- **Which anchor the ring picks** (`findAnchor`): a cable scores `rigBonus` (4) m better, but a cable point more than
+  `rigSideFree` (4) m off your line (a side street's cable at a crossing: it swings you into the facades) scores
+  `rigSide` (1) worse per m, and one less than `rigNearAhead` (12) m ahead (nearly overhead: a drop, not a swing)
+  `rigNear` (2) worse per m short. In the canyons (read-only sampling of every street at 0.3 / 0.5 / 0.7 x the lower
+  roof, 20 m/s along it) the ring is now a cable 45 / 31 / 11 % of the time in Downtown (was 33 / 25 / 7), Towers 37 /
+  33 / 7 (25 / 27 / 4), Docks 23 / 11 / 3 (14 / 7 / 4). The "pivot 12-32 m ahead over the street" share is now above
+  the no-structures one in the Towers (79 / 77 / 72 % vs 75 / 75 / 72) and within 2 points of it in Downtown (81 / 78 /
+  72 vs 83 / 80 / 72) and the Docks (77 / 70 / 63 vs 77 / 71 / 63); the first cut was 5-7 points under it low in the
+  canyons (Downtown 76 / 74, Towers 70 / 71).
 - Deviations: a street run is the whole street line (the blocks are ~40-60 m, so "cut at every crossing" gave
   1-2 stations per run: all gantries, one cable tier); rooftop fixtures sit 1 m in from the roof edge and 1.5 m
   off its centre (the spec's 2.5 m / 4 m left no room on the 12-15 m roofs of Market, the Docks and Vertigo).
 - Lint G9-G12 (clean everywhere) and the **G11 swing-coverage stat**, printed by `npm run level` next to the
-  no-structures baseline: Downtown 71 % (71.7), Market 74 % (74.0), Docks 62 % (63.3), Towers 71 % (71.6),
-  Vertigo 84 % (83.5). The spec's targets (90 / 60 / 70 / 90 / 75) are missed where they were set high: the
-  upper-tier cable ahead is 45-60 m apart after the tiers alternate, and the anchor search prefers building rims
-  anyway (a larger `rigBonus` only picks cables under 12 m ahead, which the stat does not count).
+  no-structures baseline: Downtown 72 % (71.7), Market 74 % (74.0), Docks 63 % (63.3), Towers 72 % (71.6),
+  Vertigo 84 % (83.5). The spec's targets (90 / 60 / 70 / 90 / 75) are missed in Downtown, the Towers and the Docks
+  and cannot be met under the spec's own height rule: G11 samples at 0.7 x the local pair's lower roof, and where
+  the pairs 12-32 m ahead are lower (the skyline steps down, or a crossing), their cables hang below you - even a
+  test with X-shaped span wires over every crossing (deferred by the spec) only reached Downtown 73 %, Towers 80 %.
+  The misses are almost never "a cable was in the window but the ring took something else" (0-4 % of samples).
 - Drawn by `src/app/StructuresView.tsx` (8 instanced draw calls, one billboard texture; Low quality drops the
   signal glow, cable highlights and board lighting, never a structure), also in `?editor`.
 
 **E: the straight zip.** Goes where the camera points (pitched up 8 degrees), in a straight line at 30 m/s, to
 the first thing the ray hits within 45 m (a white diamond previews it; grey = out of zips / cooling down).
-Arrival: a rim = the ledge pop onto the roof at 12 m/s; a facade = wall run / run-up / push off; a cable = a
-fling past it, or with LMB held you swing on it; a roof top = you land. Two zips per airtime, 0.35 s apart. A
+Nothing on the ray: the ringed anchor within 15 degrees, else the zip fan (the ray again 10 and 20 degrees off the
+aim, 8 ways round, up first; `zipFanCos`) - falling with nothing ringed, a zip now finds something 93-96 % of the time
+in the canyons (49-76 % without the fan). Arrival: a rim = the ledge pop onto the roof at 12 m/s; a facade = wall run /
+run-up / push off; a cable = a fling past it, or with LMB held you swing on it; a roof top = you land. Two zips per
+airtime, 0.35 s apart. A
 zip down from a roof drags you across it and off the edge. **Space at the end of a zip = zip pop** (14 m/s up,
 over a rim and on).
 
@@ -200,26 +219,28 @@ into a charge.
 **Tech.** Perfect release (let go 35-50 degrees past the bottom: +3 m/s, the web flashes white, a ding); rebound
 kick (Space right as you would bonk: kicked back off the wall instead); kick chains (+0.8 m/s per chained wall
 kick, 3 times); air carve (the flight bends toward the stick, speed kept); the **web-yank** (the red dashed ring
-on him: E = a homing zip at 32 m/s for 0.7 s; reaching him is a catch, "YANKED"; a miss = 2.5 s cooldown; Normal
-6 m / Degen 5 m, none on Chill); **flow** (a perfect release, a pop, a rebound, the 3rd chained kick or a full
+on him: E = a homing zip at 32 m/s for 0.7 s; reaching him is a catch, "YANKED"; a miss = 2.5 s cooldown; within
+12 m on Normal / 9 m on Degen, none on Chill - the owner's ranges, never cut per district); **flow** (a perfect release, a pop, a rebound, the 3rd chained kick or a full
 leap = a pip, up to 3; each raises the speed cap 2 m/s; one drains every 2.5 s; all go on a bonk, a stumble, a fall
 or stopping). HUD: three small pips under the middle of the screen.
 
 **The thief** (pack v3): zips straight onto the rims (the same pull and ledge pop), and a new **leap** hop (a
-charged jump across a street or alley <= 24 m, -20..+6 m) where no swing bakes, before a zip, and on a seeded 35 %
-of the downhill crossings (`GRAPH.leapShare`). Street crossings over the kept edges (swings / leaps / zips):
-Downtown 75 / 18 / 7 %, Market 91 / 3 / 6, Docks 86 / 12 / 1, Towers 61 / 19 / 19, Vertigo 69 / 16 / 16. His view
-plays the zip pose and web, the charge ring (orange) and the leap. **He never swings on a cable**: every cable
-hangs at least 3 m under the lower roof of its street, so from his rooftop takeoff it is never 5 m above him (the
-spec's "cable crossing pendulum" cannot bake with its own height rule); his swings use buildings, tanks and
-boards, and the cables are the chaser's canyon anchors. Market's leap share is low because the bake keeps the
-fewest-leap edges (the spec's "fewest zips, then fewest leaps").
+charged jump across a street or alley <= 24 m, -20..+6 m) where no swing bakes, before a zip, and on a seeded 40 %
+of the level and downhill crossings (`GRAPH.leapShare`). **He swings on the cables**: every cable hangs at least 3 m
+under the lower roof of its street, so it is never 5 m above his rooftop takeoff and a pendulum on it cannot lift him
+back onto a roof; instead he drops off the edge, webs his street's cable once he is 3.5 m under it, swoops under it
+for 0.2-0.4 s and zips up onto the far rim (`GRAPH.cable*`; a seeded 60 % of the crossings with a cable try it
+first, the rest after their building swings). Street crossings over the kept edges (swings, of them on a cable /
+leaps / zips): Downtown 73 % (22 %) / 21 / 6, Market 88 % (30 %) / 10 / 2, Docks 82 % (18 %) / 18 / 0, Towers 65 %
+(15 %) / 18 / 16, Vertigo 67 % (3 %) / 18 / 16. His view plays the zip pose and web, the charge ring (orange), the
+leap, and his web on the cable.
 
 **Campaign.** Time stars re-set against the full-kit bot (150 seeds per level, the round 6 rule: ~60-85 %, ~30 %
-on L12): L1 under 18 s, L3 under 50, L7 under 75, L9 under 50, L12 under 35. "Finish with the web" counts a yank
-as well as a YOINK (with the short Yoink most web catches are yanks). L10 Altitude trades its chain star for 3 tech
-moves (perfect releases, zip pops, rebounds, 3rd chained kicks, full leaps; the balance bot almost never gets it:
-it is a skill star). Numbers: `.local/r12/camp1.txt` in the build worktree.
+on L12): L1 under 18 s (84 %), L2 under 60 (74 %), L3 under 60 (64 %), L5 under 88 (60 %: the bot catches him in 61 %
+of its no-Yoink rounds), L6 under 55 (71 %), L7 under 60 (81 %), L9 under 50 (71 %), L10 under 70 (59 %), L12 under 35
+(29 %). "Finish with the web" counts a yank as well as a YOINK. L10 Altitude trades its chain star for 3 tech moves
+(perfect releases, zip pops, rebounds, 3rd chained kicks, full leaps; the balance bot almost never gets it: it is a
+skill star). Numbers: `.local/r12fix/camp1.txt` and `camp-L*.txt` in the build worktree.
 
 **Versions.** Links v=6 (bests / ghosts from before are the older build's), ghost format 4 (+ the pitch column and
 C held; formats 1-3 replay with the charge and dive off), pack v3 (v1 / v2 packs are rejected).
@@ -384,29 +405,41 @@ and gets GASSED when his panic budget runs out. He stops to taunt you when you a
 
 | | runner | Yoink range | web-yank | medals (RAD / GOLD / SILVER, s) |
 |---|---|---|---|---|
-| **Chill** | jogs (0.9x), sprints to 1.25x, gassed after ~14 s of sprinting, wanders, 4 s head start | 6.5 m | none | 35 / 55 / 75 |
-| **Normal** | 1.2x, sprints up to 1.9x from 40 m out, 30 s panic budget, 8 s head start | 2.5 m | 6 m | 25 / 40 / 60 |
-| **Degen** | 1.4x, sprints up to 2.4x from 50 m out, 45 s panic budget, barely wanders, short taunts, 12 s head start | 3 m | 5 m | 30 / 45 / 65 |
+| **Chill** | jogs (0.9x), sprints to 1.25x, gassed after ~14 s of sprinting, wanders, 8 s head start | 6.5 m | none | 35 / 55 / 75 |
+| **Normal** | 1.8x, speeds up inside 70 m to 2.2x, 30 s panic budget, 8 s head start | 3 m | 12 m | 25 / 40 / 60 |
+| **Degen** | 1.7x, speeds up inside 70 m to 2.6x, 45 s panic budget, barely wanders, short taunts, 20 s head start | 3 m | 9 m | 30 / 45 / 65 |
 
-(District tweaks move these a little: `chase` in `src/world/districts.ts`.) Round 12: the straight zip and the
-yank made the swinging bot far stronger (Normal caught him in 5-10 s against the round 11 table), so he is faster,
-starts further ahead, and the catch ranges are short: the yank is how you finish a chase now.
+(District tweaks move the runner: `chase` in `src/world/districts.ts`; they never change the yank range, and the Yoink
+stays at least twice the 1.5 m tag radius everywhere.) Round 12: the straight zip, the zip fan and the owner's yank
+ranges (12 m Normal, 9 m Degen) make the swinging bot very strong - against the round 11 table it caught him in
+~11 s on Normal - so he is much faster (1.7-2.6x his baked pace, sprinting to 2.4-3.1x) and starts further ahead;
+the Yoink is 3 m (it was 5 / 4.5 m in round 11; at 4-5 m the bot Yoinked him in ~11-16 s whatever else changed).
+Catches are now mostly yanks from across the gap (Normal: 51-95 yanks per 200 rounds, 36-65 Yoinks).
 
 Round 12 balance, 200 rounds per row (`npm run balance -- --all`), the swing bot with the full kit (zips, leaps,
-the yank; it swings to the auto-release), every banded row in band:
+the yank; it swings to the auto-release), and the tech bot (the same plus perfect releases when he is above it, the
+rebound kick, the dive at him when he is well below, and yanks at him running away while they still reach):
 
-| | Chill swing (info) | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) | Degen tech bot (info; spec >= 80 %, 30-50 s) | falls / round (Normal / Degen; round 11) |
+| | Chill swing (info) | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) | Degen tech bot (target >= 80 %, 30-50 s) | falls / round (Normal / Degen; round 11) |
 |---|---|---|---|---|---|
-| Downtown | 99 %, 10.4 s | 92 %, 28.0 s | 68 %, 42.4 s | 62 %, 29.5 s | 0.01 / 0.01 (0 / 0) |
-| Night Market | 100 %, 7.3 s | 93 %, 28.9 s | 68 %, 45.1 s | 77 %, 38.9 s | 0.19 / 0.47 (0.16 / 0.18) |
-| The Docks | 99 %, 9.8 s | 75 %, 31.6 s | 65 %, 42.8 s | 58 %, 34.2 s | 0.10 / 0.11 (0.04 / 0.02) |
-| The Towers | 98 %, 9.9 s | 86 %, 31.3 s | 66 %, 46.6 s | 63 %, 33.4 s | 0 / 0 (0 / 0) |
-| Vertigo | 100 %, 7.9 s | 98 %, 25.8 s | 58 %, 47.0 s | 68 %, 31.1 s | 0.05 / 0.11 (0.01 / 0.01) |
+| Downtown | 99 %, 7.0 s | 86 %, 34.0 s | 73 %, 41.9 s | 73 %, 41.6 s (MISS) | 0.03 / 0.04 (0 / 0) |
+| Night Market | 100 %, 7.7 s | 95 %, 33.1 s | 73 %, 40.0 s | 82 %, 34.3 s | 0.18 / 0.25 (0.16 / 0.18) |
+| The Docks | 100 %, 8.4 s | 97 %, 30.0 s | 54 %, 46.5 s | 58 %, 41.6 s (MISS) | 0.10 / 0.20 (0.04 / 0.02) |
+| The Towers | 100 %, 10.9 s | 80 %, 36.4 s | 62 %, 43.9 s | 57 %, 48.2 s (MISS) | 0 / 0 (0 / 0) |
+| Vertigo | 100 %, 8.2 s | 89 %, 38.6 s | **45 %**, 48.5 s (MISS: under 50 %) | 58 %, 45.3 s (MISS) | 0.04 / 0.12 (0.01 / 0.01) |
 
-The camper stays under 12 % everywhere; the bot's web presses with nothing ringed are 0-0.14 a minute. Misses:
-the tech bot is not the spec's >= 80 % (letting go in the perfect window does not help this bot catch), and the
-bot falls more than in round 11 in Market, the Docks and Vertigo (the cables draw it into low canyon swings;
-the spec asked for at most half of round 11's). Most catches are yanks now.
+The camper stays under 20 % everywhere (0-18 %); the bot's web presses with nothing ringed are 0-0.08 a minute; Market's
+no-zip swinger falls 0.64 / 0.72 a round (0.91 / 0.92 in the first cut). Misses, honestly:
+- **Vertigo Degen** (45 % caught) sits just under its band. The bot's catches there swing hard with small runner
+  changes (base +0.23: 57 %, 24 s; +0.25: 45-49 %, 46-49 s; +0: 66 %, 35 s), so there was no setting with both numbers
+  in band; Vertigo's Degen row has missed before (round 7).
+- **The tech bot** catches as often as the swing bot or more in four districts (Downtown 73 = 73, Market 82 vs 73,
+  Docks 58 vs 54, Vertigo 58 vs 45; Towers 57 vs 62, inside the seed noise) and faster in most, but reaches the
+  spec's 80 % only in Market: with the runner fast enough for the swing rows' bands, timing moves are not a big enough
+  edge for a bot. What each move is worth to it (Degen, a test table with a 4 m Yoink, 200 seeds, caught % without the
+  move minus with it, per district): the perfect release 0 to -11 points (Vertigo 51 vs 62), the dive +1 to -21
+  (Vertigo 41 vs 62), the rebound 0 to -6, the long-range yank about 0; the zip pop cost it 3-7 points in four districts (it pops over
+  the rim instead of taking the 12 m/s ledge pop), so the tech bot does not pop.
 
 Round 10 balance (for reference), 200 rounds per row, all in band then:
 
@@ -628,13 +661,13 @@ Double jump and slide: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.
 
 | group | keys (default) |
 |---|---|
-| straight zip | `zipSpeed` 30, `zipPull` 60 (on the line within ~4 steps), `zipCooldown` 0.35, `zipMaxTime` 1.6, `zipReach` 45, `zipLift` 0.14 (the aim is pitched up ~8 degrees; a sine), `zipAimMin` -0.34 / `zipAimMax` 0.77 (sines), `zipRigAssist` 1.2 (a cable this close to the ray counts), `zipAssistCos` 0.966 (the ringed anchor within 15 degrees when the ray hits nothing), `zipStop` 1, `zipKeep` 0.85, `zipCharges` 2, `zipRimReach` 2.5, `zipLedgeSpeed` 12 / `zipLedgeUp` 4 (the ledge pop), `zipFlingUp` 3 (the cable fling), `zipPopWindow` 0.25 / `zipPopUp` 14 / `zipPopFwd` 6 (the pop) |
-| rig anchors | `rigBonus` 4 (a cable scores this many m better), `rigEndInset` 2 |
+| straight zip | `zipSpeed` 30, `zipPull` 60 (on the line within ~4 steps), `zipCooldown` 0.35, `zipMaxTime` 1.6, `zipReach` 45, `zipLift` 0.14 (the aim is pitched up ~8 degrees; a sine), `zipAimMin` -0.34 / `zipAimMax` 0.77 (sines), `zipRigAssist` 1.2 (a cable this close to the ray counts), `zipAssistCos` 0.966 (the ringed anchor within 15 degrees when the ray hits nothing), `zipFanCos` 0.94 (then the zip fan: the ray again at half and the full 20 degrees off the aim, 8 ways round; 1 = off), `zipStop` 1, `zipKeep` 0.85, `zipCharges` 2, `zipRimReach` 2.5, `zipLedgeSpeed` 12 / `zipLedgeUp` 4 (the ledge pop), `zipFlingUp` 3 (the cable fling), `zipPopWindow` 0.25 / `zipPopUp` 14 / `zipPopFwd` 6 (the pop) |
+| rig anchors | `rigBonus` 4 (a cable scores this many m better), `rigEndInset` 2, `rigSide` 1 / `rigSideFree` 4 (a cable point more than 4 m off your line scores 1 worse per m), `rigNear` 2 / `rigNearAhead` 12 (one less than 12 m ahead scores 2 worse per m short) |
 | charge | `charge`, `chargeMin` 0.15, `chargeTime` 0.55, `chargeWalk` 4, `chargeUp` 13, `chargeFwd` 8, `chargeWallOut` 6, `chargeWallUp` 8, `chargeHangMax` 1.5, `chargeFling` 8, `chargeFlingUp` 4, `chargeAir` 0.3 |
 | tech (player only) | `swingPerfectCos` 0.82 (35 degrees), `releasePerfect` 3, `reboundWindow` 0.12, `reboundKeep` 0.6, `kickChainUp` 0.8, `dive`, `diveMinDrop` 6, `diveSpeed` 12, `diveGravity` 1.5, `yankSpeed` 32, `yankTime` 0.7, `yankCooldown` 2.5, `airTurn` 1.6, `flowCap` 2, `flowDecay` 2.5 |
 | camera | `zipFov` 6, `armZip` 6.5, `armDive` 8, `chargeArm` 0.5, `chargeFov` 3 |
-| difficulty | `yankRange` per difficulty (Chill 0 = no yank, Normal 6, Degen 5; district tweaks nudge it) |
-| structures | `structures.default` + `structures.<district>`: `cables`, `cableTier1` / `cableTier2`, `cableMin`, `cableSag`, `rigApart`, `gantry`, `gantryMin` / `gantryMax` / `gantryMinL`, `skybridge` / `skybridgeLo` / `skybridgeHi`, `tanks` / `tankLo` / `tankHi`, `boards` / `boardLo` / `boardHi`, `stacks` / `stackBelowLo` / `stackBelowHi` (the §2.2 district table is the default) |
+| difficulty | `yankRange` per difficulty (Chill 0 = no yank, Normal 12, Degen 9: the owner's ranges; the district tweaks never change it) |
+| structures | `structures.default` + `structures.<district>`: `cables`, `cableTier1` / `cableTier2`, `cableMin`, `cableSag`, `rigApart`, `cablePairs` (1 = one cable per street pair at its centre, 2 = one near each end) / `cableInset`, `gantry`, `gantryMin` / `gantryMax` / `gantryMinL`, `skybridge` / `skybridgeLo` / `skybridgeHi`, `tanks` / `tankLo` / `tankHi`, `boards` / `boardLo` / `boardHi`, `stacks` / `stackBelowLo` / `stackBelowHi` (the §2.2 district table is the default) |
 
 **The runner zips and charges too** (his zip-up hops and leaps), so the zip, charge, rig and structure keys
 are part of his bake; the double jump, slide, tech, zip-aim / pop and camera keys are not (tuning them never

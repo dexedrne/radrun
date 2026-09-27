@@ -79,6 +79,9 @@ export class EdgeBot {
   climbed = false;
   /** Round 12: the step this hop's line phase began (a leap's charge never starts before it). */
   lineStart = -1;
+  /** Round 12 fix (a cable swing): the web has been pressed this hop (on step pressStep). */
+  pressed = false;
+  pressStep = -1;
   fail = "";
   results: HopResult[] = [];
   readonly input: InputFrame = emptyInput();
@@ -109,6 +112,8 @@ export class EdgeBot {
     c.vaulting = this.vaulting;
     c.climbed = this.climbed;
     c.lineStart = this.lineStart;
+    c.pressed = this.pressed;
+    c.pressStep = this.pressStep;
     c.fail = this.fail;
     c.results = this.results.map(r => ({ ...r }));
     return c;
@@ -207,9 +212,24 @@ export class EdgeBot {
       this.input.moveX = l.axis === "x" ? l.dir : push;
       this.input.moveZ = l.axis === "x" ? push : l.dir;
       if (l.kind === "street" && !p.zip && s > p.jump && s < p.release && !this.ropeDone) {
-        inp.webHeld = true;
-        inp.webPressed = s === p.jump + 1;
-        this.world.forceAnchor = l.swings[Math.min(p.alt, l.swings.length - 1)]?.anchor ?? l.anchor;
+        const o = l.swings[Math.min(p.alt, l.swings.length - 1)];
+        const a = o?.anchor ?? l.anchor;
+        if (o?.press === undefined) {
+          inp.webHeld = true;
+          inp.webPressed = s === p.jump + 1;
+          this.world.forceAnchor = a;
+        } else if (this.pressed || (a !== null && b.v.y < 0 && b.p.y <= a.ay - o.press)) {
+          // Round 12 fix, a cable swing: web the cable once he has dropped o.press m under it; the release step is a zip
+          // up onto the far roof's rim (below).
+          inp.webHeld = true;
+          inp.webPressed = !this.pressed;
+          if (!this.pressed) this.pressStep = s;
+          this.pressed = true;
+          this.world.forceAnchor = a;
+        }
+      } else if (l.kind === "street" && !p.zip && s === p.release && this.pressed && !this.ropeDone && l.rim) {
+        inp.zipPressed = true;
+        this.world.forceAnchor = l.rim;
       }
     } else if (this.phase === PH_FINAL) {
       const j = this.plan.to;
@@ -266,7 +286,8 @@ export class EdgeBot {
         else {
           this.hop++;
           this.legSteps = 0;
-          this.ropeDone = this.ropeAttached = this.autoReleased = this.climbed = false;
+          this.ropeDone = this.ropeAttached = this.autoReleased = this.climbed = this.pressed = false;
+          this.pressStep = -1;
           this.phase = this.hop < this.plan.links.length ? PH_APPROACH : PH_FINAL;
         }
       } else if (this.airSteps > BOT.maxAirSteps) { this.fail = `air timeout (hop ${this.hop})`; this.phase = PH_FAIL; }

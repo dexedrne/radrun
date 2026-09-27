@@ -117,12 +117,17 @@
     "zipLedgeUp": 4,
     "rigBonus": 4,
     "rigEndInset": 2,
+    "rigSide": 1,
+    "rigSideFree": 4,
+    "rigNear": 2,
+    "rigNearAhead": 12,
     "zipReach": 45,
     "zipLift": 0.14,
     "zipAimMin": -0.34,
     "zipAimMax": 0.77,
     "zipRigAssist": 1.2,
     "zipAssistCos": 0.966,
+    "zipFanCos": 0.94,
     "zipStop": 1,
     "zipKeep": 0.85,
     "zipCharges": 2,
@@ -200,36 +205,36 @@
       "taunt": 1.8,
       "airMin": 0.9,
       "airMax": 1.25,
-      "lead": 4,
+      "lead": 8,
       "yankRange": 0
     },
     "normal": {
-      "base": 1.2,
-      "gStar": 40,
+      "base": 1.8,
+      "gStar": 70,
       "mMin": 0.8,
-      "mMax": 1.9,
+      "mMax": 2.2,
       "panicBudget": 30,
       "sigma": 0.15,
-      "yoinkRange": 2.5,
+      "yoinkRange": 3,
       "taunt": 1.4,
       "airMin": 0.9,
-      "airMax": 1.9,
+      "airMax": 2.2,
       "lead": 8,
-      "yankRange": 6
+      "yankRange": 12
     },
     "degen": {
-      "base": 1.4,
-      "gStar": 50,
+      "base": 1.7,
+      "gStar": 70,
       "mMin": 0.85,
-      "mMax": 2.4,
+      "mMax": 2.6,
       "panicBudget": 45,
       "sigma": 0.08,
       "yoinkRange": 3,
       "taunt": 0.9,
       "airMin": 0.9,
-      "airMax": 2.4,
-      "lead": 12,
-      "yankRange": 5
+      "airMax": 2.6,
+      "lead": 20,
+      "yankRange": 9
     }
   },
   "george": {
@@ -265,7 +270,9 @@
       "cableTier2": 0.85,
       "cableMin": 12,
       "cableSag": 0.25,
-      "rigApart": 12,
+      "rigApart": 8,
+      "cablePairs": 2,
+      "cableInset": 2.5,
       "gantry": true,
       "gantryMin": 13,
       "gantryMax": 16,
@@ -299,10 +306,12 @@
       "skybridge": 0,
       "tanks": 0.25,
       "boards": 0.15,
-      "stacks": 0.1
+      "stacks": 0.1,
+      "rigApart": 12,
+      "cablePairs": 1
     },
     "docks": {
-      "cables": 0.5,
+      "cables": 1,
       "cableTier1": 0.85,
       "cableTier2": 0,
       "gantry": false,
@@ -319,7 +328,9 @@
       "skybridge": 0.08,
       "tanks": 0.1,
       "boards": 0,
-      "stacks": 0
+      "stacks": 0,
+      "rigApart": 12,
+      "cablePairs": 1
     }
   }
 }

@@ -98,8 +98,12 @@ export function findAnchor(
     let qz = sz < s.z0 ? s.z0 : sz > s.z1 ? s.z1 : sz;
     const inX = sx > s.x0 && sx < s.x1, inZ = sz > s.z0 && sz < s.z1;
     let rim: boolean, under = false;
-    if (inX && inZ && y0 > 0 && sy <= y0) {
-      // Round 12: under a floating solid - its underside (normal (0, 0): the pivot is the point itself).
+    if (y0 > 0) {
+      // Round 12: a floating solid (gantry, skybridge) is webbed on its underside, the point of it nearest the ideal
+      // point: the pivot is that point itself (normal (0, 0)), so the swing carries you under it and on down the street.
+      // (Its near face with the facade rule's push would put the pivot in front of it and swing you into that face; and
+      // a web needs its anchor >= anchorMinAbove over you, so from above it could never be webbed anyway.)
+      qy = y0;
       rim = false; under = true;
     } else if (inX && inZ) {
       // Over the roof interior -> the nearest rim point; inside the box -> the nearest side face. Only sides
@@ -165,6 +169,13 @@ export function findAnchor(
     const ex = qx - sx, ey = qy - sy, ez = qz - sz;
     const id = RIG0 + gi;
     let sc = Math.sqrt(ex * ex + ey * ey + ez * ez) - k.rigBonus;
+    // Round 12 fix: a cable point off to the side of your line (a side street's cable at a crossing) swings you into
+    // the facades, and one almost overhead is a short drop, not a swing: both score worse than a centred one ahead.
+    if (k.rigSide > 0 || k.rigNear > 0) {
+      const al = dx * fx + dz * fz, lt = dx * fz - dz * fx, la = lt < 0 ? -lt : lt;
+      if (la > k.rigSideFree) sc += k.rigSide * (la - k.rigSideFree);
+      if (al < k.rigNearAhead) sc += k.rigNear * (k.rigNearAhead - (al > 0 ? al : 0));
+    }
     if (id === ringSolid) sc -= k.hysteresis;
     if (id === lastSolid) sc += k.anchorAlternate;
     if (kept === top && sc >= TOPS[kept - 1].score) continue;

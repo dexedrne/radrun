@@ -54,8 +54,10 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
     { label: "chill  swing", d: "chill", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: forgiving)", check: () => true },
     { label: "normal swing", d: "normal", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "median 25-40 s", check: (c, m) => c > 0 && m >= 25 && m <= 40 },
     { label: "degen  swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "50-95% caught, median 40-70 s", check: (c, m) => c < 0.95 * n && c >= 0.5 * n && m >= 40 && m <= 70 },
-    // Round 12 tech bot (info): the full kit plus perfect releases and yanks - skill pays, but still takes work.
-    { label: "degen  tech swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true, tech: true }, target: "(info; spec >=80%, median 30-50 s)", check: () => true },
+    // Round 12 tech bot: the full kit plus the timing moves (perfect releases when he is above, zip pops, rebounds, the
+    // dive, yanks at him running away while they still reach) - skill pays, but still takes work. Banded (the spec's
+    // info target) so a miss shows.
+    { label: "degen  tech swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true, tech: true }, target: ">=80% caught, median 30-50 s", check: (c, m) => c >= 0.8 * n && m >= 30 && m <= 50 },
     { label: "chill  swing, no zip", d: "chill", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
     { label: "normal swing, no zip", d: "normal", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
     { label: "degen  swing, no zip", d: "degen", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },

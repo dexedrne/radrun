@@ -1,12 +1,12 @@
 {
  "city": "a878ba35",
- "tuning": "4107a93e",
- "pack": "17fb1b89",
- "packBytes": 299032,
- "ms": 42368,
+ "tuning": "4ca4fe56",
+ "pack": "06fd879f",
+ "packBytes": 295948,
+ "ms": 66658,
  "junctions": 14,
  "candidates": 185,
- "baked": 174,
+ "baked": 177,
  "kept": 42,
  "checks": {
   "stronglyConnected": true,
@@ -14,7 +14,7 @@
   "walkStalls": 0,
   "minSwingWindowMs": 150,
   "minAlleyWindowMs": 125,
-  "minLandMargin": 1.51,
+  "minLandMargin": 1.62,
   "maxSnap": 0.02,
   "minDropWindow": 10,
   "drops": 18
@@ -538,26 +538,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 1521,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 1602,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 1812,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 1870,
+     "margin": 2.56
     }
    ],
-   "seconds": 16.341666666666665,
+   "seconds": 16.825,
    "speed": 0,
-   "score": 1.2222222222222223,
-   "residual": 0.01583160110469832,
+   "score": 0.9166666666666666,
+   "residual": 0.01948561472965269,
    "kept": false,
    "exitX": 0,
    "exitZ": 1
@@ -720,26 +720,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 1508,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 1589,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 1799,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 1857,
+     "margin": 2.56
     }
    ],
-   "seconds": 16.233333333333334,
-   "speed": 10.99,
-   "score": 1.8333333333333333,
-   "residual": 0.015824745635019347,
+   "seconds": 16.716666666666665,
+   "speed": 13.2,
+   "score": 0.9166666666666666,
+   "residual": 0.01956926728570261,
    "kept": true,
    "exitX": 1,
    "exitZ": 0
@@ -902,26 +902,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 1540,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 1621,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 1831,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 1889,
+     "margin": 2.56
     }
    ],
-   "seconds": 16.5,
+   "seconds": 16.983333333333334,
    "speed": 0,
-   "score": 1.2222222222222223,
-   "residual": 0.015833581953221047,
+   "score": 0.9166666666666666,
+   "residual": 0.01946155827724653,
    "kept": false,
    "exitX": 0,
    "exitZ": 1
@@ -2134,22 +2134,21 @@
      "margin": 2.94
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 1262,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 1136,
+     "margin": 5.37
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1475,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1388,
      "margin": 0.6,
      "climbed": true
     },
@@ -2159,7 +2158,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1894,
+     "param": 1790,
      "margin": 0.6,
      "climbed": true
     },
@@ -2169,15 +2168,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 2220,
+     "param": 2116,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 19.725,
+   "seconds": 18.858333333333334,
    "speed": 0,
    "score": 1.2222222222222223,
-   "residual": 0.01944704937880613,
+   "residual": 0.019447157128750635,
    "kept": false,
    "exitX": 0,
    "exitZ": -1
@@ -2236,22 +2235,21 @@
      "margin": 2.61
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 1377,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 1249,
+     "margin": 5.31
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1590,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1501,
      "margin": 0.6,
      "climbed": true
     },
@@ -2261,7 +2259,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 2009,
+     "param": 1903,
      "margin": 0.6,
      "climbed": true
     },
@@ -2271,15 +2269,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 2335,
+     "param": 2229,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 20.683333333333334,
+   "seconds": 19.8,
    "speed": 0,
    "score": 1.2222222222222223,
-   "residual": 0.019447049510951307,
+   "residual": 0.01944715706956743,
    "kept": false,
    "exitX": 0,
    "exitZ": -1
@@ -2391,22 +2389,21 @@
      "margin": 2.92
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 1218,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 1084,
+     "margin": 5.33
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1431,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1336,
      "margin": 0.6,
      "climbed": true
     },
@@ -2416,7 +2413,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1850,
+     "param": 1738,
      "margin": 0.6,
      "climbed": true
     },
@@ -2426,15 +2423,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 2176,
+     "param": 2064,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 19.358333333333334,
+   "seconds": 18.425,
    "speed": 0,
    "score": 1.2222222222222223,
-   "residual": 0.019447049773566788,
+   "residual": 0.019447156814359566,
    "kept": false,
    "exitX": -1,
    "exitZ": 0
@@ -2493,22 +2490,21 @@
      "margin": 2.68
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 1322,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 1193,
+     "margin": 5.32
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1535,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1445,
      "margin": 0.6,
      "climbed": true
     },
@@ -2518,7 +2514,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1954,
+     "param": 1847,
      "margin": 0.6,
      "climbed": true
     },
@@ -2528,15 +2524,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 2280,
+     "param": 2173,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 20.225,
+   "seconds": 19.333333333333332,
    "speed": 0,
    "score": 1.8333333333333333,
-   "residual": 0.019447048944117928,
+   "residual": 0.019447156972836457,
    "kept": false,
    "exitX": -1,
    "exitZ": 0
@@ -3613,22 +3609,21 @@
      "climbed": true
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 995,
-     "margin": 0.6,
-     "climbed": true
+     "window": 13,
+     "windowMs": 108,
+     "param": 815,
+     "margin": 2.15
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1208,
+     "window": 60,
+     "windowMs": 500,
+     "param": 1129,
      "margin": 0.6,
      "climbed": true
     },
@@ -3638,7 +3633,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1627,
+     "param": 1558,
      "margin": 0.6,
      "climbed": true
     },
@@ -3648,7 +3643,7 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1953,
+     "param": 1884,
      "margin": 0.6,
      "climbed": true
     },
@@ -3662,10 +3657,10 @@
      "margin": 5.23
     }
    ],
-   "seconds": 20.216666666666665,
+   "seconds": 19.641666666666666,
    "speed": 0,
-   "score": 3,
-   "residual": 0.015475970673506107,
+   "score": 1.0833333333333333,
+   "residual": 0.01547486437779373,
    "kept": false,
    "exitX": 0.9822012588282633,
    "exitZ": -0.18783153930097846
@@ -3715,22 +3710,21 @@
      "margin": 2.94
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 260,
-     "windowMs": 2167,
-     "param": 1015,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 882,
+     "margin": 5.3
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1228,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1134,
      "margin": 0.6,
      "climbed": true
     },
@@ -3740,7 +3734,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1647,
+     "param": 1536,
      "margin": 0.6,
      "climbed": true
     },
@@ -3750,7 +3744,7 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1973,
+     "param": 1862,
      "margin": 0.6,
      "climbed": true
     },
@@ -3764,10 +3758,10 @@
      "margin": 5.23
     }
    ],
-   "seconds": 20.383333333333333,
+   "seconds": 19.458333333333332,
    "speed": 0,
    "score": 3,
-   "residual": 0.015476022906984846,
+   "residual": 0.015477007576278595,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -3816,22 +3810,21 @@
      "margin": 2.94
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 260,
-     "windowMs": 2167,
-     "param": 1015,
-     "margin": 0.6,
-     "climbed": true
+     "window": 55,
+     "windowMs": 458,
+     "param": 882,
+     "margin": 5.3
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1228,
+     "window": 43,
+     "windowMs": 358,
+     "param": 1134,
      "margin": 0.6,
      "climbed": true
     },
@@ -3841,7 +3834,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1647,
+     "param": 1536,
      "margin": 0.6,
      "climbed": true
     },
@@ -3851,15 +3844,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1973,
+     "param": 1862,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 17.666666666666668,
+   "seconds": 16.741666666666667,
    "speed": 0,
    "score": 3,
-   "residual": 0.01944705142603703,
+   "residual": 0.019447156886754916,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -3909,22 +3902,21 @@
      "climbed": true
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 995,
-     "margin": 0.6,
-     "climbed": true
+     "window": 13,
+     "windowMs": 108,
+     "param": 815,
+     "margin": 2.15
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1208,
+     "window": 60,
+     "windowMs": 500,
+     "param": 1129,
      "margin": 0.6,
      "climbed": true
     },
@@ -3934,7 +3926,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1627,
+     "param": 1558,
      "margin": 0.6,
      "climbed": true
     },
@@ -3944,15 +3936,15 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1953,
+     "param": 1884,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 17.5,
+   "seconds": 16.925,
    "speed": 0,
-   "score": 3,
-   "residual": 0.019447045831657003,
+   "score": 1.0833333333333333,
+   "residual": 0.019446927343641226,
    "kept": false,
    "exitX": 0.9822012588282633,
    "exitZ": -0.18783153930097846
@@ -4468,8 +4460,8 @@
    "score": 1.8333333333333333,
    "residual": 0.015053427666771424,
    "kept": false,
-   "exitX": 0.9868012894353805,
-   "exitZ": 0.1619358365794013
+   "exitX": 1,
+   "exitZ": 0
   },
   {
    "from": 4,
@@ -4594,12 +4586,12 @@
     }
    ],
    "seconds": 10.116666666666667,
-   "speed": 0,
+   "speed": 9.68,
    "score": 1.8333333333333333,
    "residual": 0.019439824591280276,
-   "kept": false,
-   "exitX": 0.9868012894353805,
-   "exitZ": 0.1619358365794013
+   "kept": true,
+   "exitX": 1,
+   "exitZ": 0
   },
   {
    "from": 4,
@@ -4735,8 +4727,8 @@
    "score": 1.8333333333333333,
    "residual": 0.018567445821743498,
    "kept": false,
-   "exitX": 0.9868012894353805,
-   "exitZ": 0.1619358365794013
+   "exitX": 1,
+   "exitZ": 0
   },
   {
    "from": 4,
@@ -4798,11 +4790,11 @@
      "margin": 1.51
     }
    ],
-   "seconds": 15.933333333333334,
-   "speed": 10.19,
+   "seconds": 15.925,
+   "speed": 0,
    "score": 1.9166666666666667,
    "residual": 0.016365524771471848,
-   "kept": true,
+   "kept": false,
    "exitX": 0.9805925713873528,
    "exitZ": -0.1960566472730253
   },
@@ -4928,37 +4920,38 @@
      "climbed": true
     },
     {
-     "kind": "zip",
+     "kind": "street",
      "from": 59,
      "to": 58,
-     "window": 120,
-     "windowMs": 1000,
-     "param": 1167,
-     "margin": 5.21
+     "window": 24,
+     "windowMs": 200,
+     "param": 1373,
+     "margin": 4.93,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 58,
      "to": 49,
-     "window": 35,
-     "windowMs": 292,
-     "param": 1395,
-     "margin": 2.85
+     "window": 36,
+     "windowMs": 300,
+     "param": 1676,
+     "margin": 2.78
     },
     {
      "kind": "leap",
      "from": 49,
      "to": 37,
-     "window": 54,
-     "windowMs": 450,
-     "param": 1637,
-     "margin": 3.77
+     "window": 55,
+     "windowMs": 458,
+     "param": 1920,
+     "margin": 3.75
     }
    ],
-   "seconds": 16.333333333333332,
+   "seconds": 18.7,
    "speed": 0,
-   "score": 1.8333333333333333,
-   "residual": 0.019898551270819482,
+   "score": 0.6666666666666666,
+   "residual": 0.015810970387355617,
    "kept": false,
    "exitX": 0,
    "exitZ": -1
@@ -5019,26 +5012,26 @@
      "kind": "street",
      "from": 50,
      "to": 49,
-     "window": 14,
-     "windowMs": 117,
-     "param": 1469,
-     "margin": 0.6,
-     "climbed": true
+     "window": 37,
+     "windowMs": 308,
+     "param": 1631,
+     "margin": 5,
+     "cable": true
     },
     {
-     "kind": "zip",
+     "kind": "leap",
      "from": 49,
      "to": 37,
-     "window": 120,
-     "windowMs": 1000,
-     "param": 1830,
-     "margin": 5.49
+     "window": 67,
+     "windowMs": 558,
+     "param": 1948,
+     "margin": 4.27
     }
    ],
-   "seconds": 16.633333333333333,
+   "seconds": 18.875,
    "speed": 0,
-   "score": 0.3888888888888889,
-   "residual": 0.01623108142705328,
+   "score": 1.0277777777777777,
+   "residual": 0.017113886338995302,
    "kept": false,
    "exitX": 0,
    "exitZ": -1
@@ -5588,8 +5581,8 @@
     21,
     22
    ],
-   "ok": false,
-   "reason": "ran off the junction roof",
+   "ok": true,
+   "reason": "",
    "hops": [
     {
      "kind": "leap",
@@ -5628,22 +5621,21 @@
      "margin": 2.83
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 21,
      "to": 22,
-     "window": 42,
-     "windowMs": 350,
-     "param": 1228,
-     "margin": 0.6,
-     "climbed": true
+     "window": 54,
+     "windowMs": 450,
+     "param": 1204,
+     "margin": 3.99
     }
    ],
-   "seconds": 0,
+   "seconds": 12.683333333333334,
    "speed": 0,
-   "score": 0,
-   "residual": 0,
+   "score": 1.2222222222222223,
+   "residual": 0.019899348506221895,
    "kept": false,
-   "exitX": 17.754166666665157,
+   "exitX": 1,
    "exitZ": 0
   },
   {
@@ -5837,19 +5829,19 @@
      "margin": 2
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 21,
      "to": 22,
-     "window": 117,
-     "windowMs": 975,
-     "param": 1630,
-     "margin": 1.51
+     "window": 57,
+     "windowMs": 475,
+     "param": 1417,
+     "margin": 4.04
     }
    ],
-   "seconds": 14.916666666666666,
-   "speed": 10.33,
+   "seconds": 14.466666666666667,
+   "speed": 10.97,
    "score": 1.1944444444444444,
-   "residual": 0.018405403341255778,
+   "residual": 0.01686697806851314,
    "kept": true,
    "exitX": 0,
    "exitZ": -1
@@ -5865,8 +5857,8 @@
     21,
     22
    ],
-   "ok": false,
-   "reason": "ran off the junction roof",
+   "ok": true,
+   "reason": "",
    "hops": [
     {
      "kind": "drop",
@@ -5906,23 +5898,22 @@
      "margin": 4.65
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 21,
      "to": 22,
-     "window": 42,
-     "windowMs": 350,
-     "param": 1353,
-     "margin": 0.6,
-     "climbed": true
+     "window": 61,
+     "windowMs": 508,
+     "param": 1321,
+     "margin": 4.17
     }
    ],
-   "seconds": 0,
+   "seconds": 13.641666666666667,
    "speed": 0,
-   "score": 0,
-   "residual": 0,
+   "score": 1.4722222222222223,
+   "residual": 0.01799961993167588,
    "kept": false,
-   "exitX": 1.9462642893081465,
-   "exitZ": -14.924362263935258
+   "exitX": 0.12931359681344207,
+   "exitZ": -0.9916037483184352
   },
   {
    "from": 5,
@@ -6329,7 +6320,7 @@
     22
    ],
    "ok": true,
-   "reason": "no takeoff (hop 2)",
+   "reason": "",
    "hops": [
     {
      "kind": "street",
@@ -7858,13 +7849,13 @@
      "margin": 3.54
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 17,
      "to": 18,
-     "window": 171,
-     "windowMs": 1425,
-     "param": 529,
-     "margin": 3.97
+     "window": 54,
+     "windowMs": 450,
+     "param": 328,
+     "margin": 5.16
     },
     {
      "kind": "zip",
@@ -7872,8 +7863,8 @@
      "to": 30,
      "window": 120,
      "windowMs": 1000,
-     "param": 710,
-     "margin": 5.09
+     "param": 669,
+     "margin": 4.96
     },
     {
      "kind": "drop",
@@ -7882,13 +7873,13 @@
      "window": 49,
      "windowMs": 408,
      "param": 76,
-     "margin": 4.04
+     "margin": 4
     }
    ],
-   "seconds": 9.4,
-   "speed": 11.68,
-   "score": 4.666666666666667,
-   "residual": 0.017790417795399308,
+   "seconds": 9.066666666666666,
+   "speed": 12.7,
+   "score": 4.5,
+   "residual": 0.015840216151506332,
    "kept": true,
    "exitX": 1,
    "exitZ": 0
@@ -8009,8 +8000,8 @@
    "score": 3,
    "residual": 0.015031677069572771,
    "kept": false,
-   "exitX": 0.9902328630604538,
-   "exitZ": 0.13942337291536397
+   "exitX": 0.9853347336455592,
+   "exitZ": 0.17063253696653202
   },
   {
    "from": 8,
@@ -8106,22 +8097,22 @@
      "margin": 3.54
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 17,
      "to": 18,
-     "window": 171,
-     "windowMs": 1425,
-     "param": 529,
-     "margin": 3.97
+     "window": 54,
+     "windowMs": 450,
+     "param": 328,
+     "margin": 5.16
     },
     {
      "kind": "alley",
      "from": 18,
      "to": 19,
-     "window": 35,
-     "windowMs": 292,
-     "param": 714,
-     "margin": 2.85
+     "window": 47,
+     "windowMs": 392,
+     "param": 582,
+     "margin": 4.69
     },
     {
      "kind": "zip",
@@ -8129,8 +8120,8 @@
      "to": 31,
      "window": 120,
      "windowMs": 1000,
-     "param": 921,
-     "margin": 4.96
+     "param": 784,
+     "margin": 4.97
     },
     {
      "kind": "climb",
@@ -8138,15 +8129,15 @@
      "to": 43,
      "window": 61,
      "windowMs": 508,
-     "param": 1130,
+     "param": 993,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 11.75,
+   "seconds": 10.608333333333333,
    "speed": 0,
-   "score": 2.9166666666666665,
-   "residual": 0.019439757023992126,
+   "score": 3.9166666666666665,
+   "residual": 0.01943975702394661,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -8175,13 +8166,13 @@
      "margin": 3.54
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 17,
      "to": 18,
-     "window": 171,
-     "windowMs": 1425,
-     "param": 529,
-     "margin": 3.97
+     "window": 54,
+     "windowMs": 450,
+     "param": 328,
+     "margin": 5.16
     },
     {
      "kind": "zip",
@@ -8189,8 +8180,8 @@
      "to": 30,
      "window": 120,
      "windowMs": 1000,
-     "param": 710,
-     "margin": 5.09
+     "param": 669,
+     "margin": 4.96
     },
     {
      "kind": "drop",
@@ -8199,7 +8190,7 @@
      "window": 49,
      "windowMs": 408,
      "param": 76,
-     "margin": 4.04
+     "margin": 4
     },
     {
      "kind": "zip",
@@ -8207,14 +8198,14 @@
      "to": 43,
      "window": 92,
      "windowMs": 767,
-     "param": 1177,
+     "param": 1136,
      "margin": 5.03
     }
    ],
-   "seconds": 11.416666666666666,
+   "seconds": 11.075,
    "speed": 0,
-   "score": 4.666666666666667,
-   "residual": 0.01514677381567485,
+   "score": 4.5,
+   "residual": 0.015008994204022174,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -8284,8 +8275,8 @@
    "score": 3,
    "residual": 0.015360528986394844,
    "kept": false,
-   "exitX": 0.9902328630604538,
-   "exitZ": 0.13942337291536397
+   "exitX": 0.9853347336455592,
+   "exitZ": 0.17063253696653202
   },
   {
    "from": 8,
@@ -8749,26 +8740,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 2105,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 2186,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 2396,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 2454,
+     "margin": 2.56
     }
    ],
-   "seconds": 21.208333333333332,
+   "seconds": 21.691666666666666,
    "speed": 0,
-   "score": 1.8333333333333333,
-   "residual": 0.01582474209541784,
+   "score": 0.9166666666666666,
+   "residual": 0.019569310635789133,
    "kept": false,
    "exitX": 0.07118915080504865,
    "exitZ": 0.997462833797659
@@ -8852,26 +8843,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 2005,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 2086,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 2296,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 2354,
+     "margin": 2.56
     }
    ],
-   "seconds": 20.383333333333333,
-   "speed": 10.46,
-   "score": 1.8333333333333333,
-   "residual": 0.0158247319798772,
+   "seconds": 20.866666666666667,
+   "speed": 12.26,
+   "score": 0.9166666666666666,
+   "residual": 0.01956943452209986,
    "kept": true,
    "exitX": -1,
    "exitZ": 0
@@ -9153,22 +9144,22 @@
      "margin": 3.54
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 17,
      "to": 18,
-     "window": 171,
-     "windowMs": 1425,
-     "param": 529,
-     "margin": 3.97
+     "window": 54,
+     "windowMs": 450,
+     "param": 328,
+     "margin": 5.16
     },
     {
      "kind": "alley",
      "from": 18,
      "to": 19,
-     "window": 35,
-     "windowMs": 292,
-     "param": 714,
-     "margin": 2.85
+     "window": 47,
+     "windowMs": 392,
+     "param": 582,
+     "margin": 4.69
     },
     {
      "kind": "street",
@@ -9176,7 +9167,7 @@
      "to": 20,
      "window": 42,
      "windowMs": 350,
-     "param": 969,
+     "param": 815,
      "margin": 0.6,
      "climbed": true
     },
@@ -9186,23 +9177,23 @@
      "to": 21,
      "window": 35,
      "windowMs": 292,
-     "param": 1366,
+     "param": 1212,
      "margin": 2
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 21,
      "to": 22,
-     "window": 116,
-     "windowMs": 967,
-     "param": 1849,
-     "margin": 1.53
+     "window": 57,
+     "windowMs": 475,
+     "param": 1481,
+     "margin": 4.05
     }
    ],
-   "seconds": 16.733333333333334,
+   "seconds": 14.991666666666667,
    "speed": 0,
    "score": 1.1666666666666667,
-   "residual": 0.016485746297821735,
+   "residual": 0.015949730520566977,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -9411,26 +9402,26 @@
      "kind": "street",
      "from": 50,
      "to": 49,
-     "window": 14,
-     "windowMs": 117,
-     "param": 694,
-     "margin": 0.6,
-     "climbed": true
+     "window": 37,
+     "windowMs": 308,
+     "param": 856,
+     "margin": 5,
+     "cable": true
     },
     {
-     "kind": "zip",
+     "kind": "leap",
      "from": 49,
      "to": 37,
-     "window": 120,
-     "windowMs": 1000,
-     "param": 1055,
-     "margin": 5.49
+     "window": 67,
+     "windowMs": 558,
+     "param": 1173,
+     "margin": 4.27
     }
    ],
-   "seconds": 10.175,
+   "seconds": 12.416666666666666,
    "speed": 0,
-   "score": 0.3888888888888889,
-   "residual": 0.01619218261344731,
+   "score": 1.0277777777777777,
+   "residual": 0.017120456425724396,
    "kept": false,
    "exitX": -0.23641615788439466,
    "exitZ": -0.9716518925475218
@@ -10091,14 +10082,13 @@
    "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
@@ -10106,7 +10096,7 @@
      "to": 63,
      "window": 61,
      "windowMs": 508,
-     "param": 414,
+     "param": 415,
      "margin": 0.6,
      "climbed": true
     },
@@ -10116,8 +10106,8 @@
      "to": 54,
      "window": 36,
      "windowMs": 300,
-     "param": 719,
-     "margin": 2
+     "param": 660,
+     "margin": 2.01
     },
     {
      "kind": "zip",
@@ -10125,17 +10115,17 @@
      "to": 55,
      "window": 120,
      "windowMs": 1000,
-     "param": 1061,
+     "param": 1002,
      "margin": 4.87
     }
    ],
-   "seconds": 10.316666666666666,
+   "seconds": 9.825,
    "speed": 0,
    "score": 3,
-   "residual": 0.017986083283375545,
+   "residual": 0.01795834518074475,
    "kept": false,
-   "exitX": -0.05494421487737776,
-   "exitZ": -0.998489425708409
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -10317,22 +10307,21 @@
    "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 462,
+     "window": 43,
+     "windowMs": 358,
+     "param": 367,
      "margin": 0.6,
      "climbed": true
     },
@@ -10342,7 +10331,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 881,
+     "param": 768,
      "margin": 0.6,
      "climbed": true
     },
@@ -10352,18 +10341,18 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1207,
+     "param": 1094,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 11.283333333333333,
+   "seconds": 10.341666666666667,
    "speed": 0,
-   "score": 5.083333333333333,
-   "residual": 0.019447049992533886,
+   "score": 3.5833333333333335,
+   "residual": 0.019447156813052778,
    "kept": false,
-   "exitX": -0.05494421487737776,
-   "exitZ": -0.998489425708409
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -10380,22 +10369,21 @@
    "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 462,
+     "window": 43,
+     "windowMs": 358,
+     "param": 367,
      "margin": 0.6,
      "climbed": true
     },
@@ -10405,7 +10393,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 881,
+     "param": 768,
      "margin": 0.6,
      "climbed": true
     },
@@ -10415,7 +10403,7 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 1207,
+     "param": 1094,
      "margin": 0.6,
      "climbed": true
     },
@@ -10429,13 +10417,13 @@
      "margin": 5.23
     }
    ],
-   "seconds": 14,
+   "seconds": 13.058333333333334,
    "speed": 0,
-   "score": 5.083333333333333,
-   "residual": 0.015476009523046886,
+   "score": 3.5833333333333335,
+   "residual": 0.015477006888291883,
    "kept": false,
-   "exitX": -0.05494421487737776,
-   "exitZ": -0.998489425708409
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -10541,26 +10529,25 @@
     21,
     22
    ],
-   "ok": false,
-   "reason": "ran off the junction roof",
+   "ok": true,
+   "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 462,
+     "window": 43,
+     "windowMs": 358,
+     "param": 367,
      "margin": 0.6,
      "climbed": true
     },
@@ -10568,57 +10555,56 @@
      "kind": "climb",
      "from": 53,
      "to": 54,
-     "window": 58,
-     "windowMs": 483,
-     "param": 707,
+     "window": 51,
+     "windowMs": 425,
+     "param": 610,
      "margin": 0.6,
      "climbed": true
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 54,
      "to": 45,
-     "window": 147,
-     "windowMs": 1225,
-     "param": 1252,
-     "margin": 1.93
+     "window": 61,
+     "windowMs": 508,
+     "param": 907,
+     "margin": 4.02
     },
     {
      "kind": "alley",
      "from": 45,
      "to": 33,
-     "window": 36,
-     "windowMs": 300,
-     "param": 1441,
-     "margin": 2
+     "window": 47,
+     "windowMs": 392,
+     "param": 1163,
+     "margin": 4.69
     },
     {
      "kind": "street",
      "from": 33,
      "to": 21,
-     "window": 52,
-     "windowMs": 433,
-     "param": 1692,
-     "margin": 4.63
+     "window": 51,
+     "windowMs": 425,
+     "param": 1362,
+     "margin": 4.62
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 21,
      "to": 22,
-     "window": 42,
-     "windowMs": 350,
-     "param": 2028,
-     "margin": 0.6,
-     "climbed": true
+     "window": 60,
+     "windowMs": 500,
+     "param": 1665,
+     "margin": 4.23
     }
    ],
-   "seconds": 0,
+   "seconds": 16.5,
    "speed": 0,
-   "score": 0,
-   "residual": 0,
+   "score": 1.4166666666666667,
+   "residual": 0.019415599807583065,
    "kept": false,
-   "exitX": -1.0812871869669323,
-   "exitZ": -19.650000000000006
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -10637,22 +10623,21 @@
    "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
      "from": 62,
      "to": 53,
-     "window": 61,
-     "windowMs": 508,
-     "param": 462,
+     "window": 43,
+     "windowMs": 358,
+     "param": 367,
      "margin": 0.6,
      "climbed": true
     },
@@ -10660,29 +10645,29 @@
      "kind": "climb",
      "from": 53,
      "to": 54,
-     "window": 58,
-     "windowMs": 483,
-     "param": 707,
+     "window": 51,
+     "windowMs": 425,
+     "param": 610,
      "margin": 0.6,
      "climbed": true
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 54,
      "to": 45,
-     "window": 147,
-     "windowMs": 1225,
-     "param": 1252,
-     "margin": 1.93
+     "window": 61,
+     "windowMs": 508,
+     "param": 907,
+     "margin": 4.02
     },
     {
      "kind": "street",
      "from": 45,
      "to": 46,
-     "window": 115,
-     "windowMs": 958,
-     "param": 1640,
-     "margin": 3.7
+     "window": 119,
+     "windowMs": 992,
+     "param": 1526,
+     "margin": 3.71
     },
     {
      "kind": "alley",
@@ -10690,7 +10675,7 @@
      "to": 34,
      "window": 22,
      "windowMs": 183,
-     "param": 1984,
+     "param": 1844,
      "margin": 2.29
     },
     {
@@ -10699,18 +10684,18 @@
      "to": 22,
      "window": 288,
      "windowMs": 2400,
-     "param": 2363,
+     "param": 2233,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 21.158333333333335,
+   "seconds": 20.075,
    "speed": 0,
    "score": 1.8333333333333333,
-   "residual": 0.016458683695127152,
+   "residual": 0.016400051253014646,
    "kept": false,
-   "exitX": -0.05494421487737776,
-   "exitZ": -0.998489425708409
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -10726,17 +10711,16 @@
     22
    ],
    "ok": true,
-   "reason": "no takeoff (hop 4)",
+   "reason": "",
    "hops": [
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 249,
-     "margin": 0.6,
-     "climbed": true
+     "window": 58,
+     "windowMs": 483,
+     "param": 113,
+     "margin": 5.5
     },
     {
      "kind": "climb",
@@ -10744,7 +10728,7 @@
      "to": 63,
      "window": 61,
      "windowMs": 508,
-     "param": 414,
+     "param": 415,
      "margin": 0.6,
      "climbed": true
     },
@@ -10754,8 +10738,8 @@
      "to": 54,
      "window": 36,
      "windowMs": 300,
-     "param": 719,
-     "margin": 2
+     "param": 660,
+     "margin": 2.01
     },
     {
      "kind": "street",
@@ -10763,7 +10747,7 @@
      "to": 45,
      "window": 142,
      "windowMs": 1183,
-     "param": 1193,
+     "param": 1134,
      "margin": 4.74
     },
     {
@@ -10772,8 +10756,8 @@
      "to": 46,
      "window": 119,
      "windowMs": 992,
-     "param": 1653,
-     "margin": 3.66
+     "param": 1594,
+     "margin": 3.65
     },
     {
      "kind": "alley",
@@ -10781,7 +10765,7 @@
      "to": 34,
      "window": 22,
      "windowMs": 183,
-     "param": 1966,
+     "param": 1907,
      "margin": 2.32
     },
     {
@@ -10790,18 +10774,18 @@
      "to": 22,
      "window": 288,
      "windowMs": 2400,
-     "param": 2355,
+     "param": 2296,
      "margin": 0.6,
      "climbed": true
     }
    ],
-   "seconds": 21.091666666666665,
+   "seconds": 20.6,
    "speed": 0,
    "score": 1.8333333333333333,
-   "residual": 0.01645066899388135,
+   "residual": 0.016468070225360835,
    "kept": false,
-   "exitX": -0.05494421487737776,
-   "exitZ": -0.998489425708409
+   "exitX": 0,
+   "exitZ": -1
   },
   {
    "from": 10,
@@ -11032,26 +11016,26 @@
      "kind": "street",
      "from": 69,
      "to": 70,
-     "window": 257,
-     "windowMs": 2142,
-     "param": 2007,
-     "margin": 0.6,
-     "climbed": true
+     "window": 33,
+     "windowMs": 275,
+     "param": 2088,
+     "margin": 4.96,
+     "cable": true
     },
     {
      "kind": "alley",
      "from": 70,
      "to": 71,
-     "window": 29,
-     "windowMs": 242,
-     "param": 2298,
-     "margin": 2.62
+     "window": 30,
+     "windowMs": 250,
+     "param": 2356,
+     "margin": 2.56
     }
    ],
-   "seconds": 20.4,
-   "speed": 10.2,
-   "score": 1.8333333333333333,
-   "residual": 0.015824699390736916,
+   "seconds": 20.883333333333333,
+   "speed": 11.99,
+   "score": 0.9166666666666666,
+   "residual": 0.019569833656976874,
    "kept": true,
    "exitX": -0.971603323338922,
    "exitZ": -0.236615684342273
@@ -11792,14 +11776,13 @@
      "climbed": true
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 74,
      "to": 62,
-     "window": 259,
-     "windowMs": 2158,
-     "param": 1138,
-     "margin": 0.6,
-     "climbed": true
+     "window": 15,
+     "windowMs": 125,
+     "param": 957,
+     "margin": 2.15
     },
     {
      "kind": "climb",
@@ -11807,7 +11790,7 @@
      "to": 53,
      "window": 61,
      "windowMs": 508,
-     "param": 1351,
+     "param": 1272,
      "margin": 0.6,
      "climbed": true
     },
@@ -11817,7 +11800,7 @@
      "to": 44,
      "window": 288,
      "windowMs": 2400,
-     "param": 1770,
+     "param": 1701,
      "margin": 0.6,
      "climbed": true
     },
@@ -11827,7 +11810,7 @@
      "to": 43,
      "window": 288,
      "windowMs": 2400,
-     "param": 2096,
+     "param": 2027,
      "margin": 0.6,
      "climbed": true
     },
@@ -11841,10 +11824,10 @@
      "margin": 5.23
     }
    ],
-   "seconds": 21.408333333333335,
+   "seconds": 20.833333333333332,
    "speed": 0,
-   "score": 1.8333333333333333,
-   "residual": 0.01547597010415908,
+   "score": 1.25,
+   "residual": 0.01547486437779373,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -11903,22 +11886,22 @@
      "margin": 4.77
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 51,
      "to": 39,
-     "window": 129,
-     "windowMs": 1075,
-     "param": 1420,
-     "margin": 5.96
+     "window": 54,
+     "windowMs": 450,
+     "param": 1195,
+     "margin": 5.12
     },
     {
      "kind": "street",
      "from": 39,
      "to": 40,
-     "window": 121,
-     "windowMs": 1008,
-     "param": 1837,
-     "margin": 5.64
+     "window": 122,
+     "windowMs": 1017,
+     "param": 1787,
+     "margin": 5.63
     },
     {
      "kind": "alley",
@@ -11926,7 +11909,7 @@
      "to": 41,
      "window": 35,
      "windowMs": 292,
-     "param": 2017,
+     "param": 1968,
      "margin": 2.82
     },
     {
@@ -11935,14 +11918,14 @@
      "to": 42,
      "window": 54,
      "windowMs": 450,
-     "param": 2258,
-     "margin": 4.29
+     "param": 2209,
+     "margin": 4.31
     }
    ],
-   "seconds": 21.416666666666668,
+   "seconds": 21,
    "speed": 0,
    "score": 2,
-   "residual": 0.015002995998846901,
+   "residual": 0.018923779939071458,
    "kept": false,
    "exitX": -1,
    "exitZ": 0
@@ -12812,21 +12795,21 @@
      "margin": 2.51
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 51,
      "to": 39,
-     "window": 129,
-     "windowMs": 1075,
-     "param": 1376,
-     "margin": 5.99
+     "window": 55,
+     "windowMs": 458,
+     "param": 1144,
+     "margin": 5.12
     },
     {
      "kind": "street",
      "from": 39,
      "to": 40,
-     "window": 121,
-     "windowMs": 1008,
-     "param": 1794,
+     "window": 122,
+     "windowMs": 1017,
+     "param": 1736,
      "margin": 5.63
     },
     {
@@ -12835,7 +12818,7 @@
      "to": 28,
      "window": 92,
      "windowMs": 767,
-     "param": 1969,
+     "param": 1915,
      "margin": 4.98
     },
     {
@@ -12844,14 +12827,14 @@
      "to": 16,
      "window": 21,
      "windowMs": 175,
-     "param": 2172,
+     "param": 2118,
      "margin": 2.33
     }
    ],
-   "seconds": 21.133333333333333,
+   "seconds": 20.683333333333334,
    "speed": 0,
    "score": 1.2222222222222223,
-   "residual": 0.01916955231235562,
+   "residual": 0.019001129151277496,
    "kept": false,
    "exitX": 0,
    "exitZ": -1
@@ -12911,21 +12894,21 @@
      "margin": 2.48
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 51,
      "to": 39,
-     "window": 129,
-     "windowMs": 1075,
-     "param": 1399,
-     "margin": 5.99
+     "window": 54,
+     "windowMs": 450,
+     "param": 1166,
+     "margin": 5.16
     },
     {
      "kind": "climb",
      "from": 39,
      "to": 27,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1542,
+     "window": 47,
+     "windowMs": 392,
+     "param": 1420,
      "margin": 0.6,
      "climbed": true
     },
@@ -12935,7 +12918,7 @@
      "to": 28,
      "window": 269,
      "windowMs": 2242,
-     "param": 1918,
+     "param": 1779,
      "margin": 0.6,
      "climbed": true
     },
@@ -12945,14 +12928,14 @@
      "to": 16,
      "window": 30,
      "windowMs": 250,
-     "param": 2221,
+     "param": 2082,
      "margin": 2.68
     }
    ],
-   "seconds": 21.508333333333333,
+   "seconds": 20.35,
    "speed": 0,
    "score": 1.1666666666666667,
-   "residual": 0.015524320288550775,
+   "residual": 0.015524482454615813,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
@@ -13113,21 +13096,21 @@
      "margin": 2.48
     },
     {
-     "kind": "street",
+     "kind": "leap",
      "from": 51,
      "to": 39,
-     "window": 129,
-     "windowMs": 1075,
-     "param": 1399,
-     "margin": 5.99
+     "window": 54,
+     "windowMs": 450,
+     "param": 1166,
+     "margin": 5.16
     },
     {
      "kind": "climb",
      "from": 39,
      "to": 27,
-     "window": 61,
-     "windowMs": 508,
-     "param": 1542,
+     "window": 47,
+     "windowMs": 392,
+     "param": 1420,
      "margin": 0.6,
      "climbed": true
     },
@@ -13137,7 +13120,7 @@
      "to": 15,
      "window": 66,
      "windowMs": 550,
-     "param": 1839,
+     "param": 1700,
      "margin": 3.36
     },
     {
@@ -13146,14 +13129,14 @@
      "to": 16,
      "window": 180,
      "windowMs": 1500,
-     "param": 2307,
+     "param": 2168,
      "margin": 5.91
     }
    ],
-   "seconds": 20.133333333333333,
+   "seconds": 18.975,
    "speed": 0,
    "score": 1.1666666666666667,
-   "residual": 0.01590991121406948,
+   "residual": 0.01592631825601304,
    "kept": false,
    "exitX": 1,
    "exitZ": 0
