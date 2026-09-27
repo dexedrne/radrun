@@ -7,6 +7,7 @@
 import { isLow, sfxOn, whenCreated, type Engine } from "./engine.ts";
 import { SFX, SFX_FIRST, sfxPath, type SfxName } from "./catalog.ts";
 import { loadSample, playBuffer, preloadSamples, sample } from "./samples.ts";
+import { SOUND_DEBUG, soundLog } from "./debug.ts";
 
 let played = 0;
 
@@ -181,7 +182,7 @@ function meow(e: Engine, t: number, sulky: boolean): void {
   lfo.stop(t + dur + 0.05);
 }
 
-export const sfx = {
+const sounds = {
   /** Rope attach: a noisy "thwip" (band-passed noise + a falling sine). */
   thwip: () => smp("thwip", 0.55) || at(0, (e, t) => {
     noise(e, "bandpass", 5200, 1300, 3, t, 0.1, 0.5, 0.1);
@@ -322,3 +323,21 @@ export const sfx = {
   },
   played: () => played,
 };
+
+/** ?sfxdebug: every call is logged with whether it made a sound (the wind loop and the counter are not). */
+function logged<T extends Record<string, unknown>>(o: T): T {
+  if (!SOUND_DEBUG) return o;
+  const out: Record<string, unknown> = { ...o };
+  for (const [k, f] of Object.entries(o)) {
+    if (typeof f !== "function" || k === "wind" || k === "played") continue;
+    out[k] = (...a: unknown[]) => {
+      const before = played;
+      const r = (f as (...x: unknown[]) => unknown)(...a);
+      soundLog("sfx", k, played > before);
+      return r;
+    };
+  }
+  return out as T;
+}
+
+export const sfx = logged(sounds);

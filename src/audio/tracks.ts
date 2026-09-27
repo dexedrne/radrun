@@ -1,13 +1,14 @@
-// Sampled music (catalog.ts). The calm loop (title / loading / results) and the district's chase loop
-// stream through media elements (never decoded whole, never waited for); each has a fade gain into one
-// bus: lift (close-chase high shelf) -> pause low-pass -> the engine's duck. The countdown build and the
-// catch / rugged stings are short decoded one-shots into the music gain.
+// Sampled music (catalog.ts). The calm loop (title / loading / results) and the round's loop (the music style:
+// the district's chill loop, or its chase loop) stream through media elements (never decoded whole, never waited
+// for); each has a fade gain into one bus: lift (close-chase high shelf) -> pause low-pass -> the engine's duck.
+// The countdown build and the catch / rugged stings are short decoded one-shots into the music gain.
 // music.ts asks every frame; a loop that is not playable yet (or failed) leaves the procedural score in
 // charge, so the game never waits for a file and always has music. Crossfades are gain automation only.
 import { engine, musicOn, whenCreated, type Engine } from "./engine.ts";
 import { audioUrl, playBuffer, preloadSamples, sample } from "./samples.ts";
-import { MUSIC, chaseTrack, musicPath } from "./catalog.ts";
+import { MUSIC, musicPath, roundTrack, type MusicStyle } from "./catalog.ts";
 import type { MusicMode } from "./score.ts";
+import { soundLog } from "./debug.ts";
 
 type Track = { name: string; el: HTMLAudioElement; g: GainNode; failed: boolean; on: boolean; stopAt: number };
 
@@ -19,7 +20,23 @@ let holdUntil = 0;
 let countdownSrc: { src: AudioBufferSourceNode; g: GainNode } | null = null;
 let introSampled = false;
 let lifted = false;
+let liftStyle: MusicStyle | null = null;
 let pausedNow = false;
+let style: MusicStyle = "chill";
+/** Rounds played (an unknown district rotates through the chill loops, one per round). */
+let rotation = 0;
+let wasChase = false;
+
+/** Close-chase lift per style: high-shelf dB and level. Chill keeps it gentle (the same loop, a little brighter). */
+const LIFT: Record<MusicStyle, { shelf: number; level: number }> = { chill: { shelf: 2, level: 1.08 }, chase: { shelf: 5, level: 1.2 } };
+
+/** The music style (pause -> Settings); a change mid-round crossfades to the other loop. */
+export function setMusicStyle(s: MusicStyle): void {
+  style = s === "chase" ? "chase" : "chill";
+}
+export function musicStyle(): MusicStyle {
+  return style;
+}
 
 whenCreated(e => {
   const lift = e.ac.createBiquadFilter();
@@ -65,14 +82,16 @@ function track(e: Engine, name: string): Track | null {
   return t;
 }
 
-const playable = (t: Track | null): t is Track => !!t && !t.failed && (t.el.readyState >= 3 || (t.on && t.el.readyState >= 2));
+/** Ready to start, or already chosen and still going (a seek back to the top briefly drops readyState). */
+const playable = (t: Track | null): t is Track => !!t && !t.failed && (t.el.readyState >= 3 || (t.on && (t.el.readyState >= 2 || t.el.seeking)));
 
 function fadeIn(e: Engine, t: Track, tau: number, fromStart: boolean): void {
   t.on = true;
-  if (fromStart && t.el.paused) {
+  if (fromStart && t.el.paused && t.el.currentTime > 0) {
     try { t.el.currentTime = 0; } catch { /* not seekable yet */ }
   }
   if (t.el.paused) void t.el.play().catch(() => { t.failed = true; });
+  soundLog("music", t.name, true, { from: +t.el.currentTime.toFixed(2) });
   const p = t.g.gain, now = e.ac.currentTime;
   p.cancelScheduledValues(now);
   p.setTargetAtTime(1, now, tau);
@@ -86,11 +105,11 @@ function fadeOut(e: Engine, t: Track, tau: number): void {
   t.stopAt = now + tau * 6;
 }
 
-/** Start streaming the district's chase loop (with the round) and decode the countdown build + stings. */
+/** Start streaming the round's loop (with the round) and decode the countdown build + stings. */
 export function preloadTracks(district: string): void {
   preloadSamples([musicPath(MUSIC.countdown)], true);
   preloadSamples([musicPath(MUSIC.win), musicPath(MUSIC.yoink), musicPath(MUSIC.rugged)]);
-  const go = (e: Engine) => { track(e, chaseTrack(district)); };
+  const go = (e: Engine) => { track(e, roundTrack(style, district, rotation)); };
   const e = engine();
   if (e) go(e);
   else whenCreated(go);
@@ -104,25 +123,33 @@ export function updateTracks(mode: MusicMode, layer: boolean, district: string, 
   const e = engine();
   if (!e || !bus) return false;
   const now = e.ac.currentTime;
-  const name = mode === "calm" ? MUSIC.title : mode === "chase" ? chaseTrack(district) : null;
+  // A round's music ended: the next round of an unknown district takes the next chill loop.
+  if (wasChase && mode !== "chase") rotation++;
+  wasChase = mode === "chase";
+  const name = mode === "calm" ? MUSIC.title : mode === "chase" ? roundTrack(style, district, rotation) : null;
   const t = name ? track(e, name) : null;
   const ok = playable(t);
-  const want = musicOn() && ok && now >= holdUntil ? t : null;
+  // The style changed mid-round: the loop playing keeps going until the other one can take over (a crossfade, no gap).
+  const keep = mode === "chase" && !!t && !t.failed && !ok && !!cur && cur.name !== MUSIC.title && playable(cur);
+  const want = musicOn() && now >= holdUntil ? (ok ? t : keep ? cur : null) : null;
   if (want !== cur) {
     const toChase = mode === "chase";
     if (cur) fadeOut(e, cur, !musicOn() ? 0.05 : toChase || mode === "intro" ? 0.08 : cur.name === MUSIC.title ? 0.5 : 0.12);
-    // GO: the countdown build cuts on the downbeat, so the chase loop starts at once, from bar 1.
-    if (want) fadeIn(e, want, toChase && introSampled ? 0.01 : toChase ? 0.25 : 0.8, toChase);
+    // GO: the countdown build cuts on the downbeat, so the chase loop starts at once, from bar 1 (a chill loop
+    // eases in over a beat's first few tens of ms).
+    if (want) fadeIn(e, want, toChase && introSampled ? (style === "chill" ? 0.05 : 0.01) : toChase ? 0.25 : 0.8, toChase);
     cur = want;
   }
   if (mode !== "intro") introSampled = false;
   // Left the countdown before GO (quit / restart): cut the build.
   if (countdownSrc && mode !== "intro" && mode !== "chase") stopCountdown(e);
-  // Close-chase layer: the loop gets louder and brighter (the procedural layer would clash with it).
-  if (layer !== lifted) {
+  // Close-chase layer: the loop gets louder and brighter (the procedural layer would clash with it); on Chill only
+  // a little.
+  if (layer !== lifted || style !== liftStyle) {
     lifted = layer;
-    bus.lift.gain.setTargetAtTime(layer ? 5 : 0, now, 0.25);
-    bus.level.gain.setTargetAtTime(layer ? 1.2 : 1, now, 0.25);
+    liftStyle = style;
+    bus.lift.gain.setTargetAtTime(layer ? LIFT[style].shelf : 0, now, 0.25);
+    bus.level.gain.setTargetAtTime(layer ? LIFT[style].level : 1, now, 0.25);
   }
   if (paused !== pausedNow) {
     pausedNow = paused;
@@ -159,6 +186,7 @@ export function countdownTrack(seconds: number): boolean {
   const now = e.ac.currentTime;
   const offset = Math.max(0, buf.duration - seconds);
   countdownSrc = playBuffer(e, buf, e.musicGain, now + 0.02, 0.9, 1, offset);
+  soundLog("music", MUSIC.countdown, true);
   const src = countdownSrc.src;
   src.addEventListener("ended", () => { if (countdownSrc?.src === src) countdownSrc = null; });
   introSampled = true;
@@ -175,6 +203,7 @@ export function stingTrack(kind: "caught" | "yoink" | "escaped"): boolean {
   const now = e.ac.currentTime;
   if (cur) { fadeOut(e, cur, 0.06); cur = null; }
   playBuffer(e, buf, e.musicGain, now + 0.03, 0.85);
+  soundLog("music", kind === "escaped" ? MUSIC.rugged : kind === "yoink" ? MUSIC.yoink : MUSIC.win, true);
   holdUntil = now + Math.max(1, buf.duration - 1.2);
   return true;
 }

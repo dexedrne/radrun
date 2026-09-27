@@ -35,7 +35,7 @@ import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx } from "../audio/sfx.ts";
 import { preloadVoices, voice } from "../audio/voice.ts";
-import { preloadTracks } from "../audio/tracks.ts";
+import { preloadTracks, setMusicStyle } from "../audio/tracks.ts";
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
 import { bridge, chaseResult, requestLock } from "../radbro/bridge.ts";
@@ -78,7 +78,7 @@ async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["so
   if (!dec) return null;
   return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older);
 }
-const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); setPadSettings(padSettingsOf(s)); };
+const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); setMusicStyle(s.musicStyle); setPadSettings(padSettingsOf(s)); };
 /** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */
 const AUTOQ_OFF = params.get("autoq") === "0";
 const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" && !s.qualityChosen && !s.qualityAuto;

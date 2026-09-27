@@ -1,5 +1,5 @@
 // The sampled audio under public/audio/ (pure: Node tests import it and check every file exists).
-//   music/  loops (title + one chase loop per district) streamed through media elements; stings decoded
+//   music/  loops (title, one chill loop and one chase loop per district) streamed through media elements; stings decoded
 //   sfx/    one-shots (+ the wind loop), `_2` / `_3` = variations of the same sound
 //   voice/  per-Radbro lines (keys match the bubbles in ui/strings.ts) + the announcer (a Milady)
 // Everything here is optional at runtime: a file that fails to load falls back to the procedural sound.
@@ -69,6 +69,32 @@ export const CHASE_TRACK: Readonly<Record<string, string>> = {
 };
 export const chaseTrack = (district: string): string => CHASE_TRACK[district] ?? CHASE_TRACK.downtown;
 
+/**
+ * Music style (pause -> Settings): "chill" (the default) plays the laid-back loops in a round and in SPIDER-TAG,
+ * "chase" the district's chase loop. Title, countdown build and stings are the same in both.
+ */
+export type MusicStyle = "chill" | "chase";
+export const MUSIC_STYLES: readonly MusicStyle[] = ["chill", "chase"];
+
+/** The chill loops: dusk rooftops lo-fi, night-market chillhop, harbour jazz-hop, high-towers downtempo. */
+export const CHILL_TRACKS = ["chill_rooftops", "chill_market", "chill_harbour", "chill_towers"] as const;
+/** Chill loop per district id (string keys, like CHASE_TRACK); a district without a line rotates through CHILL_TRACKS. */
+export const CHILL_TRACK: Readonly<Record<string, string>> = {
+  downtown: "chill_rooftops",
+  market: "chill_market",
+  docks: "chill_harbour",
+  towers: "chill_towers",
+  vertigo: "chill_towers",
+};
+/** The district's chill loop; an unknown district takes the next one each round (`rotation` = rounds played). */
+export const chillTrack = (district: string, rotation = 0): string => {
+  const n = CHILL_TRACKS.length;
+  return CHILL_TRACK[district] ?? CHILL_TRACKS[((Math.floor(rotation) % n) + n) % n];
+};
+/** The loop a round plays in this style. */
+export const roundTrack = (style: MusicStyle, district: string, rotation = 0): string =>
+  style === "chase" ? chaseTrack(district) : chillTrack(district, rotation);
+
 export const sfxPath = (file: string): string => `sfx/${file}.mp3`;
 export const voicePath = (who: Speaker, key: string): string => `voice/${who}/${key}.mp3`;
 export const musicPath = (name: string): string => `music/${name}.mp3`;
@@ -81,5 +107,6 @@ export function allAudioFiles(radbros: readonly RadbroId[]): string[] {
   for (const k of ANNOUNCER_KEYS) out.push(voicePath("announcer", k));
   for (const m of Object.values(MUSIC)) out.push(musicPath(m));
   for (const m of Object.values(CHASE_TRACK)) out.push(musicPath(m));
-  return out;
+  for (const m of CHILL_TRACKS) out.push(musicPath(m));
+  return [...new Set(out)];
 }

@@ -17,6 +17,7 @@ import { safe, safePad } from "./safe.ts";
 import { PadText } from "./pad.tsx";
 import { radrunPadControls, radrunPadHud } from "./padPrompts.ts";
 import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
+import { MUSIC_STYLES } from "../audio/catalog.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -509,6 +510,15 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
             </div>
             {s.quality === "low" && <div style={{ opacity: 0.7, fontSize: 11 }}>Low: sharpness 1x, no shadows or trail, fewer rooftop props (anti-aliasing off after a reload){s.qualityAuto && !s.qualityChosen ? ". Switched automatically (the game ran below ~40 fps); pick High to keep High." : ""}</div>}
             <label>sensitivity {s.sensitivity.toFixed(4)}<input type="range" min={0.0005} max={0.006} step={0.0001} value={s.sensitivity} onChange={e => set({ sensitivity: Number(e.target.value) })} style={{ width: "100%" }} /></label>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }} data-testid="music-style">
+              <span style={{ flex: 1 }}>music style</span>
+              {MUSIC_STYLES.map(m => (
+                <button key={m} onClick={() => set({ musicStyle: m })} data-testid={`music-style-${m}`}
+                  style={{ ...btn(false), padding: "5px 12px", fontSize: 12, background: s.musicStyle === m ? "rgba(255,210,63,0.3)" : "rgba(255,255,255,0.06)", borderColor: s.musicStyle === m ? "#ffd23f" : "rgba(255,255,255,0.35)" }}>
+                  {m === "chill" ? "Chill" : "Chase"}
+                </button>
+              ))}
+            </div>
             <label>music {Math.round(s.music * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.music} onChange={e => set({ music: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-music" /></label>
             <label>sound effects {Math.round(s.sfx * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.sfx} onChange={e => set({ sfx: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-sfx" /></label>
             <label>voices {Math.round(s.voice * 100)}%<input type="range" min={0} max={1} step={0.05} value={s.voice} onChange={e => set({ voice: Number(e.target.value) })} style={{ width: "100%" }} data-testid="vol-voice" /></label>

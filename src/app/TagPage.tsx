@@ -37,8 +37,11 @@ import { applySettings, loadSettings, padSettingsOf } from "../ui/prefs.ts";
 import { padActive, pollPads, rumble, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
 import { PadText } from "../ui/pad.tsx";
 import { keysOf } from "../ui/padPrompts.ts";
-import { setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
+import { audioState, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx, sfx } from "../audio/sfx.ts";
+import { music } from "../audio/music.ts";
+import { LAYER_OFF, LAYER_ON } from "../audio/score.ts";
+import { preloadTracks, setMusicStyle } from "../audio/tracks.ts";
 import { safe } from "../ui/safe.ts";
 
 const DEV = import.meta.env.MODE !== "production";
@@ -90,6 +93,8 @@ declare global {
     __tag?: {
       screen: string; phase: number; step: number; clock: number; holder: number; local: number; n: number; bag: number[]; tags: number[]; falls: number[];
       hash: string; over: boolean; final: boolean; tagsTotal: number; online: boolean; agreed: boolean | null;
+      /** The sampled music playing ("" = none / the fallback score) and the audio context state. */
+      track: string; audio: string;
     };
   }
 }
@@ -148,12 +153,35 @@ function localSfx(ev: number): void {
   if (ev & EV_NOANCHOR) sfx.noAnchor();
 }
 
-/** Fixed steps each frame, SFX, flashes, the 10 Hz HUD push and window.__tag. */
+/**
+ * Music: the calm loop in the menus, the round's loop (the music style: the district's chill loop by default) from the
+ * countdown through the results and on into a rematch, a gentle lift while the chase is within 20 m of you (the holder
+ * near you, or you near your target), dimmed while paused. The same volumes, mute and hidden-tab pause as RadRun.
+ */
+function tagMusic(game: TagGame, st: { layer: boolean; round: boolean }): void {
+  const screen = useTag.getState().screen, m = game.match;
+  const round = !!m && (screen === "match" || screen === "results" || (screen === "loading" && st.round));
+  let layer = false;
+  if (round && m && !m.over) {
+    const other = game.lookTarget();
+    if (other >= 0) {
+      const p = m.bodies[game.local].p, q = m.bodies[other].p, d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
+      layer = d < LAYER_ON || (st.layer && d < LAYER_OFF);
+    }
+  }
+  st.layer = layer;
+  st.round = round;
+  music.update({ mode: round ? "chase" : "calm", layer }, { difficulty: "normal", paused: game.paused && !game.link, district: PAGE_DISTRICT });
+}
+
+/** Fixed steps each frame, SFX, music, flashes, the 10 Hz HUD push and window.__tag. */
 function TagDriver({ game }: { game: TagGame }) {
   const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0, shown: [] as string[], go: false }), []);
+  const mus = useMemo(() => ({ layer: false, round: false }), []);
   useFrame((_, delta) => {
     pollPads();
     game.frame(delta);
+    tagMusic(game, mus);
     const m = game.match;
     if (!m) return;
     const ui = useTag.getState();
@@ -209,6 +237,7 @@ function TagDriver({ game }: { game: TagGame }) {
       window.__tag = {
         screen: ui.screen, phase: m.phase, step: m.step, clock: m.clock, holder: m.holder, local: game.local, n: m.n, bag: [...m.bag], tags: [...m.tags],
         falls: [...m.falls], hash: m.hashHex(), over: m.over, final, tagsTotal: st.tags, online: !!game.link, agreed: ui.agreed,
+        track: music.probe().track, audio: audioState(),
       };
     }
   }, FRAME.sim);
@@ -483,6 +512,7 @@ export default function TagPage() {
       applySettings(g.camera, s);
       setAudioVolumes(s.music, s.sfx, s.voice);
       setMuted(s.muted);
+      setMusicStyle(s.musicStyle);
       setPadSettings(padSettingsOf(s));
       g.autoLevel = AUTO;
       g.retune();
@@ -492,6 +522,25 @@ export default function TagPage() {
   useEffect(() => { game?.setTouch(touch); }, [game, touch]);
   useEffect(() => { if (game && ready && screen === "boot") useTag.setState({ screen: online ? "online" : "menu" }); }, [game, ready, screen, online]);
   useEffect(() => { const onTouch = () => { if (!useUi.getState().touch) useUi.setState({ touch: true }); }; addEventListener("touchstart", onTouch, { passive: true }); return () => removeEventListener("touchstart", onTouch); }, []);
+  // Sound: any click, tap or key on this page unlocks the audio (browsers start it only inside a gesture). Offline PLAY
+  // used to be the only unlock, so ONLINE -> CREATE / JOIN -> READY never made a sound. The round's sounds start
+  // loading from the lobby (they decode once the audio is unlocked).
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    const o = { capture: true, passive: true } as const;
+    addEventListener("pointerdown", unlock, o);
+    addEventListener("keydown", unlock, o);
+    addEventListener("touchend", unlock, o);
+    return () => { removeEventListener("pointerdown", unlock, o); removeEventListener("keydown", unlock, o); removeEventListener("touchend", unlock, o); };
+  }, []);
+  useEffect(() => {
+    if (screen !== "online" && screen !== "loading" && screen !== "match") return;
+    preloadSfx();
+    preloadTracks(PAGE_DISTRICT);
+    // A match that started without a fresh gesture (a room link, the other player's READY): the page's earlier
+    // click still lets the audio start in most browsers.
+    if (screen !== "online") unlockAudio();
+  }, [screen]);
 
   const lock = useCallback(() => { if (!useUi.getState().touch && !AUTO && !padActive()) requestLock(canvasEl()); }, []);
 
@@ -499,6 +548,7 @@ export default function TagPage() {
     if (!game) return;
     unlockAudio();
     preloadSfx();
+    preloadTracks(PAGE_DISTRICT);
     const others = botRadbros(radbro, bots, seed);
     const ids = [radbro, ...others];
     useTag.setState({ screen: "loading", flash: null, agreed: null });

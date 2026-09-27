@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { LAYER_OFF, LAYER_ON, barNotes, musicTarget, tempoFor, type MusicInput } from "../src/audio/score.ts";
 import fs from "node:fs";
 import path from "node:path";
-import { CHASE_TRACK, TAUNT_LINES, allAudioFiles, chaseTrack, tauntKey } from "../src/audio/catalog.ts";
+import { CHASE_TRACK, CHILL_TRACK, CHILL_TRACKS, MUSIC_STYLES, TAUNT_LINES, allAudioFiles, chaseTrack, chillTrack, musicPath, roundTrack, tauntKey } from "../src/audio/catalog.ts";
 import { RADBROS } from "../src/game/round.ts";
 import { TAUNTS } from "../src/ui/strings.ts";
 import { DISTRICT_IDS } from "../src/world/districts.ts";
@@ -52,10 +52,9 @@ test("music target: calm title/results, intro countdown, chase + close layer wit
 
 test("sampled audio: every catalogued file ships, nothing unused ships, lines match the bubbles", () => {
   const root = path.join(import.meta.dirname, "..", "public", "audio");
-  // #3171 (added 2026-09-25) has no ElevenLabs voice yet - voice design/picking is a bespoke pass per
-  // character (see ~/Documents/rugrun-audio/_scripts/design.py), not run for him yet. He plays fine off
-  // the VOICE[] chatter-pitch fallback in PlayViews.tsx (voice.say returning "missing" is the designed
-  // path) until that pass happens; drop his voice/ lines from the completeness check until then.
+  // #3171 (added 2026-09-25) has no recorded voice yet (each Radbro's voice is designed by hand, one at a time).
+  // He plays fine off the VOICE[] chatter-pitch fallback in PlayViews.tsx (voice.say returning "missing" is the
+  // designed path) until then; drop his voice/ lines from the completeness check until then.
   const want = allAudioFiles(RADBROS).filter(f => !f.startsWith("voice/3171/"));
   for (const f of want) assert.ok(fs.existsSync(path.join(root, f)), `missing public/audio/${f}`);
   const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.relative(root, path.join(d, e.name))]));
@@ -67,4 +66,58 @@ test("sampled audio: every catalogued file ships, nothing unused ships, lines ma
   for (const id of DISTRICT_IDS) assert.notEqual(CHASE_TRACK[id], undefined, `${id} has a chase loop`);
   assert.equal(chaseTrack("vertigo"), "chase_vertigo");
   assert.equal(chaseTrack("nowhere"), "chase_downtown");
+});
+
+test("music styles: a chill loop per district (unknown districts rotate), chase keeps the chase loops", () => {
+  assert.deepEqual([...MUSIC_STYLES], ["chill", "chase"]);
+  for (const id of DISTRICT_IDS) {
+    assert.ok(CHILL_TRACKS.includes(CHILL_TRACK[id] as (typeof CHILL_TRACKS)[number]), `${id} has a chill loop`);
+    assert.equal(roundTrack("chill", id, 7), CHILL_TRACK[id], `${id}: the same chill loop every round`);
+    assert.equal(roundTrack("chase", id), chaseTrack(id));
+  }
+  // Each chill loop is some district's, so every file is heard.
+  for (const t of CHILL_TRACKS) assert.ok(Object.values(CHILL_TRACK).includes(t), `${t} is used`);
+  assert.equal(chillTrack("docks"), "chill_harbour");
+  // An unknown district takes the next chill loop each round, all four in turn.
+  const seen = [0, 1, 2, 3].map(r => chillTrack("nowhere", r));
+  assert.equal(new Set(seen).size, CHILL_TRACKS.length);
+  assert.equal(chillTrack("nowhere", 4), seen[0]);
+  assert.equal(chillTrack("nowhere", -1), seen[3]);
+  assert.equal(roundTrack("chase", "nowhere"), "chase_downtown");
+});
+
+test("chill loops: 128 kbps mp3s of 2-3 min, under 10 MB together", () => {
+  const root = path.join(import.meta.dirname, "..", "public", "audio");
+  let total = 0;
+  for (const t of CHILL_TRACKS) {
+    const buf = fs.readFileSync(path.join(root, musicPath(t)));
+    total += buf.length;
+    // First MPEG frame header: MPEG-1 layer III, bitrate index 9 (128 kbps), 44.1 kHz.
+    let i = 0;
+    while (i < buf.length - 4 && !(buf[i] === 0xff && (buf[i + 1] & 0xe0) === 0xe0)) i++;
+    assert.equal(buf[i + 1] & 0xfe, 0xfa, `${t}: MPEG-1 layer III`);
+    assert.equal(buf[i + 2] >> 4, 9, `${t}: 128 kbps`);
+    assert.equal((buf[i + 2] >> 2) & 3, 0, `${t}: 44.1 kHz`);
+    const seconds = (buf.length * 8) / 128000;
+    assert.ok(seconds > 110 && seconds < 190, `${t}: ${seconds.toFixed(0)} s`);
+  }
+  assert.ok(total < 10 * 1024 * 1024, `chill loops ${(total / 1048576).toFixed(1)} MB`);
+});
+
+test("settings: the music style defaults to Chill and is remembered", async () => {
+  const store = new Map<string, string>();
+  const g = globalThis as { location?: unknown; localStorage?: unknown };
+  g.location ??= { href: "https://rugrun.test/", search: "" };
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+  try {
+    const { loadSettings, saveSettings } = await import("../src/ui/prefs.ts");
+    const cam = { sensitivity: 0.002, invertY: false, fov: 65, reducedMotion: false, easyGrab: false } as Parameters<typeof loadSettings>[0];
+    assert.equal(loadSettings(cam).musicStyle, "chill");
+    saveSettings({ ...loadSettings(cam), musicStyle: "chase" });
+    assert.equal(loadSettings(cam).musicStyle, "chase");
+    store.set("rugrun.v1", JSON.stringify({ settings: { musicStyle: "disco" } }));
+    assert.equal(loadSettings(cam).musicStyle, "chill");
+  } finally {
+    delete g.localStorage;
+  }
 });

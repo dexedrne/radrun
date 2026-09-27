@@ -3,6 +3,7 @@ import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
 import { PAGE_DISTRICT } from "../app/district.ts";
 import { PAD_DEAD, PAD_DEFAULTS, PAD_SENS, type PadSettings } from "../input/gamepad.ts";
+import type { MusicStyle } from "../audio/catalog.ts";
 
 const KEY = "rugrun.v1";
 
@@ -28,13 +29,14 @@ export type StoredGhost = { c: RadbroId; r: RadbroId; d: Difficulty; s: number; 
 export type Quality = "low" | "high";
 
 /**
- * music / sfx / voice = volume sliders 0..1; muted = the mute button / M key (both in pause -> Settings too).
+ * music / sfx / voice = volume sliders 0..1; muted = the mute button / M key (both in pause -> Settings too);
+ * musicStyle = Chill (the default: the laid-back loops) or Chase (the district's chase loop) in a round and SPIDER-TAG.
  * qualityChosen = the player picked Low / High in Settings (auto quality never overrides that);
  * qualityAuto = auto quality already switched to Low once (it never switches back).
  */
 export type Settings = {
   sensitivity: number; invertY: boolean; fov: number; reducedMotion: boolean; easyGrab: boolean; quality: Quality;
-  music: number; sfx: number; voice: number; muted: boolean; qualityChosen: boolean; qualityAuto: boolean;
+  music: number; sfx: number; voice: number; muted: boolean; qualityChosen: boolean; qualityAuto: boolean; musicStyle: MusicStyle;
   /** Round 14 controller: right-stick look speed, invert Y (the pad's own), stick dead zone, rumble. */
   padSens: number; padInvertY: boolean; padDead: number; padRumble: boolean;
 };
@@ -69,6 +71,7 @@ export function loadSettings(cam: CameraTuning): Settings {
     sfx: num(s.sfx, num(s.volume, 0.8)),
     voice: num(s.voice, 0.9),
     muted: s.muted === true,
+    musicStyle: s.musicStyle === "chase" ? "chase" : "chill",
     qualityChosen: s.qualityChosen === true,
     qualityAuto: s.qualityAuto === true,
     padSens: range(s.padSens, PAD_SENS.min, PAD_SENS.max, PAD_DEFAULTS.sens),

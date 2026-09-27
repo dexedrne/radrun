@@ -30,7 +30,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Q / RMB | ease the camera toward him |
 | R | retry (hold 1 s mid-round; tap on the results screen) |
 | M | mute / unmute (same as the speaker button on the title and the HUD) |
-| Esc | pause (Settings: quality, sensitivity, music / sound-effects / voice volume, mute, FOV, invert Y, reduced motion, easy grab; the controller settings once a pad has been used) |
+| Esc | pause (Settings: quality, music style (Chill / Chase), sensitivity, music / sound-effects / voice volume, mute, FOV, invert Y, reduced motion, easy grab; the controller settings once a pad has been used) |
 | (a gamepad) | everything, menus included: see **Controller** below |
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
@@ -336,6 +336,12 @@ tangled; the red ring when your Yoink is up; TAG! / YANKED! / YOINKED! flashes; 
 **Q** / right mouse turns the camera to the holder (or your target). Esc pauses offline. Results: the table, REMATCH
 (R) or MENU.
 
+**Sound** (offline and online alike): the calm loop in the menus and the lobby, the district's loop in your music
+style (Chill by default, see Sound below) from the countdown through the results and on into a rematch, a little
+brighter while the chase is within 20 m of you, dimmed while paused; your own Radbro's moves, the 3-2-1 / GO beeps
+and the tag sounds (TAG! = the lasso crack and the coins, tagged = a bonk). Any click, tap or key on the page unlocks
+the audio, so the lobby's buttons do too (online matches used to be silent: only the offline PLAY unlocked it).
+
 ### Online (1v1 private rooms)
 
 ONLINE in the SPIDER-TAG menu loads the online chunk (`src/net/online.tsx`; nothing online is fetched before you
@@ -411,18 +417,29 @@ per-Radbro hashes of the first step that differed.
 
 ## Sound
 
-Recorded music, stings, voice lines and sound effects (109 mp3s under `public/audio/`), with the older
+Recorded music, stings, voice lines and sound effects (113 mp3s under `public/audio/`), with the older
 synthesised WebAudio sound as the fallback whenever a file is not loaded yet or fails, so a round is never
 silent. Sound starts when you press PLAY or PRACTICE (browsers only allow audio after a click or a key
-press). Nothing is fetched on page open: a round loads about 3 MB alongside its Radbros, without delaying
-the LOADING screen (the countdown sounds go first).
+press; on the SPIDER-TAG page any click or key). Nothing is fetched on page open: a round loads about 3 MB
+alongside its Radbros, without delaying the LOADING screen (the countdown sounds go first); the round's music loop
+streams while it plays.
 
 - **Music:** a calm loop on the title and results; the countdown build (its cut lands exactly on GO); then
-  the district's **chase loop** from GO: Downtown, Night Market, Docks, Towers and **Vertigo** each have
-  their own (an unknown district plays Downtown's). When he is within 20 m (or panicking) the loop gets
-  brighter and louder. A catch plays the win sting (a YOINK sting for a YOINK), "He rugged you." its own
-  sting; the calm loop comes back under their tail. Pause dims it; a hidden tab or mute pauses it. The
-  loops play at their own tempo on every difficulty.
+  the round's loop from GO, in the **music style** picked in pause -> Settings (remembered with the other
+  settings; SPIDER-TAG follows it too):
+  - **Chill** (the default): laid-back instrumental loops of about two minutes, one per district mood:
+    `chill_rooftops` (dusk rooftops lo-fi, ~84 bpm: Downtown), `chill_market` (night-market chillhop with a warm
+    bass, ~92 bpm: Night Market), `chill_harbour` (harbour jazz-hop with sax and upright bass, ~80 bpm: Docks) and
+    `chill_towers` (airy high-towers downtempo, ~88 bpm: Towers and Vertigo); a district without its own takes the
+    next one each round. When he is within 20 m (or panicking) the same loop gets a little brighter and louder
+    (a +2 dB shelf, +8 %), never a different track.
+  - **Chase**: the district's **chase loop**: Downtown, Night Market, Docks, Towers and **Vertigo** each have
+    their own (an unknown district plays Downtown's); near him it gets clearly brighter and louder.
+  Switching mid-round crossfades once the other loop can play. A catch plays the win sting (a YOINK sting for
+  a YOINK), "He rugged you." its own sting; the calm loop comes back under their tail. Pause dims it; a hidden
+  tab or mute pauses it. The loops play at their own tempo on every difficulty, all at the same loudness
+  (-18.4 LUFS, 128 kbps); each chill loop is cut at a matching bar with a short crossfade, so it repeats
+  without a seam. While a loop is still loading the synthesised score fills in (on Chill its calm groove).
 - **Voices:** one line at a time (a line waits its turn or is skipped; the music dips about 4 dB under
   speech). The announcer is a Milady: she calls 3-2-1-GO, "rekt" on a fall, gassed, YOINK / tagged, rugged
   ("it's so over") and a new best ("we're so back"); she is the loud one. The Radbros are flat and mostly
@@ -447,11 +464,14 @@ the LOADING screen (the countdown sounds go first).
   mute everything. Pause -> Settings has **music**, **sound effects** and **voices** sliders and a mute
   box, all remembered in the browser. Leaving the tab (or muting) suspends the audio completely.
 - **Code:** `src/audio/catalog.ts` lists every file (a test checks each exists and nothing unlisted ships)
-  and maps district ids to chase loops; `samples.ts` loads (4 at a time); `tracks.ts` streams and
-  crossfades the music; `voice.ts` queues the lines; `sfx.ts` plays samples with the synth fallback; the
-  fallback music is `score.ts` / `music.ts`. Low quality loads one variation per sound and plays at most 6
-  sampled SFX at once. Dev / test builds report the track, voice lines and files loaded / failed in
-  `window.__play.audio`.
+  and maps district ids to chill and chase loops (`roundTrack(style, district)`); `samples.ts` loads (4 at a
+  time); `tracks.ts` streams and crossfades the music and holds the style; `voice.ts` queues the lines; `sfx.ts`
+  plays samples with the synth fallback; the fallback music is `score.ts` / `music.ts`. Low quality loads one
+  variation per sound and plays at most 6 sampled SFX at once. Dev / test builds report the track, voice lines
+  and files loaded / failed in `window.__play.audio`; SPIDER-TAG reports its track and the audio state in
+  `window.__tag`. `?sfxdebug` logs every sound asked for to `window.__sfxLog`: each SFX with whether it actually
+  played (false = no audio yet, muted, hidden tab or volume 0) and each music loop, sting and fallback score as
+  it starts.
 
 ## Practice and tips
 

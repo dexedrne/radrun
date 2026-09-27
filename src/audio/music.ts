@@ -1,5 +1,6 @@
 // Music: the sampled loops and stings (tracks.ts) when they are playable, else the procedural score
-// (audio/score.ts) - so a slow or failed file never means silence.
+// (audio/score.ts) - so a slow or failed file never means silence (on the Chill style a round's gap is filled by
+// the calm score, not the chase groove).
 // Procedural music (the score is audio/score.ts). A fixed voice graph built once when the context is
 // created (kick, snare, rim, hats, crash, bass, lead + echo, arp, pad: oscillators and ONE looping noise
 // source that run for the page's life); notes are only automation events on those voices, scheduled
@@ -8,7 +9,8 @@
 // are the only one-shot music nodes, a handful per round.
 import { engine, live, midiHz, musicOn, onLowChange, whenCreated, type Engine } from "./engine.ts";
 import { barNotes, tempoFor, type MusicMode, type Note } from "./score.ts";
-import { countdownTrack, holdTracks, stingTrack, trackProbe, updateTracks } from "./tracks.ts";
+import { countdownTrack, holdTracks, musicStyle, stingTrack, trackProbe, updateTracks } from "./tracks.ts";
+import { soundLog } from "./debug.ts";
 
 const AHEAD = 0.2;
 const TICK_MS = 25;
@@ -227,6 +229,7 @@ function tick(): void {
 function switchTo(m: MusicMode): void {
   const from = mode;
   mode = m;
+  if (m !== "off") soundLog("music", `score:${m}`, musicOn());
   const e = engine();
   if (!e || !v) return;
   const now = e.ac.currentTime;
@@ -260,7 +263,7 @@ function update(target: { mode: MusicMode; layer: boolean }, opts: { difficulty:
   difficulty = opts.difficulty;
   layerWant = target.layer;
   const sampled = updateTracks(target.mode, target.layer, opts.district ?? "downtown", opts.paused);
-  const m = sampled ? "off" : target.mode;
+  const m = sampled ? "off" : target.mode === "chase" && musicStyle() === "chill" ? "calm" : target.mode;
   if (m !== mode) switchTo(m);
   if (opts.paused !== paused) {
     paused = opts.paused;
