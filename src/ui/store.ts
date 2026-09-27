@@ -88,7 +88,11 @@ export type GhostInfo = {
   chaser: RadbroId;
   /** checking = the replay is still running; unverified = it does not reproduce the claimed time. */
   status: "checking" | "verified" | "unverified";
-  /** A v1 link (made before round 4): an unverified replay is most likely just an older build. */
+  /**
+   * A link from an older version (v < LINK_VERSION, or a record made before the web-slinger swing): it replays with the
+   * physics of its own build where the record says which (ghost formats 1-4); an unverified replay is most likely just
+   * an older build.
+   */
   older?: boolean;
   /** Claimed catch time (the link's t, or your stored best). */
   claimed: number;

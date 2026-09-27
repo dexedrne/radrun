@@ -10,7 +10,7 @@ import { emptyRec, recFromInput } from "../game/ghost.ts";
 import { packWord } from "./wire.ts";
 
 /** Update when the sim changes on purpose (npm test prints the new value). */
-export const SELFTEST_HASH = 0x17f91fdb;
+export const SELFTEST_HASH = 0x113801d5;
 
 let cached: CityModel | null = null;
 

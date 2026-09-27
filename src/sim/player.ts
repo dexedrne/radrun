@@ -76,6 +76,8 @@ export const EV_YANK = 1 << 26;
 export const EV_YANK_END = 1 << 27;
 export const EV_FLOW = 1 << 28;
 export const EV_CHARGE_START = 1 << 29;
+/** The web-slinger swing: a corner swing started (a web on a building corner). Its end is an EV_RELEASE. */
+export const EV_CORNER = 1 << 30;
 
 /** wallMode values. */
 export const WALL_RUN = 1;
@@ -205,6 +207,22 @@ export type Body = {
   /** Flow pips (0-3) and seconds since the last one. */
   flow: number;
   flowT: number;
+  // ---- the web-slinger swing ----
+  /** Speed allowed over the cap (m/s): a dive's extra speed, wearing off after it (the dive-into-swing). */
+  capX: number;
+  /** Seconds since the last dive ended (0 while diving) and whether this rope started out of one. */
+  diveT: number;
+  ropeDive: boolean;
+  /** Corner swing: on, the solid, the corner post (x, z) and the web's height on it, the orbit radius, seconds in, the start heading. */
+  cornerOn: boolean;
+  cornerSolid: number;
+  cornerX: number;
+  cornerY: number;
+  cornerZ: number;
+  cornerR: number;
+  cornerT: number;
+  cornerDx: number;
+  cornerDz: number;
 };
 
 /** What stepBody needs from the world. */
@@ -315,6 +333,18 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     tech: 0,
     flow: 0,
     flowT: 0,
+    capX: 0,
+    diveT: 1e3,
+    ropeDive: false,
+    cornerOn: false,
+    cornerSolid: -1,
+    cornerX: 0,
+    cornerY: 0,
+    cornerZ: 0,
+    cornerR: 0,
+    cornerT: 0,
+    cornerDx: 0,
+    cornerDz: 0,
   };
 }
 
@@ -376,6 +406,9 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.chargeT = src.chargeT; dst.chargeAirT = src.chargeAirT; dst.diveOn = src.diveOn; dst.kicks = src.kicks;
   dst.rebT = src.rebT; dst.rebVin = src.rebVin; dst.rebNx = src.rebNx; dst.rebNz = src.rebNz;
   dst.tech = src.tech; dst.flow = src.flow; dst.flowT = src.flowT;
+  dst.capX = src.capX; dst.diveT = src.diveT; dst.ropeDive = src.ropeDive;
+  dst.cornerOn = src.cornerOn; dst.cornerSolid = src.cornerSolid; dst.cornerX = src.cornerX; dst.cornerY = src.cornerY; dst.cornerZ = src.cornerZ;
+  dst.cornerR = src.cornerR; dst.cornerT = src.cornerT; dst.cornerDx = src.cornerDx; dst.cornerDz = src.cornerDz;
   return dst;
 }
 
@@ -399,6 +432,7 @@ export function resetMoves(b: Body): void {
   b.yankOk = b.yankOn = false; b.yankT = b.yankCd = 0;
   b.chargeT = b.chargeAirT = 0; b.diveOn = false; b.kicks = 0; b.rebT = 1e3;
   b.flow = 0; b.flowT = 0;
+  b.capX = 0; b.diveT = 1e3; b.ropeDive = false; b.cornerOn = false; b.cornerSolid = -1; b.cornerT = 0;
 }
 
 /** FNV-1a over the full sim state (ringId included), round 9 fields after the older ones. */
@@ -421,6 +455,8 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.i32(b.yankOk ? 1 : 0).i32(b.yankOn ? 1 : 0).f64(b.yankT).f64(b.yankCd);
   h.f64(b.chargeT).f64(b.chargeAirT).i32(b.diveOn ? 1 : 0).i32(b.kicks).f64(b.rebT).f64(b.rebVin).f64(b.rebNx).f64(b.rebNz);
   h.i32(b.tech).i32(b.flow).f64(b.flowT);
+  h.f64(b.capX).f64(b.diveT).i32(b.ropeDive ? 1 : 0).i32(b.cornerOn ? 1 : 0).i32(b.cornerSolid);
+  h.f64(b.cornerX).f64(b.cornerY).f64(b.cornerZ).f64(b.cornerR).f64(b.cornerT).f64(b.cornerDx).f64(b.cornerDz);
   return h;
 }
 
@@ -476,11 +512,17 @@ export function pickRing(b: Body, inp: InputFrame, k: Tuning, w: SimWorld, out: 
   if (fl < 1e-9) return RING_NONE;
   const last = b.relT < ALTERNATE_FOR ? b.lastRope : -1;
   const ring = b.ringId >= 0 ? b.ringId : -1;
+  // Web length from your height: high over the ground below, the ideal point goes up and ahead (a longer rope).
+  let up = 0, ah = 0;
+  if (k.anchorHeightGain > 0 || k.anchorHeightAhead > 0) {
+    const h = p.y - k.halfHeight - w.index.groundBelow(p.x, p.z, p.y) - k.anchorHeightFree;
+    if (h > 0) { up = Math.min(k.anchorHeightGain * h, Math.max(0, k.anchorUpMax - k.anchorUp)); ah = k.anchorHeightAhead * h; }
+  }
   // Round 11: the swing look-ahead runs from your velocity (a web from a roof: the lift's).
-  if (findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out, k.aimCos, b.v)) return out.solid;
+  if (findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, b.grounded ? b.roofId : -1, out, k.aimCos, b.v, up, ah)) return out.solid;
   // Round 10: falling with nothing in the aim cone (the end of an avenue, a crossing): the wider fall cone.
   if (!b.grounded && b.v.y < 0 && k.aimCosFall < k.aimCos &&
-    findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, -1, out, k.aimCosFall, b.v)) return out.solid;
+    findAnchor(w.index, p.x, p.y, p.z, fx / fl, fz / fl, vl, k, ring, last, -1, out, k.aimCosFall, b.v, up, ah)) return out.solid;
   return RING_NONE;
 }
 
@@ -725,6 +767,9 @@ function attach(b: Body, a: AnchorHit, k: Tuning, w: SimWorld): void {
   b.ropeSteps = 0;
   b.ropeUp = false;
   b.liftOn = false;
+  // A web out of a dive (or just after one) keeps the dive's speed when it goes taut.
+  b.ropeDive = k.diveSwingT > 0 && b.diveT <= k.diveSwingT;
+  b.cornerOn = false;
   b.wallMode = 0;
   b.ledgeMode = 0;
   b.slideT = 0;
@@ -802,6 +847,7 @@ function startZip(b: Body, a: ZipAim, k: Tuning): void {
   b.popBuf = 0;
   b.zipFrom = b.grounded ? b.roofId : -1;
   if (b.ropeSolid >= 0) release(b, k, false);
+  b.cornerOn = false;
   b.wallMode = 0;
   b.ledgeMode = 0;
   b.slideT = 0;
@@ -903,6 +949,7 @@ function yankable(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): boolean {
 
 function startYank(b: Body, k: Tuning): void {
   if (b.ropeSolid >= 0) release(b, k, false);
+  b.cornerOn = false;
   b.yankOn = true;
   b.yankT = 0;
   b.yankOk = false;
@@ -989,6 +1036,7 @@ function ropeRelease(b: Body, k: Tuning): void {
   if (perfect) {
     const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
     v.x += (v.x / sp) * k.releasePerfect; v.y += (v.y / sp) * k.releasePerfect; v.z += (v.z / sp) * k.releasePerfect;
+    if (k.releasePerfectUp > 0) v.y += k.releasePerfectUp;
     b.tech++;
     b.events |= EV_PERFECT;
     flowPip(b, k);
@@ -1269,6 +1317,86 @@ function ledgeStep(b: Body, k: Tuning, w: SimWorld, charging: boolean): void {
   b.events |= EV_CLIMB;
 }
 
+// ---- the web-slinger swing: corners -------------------------------------------------------------
+
+/** A corner orbit never gets tighter than this (m); a corner swing may start this far (m) past being abreast of it. */
+const CORNER_MIN_R = 2.5;
+const CORNER_LATE = 2.5;
+const CORNER_EARLY = 1;
+/** The web goes this far (m) up the corner post above you (at most its top). */
+const CORNER_UP = 4;
+/** A corner let go of is not taken again for this long (s). */
+const CORNER_AGAIN = 0.5;
+
+/**
+ * The corner a corner swing would take this step (fills b.corner* without starting it), or false: flying (or on the
+ * rope) at cornerMinSpeed+ with the stick turned at least cornerStick (sine) off the way you are going, a grounded
+ * building's vertical corner on that side, abreast of you (up to CORNER_EARLY m ahead, CORNER_LATE m behind) and
+ * within cornerReach m, with the building behind the corner on that side (so the orbit runs round its outside, into
+ * the street past it), standing over you and in clear sight. The nearest wins. Allocation-free.
+ */
+function cornerFind(b: Body, k: Tuning, w: SimWorld, mx: number, mz: number): boolean {
+  const v = b.v, p = b.p;
+  const hs = Math.sqrt(v.x * v.x + v.z * v.z), ml = Math.sqrt(mx * mx + mz * mz);
+  if (hs < k.cornerMinSpeed || ml < 0.5) return false;
+  const fx = v.x / hs, fz = v.z / hs, ux = mx / ml, uz = mz / ml;
+  const side = fx * uz - fz * ux, along = fx * ux + fz * uz;
+  if ((side < 0 ? -side : side) < k.cornerStick || along < -0.5) return false;
+  // n: across the way you go, toward the stick.
+  const nx = side > 0 ? -fz : fz, nz = side > 0 ? fx : -fx;
+  const idx = w.index, R = k.cornerReach, hw = k.halfWidth;
+  const n = idx.nearbySolids(p.x - R, p.z - R, p.x + R, p.z + R);
+  let best = Infinity;
+  for (let i = 0; i < n; i++) {
+    const s = idx.solids[idx.out[i]];
+    if ((s.y0 ?? 0) > 0 || s.top < p.y + 1.5) continue;
+    if (s.id === b.lastRope && b.relT < CORNER_AGAIN) continue;
+    if (p.x > s.x0 - hw && p.x < s.x1 + hw && p.z > s.z0 - hw && p.z < s.z1 + hw) continue;
+    for (let c = 0; c < 4; c++) {
+      const cx = c & 1 ? s.x1 : s.x0, cz = c & 2 ? s.z1 : s.z0;
+      const bx = c & 1 ? -1 : 1, bz = c & 2 ? -1 : 1;
+      // The building lies on the stick's side of the corner and behind it.
+      if (bx * nx + bz * nz <= 0.2 || bx * fx + bz * fz >= -0.2) continue;
+      const dx = cx - p.x, dz = cz - p.z;
+      const al = dx * fx + dz * fz, lat = dx * nx + dz * nz;
+      if (al > CORNER_EARLY || al < -CORNER_LATE || lat < CORNER_MIN_R || lat > R) continue;
+      const sc = lat + (al < 0 ? -al : al);
+      if (sc >= best) continue;
+      const cy = Math.min(s.top, p.y + CORNER_UP);
+      if (idx.segmentBlocked(p.x, p.y, p.z, cx - bx * 0.1, cy, cz - bz * 0.1, s.id, -1)) continue;
+      best = sc;
+      b.cornerSolid = s.id; b.cornerX = cx; b.cornerY = cy; b.cornerZ = cz;
+      b.cornerR = Math.max(CORNER_MIN_R, Math.sqrt(dx * dx + dz * dz));
+    }
+  }
+  return best < Infinity;
+}
+
+/** Start the corner swing cornerFind picked: off the rope (no fling), a web on the corner post. */
+function cornerStart(b: Body, k: Tuning): void {
+  if (b.ropeSolid >= 0) { b.lastRope = b.ropeSolid; b.relT = 0; b.ropeSolid = -1; b.liftOn = false; }
+  const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z) || 1;
+  b.cornerOn = true;
+  b.cornerT = 0;
+  b.cornerDx = b.v.x / hs; b.cornerDz = b.v.z / hs;
+  b.chainCount++;
+  b.airJumps = k.airJumps;
+  b.zipLeft = k.zipCharges;
+  b.kickSolid = -1;
+  b.kicks = 0;
+  b.events |= EV_CORNER | EV_ATTACH;
+}
+
+/** End a corner swing (boost: + cornerBoost m/s along the way you now go); the web lets go. */
+function cornerEnd(b: Body, k: Tuning, boost: boolean): void {
+  b.cornerOn = false;
+  const v = b.v, hs = Math.sqrt(v.x * v.x + v.z * v.z);
+  if (boost && k.cornerBoost > 0 && hs > 1e-6) { v.x += (v.x / hs) * k.cornerBoost; v.z += (v.z / hs) * k.cornerBoost; }
+  b.lastRope = b.cornerSolid;
+  b.relT = 0;
+  b.events |= EV_RELEASE;
+}
+
 // ---- the step ------------------------------------------------------------------------------------
 
 export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void {
@@ -1293,6 +1421,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   b.rollT = Math.max(0, b.rollT - dt);
   b.slideBuf = Math.max(0, b.slideBuf - dt);
   b.popBuf = Math.max(0, b.popBuf - dt);
+  b.diveT = b.diveOn ? 0 : b.diveT + dt;
   if (b.zipOn && inp.jumpPressed) b.popBuf = k.zipPopWindow;
   if (k.slide && inp.slidePressed && !locked) b.slideBuf = k.slideBuffer;
   // §6.8 flow: one pip drains every flowDecay s without a new one.
@@ -1322,7 +1451,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   if (b.ropeSolid >= 0) {
     b.ringId = b.ropeSolid;
     A.solid = -1;
-  } else if (b.zipOn || b.yankOn || b.ledgeMode >= LEDGE_CLIMB) {
+  } else if (b.zipOn || b.yankOn || b.ledgeMode >= LEDGE_CLIMB || b.cornerOn) {
     b.ringId = RING_NONE;
     A.solid = -1;
   } else {
@@ -1361,8 +1490,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     else b.events |= EV_NOANCHOR;
   }
 
-  // §6.5 dive: a fresh C press in the air with room under you (not on the rope, zipping or on a wall).
-  if (k.dive && inp.slidePressed && !locked && !b.grounded && b.coyote <= 0 && b.ropeSolid < 0 && !b.zipOn && !b.yankOn &&
+  // §6.5 dive: a fresh C press in the air with room under you (not on the rope, zipping, on a wall or round a corner).
+  if (k.dive && inp.slidePressed && !locked && !b.grounded && b.coyote <= 0 && b.ropeSolid < 0 && !b.zipOn && !b.yankOn && !b.cornerOn &&
     b.wallMode === 0 && b.ledgeMode === 0 && b.chargeT === 0 && feetBefore - idx.groundBelow(p.x, p.z, p.y) >= k.diveMinDrop) {
     b.diveOn = true;
     if (v.y > -k.diveSpeed) v.y = -k.diveSpeed;
@@ -1372,7 +1501,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
 
   // Actions (§3.8 table).
   const wantJump = !locked && (inp.jumpPressed || b.jumpBuf > 0);
-  const canAttach = !locked && held && b.heldFor >= k.holdDelay && b.ringId >= 0 && b.ropeSolid < 0 &&
+  const canAttach = !locked && held && b.heldFor >= k.holdDelay && b.ringId >= 0 && b.ropeSolid < 0 && !b.cornerOn &&
     (b.relT >= k.swingRehook || b.heldFor <= b.relT);
   if (b.zipOn || b.yankOn) {
     // (the zip's / yank's pull and end are below)
@@ -1450,6 +1579,14 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         }
       }
     }
+  } else if (b.cornerOn) {
+    // A corner swing: Jump lets go with a hop, letting go of the web lets go (both with the corner boost).
+    if (wantJump) {
+      cornerEnd(b, k, true);
+      v.y = (v.y > 0 ? v.y : 0) + k.releaseUp;
+      b.jumpBuf = 0;
+      b.events |= EV_JUMP;
+    } else if (!held) cornerEnd(b, k, true);
   } else if (launch >= 0 && b.coyote > 0) {
     groundLaunch(b, k, launch, mx, mz, inp.aimX, inp.aimZ);
   } else if (launch >= 0 && b.ropeSolid >= 0) {
@@ -1471,6 +1608,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.airJumps--;
     b.jumpBuf = 0;
     b.events |= EV_JUMP | EV_DJUMP;
+  } else if (k.cornerSwing && held && !locked && !b.diveOn && b.chargeT === 0 && cornerFind(b, k, w, mx, mz)) {
+    cornerStart(b, k);
   } else if (canAttach) {
     attach(b, A, k, w);
   } else if (b.ropeSolid >= 0 && !held) {
@@ -1535,6 +1674,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     // then a kick off the wall once you start falling (wallUpKick), so a run-up that tops out short of the rim does
     // not slide down the face.
     if (b.wallT >= k.wallClimbTime) { endWall(b, 0); b.upKick = k.wallUpKick > 0; }
+  } else if (b.cornerOn) {
+    // Corner swing: a level orbit (the web on the post holds you up; light gravity), speed kept by the constraint below.
+    b.cornerT += dt;
+    v.y -= k.gravity * k.cornerGravity * dt;
   } else if (!b.grounded) {
     const onRope = b.ropeSolid >= 0;
     v.y -= k.gravity * (onRope ? k.swingGravity : b.diveOn ? k.diveGravity : 1) * dt;
@@ -1563,6 +1706,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
           const ux = tx / tl, uy = ty / tl, uz = tz / tl;
           if (k.swingPump > 0 && ry < 0 && v.y < 0 && tl > 2) {
             const a = k.swingPump * dt;
+            v.x += ux * a; v.y += uy * a; v.z += uz * a;
+          }
+          // The surge: speed along the swing through the bottom of the arc (on the way down, full at the bottom, and
+          // just past it; the climb after that is yours to time).
+          if (k.swingSurge > 0 && b.ropeTaut && -ny > k.swingSurgeCos && (v.y < 0 || -ny > SURGE_PAST) && tl > 2) {
+            const a = (k.swingSurge * (-ny - k.swingSurgeCos) / (1 - k.swingSurgeCos)) * dt;
             v.x += ux * a; v.y += uy * a; v.z += uz * a;
           }
           // Round 11 upswing reel: rising on the forward side with the stick along the swing, the rope pulls you in.
@@ -1602,6 +1751,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       // Round 11: just flung toward a facade head-on, or flying out over the city's edge: the flight bends along
       // it (no air control into it).
       turnToward(v, AV.x, AV.z, air * dt);
+    } else if (b.diveOn && k.diveTurn > 0 && (mx !== 0 || mz !== 0)) {
+      // The web-slinger dive: the stick turns the dive (speed kept), nothing more.
+      const hs = Math.sqrt(v.x * v.x + v.z * v.z), sl = Math.sqrt(mx * mx + mz * mz);
+      if (hs > 1 && sl > 0.1 && (v.x * mx + v.z * mz) >= CARVE_COS * hs * sl) turnToward(v, mx / sl, mz / sl, k.diveTurn * dt);
     } else if (!b.diveOn && (mx !== 0 || mz !== 0) && (k.airAccel > 0 || k.airTurn > 0)) {
       // Round 12 air carve (§6.7): the horizontal velocity turns toward the stick at airTurn rad/s, speed kept, when
       // the stick is within ~100 deg of the way you are going. (Diving: no air control at all.)
@@ -1624,8 +1777,20 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   }
   if (!scripted) {
-    // (§6.8 flow: each pip raises the cap by flowCap.)
-    capSpeed(v, k.speedCap > 0 ? k.speedCap + b.flow * k.flowCap : 0);
+    // (§6.8 flow: each pip raises the cap by flowCap.) The web-slinger dive: diving, the cap is diveCap, and the speed
+    // over the usual cap after it (capX) wears off at diveCarryDecay.
+    const cap0 = k.speedCap > 0 ? k.speedCap + b.flow * k.flowCap : 0;
+    if (b.diveOn && cap0 > 0 && k.diveCap > cap0) {
+      capSpeed(v, k.diveCap);
+      const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+      b.capX = sp > cap0 ? sp - cap0 : 0;
+    } else {
+      if (b.capX > 0) {
+        const ex = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) - cap0;
+        b.capX = Math.max(0, Math.min(b.capX, ex) - k.diveCarryDecay * dt);
+      }
+      capSpeed(v, cap0 > 0 ? cap0 + b.capX : 0);
+    }
     // Integrate (semi-implicit Euler).
     p.x += v.x * dt;
     p.y += v.y * dt;
@@ -1641,7 +1806,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   // x swingKeepSpeed), later ones only remove the outward radial part.
   if (b.ropeSolid >= 0) {
     b.ropeSteps++;
-    if (b.ropeLen > b.ropeTarget) b.ropeLen = Math.max(b.ropeTarget, b.ropeLen - k.swingReel * dt);
+    if (b.ropeLen > b.ropeTarget) {
+      const reel = k.swingReelPerSpeed > 0 ? k.swingReel + k.swingReelPerSpeed * Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) : k.swingReel;
+      b.ropeLen = Math.max(b.ropeTarget, b.ropeLen - reel * dt);
+    }
     const P = b.ropeP;
     const dx = p.x - P.x, dy = p.y - P.y, dz = p.z - P.z;
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -1663,7 +1831,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         if (!b.ropeTaut) {
           b.ropeTaut = true;
           const sp1 = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-          if (sp1 > 1e-6) { const f = Math.min(sp0 / sp1, k.swingKeepSpeed); v.x *= f; v.y *= f; v.z *= f; }
+          const keep = b.ropeDive && k.diveKeep > k.swingKeepSpeed ? k.diveKeep : k.swingKeepSpeed;
+          if (sp1 > 1e-6) { const f = Math.min(sp0 / sp1, keep); v.x *= f; v.y *= f; v.z *= f; }
         }
       }
     }
@@ -1686,11 +1855,38 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       if (b.ropeTaut && v.y > 0 && away) b.ropeUp = true;
       if (p.y > P.y - k.autoReleaseBelow || (v.y > 0 && away && cosDown < k.swingReleaseCos) || (b.ropeUp && v.y <= 0)) {
         // Round 11: the auto-release flings with autoReleaseUp (a release you time yourself gets releaseUp + sweet).
-        release(b, k, true, k.autoReleaseUp);
+        if (k.autoReleaseKeep < 1) {
+          // The web-slinger swing: held to the end, the fling gets only autoReleaseKeep of the release boost.
+          const bo = k.releaseBoost * k.autoReleaseKeep, sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
+          v.x += (v.x / sp) * bo; v.y += (v.y / sp) * bo; v.z += (v.z / sp) * bo;
+          if (v.y > -4) v.y += k.autoReleaseUp;
+          release(b, k, false);
+        } else release(b, k, true, k.autoReleaseUp);
         b.events |= EV_AUTORELEASE;
-        capSpeed(v, k.speedCap);
+        capSpeed(v, k.speedCap > 0 ? k.speedCap + b.capX : 0);
       }
     }
+  }
+
+  // Corner swing: the web on the post holds you on the orbit (it only ever shortens), the horizontal speed kept; it lets go
+  // (with the boost) once you head where the stick points, the stick lets go, you have turned round, or cornerMaxT.
+  if (b.cornerOn) {
+    const dx = p.x - b.cornerX, dz = p.z - b.cornerZ, d = Math.sqrt(dx * dx + dz * dz);
+    if (d > 1e-6) {
+      const ux = dx / d, uz = dz / d;
+      if (d < b.cornerR) b.cornerR = Math.max(CORNER_MIN_R, d);
+      if (d > b.cornerR) { p.x = b.cornerX + ux * b.cornerR; p.z = b.cornerZ + uz * b.cornerR; }
+      const vr = v.x * ux + v.z * uz;
+      if (vr > 0) {
+        const hs0 = Math.sqrt(v.x * v.x + v.z * v.z);
+        v.x -= vr * ux; v.z -= vr * uz;
+        const hs1 = Math.sqrt(v.x * v.x + v.z * v.z);
+        if (hs1 > 1e-6) { v.x *= hs0 / hs1; v.z *= hs0 / hs1; }
+      }
+    }
+    const hs = Math.sqrt(v.x * v.x + v.z * v.z), ml = Math.sqrt(mx * mx + mz * mz);
+    if (b.cornerT >= k.cornerMaxT || ml < 0.3 || (hs > 1e-6 && v.x * mx + v.z * mz >= k.cornerExitCos * hs * ml) ||
+      v.x * b.cornerDx + v.z * b.cornerDz < -0.5 * hs) cornerEnd(b, k, true);
   }
 
   // The zip ends at its target (zipStop short; a facade: just off the wall), or early after zipMaxTime.
@@ -1779,6 +1975,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       }
     }
   }
+  // A corner swing that meets a facade or lands is over (no boost; the contact below takes it).
+  if (b.cornerOn && (b.grounded || contact >= 0)) { b.cornerOn = false; b.lastRope = b.cornerSolid; b.relT = 0; }
   // A zip that meets a facade: its own target face = arrived; anything else in the way ends it.
   if (b.zipOn && contact >= 0) endZip(b, k, w, b.zipKind === ZIP_FACE && contact === b.zipWall ? ZIP_ARRIVE : ZIP_EARLY, inp);
   // A wall push can move the body away from the pivot: pay the rope out so |p - pivot| <= len holds.
@@ -1841,7 +2039,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         const vo = v.x * cnx + v.z * cnz;
         if (vo < k.wallPushOff) { v.x += (k.wallPushOff - vo) * cnx; v.z += (k.wallPushOff - vo) * cnz; }
       }
-    } else if (b.ropeSolid < 0) {
+    } else if (b.ropeSolid < 0 && !b.cornerOn) {
       if (!tryLedge(b, k, w, mx, mz, false) && wallProbe(idx, p.x, feet, p.z, hw, k.wallRunReach, FH)) {
         b.touchWall = FH.solid; b.touchT = 0; b.touchNx = FH.nx; b.touchNz = FH.nz;
         if (wallRunOk(b, k, FH.solid, FH.nx, FH.nz, FH.top, v.x, v.z, feet, k.wallRunRatio)) startWall(b, k, w, FH.solid, FH.nx, FH.nz, WALL_RUN);
@@ -1882,6 +2080,9 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   }
   if (p.y - hh < k.failFloor) { b.events |= EV_FALL; b.flow = 0; }
 }
+
+/** The surge runs this far past the bottom of the arc (cosine from straight down, ~11 deg). */
+const SURGE_PAST = 0.98;
 
 /** §6.8: slower than this on the ground (m/s) loses the flow. */
 const FLOW_STOP = 4;

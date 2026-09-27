@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { createBody, emptyInput, stepBody, EV_LAND, EV_RELEASE } from "../src/sim/player.ts";
+import { createBody, emptyInput, stepBody, EV_LAND, EV_PERFECT, EV_RELEASE } from "../src/sim/player.ts";
 import { applyTuningJson, CAMERA, PLAYER, RUNNER, TUNABLE_KEYS, type Tuning } from "../src/sim/tuning.ts";
 import { swingClear } from "../src/world/cityQuery.ts";
 import { createRig, rigUpdate } from "../src/camera/rig.ts";
@@ -46,34 +46,40 @@ test("round 11 web from a roof: the web pulls you up and off the edge into the s
   assert.equal(hop.backOn, true, "without the lift the web is a hop back onto the roof");
 });
 
-test("round 11 timing: a release on the way up (past swingSweetCos) flings you higher than one at the bottom or holding to the auto-release", () => {
+test("timing: a release in the perfect window flings you higher than one at the bottom, and higher and faster than holding to the auto-release", () => {
+  // (Round 11's timed lift past swingSweetCos stays; the web-slinger swing moved the auto-release later on the arc and
+  // widened the perfect window, and a swing held to the end gets no release boost.)
   const k: Tuning = { ...PLAYER };
-  const fling = (pol: "timed" | "bottom" | "hold") => {
+  const perfectDeg = Math.acos(k.swingPerfectCos) * 180 / Math.PI;
+  const fling = (pol: "perfect" | "bottom" | "hold") => {
     const b = createBody(4, 48, 29, -1); // flying down the avenue at 16 m/s
     b.grounded = false; b.v.x = 16;
-    let rel = -1, apex = -Infinity;
-    for (let i = 0; i < 360; i++) {
+    let rel = -1, apex = -Infinity, fwd = 0, perfect = false;
+    for (let i = 0; i < 720; i++) {
       const f = emptyInput();
       f.aimX = 0.9; f.aimY = 0.4; f.moveX = 1;
       let held = rel < 0;
       if (b.ropeSolid >= 0) {
         const rx = b.p.x - b.ropeP.x, ry = b.p.y - b.ropeP.y, rz = b.p.z - b.ropeP.z;
         const ang = Math.acos(Math.min(1, -ry / Math.hypot(rx, ry, rz))) * 180 / Math.PI;
-        if (pol === "timed" && rx * b.v.x + rz * b.v.z > 0 && b.v.y > 0 && ang > 25) held = false;
+        if (pol === "perfect" && rx * b.v.x + rz * b.v.z > 0 && b.v.y > 0 && ang > perfectDeg + 4) held = false;
         if (pol === "bottom" && b.ropeTaut && b.v.y > 0) held = false;
       }
       f.webHeld = held; f.webPressed = i === 0;
       stepBody(b, f, k, world);
-      if ((b.events & EV_RELEASE) && rel < 0) rel = i;
+      if (b.events & EV_PERFECT) perfect = true;
+      if ((b.events & EV_RELEASE) && rel < 0) { rel = i; fwd = b.v.x; }
       if (rel >= 0) apex = Math.max(apex, b.p.y);
       if (rel >= 0 && b.v.y < 0 && i > rel + 5) break;
     }
     assert.ok(rel > 0, `${pol}: let go`);
-    return apex;
+    return { apex, fwd, perfect };
   };
-  const timed = fling("timed"), bottom = fling("bottom"), hold = fling("hold");
-  assert.ok(timed > bottom + 8, `timed apex ${timed.toFixed(1)} vs bottom ${bottom.toFixed(1)}`);
-  assert.ok(timed > hold + 3, `timed apex ${timed.toFixed(1)} vs hold ${hold.toFixed(1)}`);
+  const perfect = fling("perfect"), bottom = fling("bottom"), hold = fling("hold");
+  assert.ok(perfect.perfect && !hold.perfect && !bottom.perfect, "only the timed release is perfect");
+  assert.ok(perfect.apex > bottom.apex + 8, `perfect apex ${perfect.apex.toFixed(1)} vs bottom ${bottom.apex.toFixed(1)}`);
+  assert.ok(perfect.apex > hold.apex + 1, `perfect apex ${perfect.apex.toFixed(1)} vs hold ${hold.apex.toFixed(1)}`);
+  assert.ok(perfect.fwd > hold.fwd + 3, `perfect ${perfect.fwd.toFixed(1)} m/s forward vs hold ${hold.fwd.toFixed(1)}`);
 });
 
 test("round 11 swing look-ahead: an arc into the facade ahead is not clear, one down the avenue is", () => {

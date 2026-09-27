@@ -102,7 +102,7 @@ function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; activ
     <div style={{ marginTop: 10, display: "inline-block", background: "rgba(20,40,60,0.88)", border: "2px solid #9fe6ff", borderRadius: 8, padding: "6px 14px", fontWeight: 800 }} data-testid="ghost-banner">
       <span style={{ color: "#9fe6ff", letterSpacing: 2, marginRight: 8 }}>{S.ghost} RACE</span>
       #{spec.chaser} {caughtVerb(info.kind)} #{spec.runner} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
-      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}{info.status === "unverified" && info.older ? " · made on an older build" : ""}</span>
+      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}{info.older ? (info.status === "unverified" ? " · made on an older build" : " · from an older version (replayed with its own swing)") : ""}</span>
       <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>
         {active ? "same city, same start, same runner: PLAY races their ghost" : `pick #${spec.chaser} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
       </div>

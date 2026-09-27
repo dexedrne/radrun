@@ -12,8 +12,8 @@
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
 import type { InputRec } from "../game/ghost.ts";
 
-/** Bumped on any change to the wire format or the online match rules. */
-export const NET_VERSION = 1;
+/** Bumped on any change to the wire format or the online match rules (2: the web-slinger swing changed the sim). */
+export const NET_VERSION = 2;
 
 const LO = 4294967296;
 /**

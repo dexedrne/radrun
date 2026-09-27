@@ -66,7 +66,8 @@ export function faceCoord(s: Solid, nx: number, nz: number): number {
  * §2.1 search. (x, y, z) body centre; (fx, fz) unit forward; speed = |v_xz|; ringSolid = hysteresis;
  * lastSolid (-1 = none) = the building let go of in the last 1.0 s; skipRoof = the roof stood on (-1 airborne);
  * cone = the aim cone's cosine (k.aimCos; round 10's falling fallback passes k.aimCosFall); vel = the body's
- * velocity for the round 11 swing look-ahead (null: forward x speed, level).
+ * velocity for the round 11 swing look-ahead (null: forward x speed, level); upExtra / aheadExtra move the ideal point up / ahead
+ * (the web-slinger swing's web length from your height; 0 for everything else).
  * For each solid in ropeMax, Q = the closest point of its box to the ideal point (roof interior -> the rim, a
  * point inside the box -> the nearest side face), filtered by height, rope length, aim cone and a clear line.
  * Round 11: the best few (ARC_TOP) are then looked at in score order with a coarse run of the swing each would
@@ -77,10 +78,10 @@ export function faceCoord(s: Solid, nx: number, nz: number): number {
 export function findAnchor(
   idx: CityIndex, x: number, y: number, z: number, fx: number, fz: number, speed: number,
   k: Tuning, ringSolid: number, lastSolid: number, skipRoof: number, out: AnchorHit, cone: number = k.aimCos,
-  vel: { x: number; y: number; z: number } | null = null,
+  vel: { x: number; y: number; z: number } | null = null, upExtra = 0, aheadExtra = 0,
 ): boolean {
-  const ahead = k.anchorAhead + k.anchorAheadPerSpeed * speed;
-  const sx = x + fx * ahead, sy = y + k.anchorUp, sz = z + fz * ahead;
+  const ahead = k.anchorAhead + k.anchorAheadPerSpeed * speed + aheadExtra;
+  const sx = x + fx * ahead, sy = y + k.anchorUp + upExtra, sz = z + fz * ahead;
   const R = k.ropeMax;
   const n = idx.nearbySolids(x - R, z - R, x + R, z + R);
   const ids = keep(idx, n);

@@ -277,6 +277,53 @@ export type Tuning = {
   /** Flow (§6.8): speed cap per pip (m/s), one pip drains every flowDecay s. */
   flowCap: number;
   flowDecay: number;
+  // ---- the web-slinger swing (player only; docs/specs/2026-09-27-web-slinger-swing.md) ----
+  /**
+   * Web length from your height: the ideal anchor point sits anchorHeightGain m higher (and anchorHeightAhead m further
+   * ahead) per m your feet are above anchorHeightFree m over the ground below, up to anchorUpMax m up in all (0 = off).
+   * High up, the web goes to a taller rim further ahead: a longer rope, a long sweeping arc that bottoms out over the street.
+   */
+  anchorHeightGain: number;
+  anchorHeightAhead: number;
+  anchorHeightFree: number;
+  anchorUpMax: number;
+  /**
+   * The surge (m/s^2): along the swing near the bottom of the arc (from swingSurgeCos from straight down, full at the
+   * bottom), on both sides of it: the real speed gain through the bottom. 0 = off.
+   */
+  swingSurge: number;
+  swingSurgeCos: number;
+  /** The floor-clamp reel goes swingReel + swingReelPerSpeed x your speed (m/s): a fast low web shortens in time. 0 = off. */
+  swingReelPerSpeed: number;
+  /** A perfect release also pops you up this much (m/s). */
+  releasePerfectUp: number;
+  /** Held to the auto-release, the fling gets this share of releaseBoost (1 = all of it, as before). */
+  autoReleaseKeep: number;
+  /**
+   * Corner swing: on the rope or flying at cornerMinSpeed+ with the stick turned cornerStick (sine) or more off your way, a
+   * building corner on that side within cornerReach m (abreast, not ahead) that stands over you takes a web and you swing
+   * round it (a level orbit, speed kept, cornerGravity x gravity) until you head where the stick points (cornerExitCos),
+   * cornerMaxT s pass or you let go of the stick; then + cornerBoost m/s along the new way.
+   */
+  cornerSwing: boolean;
+  cornerReach: number;
+  cornerMinSpeed: number;
+  cornerStick: number;
+  cornerGravity: number;
+  cornerBoost: number;
+  cornerMaxT: number;
+  cornerExitCos: number;
+  /**
+   * The dive (a fresh C press in the air, held): the speed cap while diving is diveCap (a higher terminal speed); the
+   * stick turns a dive at diveTurn rad/s. The speed over speedCap after a dive is kept and
+   * wears off at diveCarryDecay m/s^2, and a web within diveSwingT s of a dive keeps up to diveKeep x its speed when it
+   * goes taut: the dive-into-swing.
+   */
+  diveCap: number;
+  diveTurn: number;
+  diveCarryDecay: number;
+  diveKeep: number;
+  diveSwingT: number;
 };
 
 export const DT = 1 / 120;
@@ -344,8 +391,8 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   swingGravity: 1.35,
   swingPump: 5,
   swingKeepSpeed: 1.6,
-  swingReleaseCos: 0.64,
-  releaseSweet: 11,
+  swingReleaseCos: 0.53,
+  releaseSweet: 6,
   swingSweetCos: 0.966,
   swingReelUp: 3,
   webLift: 14,
@@ -447,8 +494,8 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   chargeFling: 8,
   chargeFlingUp: 4,
   chargeAir: 0.3,
-  swingPerfectCos: 0.82,
-  releasePerfect: 3,
+  swingPerfectCos: 0.85,
+  releasePerfect: 4.5,
   reboundWindow: 0.12,
   reboundKeep: 0.6,
   kickChainUp: 0.8,
@@ -463,7 +510,51 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   airTurn: 1.6,
   flowCap: 2,
   flowDecay: 2.5,
+  anchorHeightGain: 0.35,
+  anchorHeightAhead: 0.3,
+  anchorHeightFree: 12,
+  anchorUpMax: 34,
+  swingSurge: 8,
+  swingSurgeCos: 0.8,
+  swingReelPerSpeed: 0.7,
+  releasePerfectUp: 2.5,
+  autoReleaseKeep: 0,
+  cornerSwing: true,
+  cornerReach: 13,
+  cornerMinSpeed: 9,
+  cornerStick: 0.6,
+  cornerGravity: 0.3,
+  cornerBoost: 3,
+  cornerMaxT: 1.4,
+  cornerExitCos: 0.97,
+  diveCap: 46,
+  diveTurn: 0.9,
+  diveCarryDecay: 5,
+  diveKeep: 2.5,
+  diveSwingT: 0.4,
 });
+
+/**
+ * The web-slinger swing's keys at their "off" values: the runner runs without them, and so do the replays of ghosts
+ * recorded before it (format 4 and older), which then step exactly as they did on their own build.
+ */
+export const SWING_OFF = {
+  // (the one shared key the swing retuned: the runner's pendulum lets go where it always did)
+  swingReleaseCos: 0.64,
+  anchorHeightGain: 0, anchorHeightAhead: 0, swingSurge: 0, swingReelPerSpeed: 0, releasePerfectUp: 0, autoReleaseKeep: 1, cornerSwing: false,
+  diveCap: 0, diveTurn: 0, diveKeep: 0, diveSwingT: 0,
+} as const satisfies Partial<Tuning>;
+/**
+ * The whole round 12 swing for the replay of an older ghost: SWING_OFF plus the round 12 values of the player-only keys
+ * the web-slinger swing retuned (the timed / perfect release).
+ */
+export const SWING_R12 = { ...SWING_OFF, releaseSweet: 11, swingPerfectCos: 0.82, releasePerfect: 3 } as const satisfies Partial<Tuning>;
+/** Player-only keys of the web-slinger swing (never read while SWING_OFF is on). */
+export const SWING_KEYS: readonly (keyof Tuning)[] = [
+  "anchorHeightGain", "anchorHeightAhead", "anchorHeightFree", "anchorUpMax", "swingSurge", "swingSurgeCos", "swingReelPerSpeed", "releasePerfectUp", "autoReleaseKeep",
+  "cornerSwing", "cornerReach", "cornerMinSpeed", "cornerStick", "cornerGravity", "cornerBoost", "cornerMaxT", "cornerExitCos",
+  "diveCap", "diveTurn", "diveCarryDecay", "diveKeep", "diveSwingT",
+];
 
 /** The player-only moves (double jump + web zip + slide); the runner and old ghosts run without them. */
 export const MOVES_OFF = { airJumps: 0, webZip: false, slide: false } as const satisfies Partial<Tuning>;
@@ -492,6 +583,8 @@ export function runnerFrom(player: Readonly<Tuning>): Tuning {
     wallUpKick: 0, wallPushOff: 0, anchorArcPenalty: 0,
     // Round 12 (§7.1): the straight zip (forced targets only) and the charge are his; the player's tech is not.
     charge: true, releasePerfect: 0, reboundWindow: 0, kickChainUp: 0, dive: false, yankRange: 0, airTurn: 0, flowCap: 0, zipPopWindow: 0,
+    // The web-slinger swing is the player's: his baked hops keep the round 12 pendulum.
+    ...SWING_OFF,
   };
 }
 /** Round 12 player-only tech keys (§9 "runner-unused"): never read by the runner's sim. */
@@ -499,6 +592,7 @@ export const TECH_KEYS: readonly (keyof Tuning)[] = [
   "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
   "yankRange", "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
   "zipPopWindow", "zipPopUp", "zipPopFwd", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipFanCos",
+  ...SWING_KEYS,
 ];
 /** Player-only keys the runner never uses (double jump, slide, round 12 tech): left out of the bake's tuning hash. */
 export const RUNNER_UNUSED_KEYS: readonly (keyof Tuning)[] = [
@@ -590,6 +684,9 @@ export const TUNABLE_KEYS = [
   "charge", "chargeMin", "chargeTime", "chargeWalk", "chargeUp", "chargeFwd", "chargeWallOut", "chargeWallUp", "chargeHangMax", "chargeFling", "chargeFlingUp", "chargeAir",
   "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
   "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
+  "anchorHeightGain", "anchorHeightAhead", "anchorHeightFree", "anchorUpMax", "swingSurge", "swingSurgeCos", "swingReelPerSpeed", "releasePerfectUp", "autoReleaseKeep",
+  "cornerSwing", "cornerReach", "cornerMinSpeed", "cornerStick", "cornerGravity", "cornerBoost", "cornerMaxT", "cornerExitCos",
+  "diveCap", "diveTurn", "diveCarryDecay", "diveKeep", "diveSwingT",
 ] as const satisfies readonly (keyof Tuning)[];
 
 export type CameraTuning = {
@@ -631,6 +728,18 @@ export type CameraTuning = {
   armDive: number;
   chargeArm: number;
   chargeFov: number;
+  /**
+   * The web-slinger camera: in the air the arm pulls back up to speedArm m with speed (fovSpeedLo -> fovSpeedHi); the
+   * look point's height trails the body's by up to lagYMax m, eased at lagY /s (0 = off: the camera rides every arc);
+   * sideways it leads the motion across the view by lookAhead s (at most lookAheadMax m); diving widens the FOV diveFov
+   * deg. Reduced motion turns all of it off.
+   */
+  speedArm: number;
+  lagY: number;
+  lagYMax: number;
+  lookAhead: number;
+  lookAheadMax: number;
+  diveFov: number;
 };
 
 export const CAMERA: Readonly<CameraTuning> = Object.freeze({
@@ -645,9 +754,9 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   shoulder: 0.6,
   ropeBias: 0.25,
   ropeBiasMax: 3,
-  fovBoost: 16,
+  fovBoost: 18,
   fovSpeedLo: 10,
-  fovSpeedHi: 28,
+  fovSpeedHi: 34,
   fovEase: 3,
   reducedMotion: false,
   easyGrab: false,
@@ -662,6 +771,12 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   armDive: 8,
   chargeArm: 0.5,
   chargeFov: 3,
+  speedArm: 2,
+  lagY: 4,
+  lagYMax: 1.6,
+  lookAhead: 0.06,
+  lookAheadMax: 1.4,
+  diveFov: 5,
 });
 
 /**
