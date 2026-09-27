@@ -16,6 +16,7 @@ const RouteView = DEV ? lazy(() => import("./app/dev/RouteView.tsx")) : null;
 const SandboxPage = DEV ? lazy(() => import("./app/SandboxPage.tsx")) : null;
 const PortraitPage = DEV ? lazy(() => import("./app/dev/PortraitPage.tsx")) : null;
 const HatsPage = DEV ? lazy(() => import("./app/dev/HatsPage.tsx")) : null;
+const BenchPage = DEV ? lazy(() => import("./app/dev/BenchPage.tsx")) : null;
 const params = new URLSearchParams(location.search);
 // SPIDER-TAG (?tag): its own lazy chunk, so the single-player page load does not grow.
 const TagPage = lazy(() => import("./app/TagPage.tsx"));
@@ -27,6 +28,7 @@ function App() {
   if (RouteView && params.has("routeview")) return <Suspense fallback={fallback}><RouteView /></Suspense>;
   if (PortraitPage && params.has("portrait")) return <Suspense fallback={fallback}><PortraitPage /></Suspense>;
   if (HatsPage && params.has("hats")) return <Suspense fallback={fallback}><HatsPage /></Suspense>;
+  if (BenchPage && params.has("bench")) return <Suspense fallback={fallback}><BenchPage /></Suspense>;
   if (SandboxPage && (params.has("sandbox") || params.has("autoplay"))) return <Suspense fallback={fallback}><SandboxPage /></Suspense>;
   if (params.has("tag") || params.has("room")) return <Suspense fallback={fallback}><TagPage /></Suspense>;
   return <PlayPage />;
