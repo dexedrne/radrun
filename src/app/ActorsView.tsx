@@ -469,7 +469,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
 }
 
 /** Rotate a bone about a world-space axis through its pivot (after the mixer wrote its pose). */
-function rotateBoneWorld(bone: Bone | undefined, axisWorld: Vector3, angle: number, tmp: { pq: Quaternion; wq: Quaternion; axis: Vector3 }): void {
+export function rotateBoneWorld(bone: Bone | undefined, axisWorld: Vector3, angle: number, tmp: { pq: Quaternion; wq: Quaternion; axis: Vector3 }): void {
   if (!bone || !bone.parent) return;
   bone.parent.getWorldQuaternion(tmp.pq);
   // L' = P^-1 * Q * P * L

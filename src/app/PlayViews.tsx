@@ -374,7 +374,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
 // ---- procedural props ----------------------------------------------------------------------------
 
 /** Low-poly money bag (~70 tris): a lathed sack + a tie. */
-function makeBag(): Group {
+export function makeBag(): Group {
   const pts = [[0, 0], [0.11, 0.015], [0.18, 0.08], [0.19, 0.16], [0.14, 0.24], [0.06, 0.28], [0.045, 0.3], [0.08, 0.35]].map(([x, y]) => new Vector2(x, y));
   const g = new Group();
   const sack = new Mesh(new LatheGeometry(pts, 6), new MeshBasicMaterial({ color: "#d8a843" }));

@@ -155,6 +155,12 @@ export function Title(props: {
       PRACTICE
     </button>
   );
+  const tagBtn = (
+    <button onClick={() => gotoDistrict(PAGE_DISTRICT, { tag: "1" })} title="web-slinger tag: you vs bots (or a friend online); whoever holds the bag chases"
+      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", borderColor: "#ff3d7f", color: "#ffc2d6" }} data-testid="spider-tag">
+      SPIDER-TAG
+    </button>
+  );
   return (
     <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
       <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: safe("top", 10), right: safe("right", 12), zIndex: 21 }} />
@@ -220,6 +226,7 @@ export function Title(props: {
             {compact && playBtn}
             {compact && campaignBtn}
             {compact && practiceBtn}
+            {compact && tagBtn}
             {compact && bestBtn}
           </div>
           {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
@@ -237,7 +244,7 @@ export function Title(props: {
               })}
             </div>
           )}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{bestBtn}</div>}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{tagBtn}{bestBtn}</div>}
         </div>
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {touch ? (
