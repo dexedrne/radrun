@@ -18,7 +18,8 @@ import { RESULTS_AFTER } from "../game/play.ts";
 import type { RadbroId } from "../game/round.ts";
 import {
   EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP,
-  EV_WALLRUN, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER, EV_CHARGE, EV_CHARGE_START, EV_DIVE, EV_POP, EV_YANK, EV_REBOUND,
+  EV_WALLRUN, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER, EV_CHARGE, EV_CHARGE_START, EV_DIVE, EV_POP, EV_YANK, EV_REBOUND, EV_PERFECT,
+  hangPoint,
 } from "../sim/player.ts";
 import { RM_EDGE, RM_TAUNT } from "../runner/runner.ts";
 import { EVT_CHARGE, EVT_LEAP, EVT_ROLL, EVT_VAULT, PHASE_AIR, PHASE_GROUND, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, PHASE_ZIP, eventsBetween } from "../route/trackPack.ts";
@@ -32,6 +33,7 @@ import { AnimPlayer } from "./animPlayer.ts";
 import { CLIP_META, clipsPath, handHeight, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
+import { airBones, airInput, newAirPose, placeRoot, poseBones, stepAirPose, type AirPose, type AirPoseIn, type PoseBones } from "./airPose.ts";
 
 const UP = new Vector3(0, 1, 0);
 
@@ -71,6 +73,10 @@ export type ActorRig = {
   /** Runner: seconds in the current pack phase and the track time last frame (pack events). */
   phaseT: number;
   prevT: number;
+  /** The web-slinger air poses (airPose.ts): weights / flip clock, the limb bones, the eased root orientation under the flip. */
+  air: AirPose;
+  pose: PoseBones;
+  qBase: Quaternion;
 };
 
 /** Mounted rigs by Radbro id (read by the FX pass for hands, bag, rope and lasso). */
@@ -124,6 +130,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
     },
     yaw: 0, off: new Vector3(0, -0.9, 0), ropeW: 0, look: 0, arm: 0, prevPhase: PHASE_GROUND, prevP: new Vector3(), vel: new Vector3(),
     fade: 1, p: new Vector3(), hand: new Vector3(), hook: -1, zip: false, charging: false, chargeOn: false, roll: 0, pitch: 0, hipPitch: 0, phaseT: 0, prevT: 0,
+    air: newAirPose(), pose: poseBones(model), qBase: new Quaternion(),
   };
 }
 
@@ -186,7 +193,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
     q: new Quaternion(), qYaw: new Quaternion(), qTilt: new Quaternion(), m: new Matrix4(),
     u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(), a: new Vector3(), b: new Vector3(),
     pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(), fwd: new Vector3(),
-    anchor: new Vector3(), n: { x: 0, z: 0 }, qPose: new Quaternion(), e: new Vector3(), eu: new Euler(),
+    anchor: new Vector3(), n: { x: 0, z: 0 }, qPose: new Quaternion(), e: new Vector3(), eu: new Euler(), pos: new Vector3(),
+    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
   }), []);
 
   // -5: roots, facing, rope tilt, animMachine.
@@ -215,7 +223,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
       let anchor: Vector3 | null = null;
       let zip = false;
       if (!r.over) {
-        if (isChaser && b.ropeSolid >= 0) anchor = tmp.anchor.set(b.ropeA.x, b.ropeA.y, b.ropeA.z);
+        // (a corner swing hangs from its web on the corner post the same way)
+        if (isChaser && hangPoint(b, tmp.anchor)) anchor = tmp.anchor;
         // Round 12: a zip / yank is the stretched zip pose (arm up along the web), not the rope hang.
         if (isChaser && (b.zipOn || b.yankOn)) zip = true;
         if (isRunner && run.pose.phase === PHASE_ROPE && game.runnerAnchor(tmp.e)) anchor = tmp.anchor.copy(tmp.e);
@@ -313,6 +322,11 @@ export function ActorsView({ game }: { game: PlayGame }) {
         wall, ledge, slide, wallSide, zip, charge, dive,
       }));
       rig.chargeOn = charge;
+      // The web-slinger air poses: dive, skydive, the swing's tuck / reach, the flip on a perfect release.
+      const clear = p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9);
+      const free = !grounded && !anchor && !zip && !wall && !ledge && beat === "";
+      stepAirPose(rig.air, airInput(tmp.ain, delta, dive && beat === "", free, beat === "" ? anchor : null, p, vy, clear,
+        isChaser && (game.frameEvents & EV_PERFECT) !== 0));
 
       // Facing (slerp 12 rad/s toward velocity; scripted beats face the other one).
       const faceTo = (x: number, z: number, rate: number) => {
@@ -388,8 +402,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
         pz += (mz - dz * 0.45 - pz) * waltzW;
         py += (gy - py) * waltzW;
       }
-      rig.root.position.set(px, py, pz);
-      rig.root.quaternion.slerp(tmp.q, Math.min(1, 14 * rawDelta));
+      placeRoot(rig, tmp.q, tmp.pos.set(px, py, pz), hanging, vx, vy, vz, rawDelta);
       // Camera closer than 2 m: the local Radbro fades to 40% (spec §8). Round 11: the camera's own distance to him
       // (the look point leans toward the pivot on the rope, so the arm alone understates it).
       if (isChaser) {
@@ -424,6 +437,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
         rotateBoneWorld(rig.bones.leftArm, tmp.fwd, -POSE.leftArmBack * rig.ropeW, tmp);
         if (Math.abs(rig.hipPitch) > 1e-3) rotateBoneWorld(rig.bones.hips, tmp.fwd, rig.hipPitch, tmp);
       }
+      // The air poses' limbs (dive, skydive, swing tuck / reach, flip), before the hand correction.
+      airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
       // Hand correction: shift the root so RightHand sits on its target (weighted while the hang blends in).
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {

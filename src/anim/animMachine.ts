@@ -11,7 +11,8 @@
 //
 // Round 7 free fall: a long drop (falling fast, or high above the ground below while descending)
 // crossfades from the apex hold into Free_Fall, an upright loop (treading air: arms sculling, legs
-// kicking); a rope grab cancels it. Landing after a real free fall (or very fast) plays Big_Land, a
+// kicking); a rope grab cancels it. (The web-slinger swing: the view's procedural air poses in app/airPose.ts turn
+// that loop into a belly-down skydive and the dive into a head-first dive; this machine only picks the clip under them.) Landing after a real free fall (or very fast) plays Big_Land, a
 // feet-first superhero crouch (t = 0 is ground contact), cut short when he runs on. Without the clips
 // the apex hold / landing crouch stay.
 //
@@ -45,7 +46,8 @@ export const A_BIGLAND = 8192;
 /**
  * Round 12 (docs/specs/2026-09-26-round12-spider-tag.md §7.3), no new clips: a zip starts (the stretched sprint pose,
  * arm up along the web), a charge starts (Big_Land frozen at its deepest crouch), a charged leap (Regular_Jump at 0.8x
- * with a tuck), a zip pop (Regular_Jump from takeoff at 1.4x), a dive (Leap_of_Faith into Fall_1).
+ * with a tuck), a zip pop (Regular_Jump from takeoff at 1.4x), a dive (the web-slinger swing: the free-fall loop under
+ * the view's procedural head-first pose).
  */
 export const A_ZIP = 16384;
 export const A_CHARGE = 32768;
@@ -404,9 +406,11 @@ export class AnimMachine {
     if (ev & A_POP) return this.air(0.06, true, RULE.popRate);
     if (ev & A_LEAP) return this.air(0.08, true, RULE.leapRate);
     if ((ev & A_DIVE) || (i.dive && this.special !== "dive" && air)) {
-      // Dive: the swan dive into the belly-down fall (clips cut as air poses).
-      const c = this.startShot(CLIP.leap, this.pick(CLIP.fall), 0, 0.1);
-      if (c) { this.special = "dive"; this.ff = false; return c; }
+      // Dive: the upright free-fall loop (else the apex hold) under the view's procedural head-first pose (app/airPose.ts
+      // turns the body along the velocity and sweeps the arms back); the bought dive clips stay unused.
+      const c = this.freefall() ?? this.air(0.1);
+      this.special = "dive";
+      return c;
     }
     if (this.special === "dive") {
       if (i.dive && air) return null;

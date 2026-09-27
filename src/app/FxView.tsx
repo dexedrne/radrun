@@ -11,7 +11,7 @@ import { DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Quater
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
-import { chargeLevel, emptyZipAim, zipAim, EV_NOANCHOR, EV_PERFECT, EV_RELEASE, EV_AUTORELEASE } from "../sim/player.ts";
+import { chargeLevel, emptyZipAim, hangPoint, zipAim, EV_NOANCHOR, EV_PERFECT, EV_RELEASE, EV_AUTORELEASE } from "../sim/player.ts";
 import { emptyAnchor } from "../world/cityQuery.ts";
 import { useUi } from "../ui/store.ts";
 
@@ -44,7 +44,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const diamondMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
   const fl = useMemo(() => ({ t: 0, a: new Vector3(), b: new Vector3() }), []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
-  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0 }), []);
+  const tmp = useMemo(() => ({ a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), up: new Vector3(0, 1, 0), q: new Quaternion(), m: new Matrix4(), cp: new Vector3(), cq: new Quaternion(), t: 0, nope: 0, hang: { x: 0, y: 0, z: 0 } }), []);
   /** Stretch a unit web cylinder from a to b. */
   const place = (m: Mesh, a: Vector3, b: Vector3) => {
     const len = a.distanceTo(b);
@@ -71,12 +71,14 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     };
     // Reticle on the ringed building (the anchor the next web press gets; while attached, the rope's).
     const rm = ring.current, tm = tick.current;
-    const attached = b.ropeSolid >= 0;
+    // (a corner swing's web on the corner post counts as attached)
+    const hang = hangPoint(b, tmp.hang);
+    const attached = hang !== null;
     const on = !hide && (attached || b.ringId >= 0);
     if (rm) rm.visible = on;
     if (tm) tm.visible = on && !attached && b.ringRim;
     if (on && rm) {
-      const a = attached ? b.ropeA : b.ringA;
+      const a = hang ?? b.ringA;
       const nx = attached ? 0 : b.ringNx, nz = attached ? 0 : b.ringNz;
       rm.position.set(a.x + nx * 0.3, a.y + (b.ringRim && !attached ? 0.3 : 0), a.z + nz * 0.3);
       rm.quaternion.copy(camQ);
@@ -149,7 +151,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       }
     }
     // Round 12 perfect release: the web just let go of flashes white (a thicker line) for a moment.
-    if (b.ropeSolid >= 0) { if (!ropeFrom?.(fl.a)) fl.a.set(p.x, p.y + 0.25, p.z); fl.b.set(b.ropeA.x, b.ropeA.y, b.ropeA.z); }
+    if (hang) { if (!ropeFrom?.(fl.a)) fl.a.set(p.x, p.y + 0.25, p.z); fl.b.set(hang.x, hang.y, hang.z); }
     if ((game.frameEvents & EV_PERFECT) && (game.frameEvents & (EV_RELEASE | EV_AUTORELEASE))) fl.t = PERFECT_FLASH;
     fl.t = Math.max(0, fl.t - delta);
     const fm = flash.current;
@@ -164,7 +166,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     if (ro) {
       ro.visible = (attached || b.zipOn) && !hide;
       if (ro.visible) {
-        const h = b.zipOn ? b.zipP : b.ropeA;
+        const h = b.zipOn ? b.zipP : hang ?? b.ropeA;
         if (!ropeFrom?.(tmp.a)) tmp.a.set(p.x, p.y + 0.25, p.z);
         tmp.b.set(h.x, h.y, h.z);
         // |a + t (b - a) - cam|^2 = R^2 -> the t range inside the sphere.

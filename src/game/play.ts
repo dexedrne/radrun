@@ -182,7 +182,7 @@ export class PlayGame {
     this.rig.pitch = this.botOptions ? -0.25 : 0.08; // the bot camera sits higher and looks down past the stand-in
     rigLook(this.rig, 0, 0, 0, false);
     const bo = this.botOptions;
-    this.bot = bo ? (bo.kind === "swing" ? new SwingBot(this.round, s.seed, bo.moves ?? false) : new Bot(this.round, bo)) : null;
+    this.bot = bo ? (bo.kind === "swing" ? new SwingBot(this.round, s.seed, bo.moves ?? false, bo.tech ?? false) : new Bot(this.round, bo)) : null;
     const sp = this.round.spawn, rp = this.round.runner.p;
     this.george.beat = practice ? "" : "sit";
     if (practice) this.george.place(sp.x, sp.y, sp.z, sp.roofId, -Math.sin(sp.yaw), -Math.cos(sp.yaw));

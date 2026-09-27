@@ -8,7 +8,10 @@
 // the chaser's airborne jumps / rope releases (window.__frozen, __frozenWhy = "jump" | "release") so a
 // screenshot catches the airborne pose; resume through window.__unfreeze. Round 7: snap=freefall,sky,
 // runnerff (any subset) instead freezes once each: the chaser 0.45 s into his Free_Fall loop, 0.35 s
-// into a swing (sky: on a tower anchor), the runner 0.45 s into his free fall.
+// into a swing (sky: on a tower anchor), the runner 0.45 s into his free fall. The web-slinger swing: snap=dive, skydive,
+// tuck, reach, flip, corner freeze once each on the chaser's procedural air poses (app/airPose.ts: the head-first dive,
+// the skydive spread, knees tucked at the bottom of an arc, reaching out at its end, mid-flip after a perfect release, a
+// corner swing under way); `&tech` = the tech bot (the full kit + perfect releases, rebounds, dives: it dives at him).
 // Progress and the outcome are exposed on window.__play (PlayDriver).
 import type { PlayGame } from "../../game/play.ts";
 import { RADBROS, type RadbroId } from "../../game/round.ts";
@@ -18,7 +21,7 @@ import { autoplayScript } from "../autoplay.ts";
 import { PHASE_AIR } from "../../route/trackPack.ts";
 import { rigs } from "../ActorsView.tsx";
 
-export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; moves: boolean; snap: boolean; snapKinds: string[]; mu: number } | null {
+export function botParams(search: string): { kind: "follow" | "yoink" | "swing" | "chase"; k: number; seed: number; d: Difficulty; c: RadbroId; r: RadbroId; rec: boolean; moves: boolean; tech: boolean; snap: boolean; snapKinds: string[]; mu: number } | null {
   const q = new URLSearchParams(search);
   const kind = q.get("bot");
   if (kind !== "follow" && kind !== "yoink" && kind !== "swing" && kind !== "chase") return null;
@@ -35,7 +38,9 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
     r,
     rec: q.has("rec"),
     /** Round 9: `&moves` = the chase bot also double-jumps, slides and web-zips (the balance rows' bot). */
-    moves: q.has("moves"),
+    moves: q.has("moves") || q.has("tech"),
+    /** `&tech` = the tech bot (balance's "tech swing" row). */
+    tech: q.has("tech"),
     snap: q.has("snap"),
     snapKinds: (q.get("snap") ?? "").split(",").filter(Boolean),
     /** Round 4 mutator bits (&mu=); default = none (predictions in tools/botshot use the same). */
@@ -44,7 +49,7 @@ export function botParams(search: string): { kind: "follow" | "yoink" | "swing" 
 }
 
 export function startBot(game: PlayGame, p: NonNullable<ReturnType<typeof botParams>>): void {
-  game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true, moves: p.moves } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
+  game.botOptions = p.kind === "swing" ? null : p.kind === "chase" ? { kind: "swing", k: 1, yoink: true, moves: p.moves, tech: p.tech } : { kind: "follow", k: p.k, yoink: p.kind === "yoink" };
   game.recordBot = p.rec;
   game.startRound({ chaser: p.c, runner: p.r, difficulty: p.d, seed: p.seed, mutators: p.mu });
   if (p.kind === "swing") {
@@ -88,7 +93,14 @@ function snapRound7(game: PlayGame, kinds: string[]): void {
     let why = "";
     // (the rig's machine lags the sim by a frame: also require the body to be falling free right now)
     const run = game.round.runner.pose;
+    const air = chaser?.air;
     if (left.has("freefall") && chaser?.machine.ff && chaser.machine.ffT >= 0.45 && !b.grounded && b.ropeSolid < 0 && b.v.y < -3) why = "freefall";
+    else if (left.has("dive") && air && air.dive > 0.95 && b.diveOn) why = "dive";
+    else if (left.has("skydive") && air && air.sky > 0.95 && !b.diveOn) why = "skydive";
+    else if (left.has("tuck") && air && air.swing > 0.95 && air.tuck > 0.9 && b.ropeSolid >= 0) why = "tuck";
+    else if (left.has("reach") && air && air.swing > 0.95 && air.tuck < 0.05 && b.ropeSolid >= 0 && b.ropeTaut) why = "reach";
+    else if (left.has("flip") && air && air.flipT > 0.18 && air.flipT < 0.4) why = "flip";
+    else if (left.has("corner") && b.cornerOn && b.cornerT > 0.25) why = "corner";
     else if (left.has("sky") && sky >= 0.35) why = "sky";
     else if (left.has("runnerff") && runner?.machine.ff && runner.machine.ffT >= 0.45 && run.phase === PHASE_AIR) why = "runnerff";
     if (why) {
