@@ -10,10 +10,11 @@ import { SimDriver } from "./SimDriver.tsx";
 import { PlayerView } from "./PlayerView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
+import { StructuresView } from "./StructuresView.tsx";
 import "./Sign.tsx"; // registers the decor "Sign" component before any prefab mounts
 import { CityLook, FOG_COLOR, SkyGradient } from "./cityLook.tsx";
 import { ANTIALIAS, HIGH_DPR, QualityView, lowQuality } from "./quality.tsx";
-import { PAGE, lv } from "./district.ts";
+import { PAGE, PAGE_DISTRICT, lv } from "./district.ts";
 
 export const SKY = FOG_COLOR;
 
@@ -86,6 +87,7 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
   const prefab = useMemo(() => playPrefab(game, sandboxActors(game)), [game]);
   return (
     <SceneCanvas prefab={prefab}>
+      <StructuresView model={game.model} district={PAGE_DISTRICT} source={game} />
       <SimDriver game={game} />
       <PlayerView game={game} />
       <CameraView game={game} />

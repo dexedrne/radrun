@@ -279,6 +279,21 @@ export const sfx = {
   roll: () => smp("landHeavy", 0.32, 0, 0.02, 1.25) || at(0, (e, t) => noise(e, "lowpass", 700, 250, 0.8, t, 0.3, 0.25, 0.2)),
   /** A web press with nothing to web to (a soft "no" tick). */
   noAnchor: () => at(0, (e, t) => tone(e, "sine", 320, 210, t, 0.07, 0.035, 0.004)),
+  // ---- round 12 (docs/specs/2026-09-26-round12-spider-tag.md §8): one short cue per move, under the music ----
+  /** Zip pop off the end of a zip. */
+  pop: () => at(0, (e, t) => { tone(e, "square", 420, 900, t, 0.09, 0.05); noise(e, "bandpass", 2400, 1200, 1.5, t, 0.06, 0.12, 0.1); }),
+  /** The charge's rising whine (a full charge's length). */
+  chargeWhine: () => at(0, (e, t) => tone(e, "sine", 260, 880, t, 0.7, 0.035, 0.1)),
+  /** The launch thump. */
+  launch: (full: boolean) => at(0, (e, t) => { noise(e, "lowpass", 600, 180, 0.8, t, 0.2, full ? 0.32 : 0.22, 0.05); tone(e, "sine", full ? 150 : 120, 55, t, 0.16, 0.08); }),
+  /** Perfect release: a short ding. */
+  perfect: () => at(0, (e, t) => { tone(e, "sine", 1320, 1320, t, 0.22, 0.05, 0.003); tone(e, "sine", 1980, 1980, t + 0.05, 0.18, 0.03, 0.003); }),
+  /** The yank: a web snap. */
+  yank: () => at(0, (e, t) => { noise(e, "bandpass", 2600, 700, 2, t, 0.1, 0.22, 0.05); tone(e, "triangle", 500, 1300, t, 0.1, 0.05); }),
+  /** Rebound kick: a clang. */
+  rebound: () => at(0, (e, t) => { tone(e, "square", 230, 180, t, 0.14, 0.05); noise(e, "bandpass", 1800, 1500, 6, t, 0.12, 0.16, 0.05); }),
+  /** Dive: wind rising. */
+  dive: () => at(0, (e, t) => noise(e, "bandpass", 380, 950, 0.9, t, 0.6, 0.16, 0.4)),
   /** Round 4: a wind gust starts (a rising, breathy swell). */
   gust: () => smp("gust", 0.55, 0, 0.02) || at(0, (e, t) => {
     noise(e, "bandpass", 300, 900, 0.7, t, 1.6, 0.22, 0.9);

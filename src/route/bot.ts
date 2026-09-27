@@ -8,13 +8,15 @@
 // forced (the sim's ledge zip pulls him up and launches him onto the roof). Vaults over rooftop props happen
 // by themselves on the legs.
 // Pure TS; deterministic (sqrt-only maths, fixed order).
-import { copyBody, createBody, emptyInput, stepBody, EV_FALL, EV_WALL, EV_BONK, EV_CLIMB, EV_VAULT, EV_ZIP, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
+import { copyBody, createBody, emptyInput, stepBody, EV_CHARGE, EV_FALL, EV_WALL, EV_BONK, EV_CLIMB, EV_VAULT, EV_ZIP, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
 import { GRAPH, type Link, type Junction } from "./graph.ts";
 
 export const BOT = {
   approach: 3,
+  /** Round 12 leaps: the approach point this far behind the edge (room to run, then crouch-walk through the charge). */
+  leapApproach: 6,
   /** Street swings: jump once the body centre is this close to the takeoff edge. */
   swingJumpBefore: 0.5,
   /** Alley takeoff lateral is clamped this far inside the overlapping span. */
@@ -37,12 +39,17 @@ export const PH_FAIL = 5;
 
 /**
  * pace (round 7 drops): walk-off speed in % of runSpeed (100 for every other hop); alt: the street swing's anchor
- * option; zip: a street hop (or a tall climb) taken as a zip onto the far rim (its fallback when no swing / climb bakes).
+ * option; zip: a street hop (or a tall climb) taken as a zip onto the far rim (its fallback when no swing / climb bakes);
+ * leap (round 12): taken as a charged leap instead (`jump` = the step C is let go: held from jump - leapHold).
  */
-export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number; zip: boolean };
+export type HopParams = { lat: number; jump: number; release: number; pace: number; alt: number; zip: boolean; leap: boolean };
 
 /** The hop is a zip (a zip link, or a street hop / tall climb on its zip fallback). */
-export const zipHop = (l: Link, p: HopParams): boolean => l.kind === "zip" || ((l.kind === "street" || l.kind === "climb") && p.zip);
+export const zipHop = (l: Link, p: HopParams): boolean => l.kind === "zip" || ((l.kind === "street" || l.kind === "climb") && p.zip && !p.leap);
+/** Round 12: the hop is a charged leap (a street hop / tall climb on its leap fallback). */
+export const leapHop = (l: Link, p: HopParams): boolean => (l.kind === "street" || l.kind === "climb") && p.leap;
+/** Steps of a full charge (chargeMin + chargeTime), rounded up. */
+export const fullChargeSteps = (k: Tuning): number => Math.ceil((k.chargeMin + k.chargeTime) / k.dt - 1e-9);
 /** Wall-run hops: the stick's push into the wall (fraction of full). */
 export const WALL_PUSH = 0.3;
 
@@ -70,6 +77,11 @@ export class EdgeBot {
   /** Airborne after a vault on a roof leg (not a takeoff), and the current hop ended with a ledge climb. */
   vaulting = false;
   climbed = false;
+  /** Round 12: the step this hop's line phase began (a leap's charge never starts before it). */
+  lineStart = -1;
+  /** Round 12 fix (a cable swing): the web has been pressed this hop (on step pressStep). */
+  pressed = false;
+  pressStep = -1;
   fail = "";
   results: HopResult[] = [];
   readonly input: InputFrame = emptyInput();
@@ -99,6 +111,9 @@ export class EdgeBot {
     c.autoReleased = this.autoReleased;
     c.vaulting = this.vaulting;
     c.climbed = this.climbed;
+    c.lineStart = this.lineStart;
+    c.pressed = this.pressed;
+    c.pressStep = this.pressStep;
     c.fail = this.fail;
     c.results = this.results.map(r => ({ ...r }));
     return c;
@@ -126,6 +141,7 @@ export class EdgeBot {
     const l = this.link;
     const p = this.params[this.hop];
     if (zipHop(l, p)) p.lat = l.axis === "x" ? l.rim!.az : l.rim!.ax;
+    else if (leapHop(l, p)) p.lat = (l.lo + l.hi) / 2;
     else if (l.kind === "street") p.lat = l.swings[Math.min(p.alt, l.swings.length - 1)]?.lat ?? (l.lo + l.hi) / 2;
     else if (l.kind === "wallrun") p.lat = l.face + l.side * (this.tuning.halfWidth + GRAPH.wallOff);
     else p.lat = Math.min(Math.max(this.lateral(), l.lo + BOT.alleyLatInset), l.hi - BOT.alleyLatInset);
@@ -140,7 +156,7 @@ export class EdgeBot {
 
   /** True when the street-swing jump rule fires on the next step (line phase, near the edge). */
   swingJumpDue(): boolean {
-    if (this.phase !== PH_LINE || this.link.kind !== "street" || this.params[this.hop].zip) return false;
+    if (this.phase !== PH_LINE || this.link.kind !== "street" || this.params[this.hop].zip || this.params[this.hop].leap) return false;
     const l = this.link;
     return (this.along() - l.edge) * l.dir >= -BOT.swingJumpBefore;
   }
@@ -153,6 +169,8 @@ export class EdgeBot {
     inp.zipPressed = false;
     inp.webPressed = false;
     inp.webHeld = false;
+    inp.slidePressed = false;
+    inp.slideHeld = false;
     inp.aimX = 1; inp.aimY = 0; inp.aimZ = 0;
     this.world.forceAnchor = null;
     const s = this.step;
@@ -162,8 +180,9 @@ export class EdgeBot {
 
     if (this.phase === PH_APPROACH) {
       const l = this.link, p = this.params[this.hop];
+      this.lineStart = -1;
       if (p.lat !== p.lat) this.chooseLateral(); // NaN = not chosen yet
-      const ax = l.edge - l.dir * BOT.approach;
+      const ax = l.edge - l.dir * (leapHop(l, p) ? BOT.leapApproach : BOT.approach);
       const al = this.along();
       // Past the approach point already (along the hop direction) -> straight to the line phase.
       const tx = l.axis === "x" ? ax : p.lat, tz = l.axis === "x" ? p.lat : ax;
@@ -173,11 +192,17 @@ export class EdgeBot {
     }
     if (this.phase === PH_LINE) {
       const l = this.link, p = this.params[this.hop];
+      if (this.lineStart < 0) this.lineStart = s;
       const err = p.lat - this.lateral();
       const c = Math.min(Math.max(err * 1.5, -0.6), 0.6);
       const mag = l.kind === "drop" && !entering ? p.pace / 100 : 1;
       if (l.axis === "x") this.setMove(l.dir, c, mag); else this.setMove(c, l.dir, mag);
-      if (s === p.jump) {
+      if (leapHop(l, p)) {
+        // Round 12 leap: C held from jump - fullCharge (crouch-walking), let go on step `jump` (the launch).
+        const hold = s >= p.jump - fullChargeSteps(k) && s < p.jump;
+        inp.slideHeld = hold;
+        inp.slidePressed = hold && (s === p.jump - fullChargeSteps(k) || s === this.lineStart);
+      } else if (s === p.jump) {
         if (zipHop(l, p)) { inp.zipPressed = true; this.world.forceAnchor = l.rim; } else inp.jumpPressed = true;
       }
     } else if (this.phase === PH_AIR) {
@@ -187,9 +212,24 @@ export class EdgeBot {
       this.input.moveX = l.axis === "x" ? l.dir : push;
       this.input.moveZ = l.axis === "x" ? push : l.dir;
       if (l.kind === "street" && !p.zip && s > p.jump && s < p.release && !this.ropeDone) {
-        inp.webHeld = true;
-        inp.webPressed = s === p.jump + 1;
-        this.world.forceAnchor = l.swings[Math.min(p.alt, l.swings.length - 1)]?.anchor ?? l.anchor;
+        const o = l.swings[Math.min(p.alt, l.swings.length - 1)];
+        const a = o?.anchor ?? l.anchor;
+        if (o?.press === undefined) {
+          inp.webHeld = true;
+          inp.webPressed = s === p.jump + 1;
+          this.world.forceAnchor = a;
+        } else if (this.pressed || (a !== null && b.v.y < 0 && b.p.y <= a.ay - o.press)) {
+          // Round 12 fix, a cable swing: web the cable once he has dropped o.press m under it; the release step is a zip
+          // up onto the far roof's rim (below).
+          inp.webHeld = true;
+          inp.webPressed = !this.pressed;
+          if (!this.pressed) this.pressStep = s;
+          this.pressed = true;
+          this.world.forceAnchor = a;
+        }
+      } else if (l.kind === "street" && !p.zip && s === p.release && this.pressed && !this.ropeDone && l.rim) {
+        inp.zipPressed = true;
+        this.world.forceAnchor = l.rim;
       }
     } else if (this.phase === PH_FINAL) {
       const j = this.plan.to;
@@ -213,7 +253,7 @@ export class EdgeBot {
     else if (this.phase === PH_LINE || this.phase === PH_APPROACH) {
       // Drops walk off; a wall-run hop may run off the edge straight onto the wall before its jump step.
       const walkOff = this.phase === PH_LINE && (this.link.kind === "drop" || this.link.kind === "wallrun") && !b.grounded && wasGrounded && !this.vaulting;
-      if (!b.grounded && ((b.events & (1 /* EV_JUMP */ | EV_ZIP)) || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.vaulting = false; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1, climbed: false }; }
+      if (!b.grounded && ((b.events & (1 /* EV_JUMP */ | EV_ZIP | EV_CHARGE)) || walkOff)) { this.phase = PH_AIR; this.airSteps = 0; this.vaulting = false; this.results[this.hop] = { jumpStep: s, landStep: -1, margin: 0, landRoof: -1, climbed: false }; }
       else if (this.vaulting) { if (this.legSteps > BOT.maxLegSteps) { this.fail = `leg timeout (hop ${this.hop})`; this.phase = PH_FAIL; } }
       else if (!b.grounded && wasGrounded && this.phase === PH_APPROACH) { this.fail = `ran off roof on approach (hop ${this.hop})`; this.phase = PH_FAIL; }
       else if (!b.grounded && this.legSteps > 60 && s > this.params[this.hop].jump + 13) { this.fail = `no takeoff (hop ${this.hop})`; this.phase = PH_FAIL; }
@@ -246,7 +286,8 @@ export class EdgeBot {
         else {
           this.hop++;
           this.legSteps = 0;
-          this.ropeDone = this.ropeAttached = this.autoReleased = this.climbed = false;
+          this.ropeDone = this.ropeAttached = this.autoReleased = this.climbed = this.pressed = false;
+          this.pressStep = -1;
           this.phase = this.hop < this.plan.links.length ? PH_APPROACH : PH_FINAL;
         }
       } else if (this.airSteps > BOT.maxAirSteps) { this.fail = `air timeout (hop ${this.hop})`; this.phase = PH_FAIL; }
@@ -268,4 +309,4 @@ export class EdgeBot {
   }
 }
 
-export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, jump: -1, release: -1, pace: 100, alt: 0, zip: false }));
+export const newParams = (n: number): HopParams[] => Array.from({ length: n }, () => ({ lat: NaN, jump: -1, release: -1, pace: 100, alt: 0, zip: false, leap: false }));

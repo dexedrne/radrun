@@ -4,9 +4,9 @@
 // Round 9 (docs/specs/2026-09-25-round9-movement.md §6.1): street swings carry a baked building anchor
 // (findAnchor from the takeoff point), alley steps up to +3.5 m are climbs (ledge grab), wall gaps are
 // wall-run hops.
-import { mulberry32 } from "../sim/math.ts";
+import { hash01, mulberry32 } from "../sim/math.ts";
 import { RUNNER, type Tuning } from "../sim/tuning.ts";
-import { CityIndex, type Adjacency, type CityModel, type Solid } from "../world/cityModel.ts";
+import { CityIndex, RIG0, type Adjacency, type CityModel, type Solid } from "../world/cityModel.ts";
 import { emptyAnchor, findAnchor, type AnchorHit } from "../world/cityQuery.ts";
 
 export const GRAPH = {
@@ -78,15 +78,41 @@ export const GRAPH = {
   wideUpDown: 1,
   /** The building's nearest point at most this far (horizontal) from the pivot (a tower on the crossing's corner). */
   wideReach: 26,
+  /**
+   * Round 12 leaps (docs/specs/2026-09-26-round12-spider-tag.md §7.1): a charged jump across a street or alley of at
+   * most leapGapMax m, leapDown..leapUp m of height change - the fallback before a zip (swing > leap > zip).
+   */
+  leapGapMax: 24,
+  leapUp: 6,
+  leapDown: 20,
+  /**
+   * ...and this share of the level and downhill street crossings (at most alleyHopMax up; picked by a hash of the two
+   * roof ids) tries the leap first: he mixes charged leaps into his swinging (spec target 10-25 % of crossings).
+   */
+  leapShare: 0.4,
+  /**
+   * Round 12 fix, the thief's cable swings: a street crossing under one of its own pair's cables (they hang >= 3 m under
+   * the lower roof, so never >= anchorMinAbove over his takeoff) drops off the edge, webs the cable once he is
+   * cablePress m under it, swings under it and, on the swept release step, zips up onto the far roof's rim (the swing
+   * alone can't lift him the >= 3 m over the cable onto that roof). The pivot is the cable point cableT of the way
+   * across (from his side); this share of the crossings with a cable (a hash of the two roof ids) try it first, the
+   * others after their building swings (before a leap or a zip).
+   */
+  cableT: [0.6] as readonly number[],
+  cablePress: [3.5] as readonly number[],
+  cableShare: 0.6,
+  /** ...and he stays on the cable at least this long (s) before the zip (the zip works for ~0.4 s of the swoop). */
+  cableHold: 0.2,
 } as const;
 
 /**
  * alley = jump across; climb (round 9) = jump at a higher roof, the sim's ledge grab + climb finish it;
  * street = web swing across a street on the link's baked building anchor (the spec's "swing"); drop (round 7)
  * = walk off onto a much lower roof; wallrun (round 9) = run along a wall-gap face into the notch; zip
- * (integration) = web zip from the edge up to the higher roof's near rim, then the ledge launch onto it.
+ * (integration) = web zip from the edge up to the higher roof's near rim, then the ledge launch onto it; leap
+ * (round 12, a street hop's or a tall climb's fallback, reported as its own kind) = a charged jump across.
  */
-export type HopKind = "alley" | "climb" | "street" | "drop" | "wallrun" | "zip";
+export type HopKind = "alley" | "climb" | "street" | "drop" | "wallrun" | "zip" | "leap";
 
 /** One roof-to-roof hop (axis-aligned). */
 export type Link = {
@@ -119,10 +145,15 @@ export type Link = {
   wall: number;
   face: number;
   side: 1 | -1;
+  /** Round 12: a street hop / tall climb that may fall back to a charged leap (gap and height in reach). */
+  leap: boolean;
 };
 
-/** A swing takeoff lateral (on the hop's cross axis) and the anchor findAnchor gives from there. */
-export type SwingOption = { lat: number; anchor: AnchorHit };
+/**
+ * A swing takeoff lateral (on the hop's cross axis) and the anchor findAnchor gives from there. Round 12 fix: `press`
+ * (a cable swing) = the web waits until he is this far under the anchor, and C is held on the rope for the slingshot.
+ */
+export type SwingOption = { lat: number; anchor: AnchorHit; press?: number };
 
 export type Junction = { roof: number; x: number; y: number; z: number };
 
@@ -147,8 +178,9 @@ function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k:
   const edge = e.axis === "x" ? (dir > 0 ? from.x1 : from.x0) : (dir > 0 ? from.z1 : from.z0);
   const far = e.axis === "x" ? (dir > 0 ? to.x0 : to.x1) : (dir > 0 ? to.z0 : to.z1);
   const dh = to.top - from.top;
-  const base = { from: fromId, to: toId, axis: e.axis, dir, edge, far, lo: e.lo, hi: e.hi, anchor: null, rim: null, swings: [], wall: -1, face: 0, side: 1 as const };
   const gap = Math.abs(far - edge);
+  const leap = gap <= GRAPH.leapGapMax && dh <= GRAPH.leapUp && dh >= -GRAPH.leapDown;
+  const base = { from: fromId, to: toId, axis: e.axis, dir, edge, far, lo: e.lo, hi: e.hi, anchor: null, rim: null, swings: [], wall: -1, face: 0, side: 1 as const, leap: false };
   // The near rim of `to`, straight across from the span's centre (zip target).
   const rim = emptyAnchor(), mid = (e.lo + e.hi) / 2;
   rim.solid = toId; rim.rim = true; rim.ay = rim.py = to.top;
@@ -246,12 +278,33 @@ function linkFrom(m: CityModel, e: Adjacency, fromId: number, idx: CityIndex, k:
     }
     wide.sort((p, q) => p.anchor.score - q.anchor.score || p.anchor.solid - q.anchor.solid);
     swings.unshift(...mids, ...wide.slice(0, GRAPH.wideOptions));
-    if (!swings.length && !zipOk) return null;
-    return { ...base, kind: "street", anchor: swings[0]?.anchor ?? null, rim: zipOk ? rim : null, swings };
+    // Round 12 fix: the cables of this street pair over his path (ends on its two faces, inside the span).
+    const cables: SwingOption[] = [];
+    const rigs = m.rigs ?? [];
+    for (let gi = 0; gi < rigs.length; gi++) {
+      const g = rigs[gi];
+      const ga = e.axis === "x" ? g.az : g.ax, gb = e.axis === "x" ? g.bz : g.bx;
+      const e0 = e.axis === "x" ? g.ax : g.az, e1 = e.axis === "x" ? g.bx : g.bz;
+      if (Math.abs(ga - gb) > 1e-6 || ga < e.lo + GRAPH.swingLatInset || ga > e.hi - GRAPH.swingLatInset) continue;
+      if (!((Math.abs(e0 - edge) < 0.01 && Math.abs(e1 - far) < 0.01) || (Math.abs(e1 - edge) < 0.01 && Math.abs(e0 - far) < 0.01))) continue;
+      const fromA = Math.abs(e0 - edge) < 0.01;
+      for (const tt of GRAPH.cableT) {
+        const t = fromA ? tt : 1 - tt;
+        const a = emptyAnchor();
+        a.solid = RIG0 + gi;
+        a.ax = a.px = g.ax + (g.bx - g.ax) * t; a.ay = a.py = g.ay + (g.by - g.ay) * t - 4 * g.sag * t * (1 - t); a.az = a.pz = g.az + (g.bz - g.az) * t;
+        for (const press of GRAPH.cablePress) cables.push({ lat: ga, anchor: a, press });
+      }
+    }
+    if (cables.length && zipOk) {
+      if (hash01(m.config?.seed ?? 7, fromId, toId, 0xcab1) < GRAPH.cableShare) swings.unshift(...cables); else swings.push(...cables);
+    }
+    if (!swings.length && !zipOk && !leap) return null;
+    return { ...base, kind: "street", anchor: swings[0]?.anchor ?? null, rim: zipOk ? rim : null, swings, leap };
   }
   if (dh <= -GRAPH.dropMin) return { ...base, kind: "drop" };
   // Round 10: a tall climb (run-up + ledge) keeps the zip onto the rim as its fallback.
-  if (dh > GRAPH.alleyHopMax) return { ...base, kind: "climb", rim: dh > GRAPH.climbJumpMax && zipOk ? rim : null };
+  if (dh > GRAPH.alleyHopMax) return { ...base, kind: "climb", rim: dh > GRAPH.climbJumpMax && zipOk ? rim : null, leap: dh > GRAPH.climbJumpMax && leap };
   return { ...base, kind: "alley" };
 }
 
@@ -264,7 +317,7 @@ function wallLinks(m: CityModel): Link[] {
     if (!a || !b || !a.landable || !b.landable) continue;
     const lo = g.axis === "x" ? Math.max(a.z0, b.z0) : Math.max(a.x0, b.x0);
     const hi = g.axis === "x" ? Math.min(a.z1, b.z1) : Math.min(a.x1, b.x1);
-    const common = { kind: "wallrun" as const, axis: g.axis, lo, hi, anchor: null, rim: null, swings: [], wall: g.wall, face: g.face, side: g.side };
+    const common = { kind: "wallrun" as const, axis: g.axis, lo, hi, anchor: null, rim: null, swings: [], wall: g.wall, face: g.face, side: g.side, leap: false };
     out.push({ ...common, from: g.a, to: g.b, dir: g.dir, edge: g.edge, far: g.far });
     out.push({ ...common, from: g.b, to: g.a, dir: g.dir > 0 ? -1 : 1, edge: g.far, far: g.edge });
   }

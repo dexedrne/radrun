@@ -17,21 +17,25 @@ import { DISTRICTS, DISTRICT_IDS, isDistrictId, type DistrictId } from "../src/w
 const PUBLIC = path.resolve(import.meta.dirname, "..", "public");
 const LEVELS = path.join(PUBLIC, "levels");
 
-export type Row = { label: string; target: string; caught: number; n: number; median: number; p25: number; p75: number; yoinks: number; pass: boolean | null };
+/** Round 12: falls per round, web presses with nothing ringed per minute (swing bots), yank catches. */
+export type Row = { label: string; target: string; caught: number; n: number; median: number; p25: number; p75: number; yoinks: number; pass: boolean | null; falls: number; noRingPerMin: number; yanks: number };
 
 const q = (xs: number[], f: number) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(f * xs.length))] : NaN);
 
-export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1, mutators = 0, district: DistrictId = "downtown"): { times: number[]; caught: number; yoinks: number } {
+export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1, mutators = 0, district: DistrictId = "downtown"): { times: number[]; caught: number; yoinks: number; falls: number; noRing: number; seconds: number; yanks: number } {
   const times: number[] = [];
-  let caught = 0, yoinks = 0;
+  let caught = 0, yoinks = 0, falls = 0, noRing = 0, seconds = 0, yanks = 0;
   const inp = emptyInput();
   for (let s = 0; s < n; s++) {
     const round = new Round({ model, index, pack, difficulty: d, params: table[d], tuning, chaser: "652", runner: "4764", seed: seed0 + s, countdown: false, mutators, district });
     const r = runBotRound(round, bot, inp);
-    if (r.caught) { caught++; times.push(r.time); if (r.kind === "yoink") yoinks++; }
+    if (r.caught) { caught++; times.push(r.time); if (r.kind === "yoink") yoinks++; if (r.kind === "yank") yanks++; }
+    falls += r.falls;
+    noRing += r.swing?.noRing ?? 0;
+    seconds += r.steps / 120;
   }
   times.sort((a, b) => a - b);
-  return { times, caught, yoinks };
+  return { times, caught, yoinks, falls, noRing, seconds, yanks };
 }
 
 export function balance(n: number, table: DifficultyTable, tuning: Tuning, model: CityModel, pack: Pack, only?: string, district: DistrictId = "downtown"): Row[] {
@@ -50,6 +54,10 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
     { label: "chill  swing", d: "chill", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "(info: forgiving)", check: () => true },
     { label: "normal swing", d: "normal", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "median 25-40 s", check: (c, m) => c > 0 && m >= 25 && m <= 40 },
     { label: "degen  swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true }, target: "50-95% caught, median 40-70 s", check: (c, m) => c < 0.95 * n && c >= 0.5 * n && m >= 40 && m <= 70 },
+    // Round 12 tech bot: the full kit plus the timing moves (perfect releases when he is above, zip pops, rebounds, the
+    // dive, yanks at him running away while they still reach) - skill pays, but still takes work. Banded (the spec's
+    // info target) so a miss shows.
+    { label: "degen  tech swing", d: "degen", bot: { kind: "swing", k: 1, yoink: true, moves: true, tech: true }, target: ">=80% caught, median 30-50 s", check: (c, m) => c >= 0.8 * n && m >= 30 && m <= 50 },
     { label: "chill  swing, no zip", d: "chill", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
     { label: "normal swing, no zip", d: "normal", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
     { label: "degen  swing, no zip", d: "degen", bot: { kind: "swing", k: 1, yoink: true }, target: "(info)", check: () => true },
@@ -57,7 +65,10 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
   return cfgs.filter(c => !only || c.label.includes(only)).map(c => {
     const r = runConfig(model, index, pack, tuning, table, c.d, c.bot, n, 1, 0, district);
     const med = q(r.times, 0.5);
-    return { label: c.label, target: c.target, caught: r.caught, n, median: med, p25: q(r.times, 0.25), p75: q(r.times, 0.75), yoinks: r.yoinks, pass: c.check(r.caught, med) };
+    return {
+      label: c.label, target: c.target, caught: r.caught, n, median: med, p25: q(r.times, 0.25), p75: q(r.times, 0.75), yoinks: r.yoinks, pass: c.check(r.caught, med),
+      falls: r.falls / n, noRingPerMin: r.seconds > 0 ? (60 * r.noRing) / r.seconds : 0, yanks: r.yanks,
+    };
   });
 }
 
@@ -86,7 +97,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`${id}: pack ${pack.hash} (${pack.junctions.length} junctions, ${pack.edges.length} edges)`);
     for (const r of balance(n, difficulty, player, model, pack, only, id)) {
       const pct = ((100 * r.caught) / r.n).toFixed(0).padStart(3);
-      console.log(`  ${r.label.padEnd(34)} caught ${pct}%  median ${isNaN(r.median) ? "  -  " : r.median.toFixed(1).padStart(5)} s  (p25 ${isNaN(r.p25) ? "-" : r.p25.toFixed(1)}, p75 ${isNaN(r.p75) ? "-" : r.p75.toFixed(1)})  yoinks ${r.yoinks}   target ${r.target}  ${r.pass ? "ok" : "MISS"}`);
+      const extra = r.label.includes("swing") ? `  falls ${r.falls.toFixed(2)}/round  no-ring webs ${r.noRingPerMin.toFixed(2)}/min  yanks ${r.yanks}` : "";
+      console.log(`  ${r.label.padEnd(34)} caught ${pct}%  median ${isNaN(r.median) ? "  -  " : r.median.toFixed(1).padStart(5)} s  (p25 ${isNaN(r.p25) ? "-" : r.p25.toFixed(1)}, p75 ${isNaN(r.p75) ? "-" : r.p75.toFixed(1)})  yoinks ${r.yoinks}${extra}   target ${r.target}  ${r.pass ? "ok" : "MISS"}`);
     }
   }
   console.log(`  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);

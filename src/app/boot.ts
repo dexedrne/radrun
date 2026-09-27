@@ -7,6 +7,7 @@ import { decodePack } from "../route/trackPack.ts";
 import { applyGeorgeJson } from "./george.config.ts";
 import { PAGE_DISTRICT, lv } from "./district.ts";
 import { TUNING_URL } from "../world/districts.ts";
+import { decorKeepOuts } from "../world/structures.ts";
 
 
 let game: Sandbox | null = null;
@@ -33,6 +34,9 @@ export function bootGame(): Promise<Sandbox> {
     applyGeorgeJson(tuningJson?.george, m => console.info(m));
     game = new Sandbox(model, player, camera);
     game.difficulty = difficulty;
+    // Round 12: what the ?tune structure sliders re-derive with (the district, its decor keep-outs).
+    game.district = PAGE_DISTRICT;
+    void getJson<unknown>(lv("decor.json")).then(d => { if (game && d) game.keepOut = decorKeepOuts(d); });
     return game;
   })();
   return booting;

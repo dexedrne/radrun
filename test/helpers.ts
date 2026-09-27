@@ -23,6 +23,7 @@ export function protoModel(): CityModel {
     wallGaps: [],
     junctionCandidates: [],
     spawn: { roofId: 0, x: 0, y: LEVEL.roofs[0].top + 0.9, z: 0, yaw: 0 },
+    rigs: [],
     hash: "proto",
   };
 }
@@ -97,4 +98,30 @@ export function tallBlocks(seed = 7, n = 4): CityModel {
     }
   }
   return deriveModel({ ...DEFAULT_CONFIG, seed, street: S, alley: A, building: B, autoHooks: false }, input as Solid[]);
+}
+
+/** Ids / numbers of canyonModel() (round 12). */
+export const CANYON = {
+  /** The street runs along +x between z = 18 and z = 40; roofs 50 m on both sides (x 0..200). */
+  streetZ0: 18,
+  streetZ1: 40,
+  top: 50,
+  /** Cables across the street (x, height): rig i = CABLES[i]. */
+  cables: [[30, 42], [60, 30], [90, 42], [120, 30]] as [number, number][],
+  /** Gantry: x 140..141, bottom 14, top 15.2. Skybridge: x 160..164, bottom 20, top 23.5. */
+  gantry: 2,
+  bridge: 3,
+} as const;
+
+/**
+ * Round 12 synthetic canyon (spec §11.3): a 22 m street between two 50 m roofs, hand-placed cables across it, a sign
+ * gantry and a skybridge (fixture solids appended after the roofs, like the deriver does). Never runs the deriver.
+ */
+export function canyonModel(): CityModel {
+  const input: Omit<Solid, "id">[] = [roof(0, 0, 200, 18, 50), roof(0, 40, 200, 58, 50)];
+  const m = deriveModel({ ...DEFAULT_CONFIG, autoHooks: false }, input as Solid[]);
+  m.solids.push({ id: 2, kind: "fixture", sub: "gantry", landable: true, x0: 140, z0: 18, x1: 141, z1: 40, top: 15.2, y0: 14 });
+  m.solids.push({ id: 3, kind: "fixture", sub: "skybridge", landable: true, x0: 160, z0: 18, x1: 164, z1: 40, top: 23.5, y0: 20 });
+  m.rigs = CANYON.cables.map(([x, h], id) => ({ id, kind: "cable" as const, ax: x, ay: h, az: 18, bx: x, by: h, bz: 40, sag: 0.25 }));
+  return m;
 }

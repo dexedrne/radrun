@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { generate, DEFAULT_CONFIG, STAND_NODE } from "../src/world/generate.ts";
 import { toPrefab } from "../src/world/toPrefab.ts";
-import { modelFromCityPrefab } from "../src/world/level.ts";
+import { modelFromCityPrefab, structureInput } from "../src/world/level.ts";
 import { deriveModel, lintModel, propHost, RULES } from "../src/world/derive.ts";
 import { prefabBatchStats } from "../src/world/fromPrefab.ts";
 import type { CityModel, Solid } from "../src/world/cityModel.ts";
@@ -15,7 +15,8 @@ const read = (f: string) => JSON.parse(fs.readFileSync(new URL(`../public/levels
 
 test("committed city.json lints clean and matches city.model.json", () => {
   const city = read("city.json");
-  const { model } = modelFromCityPrefab(city);
+  // (Round 12: npm run level derives the structures from the district's knobs and decor keep-outs.)
+  const { model } = modelFromCityPrefab(city, structureInput("downtown", read("decor.json")));
   const lint = lintModel(model);
   assert.deepEqual(lint.errors, []);
   const committed: CityModel = read("city.model.json");

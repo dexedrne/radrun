@@ -8,7 +8,9 @@
 // tall solids near every street edge, runnable roofs, solid rooftop props, wall gaps and no hook data.
 import { Fnv1a, hash01 } from "../sim/math.ts";
 export { hash01 };
-import type { Adjacency, CityConfig, CityModel, Solid, WallGap } from "./cityModel.ts";
+import type { Adjacency, CityConfig, CityModel, Rig, Solid, WallGap } from "./cityModel.ts";
+import type { StructureKnobs } from "../sim/tuning.ts";
+import { deriveStructures, lintStructures, type KeepOut } from "./structures.ts";
 
 /** Gap classes for facing roofs. */
 export const ALLEY_MAX_GAP = 6;
@@ -118,7 +120,7 @@ export function deriveWallGaps(solids: Solid[], adjacency: Adjacency[]): WallGap
       const fb = side < 0 ? (X ? b.z1 : b.x1) : (X ? b.z0 : b.x0);
       if (Math.abs(face - fb) > 0.01) continue;
       for (const w of solids) {
-        if (w.kind === "prop" || w.id === a.id || w.id === b.id) continue;
+        if (w.kind === "prop" || w.kind === "fixture" || w.id === a.id || w.id === b.id) continue;
         const wface = side < 0 ? (X ? w.z0 : w.x0) : (X ? w.z1 : w.x1);
         const t0 = X ? w.x0 : w.z0, t1 = X ? w.x1 : w.z1;
         if (Math.abs(wface - face) > 0.01) continue;
@@ -132,21 +134,34 @@ export function deriveWallGaps(solids: Solid[], adjacency: Adjacency[]): WallGap
   return out;
 }
 
-export function modelHash(m: Pick<CityModel, "solids">): string {
+/** Round 12: y0 / sub / rigs are hashed only when present, so a structure-free model hashes as before. */
+export function modelHash(m: Pick<CityModel, "solids"> & { rigs?: Rig[] }): string {
   const h = new Fnv1a();
-  for (const s of m.solids) h.i32(s.id).str(s.kind).i32(s.landable ? 1 : 0).f64(s.x0).f64(s.z0).f64(s.x1).f64(s.z1).f64(s.top);
+  for (const s of m.solids) {
+    h.i32(s.id).str(s.kind).i32(s.landable ? 1 : 0).f64(s.x0).f64(s.z0).f64(s.x1).f64(s.z1).f64(s.top);
+    if (s.y0 !== undefined) h.f64(s.y0);
+    if (s.sub !== undefined) h.str(s.sub);
+  }
+  for (const g of m.rigs ?? []) h.i32(g.id).f64(g.ax).f64(g.ay).f64(g.az).f64(g.bx).f64(g.by).f64(g.bz).f64(g.sag);
   return h.hex();
 }
 
+/** Round 12: the structure derivation's inputs (tools/level.ts: the district's knobs + decor keep-outs). */
+export type StructureInput = { knobs: StructureKnobs; keepOut: KeepOut[] };
+
 const q = (v: number) => Math.round(v * 1000) / 1000;
 
-/** Solids (ids reassigned in order) -> the full CityModel. */
-export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
-  const solids = input.map((s, id) => ({ ...s, id }));
+/**
+ * Solids (ids reassigned in order) -> the full CityModel. Round 12: with `structures`, the derived fixtures are
+ * appended after the input solids (their ids never move the city.json ones) and the cables become `rigs`. Any
+ * fixtures already in the input (a model re-derived from itself) are dropped first.
+ */
+export function deriveModel(config: CityConfig, input: Solid[], structures?: StructureInput): CityModel {
+  const solids = input.filter(s => s.kind !== "fixture").map((s, id) => ({ ...s, id }));
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   for (const s of solids) { x0 = Math.min(x0, s.x0); z0 = Math.min(z0, s.z0); x1 = Math.max(x1, s.x1); z1 = Math.max(z1, s.z1); }
-  // Props (G3) never take part in adjacency, junctions, spawn or lowestRoof.
-  const main = solids.filter(s => s.kind !== "prop");
+  // Props (G3) and round 12 fixtures never take part in adjacency, junctions, spawn or lowestRoof.
+  const main = solids.filter(s => s.kind !== "prop" && s.kind !== "fixture");
   const landable = main.filter(s => s.landable);
   const lowestRoof = Math.min(...landable.map(s => s.top));
   const adjacency = facingPairs(main);
@@ -201,8 +216,14 @@ export function deriveModel(config: CityConfig, input: Solid[]): CityModel {
     wallGaps,
     junctionCandidates,
     spawn,
+    rigs: [],
     hash: "",
   };
+  if (structures) {
+    const d = deriveStructures(solids, adjacency, structures.knobs, structures.keepOut, config?.seed ?? 7, spawnRoof.id);
+    for (const f of d.fixtures) solids.push({ ...f, id: solids.length });
+    model.rigs = d.rigs.map((g, id) => ({ ...g, id }));
+  }
   model.hash = modelHash(model);
   return model;
 }
@@ -236,12 +257,12 @@ export function streetEdgePoints(solids: Solid[], adjacency: Adjacency[], wallGa
 
 /** Does solid s give an anchor for edge point p (G1)? Props never count. */
 export function covers(s: Solid, p: EdgePoint, rise: number, dist: number): boolean {
-  return s.kind !== "prop" && s.id !== p.roof && s.top >= p.top + rise - EPS && footDist(p.x, p.z, s) <= dist + EPS;
+  return s.kind !== "prop" && s.kind !== "fixture" && s.id !== p.roof && s.top >= p.top + rise - EPS && footDist(p.x, p.z, s) <= dist + EPS;
 }
 
 /** Edge points with no anchor solid (G1). */
 export function uncoveredPoints(solids: Solid[], points: EdgePoint[], rise: number, dist: number): EdgePoint[] {
-  const tall = solids.filter(s => s.kind !== "prop");
+  const tall = solids.filter(s => s.kind !== "prop" && s.kind !== "fixture");
   return points.filter(p => !tall.some(s => covers(s, p, rise, dist)));
 }
 
@@ -272,7 +293,7 @@ export function lintModel(m: CityModel): LintResult {
 
   // G8: unrotated ground-rooted boxes (structural), non-degenerate, non-prop footprints never overlap.
   for (const s of S) if (!(s.x1 > s.x0 && s.z1 > s.z0 && s.top > 0)) errors.push(`G8: solid ${s.id} is degenerate`);
-  const main = S.filter(s => s.kind !== "prop");
+  const main = S.filter(s => s.kind !== "prop" && s.kind !== "fixture");
   for (let i = 0; i < main.length; i++) for (let j = i + 1; j < main.length; j++) {
     const a = main[i], b = main[j];
     const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), oz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0);
@@ -328,7 +349,8 @@ export function lintModel(m: CityModel): LintResult {
   const isProp = (id: number) => S[id]?.kind === "prop";
   if (m.junctionCandidates.some(isProp)) errors.push("G3: a prop is a junction candidate");
   if (isProp(m.spawn.roofId)) errors.push("G3: the spawn roof is a prop");
-  if (roofs.length && m.lowestRoof !== Math.min(...S.filter(s => s.landable && s.kind !== "prop").map(s => s.top))) errors.push("G3: lowestRoof counts a prop");
+  if (roofs.length && m.lowestRoof !== Math.min(...S.filter(s => s.landable && s.kind !== "prop" && s.kind !== "fixture").map(s => s.top))) errors.push("G3: lowestRoof counts a prop");
+  if (m.junctionCandidates.some(id => S[id]?.kind === "fixture")) errors.push("G9: a fixture is a junction candidate");
 
   // G4: wall gaps.
   const gaps = m.wallGaps ?? [];
@@ -371,11 +393,17 @@ export function lintModel(m: CityModel): LintResult {
     }
   }
 
+  // G9-G12: round 12 structures (world/structures.ts).
+  const st = lintStructures(m);
+  errors.push(...st.errors);
+  warnings.push(...st.warnings);
+
   const tops = roofs.map(s => s.top);
   return {
     errors,
     warnings,
     stats: {
+      ...st.stats,
       solids: S.length,
       roofs: roofs.length,
       towers: towers.length,

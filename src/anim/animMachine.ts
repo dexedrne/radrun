@@ -42,6 +42,16 @@ export const A_VAULT = 1024;
 export const A_SLIDE = 2048;
 export const A_ROLL = 4096;
 export const A_BIGLAND = 8192;
+/**
+ * Round 12 (docs/specs/2026-09-26-round12-spider-tag.md §7.3), no new clips: a zip starts (the stretched sprint pose,
+ * arm up along the web), a charge starts (Big_Land frozen at its deepest crouch), a charged leap (Regular_Jump at 0.8x
+ * with a tuck), a zip pop (Regular_Jump from takeoff at 1.4x), a dive (Leap_of_Faith into Fall_1).
+ */
+export const A_ZIP = 16384;
+export const A_CHARGE = 32768;
+export const A_LEAP = 65536;
+export const A_POP = 131072;
+export const A_DIVE = 262144;
 
 /** Scripted beats that override locomotion (countdown wave, taunt, catch, escape, results). */
 export type Beat = "" | "wave" | "taunt" | "cheer" | "flop" | "waltz" | "fish" | "rug" | "idle";
@@ -68,6 +78,10 @@ export type AnimInput = {
   slide?: boolean;
   /** Round 9 wall run: 1 = the wall is on his left, -1 = on his right (picks Wall_Run / Wall_Run_Mirror). */
   wallSide?: number;
+  /** Round 12 states: zipping (or yanking), charging (C held), diving. */
+  zip?: boolean;
+  charge?: boolean;
+  dive?: boolean;
 };
 
 export type AnimCmd =
@@ -163,6 +177,10 @@ const RULE = {
   rollClipFor: 0.45,
   grabLead: 0.2,
   vaultClipRate: 1.4,
+  /** Round 12: the leap's and the pop's Regular_Jump rates, the zip pose's sprint rate (a near-freeze). */
+  leapRate: 0.8,
+  popRate: 1.4,
+  zipRate: 0.15,
 } as const;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -372,6 +390,39 @@ export class AnimMachine {
     const [loco, scale] = this.locomotion(i);
     const air = airNow;
     const ev = i.events;
+    // Round 12 poses (before the older rules: they own the body while they last).
+    if (i.zip) {
+      // Zip / yank: the stretched sprint, nearly frozen (the view raises the arm along the web).
+      if (this.special !== "zip") {
+        const c = this.pick(CLIP.sprint);
+        this.shot = ""; this.special = "zip"; this.ff = false; this.clip = this.base = c;
+        return c ? { kind: "force", clip: c, fade: 0.08, scale: RULE.zipRate } : null;
+      }
+      return null;
+    }
+    if (this.special === "zip") { this.special = ""; if (air && !(ev & (A_POP | A_LEAP | A_WALLRUN | A_ATTACH | A_LEDGE))) return this.air(0.1); }
+    if (ev & A_POP) return this.air(0.06, true, RULE.popRate);
+    if (ev & A_LEAP) return this.air(0.08, true, RULE.leapRate);
+    if ((ev & A_DIVE) || (i.dive && this.special !== "dive" && air)) {
+      // Dive: the swan dive into the belly-down fall (clips cut as air poses).
+      const c = this.startShot(CLIP.leap, this.pick(CLIP.fall), 0, 0.1);
+      if (c) { this.special = "dive"; this.ff = false; return c; }
+    }
+    if (this.special === "dive") {
+      if (i.dive && air) return null;
+      this.special = "";
+      if (air) return this.air(0.15);
+    }
+    if (i.charge && i.grounded && !i.slide && this.special !== "charge" && this.clips.has(CLIP.bigLand)) {
+      // Charging on a roof: Big_Land frozen at its deepest crouch, feet planted.
+      const c = this.startShot(CLIP.bigLand, loco, 0, 0.08, true);
+      if (c && c.kind === "shot") { this.special = "charge"; return { ...c, freezeAt: RULE.slideFreeze }; }
+    }
+    if (this.special === "charge") {
+      if (i.charge && i.grounded && !i.slide && !(ev & A_JUMP)) return null;
+      this.special = "";
+      if (!air && !(ev & A_JUMP)) return this.toLoco(i, 0.12);
+    }
     // Discrete events (priority: bonk > attach > ledge > climb > wall jump > wall run > release > vault >
     // stumble / roll / land > slide > jump).
     if (ev & A_BONK) return air ? this.air(RULE.airFade) : this.toLoco(i, 0.1);

@@ -6,7 +6,8 @@
 // Aim = horizontal unit vector chest -> runner chest. yoink: press web on each step after one whose
 // snapshot had ringId = RUNNER.
 // The swinger (SwingBot, round 3) plays with the REAL player sim instead: see below.
-import { chaseDist, emptyZipAim, pickRing, zipTarget, EV_BONK, EV_LAND, RING_RUNNER, type InputFrame } from "../sim/player.ts";
+import { chargeLevel, chaseDist, emptyZipAim, pickRing, zipAim, CHEST, EV_BONK, EV_LAND, EV_PERFECT, EV_YANK, RING_RUNNER, ZIP_RIM, ZIP_TOP, type InputFrame } from "../sim/player.ts";
+import { footGap as rectGap } from "../world/derive.ts";
 import { emptyAnchor } from "../world/cityQuery.ts";
 import { DT } from "../sim/tuning.ts";
 import { Rand, type Vec3 } from "../sim/math.ts";
@@ -17,8 +18,13 @@ import type { Kinematic, Round } from "./round.ts";
 
 export type BotKind = "follow" | "camper" | "swing";
 /** k: follower speed factor (follow / camper); ignored by the swinger. */
-/** moves (swing bot): also double-jumps off drops and web-zips toward him (tools/balance "+moves" rows). */
-export type BotOptions = { kind: BotKind; k: number; yoink: boolean; moves?: boolean };
+/**
+ * moves (swing bot): the full kit - double jumps, slides, round 12's straight zip, charged leaps and the yank, and it
+ * swings to the auto-release (tools/balance's banded rows). tech (round 12): also the timing moves - it lets go in the
+ * perfect window when he is above it, turns a bonk into a rebound kick, dives at him when he is well below, and
+ * yanks him running away while the yank still reaches.
+ */
+export type BotOptions = { kind: BotKind; k: number; yoink: boolean; moves?: boolean; tech?: boolean };
 
 type TrailPt = { x: number; y: number; z: number; grounded: boolean; phase: number; roofId: number; speed: number };
 
@@ -209,6 +215,24 @@ export const SWING = {
   cooldown: 6,
   /** Round 9 (moves): climb-zip toward him when he is above and his predicted spot is within this (horizontal m). */
   climbReach: 40,
+  /**
+   * Round 12 (moves): a charged leap onto his roof when it is at most leapAcross m away and leapUp m higher; C is held
+   * from leapHold m before the edge and let go at the edge (or at full charge within leapLate m of it).
+   */
+  leapAcross: 24,
+  leapUp: 6,
+  leapHold: 6.5,
+  leapLate: 2.5,
+  /** Round 12 fix, the tech bot: it lets go in the perfect window (its timed lift) only when he is more than this above it. */
+  perfectBelow: 2,
+  /** ...and it yanks him running away when he is within this share of the yank's reach against his speed away. */
+  yankReach: 0.8,
+  /** ...and it dives when falling with him more than diveAbove m below and within diveReach m across, until diveStop m over him. */
+  diveAbove: 10,
+  diveStop: 5,
+  diveReach: 40,
+  /** Round 12: falling with nothing ringed, zip along the lane / at him pitched this much up (a sine). */
+  airZipUp: 0.35,
   /** Red ring -> click reaction, steps (uniform). */
   reactMin: 12,
   reactMax: 24,
@@ -237,7 +261,11 @@ export const SWING = {
   escapeFor: 240,
 };
 
-export type SwingStats = { swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number; stalls: number };
+export type SwingStats = {
+  swings: number; bonks: number; directSteps: number; laneSteps: number; laneSwitches: number; stalls: number;
+  /** Round 12: web presses with nothing ringed, zips, leaps, yanks, perfect releases. */
+  noRing: number; zips: number; leaps: number; yanks: number; perfect: number;
+};
 
 const sign = (v: number) => (v < 0 ? -1 : 1);
 const GAP_STREET = 0;
@@ -259,7 +287,7 @@ export class SwingBot {
   red = 0;
   relAhead: number = SWING.releaseAhead;
   readonly T: Vec3 = { x: 0, y: 0, z: 0 };
-  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0 };
+  readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0, noRing: 0, zips: 0, leaps: 0, yanks: 0, perfect: 0 };
   private pose: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
   private wasRope = false;
   /** Steps left sliding along a wall side (tower in the way), and that side's axis. */
@@ -284,12 +312,19 @@ export class SwingBot {
 
   /** Use the double jump + web zip + slide (balance rows only; the default bot plays the classic moves). */
   readonly moves: boolean;
+  /** Round 12 tech bot: lets go in the perfect window. */
+  readonly tech: boolean;
   private readonly za = emptyZipAim();
   /** The anchor of the last ring() query. */
   private readonly anc = emptyAnchor();
+  /** Round 12 leap: steps C has been held (0 = not leaping). */
+  private leap = 0;
+  /** Debug: the rule behind the last let-go of the rope (scratch diagnostics). */
+  letGo = "";
 
-  constructor(round: Round, seed: number, moves = false) {
+  constructor(round: Round, seed: number, moves = false, tech = false) {
     this.moves = moves;
+    this.tech = tech;
     this.lanes = streetLanes(round.model);
     this.vertigo = !!round.model.config?.vertigo;
     this.rng = new Rand((seed ^ 0x51f15eed) >>> 0);
@@ -564,6 +599,7 @@ export class SwingBot {
         const h = b.ropeP;
         const past = (P.x - h.x) * tx + (P.z - h.z) * tz;
         held = !(d < SWING.dropRope || this.upTo(round) || (past >= 0 && b.v.y >= SWING.releaseVy && T.y <= P.y + SWING.climbTo));
+        if (!held) this.letGo = d < SWING.dropRope ? "direct:near" : this.upTo(round) ? "direct:up" : "direct:past";
       } else if (!b.grounded) {
         if (this.cool <= 0 && this.rescue(round, inp)) held = true;
         else this.setAim(inp, r.p.x - P.x, r.p.z - P.z);
@@ -594,7 +630,12 @@ export class SwingBot {
         const past = (pa - ha) * this.dir;
         const hs = Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z);
         const high = P.y > T.y + SWING.highAbove;
-        held = !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
+        // Round 12: the full-kit bot holds on to the auto-release like a Normal human; the tech bot lets go in the
+        // perfect window. The classic bot keeps round 11's early release.
+        held = this.moves
+          ? !(this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && T.y > P.y + SWING.perfectBelow && this.perfect(round)))
+          : !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
+        if (!held) this.letGo = this.upTo(round) ? "lane:up" : high ? "lane:high" : "lane:other";
       } else {
         this.setMove(inp, dx + lx, dz + lz);
         if (this.cool <= 0 && b.ledgeMode === 0) {
@@ -612,22 +653,27 @@ export class SwingBot {
     if (b.ropeSolid >= 0) {
       const sp = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
       this.slowRope = sp < SWING.ropeStall ? this.slowRope + 1 : 0;
-      if (this.slowRope > SWING.ropeStallFor || stall) { held = false; this.slowRope = 0; }
+      if (this.slowRope > SWING.ropeStallFor || stall) { held = false; this.slowRope = 0; this.letGo = "stall"; }
     } else this.slowRope = 0;
     // Round 9 (moves): he is up on the roofs and a ledge toward him is in zip reach - let go now, zip next step.
     const climb = this.moves && this.climbZip(round, inp);
-    if (climb) held = false;
+    if (climb) { held = false; this.letGo = "climb"; }
     if (this.held && !held && b.ropeSolid >= 0) {
       this.cool = SWING.cooldown;
       this.relAhead = SWING.releaseAhead + SWING.releaseNoise * (this.rng.next() * 2 - 1);
     }
+    const press = held && !this.held;
     this.held = held;
     inp.webHeld = held || zip;
-    inp.webPressed = zip || (held && !this.held);
+    inp.webPressed = zip || press;
     inp.zipPressed = false;
     inp.slidePressed = false;
+    inp.slideHeld = false;
+    inp.aimY = 0;
     if (this.moves) this.useMoves(round, inp, d, held);
-    if (climb) { inp.zipPressed = b.ropeSolid < 0; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false; this.setAim(inp, this.zx, this.zz); }
+    if (climb) { inp.zipPressed = b.ropeSolid < 0; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false; this.setAim(inp, this.zx, this.zz); inp.aimY = this.zy; }
+    if (this.tech) this.techMoves(round, inp);
+    if (inp.webPressed && this.ring(round, inp) < 0 && b.ropeSolid < 0) this.stats.noRing++;
     // YOINK: a red ring held for the reaction time -> click.
     if (this.ring(round, inp) === RING_RUNNER) {
       if (++this.red >= this.react) { inp.webPressed = true; inp.webHeld = true; }
@@ -635,9 +681,51 @@ export class SwingBot {
     return null;
   }
 
-  /** Round 9 climb-zip aim (horizontal). */
+  /** Round 9 climb-zip aim (horizontal) and, round 12, its pitch (the sine the sim's zipAim reads). */
   private zx = 1;
   private zz = 0;
+  private zy = 0;
+
+  /** Round 12: the pitch sine that makes the sim's zip (lift included) go along the elevation sine `s`. */
+  private pitchFor(round: Round, s: number): number {
+    const sl = round.tuning.zipLift, cl = Math.sqrt(Math.max(0, 1 - sl * sl)), c = Math.sqrt(Math.max(0, 1 - s * s));
+    return s * cl - c * sl;
+  }
+
+  /** Aim (yaw + pitch) at a point from the chest. */
+  private aimAt(round: Round, inp: InputFrame, x: number, y: number, z: number): void {
+    const P = round.player.p;
+    const dx = x - P.x, dy = y - (P.y + CHEST), dz = z - P.z, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    this.setAim(inp, dx, dz);
+    inp.aimY = l > 1e-6 ? this.pitchFor(round, dy / l) : 0;
+  }
+
+  /**
+   * Round 12 fix, the tech bot's other timing moves: Jump right after a head-on bonk (the rebound kick instead of the
+   * stop) and the dive at him when he is well below. (Not the zip pop: popping off its zips made it catch less - the
+   * rim's ledge pop carries it on faster - so skill here is knowing when not to.)
+   */
+  private techMoves(round: Round, inp: InputFrame): void {
+    const b = round.player, k = round.tuning, P = b.p, T = this.T;
+    if (b.bonkT > 0 && b.rebT <= k.reboundWindow && !b.grounded) { inp.jumpPressed = true; return; }
+    // The dive: falling toward him when he is well below and not far off (C held until it is nearly down to him).
+    if (k.dive && !b.grounded && b.ropeSolid < 0 && !b.zipOn && !b.yankOn && b.wallMode === 0 && b.ledgeMode === 0 && !inp.webPressed) {
+      const hx = T.x - P.x, hz = T.z - P.z, below = P.y - T.y;
+      if (below > (b.diveOn ? SWING.diveStop : SWING.diveAbove) && hx * hx + hz * hz < SWING.diveReach * SWING.diveReach && (b.diveOn || b.v.y < 0)) {
+        inp.slideHeld = true;
+        inp.slidePressed = !b.diveOn;
+      }
+    }
+  }
+
+  /** Round 12 tech bot: on the rope, rising on the forward side, past swingPerfectCos (the perfect window). */
+  private perfect(round: Round): boolean {
+    const b = round.player, p = b.p, P = b.ropeP, v = b.v, k = round.tuning;
+    if (!b.ropeTaut || v.y <= 0) return false;
+    const rx = p.x - P.x, ry = p.y - P.y, rz = p.z - P.z;
+    const rl = Math.sqrt(rx * rx + ry * ry + rz * rz), rh = Math.sqrt(rx * rx + rz * rz), vh = Math.sqrt(v.x * v.x + v.z * v.z);
+    return rl > 1e-6 && rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh && -ry / rl <= k.swingPerfectCos;
+  }
 
   /**
    * Round 9 (moves): airborne or swinging while he is more than climbTo m above - the ledge zip toward his
@@ -645,37 +733,86 @@ export class SwingBot {
    */
   private climbZip(round: Round, inp: InputFrame): boolean {
     const b = round.player, P = b.p, T = this.T;
-    if (b.grounded || b.zipOn || b.zipCd > 0 || b.ledgeMode > 0 || T.y <= P.y + SWING.climbTo) return false;
+    // (Round 12: and a zip left this airtime - letting go of the rope with none left dropped it into the street.)
+    if (b.grounded || b.zipOn || b.zipCd > 0 || Math.min(b.zipLeft, round.tuning.zipCharges) <= 0 || b.ledgeMode > 0 || T.y <= P.y + SWING.climbTo) return false;
     const tx = T.x - P.x, tz = T.z - P.z, tl = Math.sqrt(tx * tx + tz * tz);
     if (tl < 1e-6 || tl > SWING.climbReach) return false;
-    const ax = inp.aimX, az = inp.aimZ;
-    inp.aimX = tx / tl; inp.aimZ = tz / tl;
+    const ax = inp.aimX, az = inp.aimZ, ay = inp.aimY;
+    this.aimAt(round, inp, T.x, T.y + 0.5, T.z);
+    const zy = inp.aimY;
     this.anc.solid = -1;
     const ring = pickRing(b, inp, round.tuning, round.world, this.anc);
-    const k = zipTarget(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimZ, round.tuning, round.world, this.za);
-    inp.aimX = ax; inp.aimZ = az;
-    if (k !== 2 || this.za.y < P.y + 1) return false;
-    this.zx = tx / tl; this.zz = tz / tl;
+    const k = zipAim(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimY, inp.aimZ, round.tuning, round.world, this.za);
+    inp.aimX = ax; inp.aimZ = az; inp.aimY = ay;
+    if ((k !== ZIP_RIM && k !== ZIP_TOP) || this.za.y < P.y + 1) return false;
+    this.zx = tx / tl; this.zz = tz / tl; this.zy = zy;
     return true;
   }
 
   /**
-   * Double jump when dropping with no roof close below (or a wall kick when a facade is in grace); web-zip
-   * toward him (ringed anchor or a ledge) from a roof when he is on another roof 8+ m away and the zip is
-   * ready; slide on landing fast (keeps the speed).
+   * Double jump when dropping with no roof close below (or a wall kick when a facade is in grace); round 12: a straight
+   * zip at him from a roof when he is on another roof 8+ m away, or along the way when falling with nothing ringed; a
+   * charged leap onto his roof when it is close enough (he is <= leapAcross m across, <= leapUp m up); the yank when he
+   * is in yank range and not running away; slide on landing fast (keeps the speed).
    */
   private useMoves(round: Round, inp: InputFrame, d: number, held: boolean): void {
-    const b = round.player, P = b.p, r = round.runner;
+    const b = round.player, P = b.p, r = round.runner, k = round.tuning, T = this.T;
+    // The yank: in range (the sim's own check this step) and he is coming toward / across (not running straight away).
+    if (b.yankOk && !b.zipOn && !b.yankOn) {
+      const pr = round.prevRunner, rvx = r.p.x - pr.x, rvz = r.p.z - pr.z;
+      const ex = P.x - r.p.x, ez = P.z - r.p.z, el = Math.sqrt(ex * ex + ez * ez) || 1, rs = Math.sqrt(rvx * rvx + rvz * rvz);
+      // Round 12 fix, the tech bot also yanks him running away when the yank still gets there (its reach against his
+      // speed away from it, with a margin).
+      const away = -(rvx * ex + rvz * ez) / el / k.dt;
+      const reach = this.tech && el <= (k.yankSpeed - (away > 0 ? away : 0)) * k.yankTime * SWING.yankReach;
+      if ((rvx * ex + rvz * ez) / el >= -0.5 * rs || reach) {
+        this.aimAt(round, inp, r.p.x, r.p.y, r.p.z);
+        inp.zipPressed = true; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false;
+        this.leap = 0;
+        return;
+      }
+    }
+    // The charged leap (grounded, his roof close across and not much higher).
+    if (b.grounded && r.roofId >= 0 && r.roofId !== b.roofId && k.charge) {
+      const rs = round.model.solids[r.roofId], mine = round.model.solids[b.roofId];
+      if (mine && rs) {
+        const dx = T.x - P.x, dz = T.z - P.z, dh = rs.top - mine.top, gap = rectGap(mine, rs);
+        if (gap > 1 && gap <= SWING.leapAcross && dh <= SWING.leapUp && dh >= -20) {
+          this.setMove(inp, dx, dz);
+          const e = this.edge(round, inp.moveX, inp.moveZ);
+          if (e.dist <= SWING.leapHold) {
+            const c = chargeLevel(b.chargeT, k);
+            const go = this.leap > 0 && (e.dist < SWING.edgeAt || (c >= 1 && e.dist < SWING.leapLate));
+            inp.jumpPressed = false; inp.webPressed = false; inp.webHeld = false;
+            this.setAim(inp, dx, dz);
+            if (go) { inp.slideHeld = false; this.leap = 0; this.stats.leaps++; return; }
+            inp.slideHeld = true;
+            inp.slidePressed = this.leap === 0;
+            this.leap++;
+            return;
+          }
+        }
+      }
+    }
+    this.leap = 0;
     if (!b.grounded && b.ropeSolid < 0 && !b.zipOn && b.ledgeMode === 0 && b.airJumps > 0 && b.v.y < -3 && !held) {
       if (round.index.groundBelow(P.x, P.z, P.y) < P.y - 4) inp.jumpPressed = true;
     }
-    if (b.grounded && (b.events & EV_LAND) && Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z) >= round.tuning.slideMinSpeed + 1) inp.slidePressed = true;
-    if (b.grounded && !b.zipOn && b.zipCd <= 0 && d > 8 && r.roofId !== b.roofId) {
+    if (b.grounded && (b.events & EV_LAND) && Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z) >= k.slideMinSpeed + 1) inp.slidePressed = true;
+    const ready = !b.zipOn && b.zipCd <= 0 && Math.min(b.zipLeft, k.zipCharges) > 0;
+    if (b.grounded && ready && d > 8 && r.roofId !== b.roofId) {
       const ax = this.ax, az = this.az;
-      this.setAim(inp, this.T.x - P.x, this.T.z - P.z);
+      this.aimAt(round, inp, T.x, T.y + 0.5, T.z);
       const ring = this.ring(round, inp);
-      if (zipTarget(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimZ, round.tuning, round.world, this.za) > 0) inp.zipPressed = true;
-      else this.setAim(inp, ax, az);
+      if (zipAim(b, ring >= 0 ? this.anc : null, inp.aimX, inp.aimY, inp.aimZ, k, round.world, this.za) > 0) { inp.zipPressed = true; this.stats.zips++; }
+      else { this.setAim(inp, ax, az); inp.aimY = 0; }
+    } else if (!b.grounded && ready && b.ropeSolid < 0 && b.wallMode === 0 && b.ledgeMode === 0 && b.v.y < 0 && !held && this.ring(round, inp) < 0) {
+      // Falling with nothing ringed: a zip along the way (pitched up), else at him.
+      const ax = this.ax, az = this.az;
+      inp.aimY = this.pitchFor(round, SWING.airZipUp);
+      let ok = zipAim(b, null, inp.aimX, inp.aimY, inp.aimZ, k, round.world, this.za) > 0;
+      if (!ok) { this.aimAt(round, inp, T.x, T.y + 2, T.z); ok = zipAim(b, null, inp.aimX, inp.aimY, inp.aimZ, k, round.world, this.za) > 0; }
+      if (ok) { inp.zipPressed = true; this.stats.zips++; } else { this.setAim(inp, ax, az); inp.aimY = 0; }
     }
   }
 
@@ -683,6 +820,8 @@ export class SwingBot {
     const b = round.player;
     if (b.ropeSolid >= 0 && !this.wasRope) this.stats.swings++;
     if (b.events & EV_BONK) this.stats.bonks++;
+    if (b.events & EV_YANK) this.stats.yanks++;
+    if (b.events & EV_PERFECT) this.stats.perfect++;
     this.wasRope = b.ropeSolid >= 0;
   }
 }
@@ -691,7 +830,7 @@ export type BotRun = { caught: boolean; kind: string; time: number; steps: numbe
 
 /** Run a whole round with a bot (no countdown). */
 export function runBotRound(round: Round, opts: BotOptions, inp: InputFrame): BotRun {
-  const bot = opts.kind === "swing" ? new SwingBot(round, round.opts.seed, opts.moves ?? false) : new Bot(round, opts);
+  const bot = opts.kind === "swing" ? new SwingBot(round, round.opts.seed, opts.moves ?? false, opts.tech ?? false) : new Bot(round, opts);
   let guard = 0;
   while (!round.over && guard++ < 20000) {
     const ov = bot.next(round, inp);

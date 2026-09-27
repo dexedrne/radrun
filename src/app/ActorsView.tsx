@@ -18,12 +18,13 @@ import { RESULTS_AFTER } from "../game/play.ts";
 import type { RadbroId } from "../game/round.ts";
 import {
   EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP,
-  EV_WALLRUN, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER,
+  EV_WALLRUN, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER, EV_CHARGE, EV_CHARGE_START, EV_DIVE, EV_POP, EV_YANK, EV_REBOUND,
 } from "../sim/player.ts";
 import { RM_EDGE, RM_TAUNT } from "../runner/runner.ts";
-import { EVT_ROLL, EVT_VAULT, PHASE_AIR, PHASE_GROUND, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, eventsBetween } from "../route/trackPack.ts";
+import { EVT_CHARGE, EVT_LEAP, EVT_ROLL, EVT_VAULT, PHASE_AIR, PHASE_GROUND, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, PHASE_ZIP, eventsBetween } from "../route/trackPack.ts";
 import {
   A_ATTACH, A_BIGLAND, A_BONK, A_CLIMB, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP, A_WALLRUN,
+  A_ZIP, A_CHARGE, A_LEAP, A_POP, A_DIVE,
   AnimMachine, CLIP, type AnimCmd, type Beat,
 } from "../anim/animMachine.ts";
 import type { Solid } from "../world/cityModel.ts";
@@ -59,6 +60,10 @@ export type ActorRig = {
   hand: Vector3;
   /** 1 while hanging from a web anchor or a ledge, else -1. */
   hook: number;
+  /** Round 12: zipping (arm up along the web), his baked charge between EVT_CHARGE and EVT_LEAP, the charge ring on. */
+  zip: boolean;
+  charging: boolean;
+  chargeOn: boolean;
   /** Round 9 procedural pose: smoothed roll (wall run) and pitch (run-up / slide), rad; swing hips pitch. */
   roll: number;
   pitch: number;
@@ -118,7 +123,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
       leftArm: findBone(model, "LeftArm"),
     },
     yaw: 0, off: new Vector3(0, -0.9, 0), ropeW: 0, look: 0, arm: 0, prevPhase: PHASE_GROUND, prevP: new Vector3(), vel: new Vector3(),
-    fade: 1, p: new Vector3(), hand: new Vector3(), hook: -1, roll: 0, pitch: 0, hipPitch: 0, phaseT: 0, prevT: 0,
+    fade: 1, p: new Vector3(), hand: new Vector3(), hook: -1, zip: false, charging: false, chargeOn: false, roll: 0, pitch: 0, hipPitch: 0, phaseT: 0, prevT: 0,
   };
 }
 
@@ -211,10 +216,14 @@ export function ActorsView({ game }: { game: PlayGame }) {
       let zip = false;
       if (!r.over) {
         if (isChaser && b.ropeSolid >= 0) anchor = tmp.anchor.set(b.ropeA.x, b.ropeA.y, b.ropeA.z);
-        if (isChaser && b.zipOn) { zip = true; anchor = tmp.anchor.set(b.zipP.x, b.zipP.y, b.zipP.z); }
+        // Round 12: a zip / yank is the stretched zip pose (arm up along the web), not the rope hang.
+        if (isChaser && (b.zipOn || b.yankOn)) zip = true;
         if (isRunner && run.pose.phase === PHASE_ROPE && game.runnerAnchor(tmp.e)) anchor = tmp.anchor.copy(tmp.e);
+        if (isRunner && run.pose.phase === PHASE_ZIP) zip = true;
       }
       rig.hook = anchor ? 1 : -1;
+      rig.zip = zip;
+      let charge = false, dive = false;
 
       // Events -> animMachine bits; round 9 wall / ledge / slide states.
       let ev = 0;
@@ -237,6 +246,14 @@ export function ActorsView({ game }: { game: PlayGame }) {
         if (fe & EV_SLIDE) ev |= A_SLIDE;
         if (fe & EV_ROLL) ev |= A_ROLL;
         if (fe & EV_BIGLAND) ev |= A_BIGLAND;
+        if (fe & EV_ZIP) ev |= A_ZIP;
+        if (fe & EV_CHARGE_START) ev |= A_CHARGE;
+        if (fe & EV_CHARGE) ev |= A_LEAP;
+        if (fe & (EV_POP | EV_REBOUND)) ev |= A_POP;
+        if (fe & EV_DIVE) ev |= A_DIVE;
+        if (fe & EV_YANK) ev |= A_ZIP;
+        charge = !r.over && b.chargeT > 0;
+        dive = !r.over && b.diveOn;
         grounded = b.grounded;
         if (!r.over) {
           wall = b.wallMode;
@@ -263,8 +280,12 @@ export function ActorsView({ game }: { game: PlayGame }) {
           if (run.t >= rig.prevT) for (const x of eventsBetween(e, rig.prevT, run.t)) {
             if (x.type === EVT_VAULT) ev |= A_VAULT;
             if (x.type === EVT_ROLL) ev |= A_ROLL;
+            if (x.type === EVT_CHARGE) { ev |= A_CHARGE; rig.charging = true; }
+            if (x.type === EVT_LEAP) { ev |= A_LEAP; rig.charging = false; }
           }
           rig.prevT = run.t;
+          charge = rig.charging && run.pose.phase === PHASE_GROUND;
+          if (!charge) rig.charging = false;
         } else rig.prevT = 0;
         rig.prevPhase = ph;
         grounded = ph === PHASE_GROUND;
@@ -285,12 +306,13 @@ export function ActorsView({ game }: { game: PlayGame }) {
       // Wall run side: the face normal points to his right = the wall is on his left (Wall_Run), else Wall_Run_Mirror.
       const wallSide = nx * -Math.cos(rig.yaw) + nz * Math.sin(rig.yaw) > 0 ? 1 : -1;
       applyCmd(rig.player, rig.machine.step({
-        dt: delta, grounded: grounded || beat === "idle", rope: anchor !== null || zip, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
+        dt: delta, grounded: grounded || beat === "idle", rope: anchor !== null, speed: run.mode !== RM_EDGE && isRunner ? 0 : speed, vy, events: ev,
         landVy: isChaser ? b.landVy : 0, panic: isRunner && run.band.panic && !run.band.gassed, beat,
         // Round 7 free fall: air under the feet (the view reads the sim's index between steps).
         clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
-        wall, ledge, slide, wallSide,
+        wall, ledge, slide, wallSide, zip, charge, dive,
       }));
+      rig.chargeOn = charge;
 
       // Facing (slerp 12 rad/s toward velocity; scripted beats face the other one).
       const faceTo = (x: number, z: number, rate: number) => {
@@ -411,6 +433,11 @@ export function ActorsView({ game }: { game: PlayGame }) {
         rig.root.position.add(tmp.b);
       }
       // Neck look-back / head-turn tell (runner).
+      // Round 12 zip: the right arm up along the web (both of them).
+      if (rig.zip) {
+        tmp.fwd.set(Math.sin(rig.yaw), 0, Math.cos(rig.yaw));
+        rotateBoneWorld(rig.bones.rightArm, tmp.fwd, -2.3, tmp);
+      }
       if (isRunner) {
         const run = r.runner;
         const p = game.runnerP;
@@ -428,7 +455,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
       } else {
         // Yoink arm raise (chaser): half-raised while he is ringed red, full on the lasso throw.
         const yoinked = r.phase === "caught" && r.stats.catchKind === "yoink" && game.endT < 0.9;
-        const want = yoinked ? 1 : r.phase === "chase" && r.player.ringId === RING_RUNNER ? 0.45 : 0;
+        const want = rig.zip ? 0 : yoinked ? 1 : r.phase === "chase" && r.player.ringId === RING_RUNNER ? 0.45 : 0;
         rig.arm += (want - rig.arm) * Math.min(1, 10 * rawDelta);
         if (rig.arm > 0.01) {
           tmp.fwd.set(Math.sin(rig.yaw), 0, Math.cos(rig.yaw));

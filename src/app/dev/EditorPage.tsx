@@ -11,7 +11,9 @@ import { PrefabRoot, type Prefab } from "react-three-game";
 import { saveLevelFile } from "./save.ts";
 import { SKY } from "../GameScene.tsx";
 import { CityLook, SkyGradient } from "../cityLook.tsx";
-import { PAGE, lv } from "../district.ts";
+import { PAGE, PAGE_DISTRICT, lv } from "../district.ts";
+import { StructuresView } from "../StructuresView.tsx";
+import type { CityModel } from "../../world/cityModel.ts";
 
 type FileName = "city.json" | "decor.json";
 
@@ -57,6 +59,15 @@ function Context({ file }: { file: FileName }) {
   return other ? <PrefabRoot data={other} /> : null;
 }
 
+/** Round 12: the structures between the buildings (read-only, from city.model.json; npm run level re-derives them). */
+function Structures() {
+  const [model, setModel] = useState<CityModel | null>(null);
+  useEffect(() => {
+    fetch(`${lv("city.model.json")}?v=${Date.now()}`).then(r => r.json()).then(setModel, () => setModel(null));
+  }, []);
+  return model ? <StructuresView model={model} district={PAGE_DISTRICT} /> : null;
+}
+
 export default function EditorPage() {
   const initial: FileName = new URLSearchParams(location.search).get("editor") === "decor" ? "decor.json" : "city.json";
   const [file, setFile] = useState<FileName>(initial);
@@ -86,6 +97,7 @@ export default function EditorPage() {
           <directionalLight position={[216, 220, 175]} intensity={PAGE.look.sunIntensity} color={PAGE.look.sun} />
           <FrameLevel at={centreOf(prefab)} />
           <Context file={file === "decor.json" ? "city.json" : "decor.json"} />
+          <Structures />
         </PrefabEditor>
       )}
       <div style={bar}>

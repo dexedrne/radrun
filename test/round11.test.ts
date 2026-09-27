@@ -136,7 +136,8 @@ const load = (dir: string) => ({ model: JSON.parse(fs.readFileSync(lv(dir, "city
 
 test("round 11 Chill head start: at GO he is already down his first run, and keeps running (no taunt stop) for lead s", () => {
   const { model: m, pack } = load("levels/");
-  assert.ok(tj.difficulty.chill.lead > 0 && tj.difficulty.normal.lead === 0);
+  // (Round 12: Normal and Degen have head starts too.)
+  assert.ok(tj.difficulty.chill.lead > 0);
   const mk = (lead: number) => new Round({ model: m, pack, difficulty: "chill", params: { ...tj.difficulty.chill, lead }, tuning: tj.player, chaser: "652", runner: "4764", seed: 21, countdown: false });
   const a = mk(tj.difficulty.chill.lead), b = mk(0);
   assert.equal(a.runner.mode, RM_EDGE);

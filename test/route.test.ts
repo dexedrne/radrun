@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { decodePack, encodePack, PACK_VERSION, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, packAnchor, sampleEdge, type PackEdgeHeader } from "../src/route/trackPack.ts";
+import { decodePack, encodePack, EVT_CHARGE, EVT_LEAP, PACK_VERSION, PHASE_LEDGE, PHASE_ROPE, PHASE_WALL, PHASE_ZIP, packAnchor, sampleEdge, type PackEdgeHeader } from "../src/route/trackPack.ts";
 import { bake, bakeEdge, BAKE, jumpHop, recordEdge, tuningHash, type BakeReport } from "../src/route/bake.ts";
 import { buildGraph, buildLinks, forcedUTurns, stronglyConnected, GRAPH } from "../src/route/graph.ts";
 import type { AnchorHit } from "../src/world/cityQuery.ts";
@@ -184,16 +184,25 @@ test("zip hops: he zips from the edge up to a roof 20 m higher across a street, 
   }
   assert.ok(ok >= BAKE.alleyWindow, `zip window ${ok} steps`);
   assert.ok(zipped > 0);
-  // A street swing that cannot bake falls back to the same zip across (reported as a zip hop).
+  // A street swing that cannot bake falls back to a charged leap across (round 12: swing > leap > zip; reported as a
+  // leap hop), and a street too wide to leap to the zip across (reported as a zip hop).
   const flat = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 21)] as Solid[]);
   const sl = buildLinks(flat, RUN).get(0)!.find(l => l.to === 1)!;
   assert.equal(sl.kind, "street");
   assert.equal(sl.swings.length, 0, "nothing tall to web");
+  assert.ok(sl.leap, "20 m, +1 m: in leap reach");
   const fw = { index: new CityIndex(flat), runner: null };
   const js = [{ roof: 0, x: 4, y: 20.9, z: 7 }, { roof: 1, x: 42, y: 21.9, z: 7 }];
   const r = bakeEdge(flat, fw, RUN, js, { from: 0, to: 1, roofs: [0, 1], links: [sl] }).report;
   assert.ok(r.ok, r.reason);
-  assert.equal(r.hops[0].kind, "zip");
+  assert.equal(r.hops[0].kind, "leap");
+  const wide = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(39, 0, 53, 14, 21)] as Solid[]);
+  const wl = buildLinks(wide, RUN).get(0)!.find(l => l.to === 1)!;
+  assert.ok(!wl.leap && wl.rim, "25 m: past leap reach, a zip");
+  const ww = { index: new CityIndex(wide), runner: null };
+  const r2 = bakeEdge(wide, ww, RUN, [js[0], { roof: 1, x: 47, y: 21.9, z: 7 }], { from: 0, to: 1, roofs: [0, 1], links: [wl] }).report;
+  assert.ok(r2.ok, r2.reason);
+  assert.equal(r2.hops[0].kind, "zip");
 });
 
 test("bake: swing edges on a tall synthetic city record rope samples that index the pack v2 anchor table; deterministic", () => {
@@ -238,4 +247,35 @@ test("bake: swing edges on a tall synthetic city record rope samples that index 
   // Same city + tuning = same tracks.
   const again = bakeEdge(m, world, RUN, graph.junctions, baked[0].cand);
   assert.deepEqual(again.params, baked[0].params);
+});
+
+test("pack v3 (round 12): a zip hop records the zip phase on its target's anchor; a leap hop records the charge and the leap", () => {
+  const js = [{ roof: 0, x: 4, y: 20.9, z: 7 }, { roof: 1, x: 42, y: 40.9, z: 7 }];
+  const pm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 40)] as Solid[]);
+  const zl = buildLinks(pm, RUN).get(0)!.find(l => l.to === 1)!;
+  const zw = { index: new CityIndex(pm), runner: null };
+  const zb = bakeEdge(pm, zw, RUN, js, { from: 0, to: 1, roofs: [0, 1], links: [zl] });
+  assert.ok(zb.report.ok, zb.report.reason);
+  const anchors: AnchorHit[] = [];
+  const zr = recordEdge(pm, zw, RUN, js, zb, a => { anchors.push(a); return anchors.length - 1; });
+  const phases = new Set<number>();
+  for (let i = 3; i < zr.samples.length; i += 5) phases.add(zr.samples[i]);
+  assert.ok(phases.has(PHASE_ZIP), "zip phase");
+  assert.ok(!phases.has(PHASE_ROPE), "a zip is not a rope phase any more");
+  const zs = zr.samples.findIndex((v, i) => i % 5 === 3 && v === PHASE_ZIP);
+  assert.equal(anchors[zr.samples[zs + 1]].solid, 1, "its ref = the rim's anchor");
+  const fm = deriveModel(DEFAULT_CONFIG, [roofBox(0, 0, 14, 14, 20), roofBox(34, 0, 48, 14, 21)] as Solid[]);
+  const fl = buildLinks(fm, RUN).get(0)!.find(l => l.to === 1)!;
+  const fw = { index: new CityIndex(fm), runner: null };
+  const fj = [js[0], { roof: 1, x: 42, y: 21.9, z: 7 }];
+  const lb = bakeEdge(fm, fw, RUN, fj, { from: 0, to: 1, roofs: [0, 1], links: [fl] });
+  assert.equal(lb.report.hops[0].kind, "leap");
+  const lr = recordEdge(fm, fw, RUN, fj, lb);
+  const types = new Set<number>();
+  for (let i = 1; i < lr.events.length; i += 3) types.add(lr.events[i]);
+  assert.ok(types.has(EVT_CHARGE) && types.has(EVT_LEAP), `charge + leap events (${[...types]})`);
+  assert.equal(PACK_VERSION, 3);
+  // A v2 pack is rejected.
+  const v2 = encodePack({ version: 2 as unknown as 3, city: "x", tuning: "y", anchors: [], junctions: [], edges: [] }, new Int16Array(0));
+  assert.throws(() => decodePack(v2));
 });

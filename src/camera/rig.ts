@@ -97,6 +97,10 @@ export type RigInput = {
   nearWall?: boolean;
   /** Round 11: the web line (hand -> anchor) while on the rope: the camera keeps webClear m off it. */
   web?: { ax: number; ay: number; az: number; bx: number; by: number; bz: number } | null;
+  /** Round 12 (§8): zipping / yanking (arm armZip, FOV + zipFov), charging (arm - chargeArm, FOV - chargeFov), diving (arm armDive, look point 1 m lower). */
+  zip?: boolean;
+  charge?: boolean;
+  dive?: boolean;
 };
 
 /** Round 11: the arm directions (yaw, pitch offsets, rad) tried when the arm is pulled in under armMin. */
@@ -119,11 +123,13 @@ export type SegmentHit = (ax: number, ay: number, az: number, bx: number, by: nu
 
 export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hit: SegmentHit | null): void {
   // Arm length by state, blended at armBlend/s.
-  const armTarget = s.hook ? cam.armRope : s.wall ? cam.armWall : s.grounded ? cam.armGround : cam.armAir;
+  let armTarget = s.zip ? cam.armZip : s.dive ? cam.armDive : s.hook ? cam.armRope : s.wall ? cam.armWall : s.grounded ? cam.armGround : cam.armAir;
+  if (s.charge) armTarget -= cam.chargeArm;
   r.arm += (armTarget - r.arm) * Math.min(1, cam.armBlend * dt);
 
-  // Target = chest; on the rope lean ropeBias of the way toward the pivot, at most ropeBiasMax m (W10).
-  let tx = s.p.x, ty = s.p.y + 0.3, tz = s.p.z;
+  // Target = chest; on the rope lean ropeBias of the way toward the pivot, at most ropeBiasMax m (W10). Round 12: a
+  // dive looks 1 m lower.
+  let tx = s.p.x, ty = s.p.y + 0.3 - (s.dive ? 1 : 0), tz = s.p.z;
   // Round 10: next to a facade the look point eases off it, so the arm behind has room (webbing off a wall
   // run used to pull the camera into the Radbro's hair, or behind the wall).
   const nearWall = (s.wall || s.nearWall) === true;
@@ -224,7 +230,7 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   // FOV: widen with speed (unless reduced motion), eased; -3 deg landing kick for 0.1 s.
   const span = Math.max(1e-3, cam.fovSpeedHi - cam.fovSpeedLo);
   const boost = cam.reducedMotion ? 0 : cam.fovBoost * Math.min(1, Math.max(0, (s.speed - cam.fovSpeedLo) / span));
-  const want = cam.fov + boost;
+  const want = cam.fov + boost + (cam.reducedMotion ? 0 : (s.zip ? cam.zipFov : 0) - (s.charge ? cam.chargeFov : 0));
   r.fov += (want - r.fov) * Math.min(1, cam.fovEase * dt);
   if (s.landed && !cam.reducedMotion) r.kickT = 0.1;
   r.kickT = Math.max(0, r.kickT - dt);

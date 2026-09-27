@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CityIndex, type CityModel, type Solid } from "../src/world/cityModel.ts";
 import {
-  createBody, emptyInput, pickRing, stepBody, zipTarget, emptyZipAim, EV_ATTACH, EV_BIGLAND, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LEDGE,
+  createBody, emptyInput, pickRing, stepBody, zipAim, emptyZipAim, CHEST, ZIP_FACE, ZIP_RIM, EV_ATTACH, EV_BIGLAND, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LEDGE, EV_NOANCHOR,
   EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN, EV_ZIP, EV_ZIP_END, WALL_RUN, WALL_UP,
   type Body, type InputFrame, type SimWorld,
 } from "../src/sim/player.ts";
@@ -27,6 +27,13 @@ import { TALL, tallModel, tallWorld } from "./helpers.ts";
 
 const K: Tuning = { ...PLAYER };
 const aimX = (f: InputFrame, x: number, z = 0) => { f.aimX = x; f.aimY = 0; f.aimZ = z; return f; };
+/** Round 12: aim (yaw + pitch) so the straight zip (its lift included) goes from b's chest at (x, y, z). */
+function aimAt(f: InputFrame, b: Body, x: number, y: number, z: number, k: Tuning = PLAYER): InputFrame {
+  const dx = x - b.p.x, dy = y - (b.p.y + CHEST), dz = z - b.p.z, l = Math.hypot(dx, dy, dz), s = dy / l;
+  const sl = k.zipLift, cl = Math.sqrt(1 - sl * sl), c = Math.sqrt(1 - s * s);
+  f.aimX = dx; f.aimZ = dz; f.aimY = s * cl - c * sl;
+  return f;
+}
 
 /** Step with a fresh input each time (`set` edits it); returns the OR of the event bits. */
 function run(b: Body, k: Tuning, w: SimWorld, n: number, set: (f: InputFrame, i: number) => void = () => {}): number {
@@ -106,39 +113,38 @@ test("double jump and slide are player-only (the runner and moves-off tunings ig
   }
 });
 
-test("web zip to a ringed rim: pulled up under the speed cap, launched onto that roof, cooldown", () => {
+test("straight zip to a rim: pulled straight up under the speed cap, the ledge pop onto that roof, cooldown", () => {
   const w = tallWorld();
-  // From the avenue, aim at the 62 m north roof's rim (solid 7): a ledge zip onto it.
-  const b = createBody(24, 50.9, 16, TALL.south[1] - 1); // south roof 0? (x 0..18): use a body in the air instead
-  b.grounded = false; b.p.x = 28; b.p.y = 52; b.p.z = 30; b.roofId = -1;
-  const a = emptyAnchor();
-  const inp = aimX(emptyInput(), 0.2, 1);
-  // (the anchor search's ideal point at round 9's 18 m up: this spot rings the 62 m roof's rim)
-  const KR = { ...K, anchorUp: 18 };
-  const ring = pickRing(b, inp, KR, w, a);
-  assert.ok(ring === 7 && a.rim, `ringed the rim of the 62 m roof (${ring}, rim ${a.rim})`);
+  // From the avenue, aim straight at the rim of the 62 m north roof (solid 7, its -z face at z = 40).
+  const b = createBody(28, 52, 30, -1);
+  b.grounded = false;
+  const inp = aimAt(emptyInput(), b, 28, 61, 40);
   const za = emptyZipAim();
-  assert.equal(zipTarget(b, a, inp.aimX, inp.aimZ, KR, w, za), 2, "a rim of a landable roof = a ledge zip");
-  assert.equal(za.roof, 7);
-  assert.ok(run(b, KR, w, 1, f => { aimX(f, 0.2, 1); f.zipPressed = true; }) & EV_ZIP);
-  let steps = 0, maxSp = 0;
+  assert.equal(zipAim(b, null, inp.aimX, inp.aimY, inp.aimZ, K, w, za), ZIP_RIM, "a hit within zipRimReach under a landable top = a rim");
+  assert.equal(za.solid, 7);
+  assert.ok(run(b, K, w, 1, f => { Object.assign(f, inp); f.zipPressed = true; }) & EV_ZIP);
+  let steps = 0, maxSp = 0, popped = false;
   while (!(b.grounded && !b.zipOn) && steps++ < 600) {
+    const was = b.zipOn;
     run(b, K, w, 1);
+    if (was && !b.zipOn && !popped) {
+      popped = true;
+      assert.ok(Math.abs(Math.hypot(b.v.x, b.v.z) - K.zipLedgeSpeed) < 1e-6, `ledge pop ${Math.hypot(b.v.x, b.v.z)}`);
+      assert.equal(b.zipCd, K.zipCooldown, "cooling down");
+      assert.equal(run(b, K, w, 1, f => { f.zipPressed = true; }) & EV_ZIP, 0, "no zip while cooling down");
+    }
     maxSp = Math.max(maxSp, Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z));
   }
   assert.ok(b.grounded && b.roofId === 7, `landed on the rim's roof (roof ${b.roofId})`);
   assert.ok(maxSp <= K.speedCap + 1e-9, `speed cap kept (${maxSp})`);
-  assert.ok(b.zipCd > 0 && b.zipCd <= K.zipCooldown);
-  assert.equal(run(b, K, w, 1, f => { f.zipPressed = true; }) & EV_ZIP, 0, "cooling down");
 });
 
-test("web zip to a ringed facade ends in a wall run along the aim when fast enough", () => {
+test("straight zip to a facade ends in a wall run along the aim when fast enough", () => {
   // A long wall ahead (its -z face at z = 20), top 60; the body below its top, aiming mostly at it.
   const w = boxes([tower(0, 20, 80, 40, 60)]);
   const b = flying(30, 30, 0, 0, 0, 0);
-  const a = emptyAnchor();
-  const inp = aimX(emptyInput(), 0.45, 1);
-  assert.ok(pickRing(b, inp, K, w, a) === 0 && !a.rim, "a facade point is ringed");
+  const za = emptyZipAim();
+  assert.equal(zipAim(b, null, 0.45, 0, 1, K, w, za), ZIP_FACE, "the ray meets the facade");
   run(b, K, w, 1, f => { aimX(f, 0.45, 1); f.zipPressed = true; });
   let ev = 0;
   for (let i = 0; i < 200 && !(ev & EV_WALLRUN); i++) ev |= run(b, K, w, 1, f => aimX(f, 0.45, 1));
@@ -148,24 +154,20 @@ test("web zip to a ringed facade ends in a wall run along the aim when fast enou
   assert.ok(b.v.x > K.wallRunSpeed - 1e-6, `running along the aim (+x): ${b.v.x.toFixed(2)}`);
 });
 
-test("web zip to a roof ledge under the aim (nothing ringed) lands you on that roof; no target = no zip, no cooldown", () => {
-  for (const top1 of [24, 16]) {
-    const w = boxes([roof(0, 0, 20, 20, 20), roof(26, 0, 46, 20, top1)]);
-    const b = createBody(10, 20.9, 10, 0);
-    run(b, K, w, 3);
-    const za = emptyZipAim();
-    assert.equal(zipTarget(b, null, 1, 0, K, w, za), 2, `ledge found (top ${top1})`);
-    assert.equal(za.roof, 1);
-    assert.ok(run(b, K, w, 1, f => { f.zipPressed = true; }) & EV_ZIP);
-    let steps = 0;
-    while (!(b.grounded && !b.zipOn) && steps++ < 800) run(b, K, w, 1);
-    assert.ok(b.grounded, `landed (top ${top1})`);
-    assert.equal(b.roofId, 1, `on the target roof (top ${top1}), at x=${b.p.x.toFixed(2)}`);
-    run(b, K, w, Math.ceil(K.zipCooldown * 120));
-    const cd = b.zipCd;
-    assert.equal(run(b, K, w, 1, f => { aimX(f, 0, -1); f.zipPressed = true; }) & EV_ZIP, 0);
-    assert.equal(b.zipCd, cd);
-  }
+test("straight zip: open sky gives no zip (the grey X) and costs nothing; two zips per airtime", () => {
+  const w = boxes([roof(0, 0, 20, 20, 20), roof(26, 0, 46, 20, 24)]);
+  const b = createBody(10, 20.9, 10, 0);
+  run(b, K, w, 3);
+  const cd = b.zipCd, left = b.zipLeft;
+  const ev = run(b, K, w, 1, f => { aimX(f, 0, -1); f.aimY = 0.5; f.zipPressed = true; });
+  assert.equal(ev & EV_ZIP, 0);
+  assert.ok(ev & EV_NOANCHOR);
+  assert.equal(b.zipCd, cd);
+  assert.equal(b.zipLeft, left);
+  // Across the gap onto the other roof: a zip, then (in the air, zips refilled only by a landing / rope / wall / ledge)
+  // one more, then none.
+  assert.ok(run(b, K, w, 1, f => { aimX(f, 1, 0); f.aimY = -0.05; f.zipPressed = true; }) & EV_ZIP);
+  assert.equal(b.zipLeft, K.zipCharges - 1);
 });
 
 // ---- wall run / wall jump ----------------------------------------------------------------------------
@@ -383,7 +385,7 @@ test("ghost: a run with double jumps, zips and slides records B_ZIP / B_SLIDE, r
   for (let i = 0; i < log.n; i++) { if (log.bits[i] & B_ZIP) zipBits++; if (log.bits[i] & B_SLIDE) slideBits++; }
   assert.ok(zipBits >= 2 && slideBits >= 10, `zip bits ${zipBits}, slide bits ${slideBits}`);
   const bytes = encodeBytes(log, flags);
-  assert.equal(bytes[0], 3, "format 3");
+  assert.equal(bytes[0], 4, "format 4");
   const back = await unpackGhost(await packGhost(log, flags));
   assert.ok(back);
   assert.equal(back.flags.moves, undefined, "the moves ruleset");
@@ -411,7 +413,7 @@ test("ghost: a format-1 record replays with the moves off; a format-2 record wit
   assert.notEqual(drift.round.hash(), round.hash(), "the same inputs with the double jump on play differently");
   // A format-1 record cannot carry the zip bit; a format-2 record cannot carry the slide bit.
   const withZip = new GhostLog(log.n);
-  for (let i = 0; i < log.n; i++) withZip.push({ yaw: log.yaw[i], fwd: log.fwd[i], right: log.right[i], bits: log.bits[i] | (i === 5 ? B_ZIP : 0) });
+  for (let i = 0; i < log.n; i++) withZip.push({ yaw: log.yaw[i], fwd: log.fwd[i], right: log.right[i], bits: log.bits[i] | (i === 5 ? B_ZIP : 0), pitch: 0 });
   assert.equal(decodeBytes(encodeBytes(withZip, old)), null);
   const f2: GhostFlags = { touch: false, easy: false, slide: false };
   assert.equal(encodeBytes(log, f2)[0], 2, "format 2");
@@ -419,7 +421,7 @@ test("ghost: a format-1 record replays with the moves off; a format-2 record wit
   assert.ok(d2 && d2.flags.slide === false && d2.flags.moves === undefined);
   assert.equal(roundTuning(tuning.player, d2.flags).slide, false);
   const withSlide = new GhostLog(log.n);
-  for (let i = 0; i < log.n; i++) withSlide.push({ yaw: log.yaw[i], fwd: log.fwd[i], right: log.right[i], bits: log.bits[i] | (i === 5 ? B_SLIDE : 0) });
+  for (let i = 0; i < log.n; i++) withSlide.push({ yaw: log.yaw[i], fwd: log.fwd[i], right: log.right[i], bits: log.bits[i] | (i === 5 ? B_SLIDE : 0), pitch: 0 });
   assert.equal(decodeBytes(encodeBytes(withSlide, f2)), null);
 });
 

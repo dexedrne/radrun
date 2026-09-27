@@ -9,10 +9,13 @@
 //   zip    - on a roof with a ringed anchor (after fling)    -> done at a web zip
 //   wallrun - your first wall run (round 9)                 -> done at a wall jump
 //   slide  - running fast on a roof (after the fling tip)    -> done at a slide
+// Round 12 (docs/specs/2026-09-26-round12-spider-tag.md §8): "E: zip where you look", "hold C: charge a leap" and
+// "let go near the top of the swing: faster" (the fling tip, now about the perfect release).
+//   charge - on a roof (after the fling tip)                -> done at a charged launch
 import { hintsSeen, markHintSeen, resetHintsSeen } from "./prefs.ts";
 import { useUi } from "./store.ts";
 
-export type HintId = "swing" | "fling" | "chain" | "yoink" | "djump" | "zip" | "wallrun" | "slide";
+export type HintId = "swing" | "fling" | "chain" | "yoink" | "djump" | "zip" | "wallrun" | "slide" | "charge";
 
 export type HintInput = {
   /** Chase or practice, not paused, not a bot page. */
@@ -32,6 +35,9 @@ export type HintInput = {
   kicked?: boolean;
   slid?: boolean;
   speed?: number;
+  /** Round 12: a charged launch since the last tick; the charge is on. */
+  charged?: boolean;
+  charge?: boolean;
 };
 
 export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string {
@@ -39,20 +45,21 @@ export function hintText(id: HintId, touch: boolean, easyGrab: boolean): string 
   switch (id) {
     // Round 11: a web from a roof pulls you up and off it into the swing; a release on the way up keeps your height.
     case "swing": return `hold ${web} to web the building ahead (the yellow ring): it pulls you off the roof into a swing`;
-    case "fling": return `let go of ${web} just past the bottom, on the way up, to fling forward and keep your height`;
+    case "fling": return `let go of ${web} near the top of the swing: faster (a white flash = perfect)`;
     case "chain": return "chain swings down the avenues to go fast: web the next building before you land";
     case "yoink": return touch ? "red ring on him = tap WEB to YOINK" : `red ring on him = ${easyGrab ? "tap Space" : "click"} to YOINK`;
     case "djump": return touch ? "tap JUMP again in the air to double jump" : easyGrab ? "tap Space in the air (nothing ringed) to double jump" : "press Space again in the air to double jump";
     case "zip": return touch
-      ? "tap ZIP to web-zip straight to the ringed building (or the roof ledge ahead)"
-      : "press E or Shift to web-zip straight to the ringed building (or the roof ledge ahead)";
+      ? "ZIP: zip where you look (the white diamond)"
+      : "E: zip where you look (the white diamond)";
+    case "charge": return touch ? "hold SLIDE: charge a leap, let go to launch" : "hold C: charge a leap, let go to launch";
     case "wallrun": return touch ? "wall run! tap JUMP to kick off the wall" : "wall run! press Space to kick off the wall";
     case "slide": return touch ? "tap SLIDE while running fast to slide and keep your speed" : "press C while running fast to slide and keep your speed";
   }
 }
 
 /** Seconds a tip stays up at most (it goes as soon as you have done the thing). */
-const MAX_SHOW: Record<HintId, number> = { swing: 9, fling: 6, chain: 7, yoink: 4, djump: 5, zip: 7, wallrun: 4, slide: 6 };
+const MAX_SHOW: Record<HintId, number> = { swing: 9, fling: 6, chain: 7, yoink: 4, djump: 5, zip: 7, wallrun: 4, slide: 6, charge: 7 };
 
 export class Hints {
   private seen: Record<string, boolean> = {};
@@ -120,7 +127,8 @@ export class Hints {
       this.shown += dt;
       const c = this.cur;
       const done = (c === "swing" && rope) || (c === "fling" && justReleased) || (c === "chain" && s.chain >= 3) || (c === "yoink" && this.shown >= 1.5) ||
-        (c === "djump" && !!s.djumped) || (c === "zip" && !!s.zipped) || (c === "wallrun" && !!s.kicked) || (c === "slide" && !!s.slid);
+        (c === "djump" && !!s.djumped) || (c === "zip" && !!s.zipped) || (c === "wallrun" && !!s.kicked) || (c === "slide" && !!s.slid) ||
+        (c === "charge" && !!s.charged);
       // A finished tip hands straight over to the next one below (swing -> fling -> chain).
       if (done || this.shown >= MAX_SHOW[c]) this.finish();
       else return;
@@ -131,7 +139,8 @@ export class Hints {
     else if (!rope && s.ring === "hook" && !this.seen.swing) this.show("swing", s);
     else if (!rope && !s.grounded && this.released && s.chain < 3 && this.seen.fling && !this.seen.chain) this.show("chain", s);
     else if (s.moves && !rope && !s.grounded && this.seen.fling && !this.seen.djump) this.show("djump", s);
-    else if (s.moves && s.grounded && s.ring === "hook" && this.seen.fling && !this.seen.zip) this.show("zip", s);
+    else if (s.moves && s.grounded && this.seen.fling && !this.seen.zip) this.show("zip", s);
+    else if (s.charge && s.grounded && this.seen.zip && !this.seen.charge) this.show("charge", s);
     else if (s.moves && s.grounded && (s.speed ?? 0) > 10 && this.seen.fling && !this.seen.slide) this.show("slide", s);
   }
 }

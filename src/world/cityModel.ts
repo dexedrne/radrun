@@ -8,9 +8,14 @@
  * inside one roof's footprint, landable, 0.8-1.4 m (vault) or 2.2-3.2 m (climb) above that roof; never in
  * adjacency, junctions, spawn, lowestRoof or anchor coverage (world/derive.ts, lint G3).
  */
-export type SolidKind = "roof" | "tower" | "prop";
+export type SolidKind = "roof" | "tower" | "prop" | "fixture";
 
-/** A ground-rooted, unrotated box. y0 is always 0; top = y1. */
+/**
+ * An unrotated box, ground-rooted unless y0 is set (round 12: only fixtures float - gantries, skybridges).
+ * Round 12 fixture (docs/specs/2026-09-26-round12-spider-tag.md §2.3): a derived structure (gantry, skybridge,
+ * tank, board, stack), appended after the city.json solids. Landable; never in adjacency, junctions, spawn,
+ * lowestRoof or G1 coverage (like props).
+ */
 export type Solid = {
   id: number;
   kind: SolidKind;
@@ -22,7 +27,22 @@ export type Solid = {
   top: number;
   /** Source node id in city.json (for tooling / editor round trips). */
   node?: string;
+  /** Round 12: bottom (m). Missing = 0 (ground-rooted). Only fixtures float (gantry, skybridge). */
+  y0?: number;
+  /** Round 12: what a fixture is (view + lint). Missing on city.json solids. */
+  sub?: FixtureKind;
 };
+
+/** Round 12 fixture kinds. */
+export type FixtureKind = "gantry" | "skybridge" | "tank" | "board" | "stack";
+
+/** Round 12: a web-only cable (no collision). a -> b at its ends, sagging `sag` m at the middle. */
+export type Rig = { id: number; kind: "cable"; ax: number; ay: number; az: number; bx: number; by: number; bz: number; sag: number };
+
+/** Anchor / ring / rope ids >= RIG0 are rigs[id - RIG0]; below it they are solid ids. */
+export const RIG0 = 1 << 20;
+/** A solid's bottom (0 unless it floats). */
+export const bottom = (s: Solid): number => s.y0 ?? 0;
 
 export type Adjacency = {
   a: number;
@@ -168,6 +188,8 @@ export type CityModel = {
   /** Non-boundary landable roofs (runner junction candidates, M2; never props). */
   junctionCandidates: number[];
   spawn: { roofId: number; x: number; y: number; z: number; yaw: number };
+  /** Round 12: web-only cables across the streets (world/structures.ts; [] when there are none). */
+  rigs: Rig[];
   hash: string;
 };
 
@@ -180,6 +202,9 @@ export const GRID = 16;
 export class CityIndex {
   readonly model: CityModel;
   readonly solids: Solid[];
+  /** Round 12 web-only cables (model.rigs, [] for an older model) and their boxes (sag included). */
+  readonly rigs: Rig[];
+  readonly rigBox: Float64Array;
   readonly gx0: number;
   readonly gz0: number;
   readonly nx: number;
@@ -190,15 +215,26 @@ export class CityIndex {
   private stampN = 1;
   /** Scratch result buffer for nearbySolids. */
   readonly out: Int32Array;
+  private rigStart: Int32Array;
+  private rigItems: Int32Array;
+  private rigStamp: Uint32Array;
+  private rigStampN = 1;
+  /** Scratch result buffer for nearbyRigs (rig indices, ascending). */
+  readonly rout: Int32Array;
 
   constructor(model: CityModel) {
     this.model = model;
     this.solids = model.solids;
+    this.rigs = model.rigs ?? [];
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const s of model.solids) {
       x0 = Math.min(x0, s.x0); z0 = Math.min(z0, s.z0); x1 = Math.max(x1, s.x1); z1 = Math.max(z1, s.z1);
     }
-    if (!model.solids.length) { x0 = z0 = 0; x1 = z1 = GRID; }
+    // (Round 12: the rigs too - they always lie between solids in a real city, but a test rig may not.)
+    for (const g of model.rigs ?? []) {
+      x0 = Math.min(x0, g.ax, g.bx); z0 = Math.min(z0, g.az, g.bz); x1 = Math.max(x1, g.ax, g.bx); z1 = Math.max(z1, g.az, g.bz);
+    }
+    if (!model.solids.length && !(model.rigs ?? []).length) { x0 = z0 = 0; x1 = z1 = GRID; }
     this.gx0 = Math.floor(x0 / GRID) * GRID - GRID;
     this.gz0 = Math.floor(z0 / GRID) * GRID - GRID;
     this.nx = Math.floor((x1 - this.gx0) / GRID) + 2;
@@ -218,6 +254,56 @@ export class CityIndex {
     for (const list of cells) for (const id of list.sort((a, b) => a - b)) this.cellItems[k++] = id;
     this.stamp = new Uint32Array(model.solids.length);
     this.out = new Int32Array(Math.max(16, model.solids.length));
+    // Round 12 rigs: their own cell lists on the same grid.
+    const nr = this.rigs.length;
+    this.rigBox = new Float64Array(nr * 6);
+    const rc: number[][] = Array.from({ length: this.nx * this.nz }, () => []);
+    for (let i = 0; i < nr; i++) {
+      const g = this.rigs[i];
+      const bx0 = Math.min(g.ax, g.bx), bx1 = Math.max(g.ax, g.bx), bz0 = Math.min(g.az, g.bz), bz1 = Math.max(g.az, g.bz);
+      const by0 = Math.min(g.ay, g.by) - g.sag, by1 = Math.max(g.ay, g.by);
+      this.rigBox.set([bx0, by0, bz0, bx1, by1, bz1], i * 6);
+      const [ca, cb] = this.cellRange(bx0, bx1, this.gx0, this.nx);
+      const [ra, rb] = this.cellRange(bz0, bz1, this.gz0, this.nz);
+      for (let r = ra; r <= rb; r++) for (let c = ca; c <= cb; c++) rc[r * this.nx + c].push(i);
+    }
+    this.rigStart = new Int32Array(rc.length + 1);
+    let m = 0;
+    rc.forEach((list, i) => { this.rigStart[i] = m; m += list.length; });
+    this.rigStart[rc.length] = m;
+    this.rigItems = new Int32Array(m);
+    let q = 0;
+    for (const list of rc) for (const id of list) this.rigItems[q++] = id;
+    this.rigStamp = new Uint32Array(Math.max(1, nr));
+    this.rout = new Int32Array(Math.max(16, nr));
+  }
+
+  /** Round 12: indices of rigs whose grid cells touch the xz rectangle, ascending, in this.rout. Returns the count. */
+  nearbyRigs(x0: number, z0: number, x1: number, z1: number): number {
+    if (!this.rigs.length) return 0;
+    let ca = Math.floor((x0 - this.gx0) / GRID), cb = Math.floor((x1 - this.gx0) / GRID);
+    let ra = Math.floor((z0 - this.gz0) / GRID), rb = Math.floor((z1 - this.gz0) / GRID);
+    if (ca < 0) ca = 0;
+    if (ra < 0) ra = 0;
+    if (cb > this.nx - 1) cb = this.nx - 1;
+    if (rb > this.nz - 1) rb = this.nz - 1;
+    this.rigStampN = (this.rigStampN + 1) >>> 0;
+    if (this.rigStampN === 0) { this.rigStamp.fill(0); this.rigStampN = 1; }
+    let count = 0;
+    for (let r = ra; r <= rb; r++) {
+      for (let c = ca; c <= cb; c++) {
+        const cell = r * this.nx + c;
+        for (let i = this.rigStart[cell]; i < this.rigStart[cell + 1]; i++) {
+          const id = this.rigItems[i];
+          if (this.rigStamp[id] === this.rigStampN) continue;
+          this.rigStamp[id] = this.rigStampN;
+          let j = count++;
+          while (j > 0 && this.rout[j - 1] > id) { this.rout[j] = this.rout[j - 1]; j--; }
+          this.rout[j] = id;
+        }
+      }
+    }
+    return count;
   }
 
   private cellRange(a: number, b: number, g0: number, n: number): [number, number] {
@@ -266,7 +352,7 @@ export class CityIndex {
     for (let i = 0; i < n; i++) {
       const s = this.solids[this.out[i]];
       if (s.id === skipA || s.id === skipB) continue;
-      const t = slab(ax, ay, az, dx, dy, dz, s.x0, 0, s.z0, s.x1, s.top, s.z1);
+      const t = slab(ax, ay, az, dx, dy, dz, s.x0, s.y0 ?? 0, s.z0, s.x1, s.top, s.z1);
       if (t >= 0 && (best < 0 || t < best)) best = t;
     }
     return best;
@@ -276,36 +362,7 @@ export class CityIndex {
     return this.segmentHit(ax, ay, az, bx, by, bz, skipA, skipB) >= 0;
   }
 
-  /** Entry distance of the last ledgeAlong hit (m along the ray). */
-  ledgeT = 0;
-
-  /**
-   * Web zip (player): the first landable roof whose footprint the horizontal ray from (x, z) along the
-   * unit (dx, dz) enters within `range`, with its top in [yMin, yMax]. A solid entered earlier that rises
-   * above yMax (or a non-landable one above yMin) blocks it. `skip` (the roof you stand on) and solids
-   * containing the start are ignored. Returns the roof id (entry distance in ledgeT) or -1.
-   */
-  ledgeAlong(x: number, z: number, dx: number, dz: number, range: number, yMin: number, yMax: number, skip = -1): number {
-    const ex = x + dx * range, ez = z + dz * range;
-    const n = this.nearbySolids(Math.min(x, ex), Math.min(z, ez), Math.max(x, ex), Math.max(z, ez));
-    let best = -1, bestT = Infinity, block = Infinity;
-    for (let i = 0; i < n; i++) {
-      const s = this.solids[this.out[i]];
-      if (s.id === skip) continue;
-      if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1) continue;
-      const t = slab(x, 0, z, ex - x, 0, ez - z, s.x0, -1, s.z0, s.x1, 1, s.z1);
-      if (t < 0) continue;
-      const d = t * range;
-      if (s.top > yMax || (!s.landable && s.top > yMin)) { if (d < block) block = d; continue; }
-      if (!s.landable || s.top < yMin) continue;
-      if (d < bestT || (d === bestT && s.top > this.solids[best].top)) { bestT = d; best = s.id; }
-    }
-    if (best >= 0 && bestT >= block) best = -1;
-    this.ledgeT = best >= 0 ? bestT : 0;
-    return best;
-  }
-
-  /** Highest solid top at (x, z) that is <= y + 0.05, or 0 (water / street level). */
+  /** Highest solid top at (x, z) that is <= y + 0.05, or 0 (water / street level). A bridge under y is a floor. */
   groundBelow(x: number, z: number, y: number): number {
     const n = this.nearbySolids(x, z, x, z);
     let best = 0;
@@ -360,10 +417,11 @@ export function slab(
   return tmin;
 }
 
-/** Distance from a point to a box (0 inside). */
+/** Distance from a point to a box (0 inside; a floating box is measured from its bottom). */
 export function pointBoxDist(x: number, y: number, z: number, s: Solid): number {
+  const y0 = s.y0 ?? 0;
   const dx = x < s.x0 ? s.x0 - x : x > s.x1 ? x - s.x1 : 0;
-  const dy = y < 0 ? -y : y > s.top ? y - s.top : 0;
+  const dy = y < y0 ? y0 - y : y > s.top ? y - s.top : 0;
   const dz = z < s.z0 ? s.z0 - z : z > s.z1 ? z - s.z1 : 0;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }

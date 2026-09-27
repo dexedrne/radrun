@@ -14,7 +14,7 @@ const {
 const { M_SNAP, M_WIND, M_LOWGRAV, M_SIXTY } = await import("../src/game/mutators.ts");
 const { districtFromSearch } = await import("../src/world/districts.ts");
 
-const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | ""; catchTime: number; runnerLow: number; parkour: number }> = {}) =>
+const stats = (o: Partial<{ maxChain: number; falls: number; catchKind: "tag" | "yoink" | "yank" | ""; catchTime: number; runnerLow: number; parkour: number; tech: number }> = {}) =>
   ({ maxChain: 0, topSpeed: 10, falls: 0, closest: 0, catchKind: "tag" as const, catchTime: 30, runnerLow: 60, parkour: 0, ...o });
 
 test("campaign: 15 levels, 45 stars, stable numbering, every district and mutator used", () => {
@@ -28,16 +28,21 @@ test("campaign: 15 levels, 45 stars, stable numbering, every district and mutato
 });
 
 test("campaign: star evaluation", () => {
-  const l1 = LEVELS[0]; // catch / under 30 / no falls
-  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 20 }), 70), [true, true, true]);
-  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 31, falls: 1 }), 59), [true, false, false]);
+  const l1 = LEVELS[0]; // catch / under 18 (round 12) / no falls
+  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 15 }), 75), [true, true, true]);
+  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 19, falls: 1 }), 71), [true, false, false]);
   assert.deepEqual(evaluate(l1, "escaped", stats(), 0), [false, false, false], "no stars without the catch");
   const l2 = LEVELS[1]; // chain 4
   assert.equal(evaluate(l2, "caught", stats({ maxChain: 4 }), 40)[2], true);
   assert.equal(evaluate(l2, "caught", stats({ maxChain: 3 }), 40)[2], false);
   const l3 = LEVELS[2]; // yoink
   assert.equal(evaluate(l3, "caught", stats({ catchKind: "yoink" }), 40)[1], true);
+  assert.equal(evaluate(l3, "caught", stats({ catchKind: "yank" }), 40)[1], true, "round 12: a yank is a web catch");
   assert.equal(evaluate(l3, "caught", stats({ catchKind: "tag" }), 40)[1], false);
+  const l10 = LEVELS[9]; // round 12: 3 tech moves
+  assert.deepEqual(l10.goals[2], { kind: "tech", n: 3 });
+  assert.equal(evaluate(l10, "caught", stats({ tech: 3 }), 40)[2], true);
+  assert.equal(evaluate(l10, "caught", stats({ tech: 2 }), 40)[2], false);
   const l9 = LEVELS[8]; // round 9: 4 parkour moves (was a close call)
   assert.equal(l9.mutators, M_WIND | M_SIXTY);
   assert.deepEqual(l9.goals[2], { kind: "parkour", n: 4 });
@@ -104,22 +109,23 @@ test("campaign: progress storage round-trips and survives junk / blocked storage
   assert.deepEqual(loadProgress(blocked), emptyProgress());
 });
 
-test("links: v5 links carry version, district and mutators; unversioned links are older Downtown links", () => {
-  // v5 = round 11 (the swing's timing lift, the re-baked swing routes, Chill's head start); v4 = round 9 (the
+test("links: v6 links carry version, district and mutators; unversioned links are older Downtown links", () => {
+  // v6 = round 12 (the structures, the straight zip / charge / tech / yank, pack v3, ghost format 4); v5 = round 11
+  // (the swing's timing lift, the re-baked swing routes, Chill's head start); v4 = round 9 (the
   // rebuilt cities, building-anchored swings, parkour); v3 = the double jump + web zip build (older links still
   // read the same and open with the "older build" note).
-  assert.equal(LINK_VERSION, 5);
+  assert.equal(LINK_VERSION, 6);
   const url = ghostUrl("652", "4764", "normal", 41.26, 777, "abcdEFGH_-12", M_WIND | M_SIXTY);
   const q = new URL(url).search;
   assert.equal(districtFromSearch(q), "docks");
   const c = readChallenge(q);
-  assert.equal(c.v, 5);
+  assert.equal(c.v, 6);
   assert.equal(c.mu, M_WIND | M_SIXTY);
   assert.equal(c.s, 777);
   assert.equal(c.t, 41.3);
   assert.equal(c.g, "abcdEFGH_-12");
   const plain = readChallenge(new URL(challengeUrl("652", "4764", "chill", 30)).search);
-  assert.equal(plain.v, 5);
+  assert.equal(plain.v, 6);
   assert.equal(plain.mu, 0);
   // A pre-round-4 link: no v, no m, no mu -> v1, Downtown, no mutators.
   const old = "?c=652&r=4764&d=normal&s=5&t=40.0&g=abcdEFGH_-12";

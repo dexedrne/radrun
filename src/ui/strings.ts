@@ -91,6 +91,6 @@ export function clockText(s: number): string {
   return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`;
 }
 
-export function shareText(kind: "tag" | "yoink" | "", runner: string, t: number): string {
-  return `I ${kind === "yoink" ? "yoinked" : "tagged"} #${runner} in ${t.toFixed(1)} s in RadRun`;
+export function shareText(kind: "tag" | "yoink" | "yank" | "", runner: string, t: number): string {
+  return `I ${kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : "tagged"} #${runner} in ${t.toFixed(1)} s in RadRun`;
 }

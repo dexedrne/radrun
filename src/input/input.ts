@@ -23,9 +23,10 @@ export class InputLatch {
   /** Touch: the left-thumb stick (x right, y forward, dead zone applied, |stick| <= 1). */
   stickX = 0;
   stickY = 0;
-  /** Touch: WEB button held / look-at-him button held. */
+  /** Touch: WEB button held / look-at-him button held / (round 12) SLIDE held (charge). */
   touchWeb = false;
   touchFace = false;
+  touchSlideHeld = false;
   /** Easy grab: Space press also counts as a web press (Yoink), Space held = web held. */
   easyGrab = false;
   /** Optional per-step recording (replays / tests). */
@@ -78,10 +79,21 @@ export class InputLatch {
   touchSlide(): void {
     this.slideEdge = true;
   }
+  /** Round 12: the SLIDE button is held down (tap = slide, hold = charge, release = launch). */
+  touchSlideDown(): void {
+    if (!this.touchSlideHeld) { this.touchSlideHeld = true; this.slideEdge = true; }
+  }
+  touchSlideUp(): void {
+    this.touchSlideHeld = false;
+  }
+  /** C / SLIDE held right now. */
+  get slideHeldNow(): boolean {
+    return this.keys.has("KeyC") || this.touchSlideHeld;
+  }
   clear(): void {
     this.keys.clear();
     this.stickX = this.stickY = 0;
-    this.touchWeb = this.touchFace = false;
+    this.touchWeb = this.touchFace = this.touchSlideHeld = false;
     this.lmb = this.rmb = false;
     this.jumpEdge = this.webEdge = this.zipEdge = this.slideEdge = false;
     this.mouseDX = this.mouseDY = 0;
@@ -108,9 +120,11 @@ export class InputLatch {
    * buttons); PlayGame rebuilds the InputFrame from it (game/ghost.ts buildFrame) so a recorded run
    * replays bit-exactly. Consumes the press edges like consume().
    */
-  sample(rec: InputRec, yaw: number): InputRec {
+  sample(rec: InputRec, yaw: number, pitch = 0): InputRec {
     const webHeldNow = this.lmb || this.touchWeb || (this.easyGrab && this.keys.has("Space"));
-    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge);
+    // (Round 12: the camera pitch rides along as a sine, and C held.)
+    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge,
+      this.slideHeldNow || this.slideEdge, Math.sin(pitch));
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;
@@ -141,6 +155,7 @@ export class InputLatch {
     f.webHeld = webHeldNow || this.webEdge;
     f.zipPressed = this.zipEdge;
     f.slidePressed = this.slideEdge;
+    f.slideHeld = this.slideHeldNow || this.slideEdge;
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;

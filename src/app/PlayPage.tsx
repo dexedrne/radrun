@@ -29,6 +29,7 @@ import { MiladyView } from "./Milady.tsx";
 import { GeorgeView } from "./GeorgeView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
+import { StructuresView } from "./StructuresView.tsx";
 import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx } from "../audio/sfx.ts";
@@ -92,6 +93,7 @@ function Scene({ game }: { game: PlayGame }) {
   return (
     <SceneCanvas prefab={prefab}>
       <AssetsBridge />
+      <StructuresView model={game.model} district={PAGE_DISTRICT} />
       <PlayDriver game={game} />
       <ActorsView game={game} />
       <GeorgeView game={game} />

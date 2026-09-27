@@ -6,6 +6,9 @@
 // Round 9 pack v2 (spec §6.2): header.version 2 + `anchors` (flat x, y, z in cm: the web anchor points the
 // rope refs index). The header holds only integers (cm, steps, mm/s) so decoding is exact. Pure TS; runtime
 // decoder + the encoder used by the bake. Determinism rule applies (sqrt-only maths).
+// Round 12 pack v3 (docs/specs/2026-09-26-round12-spider-tag.md §7.1): phase 5 = a straight zip (ref = its target
+// in the anchor table: the view draws his zip web and pose), events 7 = a charge starts, 8 = a charged leap. v1 / v2
+// packs are rejected (every city hash changed with the structures).
 import { Fnv1a, type Vec3 } from "../sim/math.ts";
 
 export const PACK_MAGIC = "RRP1";
@@ -18,8 +21,10 @@ export const PHASE_ROPE = 2;
 /** Round 9: wall run / run-up (ref = the wall solid) and ledge hang / climb (ref = the solid). */
 export const PHASE_WALL = 3;
 export const PHASE_LEDGE = 4;
-/** The pack format the bake writes. */
-export const PACK_VERSION = 2;
+/** Round 12: a straight zip (ref = the zip target's anchor index). */
+export const PHASE_ZIP = 5;
+/** The pack format the bake writes (and the only one read). */
+export const PACK_VERSION = 3;
 
 export const EVT_TAKEOFF = 1;
 export const EVT_ATTACH = 2;
@@ -28,6 +33,9 @@ export const EVT_LAND = 4;
 /** Round 9: a vault and a landing roll (the runner plays the same clips as the player). */
 export const EVT_VAULT = 5;
 export const EVT_ROLL = 6;
+/** Round 12: a charge starts (C held: the ring at his feet), a charged leap (the launch). */
+export const EVT_CHARGE = 7;
+export const EVT_LEAP = 8;
 
 export type PackJunction = { roof: number; x: number; y: number; z: number };
 
@@ -52,8 +60,8 @@ export type PackEdgeHeader = {
 };
 
 export type PackHeader = {
-  /** 2 = round 9 (anchors table). 1 = before (rope refs were balloon ids): still read, without anchors. */
-  version: 1 | 2;
+  /** 3 = round 12 (zip phase, charge / leap events; the anchor table as round 9's v2). */
+  version: 3;
   city: string;
   tuning: string;
   /** v2: web anchor points, flat x, y, z in cm (a rope sample's ref indexes it). */
@@ -122,8 +130,7 @@ export function decodePack(buf: ArrayBuffer | Uint8Array): Pack {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const hl = dv.getUint32(4, true);
   const header = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + hl))) as PackHeader;
-  // v1 packs (balloon refs) still load until every district is re-baked (INTEGRATE); they carry no anchors.
-  if (header.version !== 1 && header.version !== PACK_VERSION) throw new Error(`runner.pack.bin: unknown version ${header.version}`);
+  if (header.version !== PACK_VERSION) throw new Error(`runner.pack.bin: version ${header.version} is not ${PACK_VERSION} - run npm run level`);
   const anchors = Float64Array.from(header.anchors ?? [], v => v / 100);
   const base = 8 + hl;
   const n = (bytes.length - base) / 2;

@@ -48,13 +48,16 @@ export type RoundHud = {
    * and its push direction on screen (radians clockwise from "forward"); null when there is no wind.
    */
   wind: { level: number; warn: number; angle: number } | null;
+  /** Round 12 flow pips (0-3; the three small pips under the screen's middle) and tech moves this round. */
+  flow?: number;
+  tech?: number;
   /** Web zip cooldown left as a fraction (1 = just used, 0 = ready; also 1 while zipping); -1 = no zip. */
   zip: number;
 };
 
 export type Results = {
   caught: boolean;
-  kind: "tag" | "yoink" | "";
+  kind: "tag" | "yoink" | "yank" | "";
   time: number;
   closest: number;
   maxChain: number;
@@ -90,7 +93,7 @@ export type GhostInfo = {
   claimed: number;
   /** The replay's catch time / kind (null = the replay never caught him). */
   time: number | null;
-  kind: "tag" | "yoink" | "";
+  kind: "tag" | "yoink" | "yank" | "";
   source: "link" | "best";
 };
 
