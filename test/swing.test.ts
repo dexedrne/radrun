@@ -231,3 +231,26 @@ test("the dive: faster than a fall (diveCap), turned by the stick; a web out of 
   steps(b, PLAYER, bw, 60, f => { f.aimX = 1; });
   assert.ok(b.capX <= c0 - PLAYER.diveCarryDecay * 0.5 + 1e-9, `capX ${c0.toFixed(2)} -> ${b.capX.toFixed(2)}`);
 });
+
+test("camera: the look point trails the swing's height (bounded) and leads the motion across the view; the aim is unchanged", async () => {
+  const { createRig, rigUpdate } = await import("../src/camera/rig.ts");
+  const { CAMERA } = await import("../src/sim/tuning.ts");
+  const r = createRig(0), plain = createRig(0);
+  const p = { x: 0, y: 40, z: 0 }, vel = { x: 12, y: -18, z: 0 };
+  for (let i = 0; i < 60; i++) {
+    p.x += vel.x / 60; p.y += vel.y / 60;
+    rigUpdate(r, 1 / 60, { p, speed: 22, grounded: false, hook: null, landed: false, vel }, CAMERA, null);
+    rigUpdate(plain, 1 / 60, { p, speed: 22, grounded: false, hook: null, landed: false, vel }, { ...CAMERA, lagY: 0, lookAhead: 0, speedArm: 0 }, null);
+  }
+  assert.ok(r.yLag > 0.5 && r.yLag <= CAMERA.lagYMax + 1e-9, `the look point stays ${r.yLag.toFixed(2)} m above a fast drop`);
+  assert.ok(r.target.x > plain.target.x + 0.3, "leads the sideways motion (yaw 0 looks down -z: +x is across the view)");
+  // Same view direction: the camera and the look point move together.
+  const d = (a: typeof r) => { const x = a.target.x - a.pos.x, y = a.target.y - a.pos.y, z = a.target.z - a.pos.z, l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+  const [a, b] = [d(r), d(plain)];
+  assert.ok(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 1e-9, "the aim is the same");
+  assert.ok(r.arm > plain.arm + 0.5, "the arm pulls back with speed");
+  const rm = createRig(0);
+  rigUpdate(rm, 1 / 60, { p, speed: 22, grounded: false, hook: null, landed: false, vel }, { ...CAMERA, reducedMotion: true }, null);
+  assert.equal(rm.yLag, 0);
+  assert.equal(rm.aheadX, 0);
+});

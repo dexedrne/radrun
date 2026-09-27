@@ -25,7 +25,14 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
   useFrame((state, delta) => {
     const b = game.body;
     let hook = null, web = null;
-    if (b.ropeSolid >= 0) {
+    if (b.cornerOn) {
+      // A corner swing: the web on the corner post (the camera keeps off it; the look point leans toward it).
+      tmp.hook.x = b.cornerX; tmp.hook.y = b.cornerY; tmp.hook.z = b.cornerZ;
+      hook = tmp.hook;
+      const w = tmp.web;
+      w.ax = game.renderP.x; w.ay = game.renderP.y + 0.25; w.az = game.renderP.z; w.bx = b.cornerX; w.by = b.cornerY; w.bz = b.cornerZ;
+      web = w;
+    } else if (b.ropeSolid >= 0) {
       const h = b.ropeP;
       tmp.hook.x = h.x; tmp.hook.y = h.y; tmp.hook.z = h.z;
       hook = tmp.hook;
@@ -35,14 +42,14 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
       web = w;
     }
     const speed = Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z);
-    tmp.drop += ((b.ropeSolid >= 0 ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
+    tmp.drop += ((b.ropeSolid >= 0 || b.cornerOn ? ropeDrop : 0) - tmp.drop) * Math.min(1, 5 * delta);
     tmp.p.x = game.renderP.x; tmp.p.y = game.renderP.y - tmp.drop; tmp.p.z = game.renderP.z;
     // Round 10: just off a facade (a wall run you webbed or kicked off, a wall you touched): its normal.
     const onWall = b.wallMode > 0, near = !onWall && b.touchWall >= 0 && b.touchT < game.camera.nearWallFor;
     rigUpdate(game.rig, Math.min(delta, 0.1), {
       p: tmp.p, speed, grounded: b.grounded || b.ledgeMode > 0, hook, landed: (game.frameEvents & EV_LAND) !== 0,
       wall: onWall, wallNx: onWall ? b.wallNx : b.touchNx, wallNz: onWall ? b.wallNz : b.touchNz, nearWall: near, web,
-      zip: b.zipOn || b.yankOn, charge: b.chargeT > 0, dive: b.diveOn,
+      zip: b.zipOn || b.yankOn, charge: b.chargeT > 0, dive: b.diveOn, vel: b.v,
     }, game.camera, hit);
     const r = game.rig;
     const scripted = game.scriptedCamera?.(tmp.se, tmp.sa, r.pos, r.target) ?? false;

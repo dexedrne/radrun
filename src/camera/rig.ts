@@ -40,13 +40,21 @@ export type Rig = {
   dodgePitch: number;
   /** Round 11: the camera's distance to the Radbro's chest (m) this frame (the close-camera fade reads it). */
   bodyDist: number;
+  /**
+   * The web-slinger camera: the follow point's eased vertical offset (m; it trails the swing's rise and fall, so the
+   * view does not bob with every arc) and its sideways look-ahead (m, world x / z: the Radbro sits back from the way he
+   * moves across the screen, so there is room ahead of him).
+   */
+  yLag: number;
+  aheadX: number;
+  aheadZ: number;
 };
 
 export function createRig(yaw: number, pitch = 0.12): Rig {
   const r: Rig = {
     yaw, pitch, sy: 0, cy: 1, fwd: { x: 0, y: 0, z: -1 }, arm: 6, fov: 62, kickT: 0,
     pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 }, armUsed: 6, side: 1, wallOff: 0, wallNx: 0, wallNz: 0,
-    dodgeYaw: 0, dodgePitch: 0, bodyDist: 6,
+    dodgeYaw: 0, dodgePitch: 0, bodyDist: 6, yLag: 0, aheadX: 0, aheadZ: 0,
   };
   rigLook(r, 0, 0, 0, false);
   return r;
@@ -101,6 +109,8 @@ export type RigInput = {
   zip?: boolean;
   charge?: boolean;
   dive?: boolean;
+  /** The web-slinger camera: the body's velocity (the vertical lag and the look-ahead). */
+  vel?: Vec3;
 };
 
 /** Round 11: the arm directions (yaw, pitch offsets, rad) tried when the arm is pulled in under armMin. */
@@ -125,11 +135,36 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   // Arm length by state, blended at armBlend/s.
   let armTarget = s.zip ? cam.armZip : s.dive ? cam.armDive : s.hook ? cam.armRope : s.wall ? cam.armWall : s.grounded ? cam.armGround : cam.armAir;
   if (s.charge) armTarget -= cam.chargeArm;
+  // The web-slinger camera: fast and airborne, the arm pulls back up to speedArm m (the camera falls behind a little).
+  const fast = Math.min(1, Math.max(0, (s.speed - cam.fovSpeedLo) / Math.max(1e-3, cam.fovSpeedHi - cam.fovSpeedLo)));
+  if (!s.grounded && !cam.reducedMotion) armTarget += cam.speedArm * fast;
   r.arm += (armTarget - r.arm) * Math.min(1, cam.armBlend * dt);
 
   // Target = chest; on the rope lean ropeBias of the way toward the pivot, at most ropeBiasMax m (W10). Round 12: a
   // dive looks 1 m lower.
   let tx = s.p.x, ty = s.p.y + 0.3 - (s.dive ? 1 : 0), tz = s.p.z;
+  // The web-slinger camera. Swinging (and in the air after it) the look point's height trails the body's by up to lagYMax
+  // m, eased at lagY /s, so the camera rides the arcs instead of bobbing with them; on the ground it catches up fast.
+  // Sideways, the look point leads the body's motion across the view by lookAhead s of it (at most lookAheadMax m).
+  if (cam.lagY > 0 && !cam.reducedMotion) {
+    const rate = s.grounded || s.wall ? 12 : cam.lagY;
+    r.yLag += (0 - r.yLag) * Math.min(1, rate * dt);
+    // (the offset is the eased position minus the body's: integrate the body's own vertical motion into it)
+    const vy = s.vel ? s.vel.y : 0;
+    if (!s.grounded && !s.wall) r.yLag -= vy * dt;
+    if (r.yLag > cam.lagYMax) r.yLag = cam.lagYMax; else if (r.yLag < -cam.lagYMax) r.yLag = -cam.lagYMax;
+    ty += r.yLag;
+  } else r.yLag = 0;
+  if (cam.lookAhead > 0 && s.vel && !cam.reducedMotion) {
+    // The velocity's part across the view (the camera's horizontal right), as a world offset.
+    const rx0 = r.cy, rz0 = -r.sy, lat = s.vel.x * rx0 + s.vel.z * rz0;
+    let ox = rx0 * lat * cam.lookAhead, oz = rz0 * lat * cam.lookAhead;
+    const ol = Math.sqrt(ox * ox + oz * oz);
+    if (ol > cam.lookAheadMax) { ox *= cam.lookAheadMax / ol; oz *= cam.lookAheadMax / ol; }
+    const ke = Math.min(1, 3 * dt);
+    r.aheadX += (ox - r.aheadX) * ke; r.aheadZ += (oz - r.aheadZ) * ke;
+    tx += r.aheadX; tz += r.aheadZ;
+  } else { r.aheadX = 0; r.aheadZ = 0; }
   // Round 10: next to a facade the look point eases off it, so the arm behind has room (webbing off a wall
   // run used to pull the camera into the Radbro's hair, or behind the wall).
   const nearWall = (s.wall || s.nearWall) === true;
@@ -230,7 +265,7 @@ export function rigUpdate(r: Rig, dt: number, s: RigInput, cam: CameraTuning, hi
   // FOV: widen with speed (unless reduced motion), eased; -3 deg landing kick for 0.1 s.
   const span = Math.max(1e-3, cam.fovSpeedHi - cam.fovSpeedLo);
   const boost = cam.reducedMotion ? 0 : cam.fovBoost * Math.min(1, Math.max(0, (s.speed - cam.fovSpeedLo) / span));
-  const want = cam.fov + boost + (cam.reducedMotion ? 0 : (s.zip ? cam.zipFov : 0) - (s.charge ? cam.chargeFov : 0));
+  const want = cam.fov + boost + (cam.reducedMotion ? 0 : (s.zip ? cam.zipFov : 0) + (s.dive ? cam.diveFov : 0) - (s.charge ? cam.chargeFov : 0));
   r.fov += (want - r.fov) * Math.min(1, cam.fovEase * dt);
   if (s.landed && !cam.reducedMotion) r.kickT = 0.1;
   r.kickT = Math.max(0, r.kickT - dt);
