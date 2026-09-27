@@ -1,4 +1,4 @@
-// Online wire format (docs: DESIGN §4). Pure TS shared by the client, the relay and the tests; no DOM.
+// Online wire format (multiplayer design §4). Pure TS shared by the client, the relay and the tests; no DOM.
 //
 // One step of one player's input is the ghost record (game/ghost.ts InputRec) packed into a 40-bit "word", kept as a
 // plain JS number (an integer below 2^40, so it is exact) and sent as 5 bytes:
@@ -7,7 +7,7 @@
 //   bits 18-25  right        (int8)
 //   bits 26-31  buttons      jump, webPressed, webHeld, zip, slide, slideHeld (the record's bits, ghost FORMAT 4)
 //   bits 32-39  pitch        (int8, the pitch sine x 100; round 12's straight zip)
-// DESIGN §3.4 planned a 31-bit word; round 12 added the pitch column and the C-held bit, so a step is 5 bytes.
+// multiplayer design §3.4 planned a 31-bit word; round 12 added the pitch column and the C-held bit, so a step is 5 bytes.
 //
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
 import type { InputRec } from "../game/ghost.ts";
@@ -231,7 +231,7 @@ export function decodeSlotHash(buf: Uint8Array): { step: number; hashes: number[
 
 // ---- JSON control messages ------------------------------------------------------------------------------------
 
-/** What a client must share with the room to play in it (DESIGN §3.6): mismatches get "reload to update". */
+/** What a client must share with the room to play in it (multiplayer design §3.6): mismatches get "reload to update". */
 export type Compat = { v: number; build: string; link: number; city: string; tuning: string };
 
 export type PlayerInfo = { slot: number; name: string; radbro: string; touch: boolean; easy: boolean; ready: boolean };

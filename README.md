@@ -19,6 +19,7 @@ npm run dev          # http://localhost:4870/  (title -> PLAY)
 npm test             # node --test: sim, determinism, city lint, bake checks, runner + round rules
 npm run build        # production build (dev pages stripped) + draco cleanup
 npm run build:test   # build keeping the dev pages and ?bot (preview deployments)
+node relay/dev.ts    # the SPIDER-TAG online relay, locally on :8787 (or: cd relay && npx wrangler dev --env dev)
 ```
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · hold LMB to swing on the building, cable or
@@ -33,6 +34,12 @@ zip, the charge, the tech moves, the yank): `docs/specs/2026-09-26-round12-spide
 
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
+
+SPIDER-TAG on the title (`?tag`) = web-slinger tag between Radbros: whoever holds the bag chases, a touch, a Yoink or
+a yank passes it, least time holding the bag wins. Offline against 1-3 bots now; ONLINE = 1v1 private rooms (a code
+or a link) over a tiny relay (`relay/`: a Cloudflare Worker + one Durable Object per room, or `node relay/dev.ts`
+locally) with rollback netcode on the same deterministic sim. PLAY.md "SPIDER-TAG" has the rules, how to run the
+relay locally and the steps to deploy it.
 
 Challenge links: `?c=<652|4764|2564|723>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
 Ghost links add `&s=<seed>&g=<packed run>`: that exact round with the challenger's run replayed as a

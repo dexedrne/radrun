@@ -1,4 +1,4 @@
-// One room of the RadRun relay (DESIGN §5.3), independent of the runtime: the Cloudflare Durable Object
+// One room of the RadRun relay (multiplayer design §5.3), independent of the runtime: the Cloudflare Durable Object
 // (relay/src/worker.ts) and the local Node stand-in (relay/dev.ts) both drive it through a tiny socket interface.
 //
 // Phase 1: two slots, private rooms. It is the input referee's first half: it stamps each client's slot on the inputs
@@ -21,7 +21,7 @@ export type RoomEnv = {
   random(): number;
 };
 
-/** Relay limits (DESIGN §7 `relay`). */
+/** Relay limits (multiplayer design §7 `relay`). */
 export const RELAY = { maxPlayers: 2, maxMsgBytes: 1024, maxMsgsPerSec: 90, startDelayMs: 2500, aheadSteps: 600 };
 const STEP_MS = 1000 / 120;
 const SECONDS_OK = (s: number) => Number.isFinite(s) && s >= 20 && s <= 600;

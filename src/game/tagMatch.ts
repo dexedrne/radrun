@@ -1,4 +1,4 @@
-// Spider-tag (docs: DESIGN §2.1, §3.3): up to 8 Radbros on the round-12 movement, one of them holding the bag.
+// Spider-tag (multiplayer design §2.1, §3.3): up to 8 Radbros on the round-12 movement, one of them holding the bag.
 // Touch a runner (the 1.5 m / 1.8 m tag test), web him at the red ring (Yoink) or yank onto him (ZIP in yank range)
 // and the bag passes: the new bagholder is web-tangled for tagFreeze s and can't tag the one who passed it straight
 // back for tagBack s. Score = seconds holding the bag; lowest wins at the horn (ties: fewer falls, then more tags).
@@ -26,7 +26,7 @@ import { respawnNear, type RadbroId } from "./round.ts";
 import { unpackWord } from "../net/wire.ts";
 import { emptyInput } from "../sim/player.ts";
 
-/** The tag table (DESIGN §7 `tag` group; in the match hash). Mutable so tools and tests can sweep it. */
+/** The tag table (multiplayer design §7 `tag` group; in the match hash). Mutable so tools and tests can sweep it. */
 export const TAG = {
   tagRadius: 1.5,
   tagDy: 1.8,
@@ -381,7 +381,7 @@ export class TagMatch {
 }
 
 /**
- * Spawns (DESIGN §2.4): distinct landable roofs from the city's junction candidates. The holder's roof is a seeded
+ * Spawns (multiplayer design §2.4): distinct landable roofs from the city's junction candidates. The holder's roof is a seeded
  * pick; each runner then takes the roof at least itSpawnDist from the holder that keeps the most spacing from the
  * runners placed so far (capped at 2 x spawnMinDist, so nobody is sent to a far corner), preferring roofs near that
  * ring round the holder. Yaw faces the holder (the holder faces the first runner); cosmetic (camera only).

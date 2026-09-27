@@ -1,4 +1,4 @@
-// One online match (DESIGN §3.4): the TagMatch + Rollback of this client, fed by the relay. Implements the play
+// One online match (multiplayer design §3.4): the TagMatch + Rollback of this client, fed by the relay. Implements the play
 // page's NetLink: the relay clock decides how many steps to run each frame, the local word is queued inputDelay steps
 // ahead and sent at 30 Hz (4 steps per INPUT, the last ones at once), the other player's words roll the match back
 // when they differ from the prediction, and every 60 confirmed steps a state hash rides along for the relay to

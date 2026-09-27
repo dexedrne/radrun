@@ -1,4 +1,4 @@
-// Online wire format (src/net/wire.ts; DESIGN §4): the 40-bit input word is the ghost record bit for bit, the
+// Online wire format (src/net/wire.ts; multiplayer design §4): the 40-bit input word is the ghost record bit for bit, the
 // prediction clears only the press bits, and every binary message round-trips.
 import { test } from "node:test";
 import assert from "node:assert/strict";

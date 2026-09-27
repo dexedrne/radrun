@@ -1,4 +1,4 @@
-// The RadRun relay as a Cloudflare Worker + one Durable Object per room (DESIGN §5). Routes:
+// The RadRun relay as a Cloudflare Worker + one Durable Object per room (multiplayer design §5). Routes:
 //   POST /room          -> {"code": "K7QXM"}   a fresh 5-character room code (claimed in its room object)
 //   GET  /ws?room=CODE  -> WebSocket upgrade, forwarded to that room's object (relay/src/room.ts does the rest)
 //   GET  /health        -> "ok"

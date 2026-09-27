@@ -1,4 +1,4 @@
-// The client side of the relay (DESIGN §4-§5): room creation over HTTP, one WebSocket per room, JSON control and
+// The client side of the relay (multiplayer design §4-§5): room creation over HTTP, one WebSocket per room, JSON control and
 // binary input frames, and the relay clock (PING / PONG every 0.5 s; the offset comes from the lowest round trip of
 // the last 8 samples). Part of the lazy online chunk.
 import { MSG_PONG, decodePong, encodeJson, encodePing, type ClientMsg, type ServerMsg } from "./wire.ts";

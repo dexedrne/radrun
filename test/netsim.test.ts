@@ -1,4 +1,4 @@
-// Phase 0 netcode gates (DESIGN §7) on the committed Downtown city:
+// Phase 0 netcode gates (multiplayer design §7) on the committed Downtown city:
 //   gate 1, rollback fuzz: random rewinds replay the same hash at every step as a straight run, and a Rollback fed
 //     late / out-of-order inputs ends on the straight run's hash with every confirmed hash equal to it;
 //   gate 2, netsim: 2 and 8 peers over a fake network (one-way 15-75 ms, +-30 ms jitter, TCP ordering and

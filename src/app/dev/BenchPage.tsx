@@ -1,4 +1,4 @@
-// Dev-only ?bench (DESIGN §7 gates 3 and 4): open it on a phone (vite --host, or a build:test preview) to measure
+// Dev-only ?bench (multiplayer design §7 gates 3 and 4): open it on a phone (vite --host, or a build:test preview) to measure
 // the online step cost there, and in each browser to compare the determinism self-test hash.
 //   - self-test: the bundled 600-step fixture must hash to SELFTEST_HASH (same value in every engine);
 //   - step cost: a recorded Spider-tag match (tag bots, this page's district) replayed through TagMatch.stepWords,
@@ -52,7 +52,7 @@ async function run(log: (r: Row) => void): Promise<void> {
     for (let s = 0; s < steps; s++) m.stepWords(words[s]);
     const us = ((performance.now() - t) * 1000) / (steps * n);
     if (m.hash() !== rec.hash()) log({ label: `${n} Radbros`, value: "✗ replay hash differs from the recorded run" });
-    log({ label: `step, ${n} Radbros`, value: `${us.toFixed(1)} µs per body-step · ${(us * n / 1000).toFixed(3)} ms per step` });
+    log({ label: `step, ${n} Radbros`, value: `${us.toFixed(1)} µs per body-step · ${(us * n / 1000).toFixed(3)} ms per step · match hash ${hex(m.hash())} (compare across browsers)` });
     // Rollback: load the snapshot 12 steps back and re-sim, repeated.
     const m2 = new TagMatch({ model, index, tuning, slots, seed: 3, seconds: 60, countdown: false });
     for (let s = 0; s < 600; s++) m2.stepWords(words[s]);

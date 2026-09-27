@@ -45,7 +45,7 @@ const AUTO: BotLevel | null = DEV && params.has("bot") ? ((params.get("bot") || 
 /** ?secs=N: match length override (dev / test builds). */
 const SECS = DEV && params.has("secs") ? Math.max(10, Number(params.get("secs")) || 180) : null;
 const ROOM = params.get("room");
-/** The working name; the public name is still the owner's call (DESIGN §8 decision 15). */
+/** The working name; the public name is still the owner's call (multiplayer design §8 decision 15). */
 export const TAG_NAME = "SPIDER-TAG";
 /** The online lobby + relay transport + rollback: a separate chunk, fetched only when ONLINE is pressed (or a room link). */
 const Online = lazy(() => import("../net/online.tsx"));
@@ -202,7 +202,7 @@ function flash(text: string, sub: string, color: string): void {
 function TagScene({ game }: { game: TagGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const slots = useTag(s => s.slots);
-  const hidePlayer = useCallback(() => game.mode !== "match", [game]);
+  const hidePlayer = useCallback(() => game.mode !== "match" || !!game.match?.over, [game]);
   const ropeFrom = useCallback((out: Vector3) => {
     const r = tagRigs[game.local];
     return !!r?.bones.rightHand && r.root.visible && !!r.bones.rightHand.getWorldPosition(out);

@@ -1,4 +1,4 @@
-// Spider-tag match sim (src/game/tagMatch.ts; DESIGN §2.1, §3.3) on the committed Downtown city: spawns, roles and
+// Spider-tag match sim (src/game/tagMatch.ts; multiplayer design §2.1, §3.3) on the committed Downtown city: spawns, roles and
 // the holder, touch / Yoink passes, the 1.5 s web tangle, no tag-back for 3 s, bag clocks and the horn, falls, the
 // state hash and snapshots.
 import { test } from "node:test";

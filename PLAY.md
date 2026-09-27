@@ -245,6 +245,99 @@ skill star). Numbers: `.local/r12fix/camp1.txt` and `camp-L*.txt` in the build w
 **Versions.** Links v=6 (bests / ghosts from before are the older build's), ghost format 4 (+ the pitch column and
 C held; formats 1-3 replay with the charge and dive off), pack v3 (v1 / v2 packs are rejected).
 
+## SPIDER-TAG (round 13)
+
+Web-slinger tag between Radbros: one of you holds the bag, everyone else runs. **SPIDER-TAG** on the title opens it
+(`?tag`, same district as the title; its own lazy chunk, so the single-player page load is unchanged). "Spider-tag"
+is the working name; the public name is still your call (multiplayer design §8 decision 15; it is one constant, `TAG_NAME` in
+`src/app/TagPage.tsx`, plus the title button in `src/ui/screens.tsx`).
+
+**Rules** (`src/game/tagMatch.ts`, the tag table `TAG`; tuning.json may carry a `"tag"` section with the same keys):
+- Whoever holds the bag chases. Pass it by **touching** someone (1.5 m across, 1.8 m up / down), by **Yoink** (your
+  ring on them turns red within 3.5 m: click; +1 m on touch screens) or by the **yank** (E / Shift with them in the
+  red dashed ring, up to 9 m: a homing zip onto them).
+- The new bagholder is **web-tangled** for 1.5 s (no moving, the camera still turns) and can't tag the one who just
+  passed it for 3 s.
+- Falls respawn you on your last safe roof, 1 s before you can move again; the fall itself is the cost.
+- Score = seconds holding the bag (your bag clock). **Lowest wins** at the horn; ties go to fewer falls, then more
+  tags. Offline matches are 3:00.
+- Spawns: distinct junction roofs, the first bagholder (seeded) at least 60 m from everyone.
+- Every move of the chase works for everyone: swing, zip, wall run / kick, ledge grab, vault, slide, charge leap,
+  dive, perfect releases, rebounds.
+
+**Offline** (the menu): pick your Radbro, 1-3 bots and a bot level, PLAY vs BOTS. The bots are the round-12 swinging
+bot driven by role (`src/game/tagBot.ts`): holding the bag they chase the nearest runner (leading a far one along
+its velocity) with the full kit and yank / Yoink when they can; running they swing to a junction roof away from the
+holder and not past him, re-picked every 1.5 s. **chill** bots only start running once you are within 45 m and
+swing without the new tech; **normal** bots use the whole kit and run within 75 m; **sharp** bots never stop and
+time their releases. Bot vs bot on Downtown passes the bag about once a minute; you will do better.
+
+**HUD**: the match clock; the board of bag clocks (lowest first, the running one red, 💰 = holder, 🕸 = tangled); a
+line saying who holds it; name tags with bag clocks over the others; an arrow at the screen edge to the holder (or,
+when you hold it, to your target); a red cone over the holder and the bag in their left hand; a web cocoon while
+tangled; the red ring when your Yoink is up; TAG! / YANKED! / YOINKED! flashes. **Q** / right mouse turns the camera
+to the holder (or your target). Esc pauses offline. Results: the table, REMATCH (R) or MENU.
+
+### Online (1v1 private rooms)
+
+ONLINE in the SPIDER-TAG menu loads the online chunk (`src/net/online.tsx`; nothing online is fetched before you
+press it): **CREATE ROOM** gives a 5-letter code and an invite link (`?tag&room=CODE`), a friend types the code into
+**JOIN** (or opens the link), you both pick a Radbro and press **READY**. The room plays the host's district (a
+joiner on another district gets a "go there" button). REMATCH after the results = READY again.
+
+How it works (multiplayer design §3-§5): both clients run the same deterministic match; only inputs travel, 5 bytes per step
+(`src/net/wire.ts`), sent 30 times a second. Your Radbro answers at once; the other one is predicted (their last
+input, presses cleared) and corrected by rollback when their real input arrives (`src/net/rollback.ts`), so a tag
+happens on the same step for both of you. The relay starts the match on a shared clock with a seed, stamps who sent
+what, compares state hashes every 0.5 s and the final hash at the horn ("both players' results match" on the results
+screen). Input delay is picked from your round trips: 2 steps (17 ms) up to 100 ms, 3 up to 130, 4 up to 180, then 5-6.
+Before joining, each browser runs a 600-step self-test fixture (`src/net/selftest.ts`) and refuses online play if it
+computes a different hash. Players on different builds (or tuning) are told to reload.
+
+Not in phase 1 (multiplayer design §7 phase 2-3): rooms bigger than 2, relay fills for a late / dropped player (a lagging player
+now stalls the match up to 24 steps), rejoin, checkpoints, quick match, spectators. Cross-browser determinism
+(design gate 3): Chromium and Firefox give the same `?bench` hashes (the self-test and 1200-step Downtown bot matches
+with 2 and 8 Radbros); Safari on a real iPhone is still to check (open `?bench` on a test build there).
+
+### Running the relay locally
+
+Two ways, same room logic (`relay/src/room.ts`):
+
+```sh
+node relay/dev.ts                          # Node stand-in on http://127.0.0.1:8787 (no Cloudflare tooling at all)
+node relay/dev.ts --port 8787 --lag 150    # ...with 150 ms of injected round trip between the players
+cd relay && npx wrangler dev --env dev --port 8787   # the real Worker + Durable Object in the local emulator (no sign-in)
+```
+
+Then `npm run dev` and open `http://localhost:4870/?tag` -> ONLINE (dev builds use this host's port 8787 unless
+`?relay=http://127.0.0.1:<port>` says otherwise). Two browser windows (or two browser profiles) = two players.
+Dev / test build knobs: `&lag=150` (CREATE asks the local relay for that round trip), `&secs=60` (the host's match
+length, also offline), `&bot` / `&bot=chill|normal|sharp` (your slot plays itself), `&autocreate`, `&autoready`.
+
+### Deploying the relay (your Cloudflare account, when you are ready)
+
+Nothing below has been done; no account, token or deployment exists. The relay needs no secrets, keeps no data and
+fits the free plan (multiplayer design §5: about 170 1v1 matches a day, then refused until the daily reset, never billed).
+
+1. Create a Cloudflare account under the pseudonymous identity (free plan, no card).
+2. On your machine: `cd relay && npx wrangler login` (a browser sign-in; the token stays in your home directory,
+   never in the repo).
+3. In `relay/wrangler.toml`, set `ALLOWED_ORIGINS` to the game's origin(s) (default `https://radrun.vyvanse.beer`)
+   and leave `DEV = "0"` in the top-level `[vars]`.
+4. `npx wrangler deploy`. The first time it asks for a `workers.dev` subdomain: pick a neutral one (it is public).
+   It prints the relay URL, `https://radrun-relay.<subdomain>.workers.dev`.
+5. Check it: `curl https://radrun-relay.<subdomain>.workers.dev/health` prints `ok`.
+6. Tell the game where it is, at build time: add `VITE_RELAY_URL=https://radrun-relay.<subdomain>.workers.dev` to
+   the Vercel project's Production environment (`vercel env add VITE_RELAY_URL production`, then
+   `vercel pull --yes --environment=production` in the deploy clone before `vercel build --prod`). A build without it
+   shows "Online play isn't switched on for this build yet" under ONLINE; offline SPIDER-TAG always works.
+7. Redeploy the site as usual, open https://radrun.vyvanse.beer/?tag -> ONLINE -> CREATE on one device and JOIN on
+   another.
+
+Later: `npx wrangler tail` streams the relay's logs (counters only; it never logs IPs, names or inputs);
+`npx wrangler delete` takes it down. If a match ever reports "results differ", the console of both players has the
+per-Radbro hashes of the first step that differed.
+
 ## Sound
 
 Recorded music, stings, voice lines and sound effects (109 mp3s under `public/audio/`), with the older
@@ -588,6 +681,8 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?routeview` | the runner's junction graph, with a live runner fleeing your mouse |
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`). `&snap` freezes 0.12 s into each chaser jump / release; `&snap=freefall,sky,runnerff` (any subset) freezes once in the chaser's free fall, on a long swing from a tower anchor 30+ m up (`sky`) and in the runner's free fall (`window.__unfreeze()` resumes) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`; `&clip=Free_Fall&full` any clip, whole body); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
+| `?bench` | the online step / rollback cost and the determinism self-test hash (open it on a phone and in Firefox / Safari: design gates 3-4) |
+| `?tag&bot=normal&secs=60` | SPIDER-TAG with your slot played by a tag bot (`chill` / `normal` / `sharp`) and a shorter match; online knobs in "SPIDER-TAG" |
 | `?hats` | George's three campaign hats on his head across his clips (one row per hat, 3/4 close-ups; `&yaw=` camera angle, `&lift=` / `&fwd=` try other offsets than `HAT_LIFT` / `HAT_FWD` in `src/app/hats.ts`) |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat

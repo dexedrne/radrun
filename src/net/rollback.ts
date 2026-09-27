@@ -1,4 +1,4 @@
-// Prediction + rollback (DESIGN §3.4) over a TagMatch. Pure TS, no timers, no sockets: the session feeds it the
+// Prediction + rollback (multiplayer design §3.4) over a TagMatch. Pure TS, no timers, no sockets: the session feeds it the
 // local word each step and the other players' words as they arrive; it keeps the match at the newest step,
 // predicting missing inputs (the last confirmed word, press bits cleared) and, when a confirmed word differs from
 // what a step used, restoring the snapshot before that step and re-simulating up to the present.
@@ -10,7 +10,7 @@ import { predictWord } from "./wire.ts";
 import type { TagMatch, TagSnap } from "../game/tagMatch.ts";
 
 export type RollbackOptions = {
-  /** Steps of local input delay (0-12; DESIGN §7 `net.inputDelay`). */
+  /** Steps of local input delay (0-12; multiplayer design §7 `net.inputDelay`). */
   inputDelay?: number;
   /** Never predict further ahead than this many steps past the oldest missing input (stall instead). */
   maxRollback?: number;

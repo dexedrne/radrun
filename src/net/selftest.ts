@@ -1,9 +1,7 @@
-// The online join self-test (DESIGN §3.6): a bundled 600-step, two-Radbro Spider-tag fixture on a small synthetic
+// The online join self-test (multiplayer design §3.6): a bundled 600-step, two-Radbro Spider-tag fixture on a small synthetic
 // city with the built-in movement defaults. It must hash to SELFTEST_HASH in every browser that plays online; a
 // browser whose maths rounds differently fails here (about a millisecond) instead of desyncing a match. The ?bench
-// page prints it too (Chromium, Firefox, Safari on a real iPhone: DESIGN gate 3).
-import { deriveModel } from "../world/derive.ts";
-import { DEFAULT_CONFIG } from "../world/generate.ts";
+// page prints it too (Chromium, Firefox, Safari on a real iPhone: design gate 3).
 import type { CityModel, Solid } from "../world/cityModel.ts";
 import { mulberry32 } from "../sim/math.ts";
 import { PLAYER } from "../sim/tuning.ts";
@@ -12,25 +10,34 @@ import { emptyRec, recFromInput } from "../game/ghost.ts";
 import { packWord } from "./wire.ts";
 
 /** Update when the sim changes on purpose (npm test prints the new value). */
-export const SELFTEST_HASH = 0xae787d87;
+export const SELFTEST_HASH = 0x17f91fdb;
 
 let cached: CityModel | null = null;
 
-/** 3 x 3 blocks of four 12 m buildings (one a 85-110 m tower), 4 m alleys, 18 m streets. */
+/**
+ * 3 x 3 blocks of four 12 m buildings (one a 85-110 m tower), 4 m alleys, 18 m streets. Built directly (the sim reads
+ * only the solids; no world builder in the online chunk).
+ */
 export function selfTestCity(): CityModel {
   if (cached) return cached;
   const rand = mulberry32(7);
-  const input: Omit<Solid, "id">[] = [];
+  const solids: Solid[] = [];
   const B = 12, A = 4, S = 18, pitch = 2 * B + A + S;
   for (let bz = 0; bz < 3; bz++) for (let bx = 0; bx < 3; bx++) {
     const t = Math.floor(rand() * 4), base = 44 + Math.floor(rand() * 3);
     for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-      const x0 = bx * pitch + i * (B + A), z0 = bz * pitch + j * (B + A);
-      if (i + 2 * j === t) input.push({ kind: "tower", landable: false, x0, z0, x1: x0 + B, z1: z0 + B, top: 85 + Math.floor(rand() * 26) });
-      else input.push({ kind: "roof", landable: true, x0, z0, x1: x0 + B, z1: z0 + B, top: base + [0, 0, 1, 2.5][Math.floor(rand() * 4)] });
+      const x0 = bx * pitch + i * (B + A), z0 = bz * pitch + j * (B + A), id = solids.length;
+      if (i + 2 * j === t) solids.push({ id, kind: "tower", landable: false, x0, z0, x1: x0 + B, z1: z0 + B, top: 85 + Math.floor(rand() * 26) });
+      else solids.push({ id, kind: "roof", landable: true, x0, z0, x1: x0 + B, z1: z0 + B, top: base + [0, 0, 1, 2.5][Math.floor(rand() * 4)] });
     }
   }
-  cached = deriveModel({ ...DEFAULT_CONFIG, seed: 7, street: S, alley: A, building: B, autoHooks: false }, input as Solid[]);
+  const roofs = solids.filter(r => r.landable);
+  const sp = roofs[0];
+  cached = {
+    version: 1, config: null as unknown as CityModel["config"], bounds: { x0: 0, z0: 0, x1: 3 * pitch - S, z1: 3 * pitch - S },
+    lowestRoof: Math.min(...roofs.map(r => r.top)), solids, adjacency: [], wallGaps: [], junctionCandidates: roofs.map(r => r.id),
+    spawn: { roofId: sp.id, x: (sp.x0 + sp.x1) / 2, y: sp.top + 0.9, z: (sp.z0 + sp.z1) / 2, yaw: 0 }, rigs: [], hash: "selftest",
+  };
   return cached;
 }
 
