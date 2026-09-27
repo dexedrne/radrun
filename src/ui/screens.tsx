@@ -255,13 +255,13 @@ export function Title(props: {
           {pad ? (
             <><b>controller</b>{radrunPadControls().map(([k, d]) => <span key={k + d}> · <PadText text={k} /> {d}</span>)}</>
           ) : touch ? (
-            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = faster ·
+            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = perfect, steer into a cross street = corner swing ·
             <b>ZIP</b> = zip where you look (red dashed ring on him = <b>yank</b>) · JUMP (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
-            <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = dive · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
+            <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = head-first <b>dive</b> (web out of it = fast swing) · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
-            <><b>controls</b> · mouse look/aim · WASD run · LMB hold = <b>swing</b> (let go near the top = faster) ·
+            <><b>controls</b> · mouse look/aim · WASD run · LMB hold = <b>swing</b> (let go near the top = perfect; steer into a cross street = corner swing) ·
             E / Shift = <b>zip where you look</b> (red dashed ring on him = <b>yank</b>) · Space jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
-            C tap = slide · C hold = <b>charge a leap</b> · C in the air = dive · ledges and low walls are climbed / vaulted by themselves ·
+            C tap = slide · C hold = <b>charge a leap</b> · C in the air = head-first <b>dive</b> (web out of it = fast swing) · ledges and low walls are climbed / vaulted by themselves ·
             red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
         </div>}

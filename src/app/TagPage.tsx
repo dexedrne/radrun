@@ -325,12 +325,12 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
           <div style={{ ...panel, marginTop: 10, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }} data-testid="tag-pad-help">
             <b>holding the bag</b>: <PadText text={`get within 1.5 m, or ${keysOf("web")} when your ring on them turns red (Yoink, 3.5 m), or ${keysOf("zip")} in yank range (9 m) to zip onto them.`} /><br />
             <b>tagged</b>: <PadText text={`you're web-tangled for 1.5 s and can't tag them straight back for 3 s. ${keysOf("face")} looks at the bagholder.`} /><br />
-            <PadText text={`{LS} run · {RS} look · hold ${keysOf("web")} swing · ${keysOf("jump")} jump · hold ${keysOf("slide")} charge-jump · ${keysOf("pause")} pause`} />
+            <PadText text={`{LS} run · {RS} look · hold ${keysOf("web")} swing (steer into a cross street = corner swing) · ${keysOf("jump")} jump · hold ${keysOf("slide")} charge-jump, in the air dive · ${keysOf("pause")} pause`} />
           </div>
         ) : <div style={{ ...panel, marginTop: 10, fontSize: 12, lineHeight: 1.7, textAlign: "left", display: "inline-block" }}>
           <b>holding the bag</b>: get within 1.5 m, or <b>click</b> when your ring on them turns red (Yoink, 3.5 m), or <b>E</b> in yank range (9 m) to zip onto them.<br />
           <b>tagged</b>: you're web-tangled for 1.5 s and can't tag them straight back for 3 s. <b>Q</b> / right mouse looks at the bagholder.<br />
-          every move from the chase works: swing, zip, wall run, ledge grab, slide, <b>C</b> hold to charge-jump.
+          every move from the chase works: swing (steer into a cross street = corner swing), zip, wall run, ledge grab, slide, <b>C</b> hold to charge-jump, <b>C</b> in the air to dive.
         </div>}
         <div style={{ marginTop: 10 }}>
           <button onClick={() => gotoDistrict(PAGE_DISTRICT)} style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} data-testid="tag-back" data-pad-btn="EAST">← back to RadRun</button>

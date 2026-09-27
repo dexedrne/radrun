@@ -22,8 +22,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Mouse | look / aim (PLAY captures the mouse; click the canvas if the browser refused) |
 | WASD | run |
 | Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing, a rope grab, a wall run or a ledge grab recharges it); on a wall (or just off one) = **wall kick** (round 12: each kick without touching the ground or the rope goes 0.8 m/s higher, three times); hanging on a ledge = climb-jump; **at the end of a zip = zip pop** (round 12); **right as you slam a wall = rebound kick** (round 12) |
-| LMB hold | **swing**: the yellow ring sits on a rim, a corner, a facade, or (round 12) a **cable across the street** or a gantry / skybridge / tank / billboard - whatever your aim (and your speed) points at - and glides along it as you turn. Hold to swing; let go **near the top of the arc** (35-50 degrees past the bottom) for a **perfect release**: the web flashes white, a ding, +3 m/s (round 12; just past the bottom still lifts you, round 11's timed release). LMB on a roof with a ring = the web pulls you up and off the edge into the swing. No ring = nothing tall enough ahead: run, vault, zip, leap or drop off instead |
-| C | round 12: **tap = slide** (while running fast; Space out of a slide = slide-jump), **hold = charge a leap** (a ring fills at your feet, yellow at full after 0.7 s; let go - or press Space - to launch: from a roof up to ~10 m up and 30 m across, from a wall run / run-up a big wall jump, from a ledge hang straight up, on the rope a **slingshot**), **in the air = dive** (a fresh press with 6+ m under you: straight down fast; web out of it for the biggest swings; land holding C to slide into a charge) |
+| LMB hold | **swing**: the yellow ring sits on a rim, a corner, a facade, or (round 12) a **cable across the street** or a gantry / skybridge / tank / billboard - whatever your aim (and your speed) points at - and glides along it as you turn; **the higher you are, the higher and further ahead it goes** (a longer web: a long sweeping arc that bottoms out over the street). Hold to swing: you **speed up through the bottom of the arc**; let go **near the top of the forward arc** (32-58 degrees past the bottom) for a **perfect release**: the web flashes white, a ding, +4.5 m/s and a pop up (just past the bottom still lifts you, round 11's timed release; held to the end the web lets go by itself with no boost). **Steer into a cross street at speed** (stick / keys 40+ degrees off your way, web held) and you **swing round the building's corner**. LMB on a roof with a ring = the web pulls you up and off the edge into the swing. No ring = nothing tall enough ahead: run, vault, zip, leap or drop off instead |
+| C | round 12: **tap = slide** (while running fast; Space out of a slide = slide-jump), **hold = charge a leap** (a ring fills at your feet, yellow at full after 0.7 s; let go - or press Space - to launch: from a roof up to ~10 m up and 30 m across, from a wall run / run-up a big wall jump, from a ledge hang straight up, on the rope a **slingshot**), **in the air = dive** (a fresh press with 6+ m under you, held: head first, faster than a fall - up to 46 m/s - and the stick steers it; **web out of it and the swing keeps the dive's speed**: the dive-into-swing; land holding C to slide into a charge) |
 | E / Shift | round 12: **zip where you look** - a straight pull at 30 m/s along the camera (tilted up 8 degrees) to the first thing it hits within 45 m: a rim = up and the **ledge pop** onto that roof at 12 m/s; a facade = a wall run (fast, at an angle), else a run-up, else a push off; a **cable** = a fling past it along the zip, or with LMB held you swing on it; a roof top = you land. A **white diamond** shows the target every frame (grey = out of zips / cooling down). Nothing hit = the ringed anchor if it is within 15 degrees of the aim, else the **zip fan** (the same ray again 10 and 20 degrees off the aim, 8 ways round, up first: falling down a canyon while you look at him still finds a facade, a rim or a cable), else **no zip** (the grey X; nothing spent). **Two zips per airtime** (landing, a rope grab, a wall run or a ledge grab refills them), 0.35 s apart; a second E or LMB ends a zip early. When the **red dashed ring** is on him (within 12 m on Normal / 9 m on Degen, in the aim cone, in sight; no yank on Chill), E is the **web-yank**: a homing zip at him for 0.7 s (a miss: 2.5 s before the next) |
 | (by themselves) | **wall run** (hit a facade at an angle while airborne), **run-up** (hit it head-on with the stick into it: ~5 m up the wall, then a ledge grab if the top is in reach), **ledge grab + climb** (a roof edge within reach in front of you), **vault** (a low rooftop box ahead while running), **landing roll** (a hard landing with the stick forward) |
 | LMB on the red ring (on him, in range, in sight) | YOINK |
@@ -42,9 +42,9 @@ credits (tap to show it), so the whole title fits on one screen.
 |---|---|
 | Left thumb (anywhere on the left half) | floating stick: run / steer on the rope (sideways only) / push into a wall for a run-up |
 | Drag on the right half | look / aim |
-| WEB (hold) | web the ringed building; let go to release; slide the thumb while holding to turn the camera. Turns red = YOINK |
+| WEB (hold) | web the ringed building; let go to release (near the top of the arc = perfect); the stick into a cross street at speed = corner swing; slide the thumb while holding to turn the camera. Turns red = YOINK |
 | JUMP | jump; tap again in the air = double jump; on a wall = wall kick; end of a zip = zip pop |
-| SLIDE | tap = slide, hold = charge a leap (the button wears a yellow ring; let go to launch), in the air = dive (small, left of JUMP) |
+| SLIDE | tap = slide, hold = charge a leap (the button wears a yellow ring; let go to launch), in the air = head-first dive, held (small, left of JUMP) |
 | ZIP | zip where you look (the drag on the right half sets the pitch too; the white diamond is drawn larger on touch); on the red dashed ring = the yank; dimmed while it recharges |
 | HIM (hold) | ease the camera toward him |
 | II | pause (Resume / Restart / Settings / Quit; Settings has the Low / High quality switch and the volumes) |
@@ -68,9 +68,9 @@ move switches back to the keyboard prompts. More than one pad: the one pressed l
 |---|---|---|
 | left stick | left stick | run (a light push = a jog: the stick is analog) |
 | right stick | right stick | look / aim (held at the rim it speeds up for a quick about-face) |
-| R2 (hold) | RT (hold) | **swing**; let go near the top = perfect release; on the red ring = **YOINK** |
+| R2 (hold) | RT (hold) | **swing** (steer into a cross street = corner swing); let go near the top = perfect release; on the red ring = **YOINK** |
 | Cross | A | jump; again in the air = double jump; on a wall = wall kick; end of a zip = zip pop; right at a wall slam = rebound |
-| Circle | B | tap = slide, hold = **charge a leap**, in the air = dive (the C key) |
+| Circle | B | tap = slide, hold = **charge a leap**, in the air = head-first **dive** (web out of it for a fast swing; the C key) |
 | R1 or L2 | RB or LT | **zip where you look**; on the red dashed ring = the **yank** (E / Shift) |
 | L1 or R3 | LB or RS click | ease the camera toward him (Q) |
 | Triangle (hold 1 s) | Y (hold 1 s) | retry mid-round (practice: back to the start roof) |
@@ -128,6 +128,46 @@ Low quality for smoother play — change in Settings". That choice is remembered
 itself, and once you pick Low or High in Settings it never touches the setting again. `?autoq=0` turns
 it off for that page load. The numbers are `AUTO_Q` in `src/app/autoQuality.ts`.
 
+## The web-slinger swing (round 15)
+
+Design and numbers: `docs/specs/2026-09-27-web-slinger-swing.md`. The controls are the same (LMB / R2 / WEB swing,
+C / Circle / SLIDE dive, every round 12 move as before); the swing itself got the big console web-slinger's shape:
+
+- **Web length from your height.** High over a street the ring goes to a taller rim further ahead (0.35 m higher and
+  0.3 m further per m your feet are over 12 m above the ground below, up to 34 m up): a longer web, a long sweeping
+  arc that bottoms out over the street. Low down nothing changes. The floor clamp still keeps the bottom of the arc
+  6 m over the floor, and it now reels the web in faster the faster you go, so a fast low web never scrapes the street.
+  Nothing above you in range = no ring, as before.
+- **Speed through the bottom.** The surge adds speed along the swing through the bottom of the arc (from ~37 degrees
+  before it, full at the bottom, to ~11 degrees past it). The climb after that is yours to time.
+- **Release.** Let go in the **perfect window**, 32-58 degrees past the bottom on the way up: +4.5 m/s along your
+  flight and a 2.5 m/s pop up, the web flashes white, and your Radbro flips (every other one a twirl). The web lets go
+  by itself at 58 degrees (was 50) with no release boost, so holding on is slower than timing it; round 11's timed
+  lift past 15 degrees is +6 m/s up (was 11, the perfect pop and the later release took its place). A scripted chain
+  down the Downtown avenues: 23 m/s timed (round 12: 21), 16 m/s just holding the web (round 12: 13.5).
+- **Corner swings.** Swinging (or flying with the web held) at 9+ m/s, turn the stick 40+ degrees toward a cross
+  street as you pass a building's corner on that side: a web goes onto the corner and you swing round it, level and
+  at full speed, until you face where the stick points (or let go of the stick or the web, or 1.4 s pass), then +3 m/s
+  along the new street. Jump lets go with a hop. Needs the building to stand over you and 5 m of air under you.
+- **The dive.** C in the air (6+ m under you), held: head first, faster than a fall (up to 46 m/s; a fall stops at 32),
+  and the stick turns it. **Web out of a dive** (or within 0.4 s of it) and the swing keeps the dive's speed when the
+  web goes taut; the speed over 32 m/s is carried and wears off at 5 m/s each second: the dive-into-swing.
+- **Camera.** In the air it pulls back a little with speed and the FOV widens (to +18 degrees at 34 m/s, +5 more
+  diving); it rides the swing's rise and fall instead of bobbing with every arc, leads your motion across the view so
+  there is room ahead, never rolls, and the aim is still exactly where it points. Reduced motion turns this off.
+- **Animation** (view only, procedural on the Radbro rigs over their clip packs): the **head-first dive** (body along
+  the flight, arms swept back, legs together), a **skydive spread** on a long fall (belly down, arms and legs out,
+  knees bent, a little flutter; it lets go just before the landing so the feet come down first), a livelier swing
+  (the web arm up on the web, knees tucked through the bottom of the arc, legs and the free arm reaching out at its
+  ends), a flip or twirl on a perfect release, and the hang pose on a corner web. The thief and ghosts get the same
+  poses; SPIDER-TAG too.
+- **Bots** play the same physics: the chase bots and SPIDER-TAG bots corner-swing at the crossings, the tech / sharp
+  bots dive at a target well below and let go in the wider perfect window. Balance: "The chase and difficulties".
+- **The thief keeps the round 12 swing** (his baked hops are unchanged: the packs are still v3 and bake byte for
+  byte). Ghosts and links from before this build replay with the round 12 swing and say so (see "Ghost links").
+- Every number is a `tuning.json` key with a `?tune` slider ("web-slinger swing", "corner swing", "dive", and the
+  camera's `speedArm`, `lagY` / `lagYMax`, `lookAhead` / `lookAheadMax`, `diveFov`); see "tuning.json".
+
 ## Moving (rounds 9-11; round 12 below)
 
 **The swing.** There are no grab points: webs stick to the buildings themselves. Every step the game looks
@@ -148,9 +188,9 @@ you gain speed through the bottom of the arc (pump), and **the swing goes where 
 pivot) is blocked. One speed cap, 32 m/s.
 
 **Timing (round 11).** Let go on the way up, from about 15 degrees past the bottom of the arc (the sweet
-spot) until the auto-release: the fling gets 11 m/s more up (`releaseSweet`), so a timed chain keeps its
-height. Holding on, the swing lets go by itself past about 50 degrees or near the pivot's height, with no
-extra kick; letting go at the bottom flings you flat and fast and you sink. On the upswing, with the stick
+spot) until the auto-release: the fling gets 11 m/s more up (`releaseSweet`; round 15: 6), so a timed chain keeps its
+height. Holding on, the swing lets go by itself past about 50 degrees (round 15: 58, with no release boost) or near
+the pivot's height, with no extra kick; letting go at the bottom flings you flat and fast and you sink. On the upswing, with the stick
 along the swing, the rope reels in a little (3 m/s, up to the sweet spot). A chain down an avenue (Node probe
 from every street-facing roof edge, 10 s): released on the way up +0.4 to +0.8 m per swing, holding the web
 the whole time about -0.5 m, released at the bottom about -5 m per swing (round 10: -3 m per swing for the
@@ -266,7 +306,8 @@ wall jump, from a ledge hang straight up (the climb waits while you charge), on 
 press in the air with 6+ m under you dives (12 m/s down, heavier gravity while held); landing with C held slides
 into a charge.
 
-**Tech.** Perfect release (let go 35-50 degrees past the bottom: +3 m/s, the web flashes white, a ding); rebound
+**Tech.** Perfect release (let go 35-50 degrees past the bottom: +3 m/s, the web flashes white, a ding; round 15:
+32-58 degrees, +4.5 m/s and a 2.5 m/s pop up, and a flip); rebound
 kick (Space right as you would bonk: kicked back off the wall instead); kick chains (+0.8 m/s per chained wall
 kick, 3 times); air carve (the flight bends toward the stick, speed kept); the **web-yank** (the red dashed ring
 on him: E = a homing zip at 32 m/s for 0.7 s; reaching him is a catch, "YANKED"; a miss = 2.5 s cooldown; within
@@ -365,7 +406,9 @@ happens on the same step for both of you. The relay starts the match on a shared
 what, compares state hashes every 0.5 s and the final hash at the horn ("both players' results match" on the results
 screen). Input delay is picked from your round trips: 2 steps (17 ms) up to 100 ms, 3 up to 130, 4 up to 180, then 5-6.
 Before joining, each browser runs a 600-step self-test fixture (`src/net/selftest.ts`) and refuses online play if it
-computes a different hash. Players on different builds (or tuning) are told to reload.
+computes a different hash. Players on different builds (or tuning) are told to reload. The web-slinger swing changed
+the sim: `NET_VERSION` 2 and a new self-test hash, so a tab from before it (or a relay not yet redeployed) gets
+"this game is a different version: reload to update"; redeploy the relay with the client.
 
 Not in phase 1 (multiplayer design §7 phase 2-3): rooms bigger than 2, relay fills for a late / dropped player (so a lagging
 player stalls the match for as long as they lag: past 24 steps of prediction both games wait), rejoin, checkpoints,
@@ -522,12 +565,18 @@ record format 3). Links older than v4 open with the "made on an older build" not
 raced. Bests and kept ghosts from before v4 belong to the old city: the old ghost is dropped, and your first
 catch in the new city is a new best (the results line mentions the old city's time).
 
+`v=7` is the web-slinger swing (ghost record format 5: the same columns as format 4, the swing's physics changed).
+A v6 link's ghost (format 4) replays with the round 12 swing it was made with (so it still verifies) and the banner
+says it is **from an older version** ("replayed with its own swing"); one that does not verify says "made on an
+older build". Bests and kept ghosts from before v7 are the older build's (the old best shows as the older build's on
+your first catch).
+
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
 
 How it stays exact: the sim only reads the horizontal aim direction, (round 12) the camera pitch as a sine, the
 move vector and the buttons, so a live round steps with the input **rebuilt from its quantised record** (yaw in
-1024 steps per turn, move in 1/64 steps, pitch in 1/100 steps; `src/game/ghost.ts`, record format 4). The replay feeds the same records to a second Round with the same
+1024 steps per turn, move in 1/64 steps, pitch in 1/100 steps; `src/game/ghost.ts`, record format 5). The replay feeds the same records to a second Round with the same
 seed and gets the same result bit for bit. sin/cos come from a table built with + - * / only, so a link
 made in Chrome replays the same in Safari or Firefox. The link string is varint RLE of per-step changes,
 deflate-raw (CompressionStream), base64url.
@@ -599,6 +648,28 @@ ranges (12 m Normal, 9 m Degen) make the swinging bot very strong - against the 
 ~11 s on Normal - so he is much faster (1.7-2.6x his baked pace, sprinting to 2.4-3.1x) and starts further ahead;
 the Yoink is 3 m (it was 5 / 4.5 m in round 11; at 4-5 m the bot Yoinked him in ~11-16 s whatever else changed).
 Catches are now mostly yanks from across the gap (Normal: 51-95 yanks per 200 rounds, 36-65 Yoinks).
+
+**Round 15 (the web-slinger swing)**, 200 rounds per row (`npm run balance -- --all`), the same bots on the new
+physics: they corner-swing at the crossings (per round, Normal / Degen: Downtown 1.0 / 1.9, Market 4.6 / 9.0, Docks
+1.1 / 2.9, Towers 1.0 / 1.5, Vertigo 2.5 / 3.5), the tech bot dives at him (1.0-1.6 dives a round outside Market) and
+lets go in the wider perfect window (6-11 perfect releases a round). Against the round 12 table the Degen swing bot
+caught him early (Downtown 37 s, Market 29 s, Docks 39 s), so the Degen runner got faster in those districts (Downtown
+2.3x, Market 3.0x, Docks 2.45x from 75 m) and the Towers' Degen runner 20 s less panic (it had dropped to 50 %):
+
+| | Chill swing (info) | Normal swing (target median 25-40 s) | Degen swing (target 50-95 %, median 40-70 s) | Degen tech bot (target >= 80 %, 30-50 s) | falls / round (Normal / Degen) |
+|---|---|---|---|---|---|
+| Downtown | 100 %, 9.3 s | 86 %, 31.1 s | 60 %, 42.0 s | 63 %, 37.4 s (MISS) | 0.04 / 0.01 |
+| Night Market | 100 %, 7.3 s | 99 %, 33.9 s | 71 %, 41.2 s | 74 %, 32.4 s (MISS; round 12: 82 %) | 0.13 / 0.19 |
+| The Docks | 100 %, 9.2 s | 98 %, 28.9 s | 53 %, 41.3 s | 61 %, 37.2 s (MISS) | 0.03 / 0.04 |
+| The Towers | 100 %, 9.1 s | 70 %, 39.8 s | 69 %, 58.7 s | 71 %, 49.4 s (MISS) | 0.02 / 0.01 |
+| Vertigo | 100 %, 8.2 s | 87 %, 33.5 s | **49 %**, 20.1 s (MISS) | 48 %, 21.8 s (MISS) | 0.07 / 0.01 |
+
+The camper is unchanged (0-18 %). Misses: the tech row everywhere (it reached 80 % only in Market before, and the
+faster Market Degen runner took that away: 74 %), and Vertigo Degen, which missed before too (45 %, 48.5 s) and is
+chaotic here: small runner changes move it between 25 % / 36 s, 41 % / 64 s, 49 % / 20 s and 76 % / 30 s (base +-0.02,
+gStar +-10, panic, head start and Yoink all tried), so it is left on the round 12 settings for a human play-test to
+decide. Corner swings were worth the most to the bot in Market (Normal median 43 s without them, 34 s with them) - and
+cost it falls until a corner swing held you up (0.42 falls a round, now 0.13).
 
 Round 12 balance, 200 rounds per row (`npm run balance -- --all`), the swing bot with the full kit (zips, leaps,
 the yank; it swings to the auto-release), and the tech bot (the same plus perfect releases when he is above it, the
@@ -836,11 +907,11 @@ Round 9 movement keys (all in `?tune`; the full list with ranges is the spec's �
 |---|---|
 | speed | `speedCap` 32 (one cap for every state), `carryDecay` 8, `releaseBoost` 2, `releaseUp` 3, `autoReleaseBelow` 2.5, `ropeSteer` 4 (sideways only), `swingAlign` 2.5 (round 10: 1/s the swing turns toward the stick; 0 = a free pendulum), `hysteresis` 4, `bonkMinSpeed` 14, `bonkRatio` 0.85 |
 | anchor search | `ropeMin` 8, `ropeMax` 42, `anchorMinAbove` 5, `anchorAhead` 10, `anchorAheadPerSpeed` 0.5, `anchorUp` 24 (round 9: 18), `anchorVelBias` 0.6, `anchorRimBonus` 2, `anchorAlternate` 3, `aimCosFall` -0.2 (round 10: the falling fallback cone, about 100 degrees; >= `aimCos` = off) |
-| pendulum | `swingOut` 12 / `swingOutFree` 0.5 / `swingOutMin` 4 (round 10: the pivot sits `swingOutFree` of the open air in front of the face out, at most as far out as you, within 4-12 m; round 9: 5 m), `swingFloorClear` 6, `swingReel` 10, `swingGravity` 1.35, `swingPump` 5, `swingKeepSpeed` 1.6, `swingReleaseCos` 0.64 (about 50 degrees), `swingRehook` 0.18, `losSteps` 12 |
+| pendulum | `swingOut` 12 / `swingOutFree` 0.5 / `swingOutMin` 4 (round 10: the pivot sits `swingOutFree` of the open air in front of the face out, at most as far out as you, within 4-12 m; round 9: 5 m), `swingFloorClear` 6, `swingReel` 10, `swingGravity` 1.35, `swingPump` 5, `swingKeepSpeed` 1.6, `swingReleaseCos` 0.64 (about 50 degrees; round 15: 0.53 for you, the thief keeps 0.64), `swingRehook` 0.18, `losSteps` 12 |
 | wall | `wallRun`, `wallRunReach` 0.6, `wallRunMinSpeed` 5, `wallRunRatio` 1, `wallRunMinBelowTop` 1.5, `wallRunFallMax` -12, `wallRunTime` 1.4, `wallRunSpeed` 11, `wallRunAccel` 10, `wallRunGravity` 0.2, `wallRunKick` 3, `wallRunCooldown` 0.25, `wallClimbSpeed` 9, `wallClimbTime` 0.6, `wallClimbKeep` 0.55 (round 10: the run-up starts at this fraction of the speed you hit the wall at), `wallJumpOut` 7, `wallJumpUp` 9.5, `wallJumpKeep` 0.9, `wallJumpGrace` 0.15 |
 | ledge | `ledgeGrab`, `ledgeLow` 0.4, `ledgeHigh` 2.3, `ledgeMaxVy` 4, `ledgeHang` 0.2, `ledgeClimbTime` 0.35, `ledgeExitSpeed` 6, `ledgeJumpUp` 7 |
 | vault / slide / landing | `vault`, `vaultMax` 1.5, `vaultLook` 0.8, `vaultMinSpeed` 5, `vaultClear` 0.35 · `slide`, `slideMinSpeed` 6, `slideTime` 0.8, `slideDecay` 3, `slideSteer` 6, `slideJumpFwd` 2.5, `slideBuffer` 0.25 · `rollMinVy` -15, `rollTime` 0.45, `stumbleVy` -24, `stumbleKeep` 0.4, `stumbleLock` 0.35, `failFloor` 2 |
-| camera / mechanics | `ropeBiasMax` 3, `armRope` 9, `armWall` 6.5, `fovSpeedLo` 10, `fovSpeedHi` 28, `wallAway` 1.2 / `nearWallFor` 0.7 (round 10: on a wall run and 0.7 s after leaving a wall the camera's look point sits 1.2 m off it, so webbing off a wall run keeps the Radbro in frame) · `snapTime` 1.6 |
+| camera / mechanics | `ropeBiasMax` 3, `armRope` 9, `armWall` 6.5, `fovSpeedLo` 10, `fovSpeedHi` 28 (round 15: 34), `wallAway` 1.2 / `nearWallFor` 0.7 (round 10: on a wall run and 0.7 s after leaving a wall the camera's look point sits 1.2 m off it, so webbing off a wall run keeps the Radbro in frame) · `snapTime` 1.6 |
 
 Double jump and slide: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.5). Round 12 keys (all in
 `?tune`, ranges from the spec's §9, `docs/specs/2026-09-26-round12-spider-tag.md`):
@@ -850,14 +921,18 @@ Double jump and slide: `airJumps` (1; 0 = no double jump), `doubleJumpSpeed` (7.
 | straight zip | `zipSpeed` 30, `zipPull` 60 (on the line within ~4 steps), `zipCooldown` 0.35, `zipMaxTime` 1.6, `zipReach` 45, `zipLift` 0.14 (the aim is pitched up ~8 degrees; a sine), `zipAimMin` -0.34 / `zipAimMax` 0.77 (sines), `zipRigAssist` 1.2 (a cable this close to the ray counts), `zipAssistCos` 0.966 (the ringed anchor within 15 degrees when the ray hits nothing), `zipFanCos` 0.94 (then the zip fan: the ray again at half and the full 20 degrees off the aim, 8 ways round; 1 = off), `zipStop` 1, `zipKeep` 0.85, `zipCharges` 2, `zipRimReach` 2.5, `zipLedgeSpeed` 12 / `zipLedgeUp` 4 (the ledge pop), `zipFlingUp` 3 (the cable fling), `zipPopWindow` 0.25 / `zipPopUp` 14 / `zipPopFwd` 6 (the pop) |
 | rig anchors | `rigBonus` 4 (a cable scores this many m better), `rigEndInset` 2, `rigSide` 1 / `rigSideFree` 4 (a cable point more than 4 m off your line scores 1 worse per m), `rigNear` 2 / `rigNearAhead` 12 (one less than 12 m ahead scores 2 worse per m short) |
 | charge | `charge`, `chargeMin` 0.15, `chargeTime` 0.55, `chargeWalk` 4, `chargeUp` 13, `chargeFwd` 8, `chargeWallOut` 6, `chargeWallUp` 8, `chargeHangMax` 1.5, `chargeFling` 8, `chargeFlingUp` 4, `chargeAir` 0.3 |
-| tech (player only) | `swingPerfectCos` 0.82 (35 degrees), `releasePerfect` 3, `reboundWindow` 0.12, `reboundKeep` 0.6, `kickChainUp` 0.8, `dive`, `diveMinDrop` 6, `diveSpeed` 12, `diveGravity` 1.5, `yankSpeed` 32, `yankTime` 0.7, `yankCooldown` 2.5, `airTurn` 1.6, `flowCap` 2, `flowDecay` 2.5 |
+| tech (player only) | `swingPerfectCos` 0.82 (35 degrees; round 15: 0.85, 32 degrees), `releasePerfect` 3 (round 15: 4.5), `reboundWindow` 0.12, `reboundKeep` 0.6, `kickChainUp` 0.8, `dive`, `diveMinDrop` 6, `diveSpeed` 12, `diveGravity` 1.5, `yankSpeed` 32, `yankTime` 0.7, `yankCooldown` 2.5, `airTurn` 1.6, `flowCap` 2, `flowDecay` 2.5 |
 | camera | `zipFov` 6, `armZip` 6.5, `armDive` 8, `chargeArm` 0.5, `chargeFov` 3 |
+| web-slinger swing (round 15, player only) | `anchorHeightGain` 0.35 / `anchorHeightAhead` 0.3 / `anchorHeightFree` 12 / `anchorUpMax` 34 (web length from your height), `swingSurge` 8 / `swingSurgeCos` 0.8 (the surge), `swingReelPerSpeed` 0.7 (the floor-clamp reel per m/s), `releasePerfectUp` 2.5, `autoReleaseKeep` 0 (the share of `releaseBoost` a held-to-the-end fling gets); retuned: `swingReleaseCos` 0.53 (58 degrees; the thief keeps 0.64), `swingPerfectCos` 0.85 (32 degrees), `releasePerfect` 4.5, `releaseSweet` 6 |
+| corner swing (player only) | `cornerSwing`, `cornerReach` 13, `cornerMinSpeed` 9, `cornerStick` 0.6 (the stick's sine off your way), `cornerGravity` 0.3, `cornerBoost` 3, `cornerMaxT` 1.4, `cornerExitCos` 0.97 |
+| dive (player only) | `diveCap` 46 (the speed cap while diving), `diveTurn` 0.9 (rad/s), `diveCarryDecay` 5, `diveKeep` 2.5 / `diveSwingT` 0.4 (the dive-into-swing) |
+| web-slinger camera | `speedArm` 2, `lagY` 4 / `lagYMax` 1.6, `lookAhead` 0.06 / `lookAheadMax` 1.4, `diveFov` 5; the speed FOV now `fovBoost` 18 over `fovSpeedLo` 10 - `fovSpeedHi` 34 |
 | difficulty | `yankRange` per difficulty (Chill 0 = no yank, Normal 12, Degen 9: the owner's ranges; the district tweaks never change it) |
 | structures | `structures.default` + `structures.<district>`: `cables`, `cableTier1` / `cableTier2`, `cableMin`, `cableSag`, `rigApart`, `cablePairs` (1 = one cable per street pair at its centre, 2 = one near each end) / `cableInset`, `gantry`, `gantryMin` / `gantryMax` / `gantryMinL`, `skybridge` / `skybridgeLo` / `skybridgeHi`, `tanks` / `tankLo` / `tankHi`, `boards` / `boardLo` / `boardHi`, `stacks` / `stackBelowLo` / `stackBelowHi` (the §2.2 district table is the default) |
 
 **The runner zips and charges too** (his zip-up hops and leaps), so the zip, charge, rig and structure keys
-are part of his bake; the double jump, slide, tech, zip-aim / pop and camera keys are not (tuning them never
-stales a pack). After a runner-used key or a structure knob: `npm run level -- --all`, then `npm run
+are part of his bake; the double jump, slide, tech, zip-aim / pop, web-slinger swing / corner / dive and camera keys
+are not (tuning them never stales a pack; the thief's preset pins `swingReleaseCos` at 0.64). After a runner-used key or a structure knob: `npm run level -- --all`, then `npm run
 balance -- --all`; after a runner-unused key: balance only; after a camera key: nothing. The structure sliders
 re-derive the structures live in `?sandbox`; a chase keeps the baked `city.model.json` until `npm run level`.
 

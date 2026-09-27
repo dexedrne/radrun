@@ -95,12 +95,12 @@ function snapRound7(game: PlayGame, kinds: string[]): void {
     const run = game.round.runner.pose;
     const air = chaser?.air;
     if (left.has("freefall") && chaser?.machine.ff && chaser.machine.ffT >= 0.45 && !b.grounded && b.ropeSolid < 0 && b.v.y < -3) why = "freefall";
-    else if (left.has("dive") && air && air.dive > 0.95 && b.diveOn) why = "dive";
+    else if (left.has("dive") && air && air.dive > 0.6 && b.diveOn) why = "dive";
     else if (left.has("skydive") && air && air.sky > 0.95 && !b.diveOn) why = "skydive";
     else if (left.has("tuck") && air && air.swing > 0.95 && air.tuck > 0.9 && b.ropeSolid >= 0) why = "tuck";
     else if (left.has("reach") && air && air.swing > 0.95 && air.tuck < 0.05 && b.ropeSolid >= 0 && b.ropeTaut) why = "reach";
-    else if (left.has("flip") && air && air.flipT > 0.18 && air.flipT < 0.4) why = "flip";
-    else if (left.has("corner") && b.cornerOn && b.cornerT > 0.25) why = "corner";
+    else if (left.has("flip") && air && air.flipT > 0.1 && air.flipT < 0.45) why = "flip";
+    else if (left.has("corner") && b.cornerOn && b.cornerT > 0.08) why = "corner";
     else if (left.has("sky") && sky >= 0.35) why = "sky";
     else if (left.has("runnerff") && runner?.machine.ff && runner.machine.ffT >= 0.45 && run.phase === PHASE_AIR) why = "runnerff";
     if (why) {

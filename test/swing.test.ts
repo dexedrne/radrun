@@ -248,7 +248,7 @@ test("camera: the look point trails the swing's height (bounded) and leads the m
   const d = (a: typeof r) => { const x = a.target.x - a.pos.x, y = a.target.y - a.pos.y, z = a.target.z - a.pos.z, l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
   const [a, b] = [d(r), d(plain)];
   assert.ok(Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 1e-9, "the aim is the same");
-  assert.ok(r.arm > plain.arm + 0.5, "the arm pulls back with speed");
+  assert.ok(r.arm > plain.arm + 0.3, "the arm pulls back with speed");
   const rm = createRig(0);
   rigUpdate(rm, 1 / 60, { p, speed: 22, grounded: false, hook: null, landed: false, vel }, { ...CAMERA, reducedMotion: true }, null);
   assert.equal(rm.yLag, 0);

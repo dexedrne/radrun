@@ -61,8 +61,43 @@ A dive from 75 m over a street reaches 46 m/s (a fall: 32); webbing out of it sw
 
 ## 3. Camera (view only)
 
-`rig.ts`: in the air the arm pulls back up to `speedArm` m with speed; the look point's height trails the body's by up
+`rig.ts`: in the air the arm pulls back up to `speedArm` (1) m with speed; the look point's height trails the body's by up
 to `lagYMax` m (eased at `lagY` /s), so the camera rides the arcs instead of bobbing with each one; sideways it leads the
 body's motion across the view by `lookAhead` s (at most `lookAheadMax` m) so there is room ahead; diving adds `diveFov`
 deg; the speed FOV now spans 10-34 m/s (+18 deg). The view direction is still exactly the aim (the look point and the
 camera move together), the horizon never rolls, and reduced motion turns all of it off.
+
+## 4. Animation (view only)
+
+`src/app/airPose.ts`, used by `ActorsView` (the chaser and the thief), `GhostView` and `TagActors` (every SPIDER-TAG
+Radbro). No new asset files; nothing feeds back into the sim.
+
+- **Weights** (`stepAirPose`, eased per frame): `dive` (the sim's `diveOn`), `sky` (airborne with no web / zip / wall /
+  ledge, falling faster than 7 m/s with 4.5+ m below), `swing` (hanging from a web: rope or corner post) with its `tuck`
+  share from the web's angle (0.82 -> 0.97 cosine from straight down = the bottom of the arc), and a flip clock started
+  by a perfect release (0.62 s; every other one a twirl). Close above the ground (`near`: under max(2.2 m, 0.09 s of the
+  fall)) every air pose lets go fast, so the landing clips see feet first.
+- **Root** (`placeRoot`, the -5 pass): the view's own orientation (yaw, rope tilt, wall roll) is turned toward the dive
+  (model up along the velocity, belly to the ground) and the skydive (level, belly down, head 0.22 rad up) by their
+  weights and eased as before; the flip is applied on top (not eased); while a pose turns the body the root sits round
+  the body's centre (its origin 0.9 m down the body's axis), not round the feet.
+- **Limbs** (`airBones`, the -3 pass, after the mixer and the view's arm / hip turns, before the rope-hand correction):
+  each upper / lower arm and leg bone (and the chest) is turned so the direction to its child points where the blended
+  pose wants it, in the body's frame (right / up / forward), by the pose weight - rig-agnostic (only the Mixamo-style
+  bone names every Radbro rig has), so the clip underneath shows through as the weights fade. The swing layer never
+  touches the web arm (the right hand stays on the web). The skydive has a small flutter.
+- **The clip under it**: the dive now plays the free-fall loop (upright, arms sculling) instead of the bought swan-dive
+  clips (they read as the wrong dives); the skydive rides the same loop; the swing keeps the hang clip.
+
+Checked headless on the test build (`?bot=chase&tech&snap=dive,skydive,tuck,reach,flip,corner` freezes on each pose;
+close-up shots through the dev camera hook): the catch step matched Node, and the only console errors were the
+sandbox's blocked external downloads.
+
+## 5. Bots and balance
+
+The bots play the same physics (their input goes through the same sim): the full-kit swing bot corner-swings at the
+crossings when it changes lanes, the tech bot (and SPIDER-TAG's sharp bots) dive at a target well below and let go in
+the wider perfect window. Degen was retuned per district (`src/world/districts.ts`); PLAY.md "The chase and
+difficulties" has the before / after table. Every banded swing row is in band except the tech rows (they missed in 4
+of 5 districts before; Market's slipped from 82 to 74 % with the faster Degen runner there) and Vertigo Degen (a miss
+before too; chaotic under every knob tried).

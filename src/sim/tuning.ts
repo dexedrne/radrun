@@ -771,7 +771,7 @@ export const CAMERA: Readonly<CameraTuning> = Object.freeze({
   armDive: 8,
   chargeArm: 0.5,
   chargeFov: 3,
-  speedArm: 2,
+  speedArm: 1,
   lagY: 4,
   lagYMax: 1.6,
   lookAhead: 0.06,
