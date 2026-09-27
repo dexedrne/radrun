@@ -26,6 +26,8 @@ export interface NetLink {
   step(word: number): boolean;
   /** The match result is final (every input up to the horn is confirmed). */
   readonly final: boolean;
+  /** How long (ms) the match has been waiting for the other player's inputs (0 = it is not). */
+  readonly waitMs: number;
 }
 
 export type TagSetup = { slots: TagSlot[]; seed: number; seconds?: number; bots?: BotLevel };

@@ -1,6 +1,6 @@
 # RadRun relay: a Cloudflare Worker + one Durable Object per room (free plan; no secrets, no storage).
-# Local:  cd relay && npx wrangler dev          (or, with no network sign-in at all: node relay/dev.ts)
-# Deploy: PLAY.md "Online play: deploying the relay" (the owner's own Cloudflare account).
+# Local:  npm run relay:worker   (wrangler 4.141.0 via npx, pinned; or, with no Cloudflare tooling at all: npm run relay)
+# Deploy: PLAY.md "Deploying the relay" (the owner's own Cloudflare account; the same pinned wrangler version).
 name = "radrun-relay"
 main = "src/worker.ts"
 compatibility_date = "2026-09-01"

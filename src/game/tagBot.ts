@@ -7,7 +7,7 @@
 // so a bot slot replays and runs online exactly like a player slot. Deterministic: no Math.random, sqrt-only maths.
 import { SwingBot } from "./bots.ts";
 import { RM_LOOK } from "../runner/runner.ts";
-import { chaseDist, emptyInput, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
+import { chaseDist, emptyInput, WALL_UP, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import type { CityIndex, CityModel } from "../world/cityModel.ts";
 import type { Vec3 } from "../sim/math.ts";
@@ -31,6 +31,12 @@ export const BOT_LEVELS: Record<BotLevel, { alert: number; react: number; moves:
 };
 /** Holding the bag, a bot aims this many seconds ahead of its target (up to leadMax s, at leadPer m per s of lead). */
 export const CHASE = { leadMax: 1.0, leadPer: 25, leadFrom: 15 };
+
+/**
+ * Holding the bag, a climb up a wall that tops out more than climbAbove m over its target is a detour (the swing bot
+ * goes over a tower that is in the way): it kicks off sideways, toward him, and goes round instead.
+ */
+export const UNSTICK = { climbAbove: 15, kickOut: 0.6 };
 
 /** Flee planning (mutable for tools). */
 export const FLEE = {
@@ -137,13 +143,34 @@ export class TagBot {
       r.roofId = this.goalRoof;
       if (this.wasHolder) { pr.x = r.p.x; pr.y = r.p.y; pr.z = r.p.z; }
     }
-    if (holder) { this.fleeing = true; this.alerted = 0; }
+    if (holder) { this.fleeing = true; this.alerted = 0; this.chaser.yankAway = m.heat > 0; }
     this.wasHolder = holder;
     this.bot = holder ? this.chaser : this.runner;
     const f = this.frame;
     this.bot.next(v as unknown as Round, f);
+    if (holder && b.wallMode === WALL_UP) this.unstick(m, b, f);
     recFromFrame(this.rec, f);
     return packWord(this.rec);
+  }
+
+  /** Holding the bag, climbing a wall far higher than the target: kick off it along the wall toward him. */
+  private unstick(m: TagMatch, b: Body, f: InputFrame): void {
+    const top = m.model.solids[b.wallSolid]?.top ?? -Infinity;
+    const q = m.bodies[m.target[this.slot] >= 0 ? m.target[this.slot] : this.nearest(m, b)].p;
+    if (top < q.y + UNSTICK.climbAbove) return;
+    const nx = b.wallNx, nz = b.wallNz, dx = q.x - b.p.x, dz = q.z - b.p.z;
+    const sgn = dx * -nz + dz * nx >= 0 ? 1 : -1;
+    let mx = -nz * sgn + nx * UNSTICK.kickOut, mz = nx * sgn + nz * UNSTICK.kickOut;
+    const l = Math.sqrt(mx * mx + mz * mz) || 1;
+    mx /= l; mz /= l;
+    f.moveX = mx; f.moveZ = mz; f.aimX = mx; f.aimZ = mz; f.aimY = 0;
+    f.jumpPressed = true; f.webPressed = f.webHeld = f.zipPressed = false;
+  }
+
+  private nearest(m: TagMatch, b: Body): number {
+    let t = -1, best = Infinity;
+    for (let i = 0; i < m.n; i++) if (i !== this.slot) { const d = chaseDist(b.p, m.bodies[i].p); if (d < best) { best = d; t = i; } }
+    return t;
   }
 
   /** After the match stepped (the bot's per-step bookkeeping). */

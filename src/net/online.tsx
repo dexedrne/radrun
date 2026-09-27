@@ -1,10 +1,12 @@
 // ONLINE (the lazy net chunk, loaded only when ONLINE is pressed or a room link is opened): the lobby for 1v1 private
 // rooms (CREATE gives a code + a link, JOIN takes a code; pick a Radbro; READY), then the match through the relay with
-// rollback (net/session.ts) and the results agreement. Stays mounted during the match to keep the socket.
+// rollback (net/session.ts) and the results agreement. Stays mounted during the match to keep the socket, and says
+// what it is waiting for (the other player's inputs, a rematch, a player who left); a match that waits on the other
+// player for GIVE_UP_MS is abandoned (the socket closes, so the relay tells him too).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TagGame } from "../game/tagGame.ts";
 import { TAG } from "../game/tagMatch.ts";
-import { RADBROS, type RadbroId } from "../game/round.ts";
+import { RADBROS, isRadbroId, type RadbroId } from "../game/radbros.ts";
 import { Fnv1a } from "../sim/math.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import { DISTRICTS, isDistrictId, type DistrictId } from "../world/districts.ts";
@@ -26,6 +28,8 @@ const SECS = DEV && params.has("secs") ? Number(params.get("secs")) : null;
 const LAG = DEV ? Number(params.get("lag") ?? 0) || 0 : 0;
 const AUTOREADY = DEV && params.has("autoready");
 const AUTOCREATE = DEV && params.has("autocreate");
+/** A match waiting this long (ms) on the other player's inputs is abandoned. */
+const GIVE_UP_MS = 30_000;
 
 /** The match rules both clients must share: every player tuning key and the tag table. */
 function tuningHash(t: Tuning): string {
@@ -45,7 +49,12 @@ function tuningHash(t: Tuning): string {
 type Phase = "home" | "connecting" | "lobby" | "loading" | "match" | "error";
 
 declare global {
-  interface Window { __room?: { code: string; slot: number; phase: string; players: number; desyncs: number; rtt: number; inputDelay: number; stalls: number; rollbacks: number; p99: number; sent: number; recv: number } }
+  interface Window {
+    __room?: {
+      code: string; slot: number; phase: string; players: number; desyncs: number; rtt: number; inputDelay: number; stalls: number; rollbacks: number; p99: number; sent: number; recv: number;
+      inputs: number; waitMs: number; maxWaitMs: number; behind: number; maxBehind: number; status: string;
+    };
+  }
 }
 
 export default function Online(props: { game: TagGame; radbro: RadbroId; setRadbro: (r: RadbroId) => void; room: string | null; district: DistrictId; onExit: () => void }) {
@@ -63,6 +72,8 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   const tRef = useRef<Transport | null>(null);
   const sRef = useRef<OnlineSession | null>(null);
   const slotRef = useRef(-1);
+  const playersRef = useRef<PlayerInfo[]>([]);
+  const readyRef = useRef(false);
   const screen = useTag(s => s.screen);
   const selfOk = useMemo(() => selfTestHash() === SELFTEST_HASH, []);
 
@@ -72,26 +83,35 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
     tRef.current?.close();
     tRef.current = null;
     sRef.current = null;
-    useTag.setState({ net: null, netStatus: "" });
+    useTag.setState({ net: null, netStatus: "", netGone: false });
   }, []);
 
-  const begin = useCallback(async (s: StartMsg) => {
-    const t = tRef.current;
-    if (!t) return;
+  /** Leave the match (not the page) with a message: the socket closes, so the relay tells the other player. */
+  const abandon = useCallback((why: string) => {
+    leave();
+    game.toMenu();
+    setErr(why);
+    setPhase("error");
+    useTag.setState({ screen: "online", hud: null });
+  }, [game, leave]);
+
+  /** The models, then the match (the session already exists and is collecting the other player's inputs). */
+  const begin = useCallback(async (s: StartMsg, session: OnlineSession) => {
     const ids = s.slots.map(p => p.radbro as RadbroId);
     setPhase("loading");
     if (useTag.getState().screen !== "match") useTag.setState({ screen: "loading", flash: null, agreed: null });
-    if (!(await loadRadbros(ids))) { setErr("couldn't load the Radbros"); setPhase("error"); return; }
+    const loaded = await loadRadbros(ids);
+    if (sRef.current !== session) return; // dropped or replaced while loading
+    if (!loaded) { abandon("couldn't load the Radbros"); return; }
     const local = slotRef.current;
-    useTag.setState({ slots: ids, names: s.slots.map(p => (p.slot === local ? "YOU" : `#${p.radbro}`)), agreed: null, flash: null });
+    useTag.setState({ slots: ids, names: s.slots.map(p => (p.slot === local ? "YOU" : `#${p.radbro}`)), agreed: null, flash: null, netStatus: "", netGone: false });
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const session = new OnlineSession({ model: game.model, index: game.index, tuning: game.tuning, start: s, local, transport: t });
+    if (sRef.current !== session) return;
     session.rb.onFresh = () => game.fresh();
-    sRef.current = session;
     game.startOnline(session);
     setPhase("match");
     useTag.setState({ screen: "match" });
-  }, [game]);
+  }, [abandon, game]);
 
   const onMsg = useCallback((m: ServerMsg) => {
     switch (m.t) {
@@ -105,22 +125,39 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         if (m.host && SECS && SECS !== m.config.seconds) tRef.current?.sendJson({ t: "config", seconds: SECS });
         history.replaceState(null, "", `?tag&room=${m.room}${location.search.includes("map=") ? `&map=${new URLSearchParams(location.search).get("map")}` : ""}${keepDevParams()}`);
         return;
-      case "lobby":
+      case "lobby": {
         setPlayers(m.players);
+        playersRef.current = m.players;
         setConfig(m.config);
         // Preload everyone's Radbro while waiting (the start then only builds the match).
-        void loadRadbros(m.players.map(p => p.radbro as RadbroId));
+        void loadRadbros(m.players.map(p => p.radbro).filter(isRadbroId));
+        // At the results: say what the other player did.
+        if (useTag.getState().screen === "results") {
+          const other = m.players.find(p => p.slot !== slotRef.current);
+          const status = !other ? "the other player left the room" : readyRef.current ? "waiting for the other player…" : other.ready ? "the other player wants a rematch" : "";
+          useTag.setState({ netStatus: status, netGone: !other });
+        }
         return;
-      case "start":
+      }
+      case "start": {
         setReady(false);
-        void begin(m);
+        readyRef.current = false;
+        const t = tRef.current;
+        if (!t) return;
+        if (!m.slots.every(p => isRadbroId(p.radbro))) { abandon("the other player has a Radbro this version doesn't know: both of you reload"); return; }
+        // Build the session now, before the models load: the other player's inputs that arrive meanwhile (a slow load,
+        // this tab hidden) queue in its rollback, and the last match's session stops receiving at once.
+        const session = new OnlineSession({ model: game.model, index: game.index, tuning: game.tuning, start: m, local: slotRef.current, transport: t });
+        sRef.current = session;
+        void begin(m, session);
         return;
+      }
       case "drop":
         game.toMenu();
         sRef.current = null;
         setPhase("lobby");
         setErr("your opponent left the match");
-        useTag.setState({ screen: "online", hud: null });
+        useTag.setState({ screen: "online", hud: null, netStatus: "", netGone: false });
         return;
       case "result":
         useTag.setState({ agreed: m.ok });
@@ -130,7 +167,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         setPhase("error");
         return;
     }
-  }, [begin, game]);
+  }, [abandon, begin, game]);
 
   const connect = useCallback(async (room: string | null) => {
     if (!base) return;
@@ -151,7 +188,21 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         if (game.link) { game.toMenu(); useTag.setState({ screen: "online", hud: null }); }
       };
       await t.connect(base, c);
-      useTag.setState({ net: { rematch: () => { t.sendJson({ t: "ready", ready: true, rtt: rttOf(t) }); setReady(true); useTag.setState({ netStatus: "waiting for the other player…" }); }, leave } });
+      const rematch = () => {
+        // The other player left at the results: back to the room (its code / link) to wait for someone.
+        if (playersRef.current.length < 2) {
+          game.toMenu();
+          sRef.current = null;
+          setPhase("lobby");
+          useTag.setState({ screen: "online", hud: null, netStatus: "", netGone: false });
+          return;
+        }
+        t.sendJson({ t: "ready", ready: true, rtt: rttOf(t) });
+        setReady(true);
+        readyRef.current = true;
+        useTag.setState({ netStatus: "waiting for the other player…" });
+      };
+      useTag.setState({ net: { rematch, leave } });
       t.sendJson({ t: "hello", compat: compat(), name: cleanName(`radbro${props.radbro}`), radbro: props.radbro, touch: game.touch, easy: game.camera.easyGrab, district: props.district });
     } catch (e) {
       setErr(String((e as Error).message ?? e));
@@ -177,6 +228,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
     if (!t) return;
     t.sendJson({ t: "ready", ready: !ready, rtt: rttOf(t) });
     setReady(!ready);
+    readyRef.current = !ready;
   }, [ready]);
   useEffect(() => {
     if (AUTOREADY && phase === "lobby" && players.length === 2 && !ready && screen !== "results") {
@@ -185,17 +237,25 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
     }
   }, [phase, players.length, ready, screen, toggleReady]);
 
-  // Probe for the headless checks.
+  // The match watchdog (a broken session or a long wait on the other player ends it) and the probe for the headless checks.
+  const worst = useRef({ wait: 0, behind: 0 });
   useEffect(() => {
     const iv = setInterval(() => {
       const s = sRef.current, t = tRef.current;
+      if (s && game.link === s) {
+        if (s.broken) { abandon("the match lost track of the other player's inputs, so it was stopped"); return; }
+        if (s.waitMs > GIVE_UP_MS) { abandon(`the other player stopped responding for ${Math.round(GIVE_UP_MS / 1000)} s, so the match was abandoned`); return; }
+        worst.current.wait = Math.max(worst.current.wait, s.waitMs);
+        worst.current.behind = Math.max(worst.current.behind, s.behind);
+      }
       window.__room = {
         code, slot, phase, players: players.length, desyncs: s?.desyncs ?? 0, rtt: t?.rtt ?? 0, inputDelay: s?.rb.inputDelay ?? 0, stalls: s?.rb.stalls ?? 0,
         rollbacks: s?.rb.rollbacks ?? 0, p99: s?.rb.depthQuantile(0.99) ?? 0, sent: t?.sentBytes ?? 0, recv: t?.recvBytes ?? 0,
+        inputs: s?.inputsSent ?? 0, waitMs: s?.waitMs ?? 0, maxWaitMs: Math.round(worst.current.wait), behind: s?.behind ?? 0, maxBehind: worst.current.behind, status: useTag.getState().netStatus,
       };
     }, 250);
     return () => clearInterval(iv);
-  }, [code, slot, phase, players.length]);
+  }, [abandon, code, game, slot, phase, players.length]);
 
   const exit = () => { leave(); props.onExit(); };
   if (screen === "match" || screen === "loading") return null;

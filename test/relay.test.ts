@@ -130,3 +130,15 @@ test("input delay by round trip", () => {
   assert.equal(inputDelayFor(150), 4);
   assert.equal(inputDelayFor(400), 6);
 });
+
+test("Radbro ids are checked: an unknown one in hello is refused, in pick ignored", () => {
+  const { sock } = setup();
+  const a = sock(); a.h.message(hello("9999"));
+  assert.equal(last(a, "error")?.code, "bad");
+  assert.ok(a.closed);
+  const b = sock(); b.h.message(hello("652"));
+  send(b, { t: "pick", radbro: "../x" });
+  assert.equal(last(b, "lobby")?.players[0].radbro, "652");
+  send(b, { t: "pick", radbro: "3171" });
+  assert.equal(last(b, "lobby")?.players[0].radbro, "3171");
+});

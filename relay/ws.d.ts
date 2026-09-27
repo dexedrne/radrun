@@ -1,4 +1,4 @@
-// Minimal types for the `ws` package (already installed with the headless-browser tooling) used by relay/dev.ts.
+// Minimal types for the `ws` package (a pinned devDependency) as relay/dev.ts uses it, instead of a separate @types package.
 declare module "ws" {
   import type { IncomingMessage } from "node:http";
   import type { Duplex } from "node:stream";

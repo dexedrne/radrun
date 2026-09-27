@@ -19,7 +19,7 @@ npm run dev          # http://localhost:4870/  (title -> PLAY)
 npm test             # node --test: sim, determinism, city lint, bake checks, runner + round rules
 npm run build        # production build (dev pages stripped) + draco cleanup
 npm run build:test   # build keeping the dev pages and ?bot (preview deployments)
-node relay/dev.ts    # the SPIDER-TAG online relay, locally on :8787 (or: cd relay && npx wrangler dev --env dev)
+npm run relay        # the SPIDER-TAG online relay, locally on :8787 (or the Worker emulator: npm run relay:worker)
 ```
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · hold LMB to swing on the building, cable or

@@ -258,6 +258,10 @@ is the working name; the public name is still your call (multiplayer design §8 
   red dashed ring, up to 9 m: a homing zip onto them).
 - The new bagholder is **web-tangled** for 1.5 s (no moving, the camera still turns) and can't tag the one who just
   passed it for 3 s.
+- **Bag heat**: hold the bag 5 s without passing it and it heats up. Over the next 20 s the holder's Yoink reach grows
+  by up to 4 m, the yank's by up to 14 m (9 -> 23 m) and their top speed and yank speed by up to 8 m/s; a pass resets
+  it. So nobody keeps the bag for the whole match just because they started with it. The HUD shows it ("bag heat ·
+  your yank reaches 17 m"). The `TAG.heat*` keys in `src/game/tagMatch.ts` (or tuning.json `"tag"`) tune it.
 - Falls respawn you on your last safe roof, 1 s before you can move again; the fall itself is the cost.
 - Score = seconds holding the bag (your bag clock). **Lowest wins** at the horn; ties go to fewer falls, then more
   tags. Offline matches are 3:00.
@@ -270,23 +274,36 @@ bot driven by role (`src/game/tagBot.ts`): holding the bag they chase the neares
 its velocity) with the full kit and yank / Yoink when they can; running they swing to a junction roof away from the
 holder and not past him, re-picked every 1.5 s. **chill** bots only start running once you are within 45 m and
 swing without the new tech; **normal** bots use the whole kit and run within 75 m; **sharp** bots never stop and
-time their releases. Bot vs bot on Downtown passes the bag about once a minute; you will do better.
+time their releases. Holding the bag, a bot that starts climbing a tower far above its target kicks off it and goes
+round, and once the bag is hot it also yanks runners that are running away while the yank still reaches. Bot vs bot
+on Downtown over 3:00 (12 x 1v1 normal, 8 x 4 players normal, 8 x 1v1 sharp) the bag passes about 5-6 times a match
+and the longest hold is 50-60 s (median); before bag heat it was 2-3 passes and holds of 90-120 s.
 
 **HUD**: the match clock; the board of bag clocks (lowest first, the running one red, 💰 = holder, 🕸 = tangled); a
 line saying who holds it; name tags with bag clocks over the others; an arrow at the screen edge to the holder (or,
 when you hold it, to your target); a red cone over the holder and the bag in their left hand; a web cocoon while
-tangled; the red ring when your Yoink is up; TAG! / YANKED! / YOINKED! flashes. **Q** / right mouse turns the camera
-to the holder (or your target). Esc pauses offline. Results: the table, REMATCH (R) or MENU.
+tangled; the red ring when your Yoink is up; TAG! / YANKED! / YOINKED! flashes; the bag heat line under the clock.
+**Q** / right mouse turns the camera to the holder (or your target). Esc pauses offline. Results: the table, REMATCH
+(R) or MENU.
 
 ### Online (1v1 private rooms)
 
 ONLINE in the SPIDER-TAG menu loads the online chunk (`src/net/online.tsx`; nothing online is fetched before you
 press it): **CREATE ROOM** gives a 5-letter code and an invite link (`?tag&room=CODE`), a friend types the code into
 **JOIN** (or opens the link), you both pick a Radbro and press **READY**. The room plays the host's district (a
-joiner on another district gets a "go there" button). REMATCH after the results = READY again.
+joiner on another district gets a "go there" button). REMATCH after the results = READY again; the results screen
+says when you are waiting for the other player, when they want a rematch, and when they left the room (REMATCH then
+becomes BACK TO THE ROOM, where the code and link still work for someone else).
+
+**When the other player's game stops sending** (a bad connection, a hidden tab, a long hitch) your match waits for
+their inputs: after 0.4 s the screen says "waiting for the other player · N s", after 5 s a LEAVE MATCH button shows
+(press Esc first for the mouse), and after 30 s of waiting the match is abandoned (the relay tells them). When their
+inputs come back both games catch up (up to 30 steps a frame) and play on. The same holds at the horn: the results
+show once both players' last inputs are in.
 
 How it works (multiplayer design §3-§5): both clients run the same deterministic match; only inputs travel, 5 bytes per step
-(`src/net/wire.ts`), sent 30 times a second. Your Radbro answers at once; the other one is predicted (their last
+(`src/net/wire.ts`), sent 30 times a second (never more than 40 messages a second: a catch-up after a hitch goes out
+as a few messages of up to 128 steps, and the relay allows 90 a second with bursts of 180). Your Radbro answers at once; the other one is predicted (their last
 input, presses cleared) and corrected by rollback when their real input arrives (`src/net/rollback.ts`), so a tag
 happens on the same step for both of you. The relay starts the match on a shared clock with a seed, stamps who sent
 what, compares state hashes every 0.5 s and the final hash at the horn ("both players' results match" on the results
@@ -294,8 +311,9 @@ screen). Input delay is picked from your round trips: 2 steps (17 ms) up to 100 
 Before joining, each browser runs a 600-step self-test fixture (`src/net/selftest.ts`) and refuses online play if it
 computes a different hash. Players on different builds (or tuning) are told to reload.
 
-Not in phase 1 (multiplayer design §7 phase 2-3): rooms bigger than 2, relay fills for a late / dropped player (a lagging player
-now stalls the match up to 24 steps), rejoin, checkpoints, quick match, spectators. Cross-browser determinism
+Not in phase 1 (multiplayer design §7 phase 2-3): rooms bigger than 2, relay fills for a late / dropped player (so a lagging
+player stalls the match for as long as they lag: past 24 steps of prediction both games wait), rejoin, checkpoints,
+quick match, spectators. Cross-browser determinism
 (design gate 3): Chromium and Firefox give the same `?bench` hashes (the self-test and 1200-step Downtown bot matches
 with 2 and 8 Radbros); Safari on a real iPhone is still to check (open `?bench` on a test build there).
 
@@ -304,10 +322,13 @@ with 2 and 8 Radbros); Safari on a real iPhone is still to check (open `?bench` 
 Two ways, same room logic (`relay/src/room.ts`):
 
 ```sh
-node relay/dev.ts                          # Node stand-in on http://127.0.0.1:8787 (no Cloudflare tooling at all)
+npm run relay                              # Node stand-in on http://127.0.0.1:8787 (no Cloudflare tooling at all)
 node relay/dev.ts --port 8787 --lag 150    # ...with 150 ms of injected round trip between the players
-cd relay && npx wrangler dev --env dev --port 8787   # the real Worker + Durable Object in the local emulator (no sign-in)
+npm run relay:worker                       # the real Worker + Durable Object in the local emulator (no sign-in)
 ```
+
+The stand-in needs only the `ws` devDependency. `relay:worker` runs wrangler 4.141.0 through npx (pinned in
+package.json; the first run downloads it); use the same version for the deploy steps below.
 
 Then `npm run dev` and open `http://localhost:4870/?tag` -> ONLINE (dev builds use this host's port 8787 unless
 `?relay=http://127.0.0.1:<port>` says otherwise). Two browser windows (or two browser profiles) = two players.
@@ -320,11 +341,11 @@ Nothing below has been done; no account, token or deployment exists. The relay n
 fits the free plan (multiplayer design §5: about 170 1v1 matches a day, then refused until the daily reset, never billed).
 
 1. Create a Cloudflare account under the pseudonymous identity (free plan, no card).
-2. On your machine: `cd relay && npx wrangler login` (a browser sign-in; the token stays in your home directory,
+2. On your machine: `cd relay && npx wrangler@4.141.0 login` (a browser sign-in; the token stays in your home directory,
    never in the repo).
 3. In `relay/wrangler.toml`, set `ALLOWED_ORIGINS` to the game's origin(s) (default `https://radrun.vyvanse.beer`)
    and leave `DEV = "0"` in the top-level `[vars]`.
-4. `npx wrangler deploy`. The first time it asks for a `workers.dev` subdomain: pick a neutral one (it is public).
+4. `npx wrangler@4.141.0 deploy`. The first time it asks for a `workers.dev` subdomain: pick a neutral one (it is public).
    It prints the relay URL, `https://radrun-relay.<subdomain>.workers.dev`.
 5. Check it: `curl https://radrun-relay.<subdomain>.workers.dev/health` prints `ok`.
 6. Tell the game where it is, at build time: add `VITE_RELAY_URL=https://radrun-relay.<subdomain>.workers.dev` to
@@ -334,8 +355,8 @@ fits the free plan (multiplayer design §5: about 170 1v1 matches a day, then re
 7. Redeploy the site as usual, open https://radrun.vyvanse.beer/?tag -> ONLINE -> CREATE on one device and JOIN on
    another.
 
-Later: `npx wrangler tail` streams the relay's logs (counters only; it never logs IPs, names or inputs);
-`npx wrangler delete` takes it down. If a match ever reports "results differ", the console of both players has the
+Later: `npx wrangler@4.141.0 tail` streams the relay's logs (counters only; it never logs IPs, names or inputs);
+`npx wrangler@4.141.0 delete` takes it down. If a match ever reports "results differ", the console of both players has the
 per-Radbro hashes of the first step that differed.
 
 ## Sound

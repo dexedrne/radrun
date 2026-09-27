@@ -63,8 +63,11 @@ export const MSG_ACK = 0x83;
 export const MSG_PONG = 0x84;
 export const MSG_DESYNC = 0x86;
 
-/** At most this many steps per INPUT message. */
-export const MAX_INPUT_COUNT = 32;
+/**
+ * At most this many steps per INPUT message (8 + 128 x 5 + 12 = 660 B, under the relay's 1 KB message cap): a
+ * catch-up after a hitch sends a few big INPUTs, never a burst of small ones.
+ */
+export const MAX_INPUT_COUNT = 128;
 export const WORD_BYTES = 5;
 
 export type InputMsg = {

@@ -6,7 +6,8 @@
 // One match step (fixed order, so every client computes the same future from the same inputs):
 //   1. targets: the (unfrozen) holder's Yoink / yank target is the nearest runner by chaseDist on PRE-step positions
 //      (ties -> the lower slot; the tag-back player is skipped); everyone else has none. Each slot's SimWorld.runner
-//      is a copy of that target, so the slot order of step 2 does not matter.
+//      is a copy of that target, so the slot order of step 2 does not matter. The holder's Yoink / yank reach grows
+//      with his bag heat (TAG.heatFrom-heatFull s without a pass), so no hold lasts the whole match.
 //   2. bodies: each slot steps from the frame rebuilt from its 40-bit input word (net/wire.ts); a frozen or
 //      fall-locked body gets its move and buttons zeroed (it keeps its aim; gravity still applies).
 //   3. tags on POST-step positions: the holder against each runner in ascending slot order; the first hit passes.
@@ -41,6 +42,17 @@ export const TAG = {
   secondsGroup: 240,
   spawnMinDist: 40,
   itSpawnDist: 60,
+  /**
+   * Bag heat, the catch-up for a long hold: after heatFrom s holding the bag without a pass, the holder's Yoink and
+   * yank reach grow, reaching +heatYoink / +heatYank m at heatFull s (back to normal on the pass). 0 = off. Bot vs
+   * bot on Downtown (3:00) it doubles the passes (1v1 normal 2.4 -> 5.0 a match) and halves the longest hold.
+   */
+  heatFrom: 5,
+  heatFull: 25,
+  heatYoink: 4,
+  heatYank: 14,
+  /** ...and his speed cap and yank speed grow by up to this (m/s). */
+  heatSpeed: 8,
 };
 export type TagTable = typeof TAG;
 
@@ -115,6 +127,15 @@ export class TagMatch {
   readonly freezeSteps: number;
   readonly tagBackSteps0: number;
   readonly fallLockSteps: number;
+  /** The step play starts (the end of the countdown): bag heat counts from it or from the last pass. */
+  readonly playFrom: number;
+  private readonly heatFromSteps: number;
+  private readonly heatFullSteps: number;
+  /** Each slot's Yoink / yank reach without bag heat (its tuning's ranges are these plus the holder's heat). */
+  private readonly baseYoink: number[];
+  private readonly baseYank: number[];
+  private readonly baseCap: number[];
+  private readonly baseYankSpeed: number[];
 
   // ---- match state (all in the hash and the snapshot) ----
   /** Steps run since the match was created (countdown included). */
@@ -162,6 +183,12 @@ export class TagMatch {
     this.freezeSteps = Math.round(t.tagFreeze * 120);
     this.tagBackSteps0 = Math.round(t.tagBack * 120);
     this.fallLockSteps = Math.round(t.fallLock * 120);
+    this.heatFromSteps = Math.round(t.heatFrom * 120);
+    this.heatFullSteps = Math.max(this.heatFromSteps + 1, Math.round(t.heatFull * 120));
+    this.baseYoink = this.tunings.map(k => k.yoinkRange);
+    this.baseYank = this.tunings.map(k => k.yankRange);
+    this.baseCap = this.tunings.map(k => k.speedCap);
+    this.baseYankSpeed = this.tunings.map(k => k.yankSpeed);
     this.bag = new Int32Array(n);
     this.freeze = new Int32Array(n);
     this.lock = new Int32Array(n);
@@ -180,6 +207,7 @@ export class TagMatch {
     this.worlds = o.slots.map(() => ({ index: this.index, runner: null }));
     this.clock = this.totalSteps;
     const cd = o.countdown !== false;
+    this.playFrom = cd ? TAG_COUNTDOWN_STEPS : 0;
     this.phase = cd ? PH_COUNTDOWN : PH_PLAY;
     this.countdown = cd ? TAG_COUNTDOWN_STEPS : 0;
     this.updateTargets();
@@ -194,17 +222,38 @@ export class TagMatch {
     return (this.opts.countdown !== false ? TAG_COUNTDOWN_STEPS : 0) + this.totalSteps;
   }
 
+  /**
+   * Bag heat 0-1: how far the holder's reach has grown, from the steps since he took the bag (the last pass, or the
+   * start of play). Derived from hashed state only (step, lastTagStep), so a rollback re-derives it exactly.
+   */
+  get heat(): number {
+    const t = this.tag;
+    if (this.phase !== PH_PLAY || (t.heatYoink <= 0 && t.heatYank <= 0 && t.heatSpeed <= 0)) return 0;
+    const held = this.step - (this.lastTagStep > this.playFrom ? this.lastTagStep : this.playFrom);
+    const a = this.heatFromSteps, b = this.heatFullSteps;
+    return held <= a ? 0 : held >= b ? 1 : (held - a) / (b - a);
+  }
+
   /** Is `slot` web-tangled or fall-locked (no input) right now? */
   stuck(slot: number): boolean {
     return this.freeze[slot] > 0 || this.lock[slot] > 0;
   }
 
   /**
-   * Step 1: each slot's target on the current (pre-step) positions, written into its SimWorld. Idempotent (bots call
-   * it before choosing their input). A slot that loses its target mid-yank ends the yank (the sim reads the target).
+   * Step 1: each slot's target on the current (pre-step) positions, written into its SimWorld, and each slot's Yoink /
+   * yank reach (the holder's grown by the bag heat). Idempotent (bots call it before choosing their input). A slot
+   * that loses its target mid-yank ends the yank (the sim reads the target).
    */
   updateTargets(): void {
-    const n = this.n, B = this.bodies, h = this.holder;
+    const n = this.n, B = this.bodies, h = this.holder, t = this.tag;
+    const heat = this.heat;
+    for (let i = 0; i < n; i++) {
+      const k = this.tunings[i], hot = i === h ? heat : 0;
+      k.yoinkRange = this.baseYoink[i] + hot * t.heatYoink;
+      k.yankRange = this.baseYank[i] > 0 ? this.baseYank[i] + hot * t.heatYank : 0;
+      k.speedCap = this.baseCap[i] > 0 ? this.baseCap[i] + hot * t.heatSpeed : 0;
+      k.yankSpeed = this.baseYankSpeed[i] + hot * t.heatSpeed;
+    }
     let best = -1, bestD = Infinity;
     if (this.phase === PH_PLAY && this.freeze[h] === 0) {
       for (let i = 0; i < n; i++) {

@@ -1,6 +1,6 @@
 // Local stand-in for the relay Worker: the same routes and the same room logic (relay/src/room.ts) on Node's http +
-// the `ws` package, for development and headless checks without any Cloudflare tooling or sign-in.
-//   node relay/dev.ts [--port 8787] [--lag 150]
+// the `ws` package (a devDependency), for development and headless checks without any Cloudflare tooling or sign-in.
+//   node relay/dev.ts [--port 8787] [--lag 150]      (npm run relay)
 // --lag = injected round trip between the two players, ms (each relay leg gets a quarter each way); POST /room?lag=N
 // sets it per room. Localhost origins only.
 import http from "node:http";

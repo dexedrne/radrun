@@ -10,6 +10,7 @@ import {
   MAX_INPUT_COUNT, MSG_INPUT, MSG_PING, NET_VERSION, cleanName, decodeInput, decodePing, encodeAck, encodeDesync, encodeJson, encodePong,
   encodeRelayInput, type ClientMsg, type Compat, type PlayerInfo, type RoomConfig, type ServerMsg, type StartMsg,
 } from "../../src/net/wire.ts";
+import { isRadbroId } from "../../src/game/radbros.ts";
 
 export type Sock = { send(data: string | Uint8Array): void; close(code?: number, reason?: string): void };
 
@@ -21,8 +22,11 @@ export type RoomEnv = {
   random(): number;
 };
 
-/** Relay limits (multiplayer design §7 `relay`). */
-export const RELAY = { maxPlayers: 2, maxMsgBytes: 1024, maxMsgsPerSec: 90, startDelayMs: 2500, aheadSteps: 600 };
+/**
+ * Relay limits (multiplayer design §7 `relay`). The message limit is a bucket: maxMsgsPerSec on average with bursts
+ * up to msgBurst (a client sends about 32 a second: 30 INPUTs, 2 pings; a catch-up after a hitch a few more).
+ */
+export const RELAY = { maxPlayers: 2, maxMsgBytes: 1024, maxMsgsPerSec: 90, msgBurst: 180, startDelayMs: 2500, aheadSteps: 600 };
 const STEP_MS = 1000 / 120;
 const SECONDS_OK = (s: number) => Number.isFinite(s) && s >= 20 && s <= 600;
 
@@ -33,7 +37,7 @@ export function inputDelayFor(peerRttMs: number): number {
 
 type Player = {
   slot: number; sock: Sock; name: string; radbro: string; touch: boolean; easy: boolean; ready: boolean; compat: Compat; token: string;
-  rtt: number; msgs: number; msgWindow: number; upTo: number; lastAck: number; ended: { step: number; hash: number } | null;
+  rtt: number; credit: number; creditAt: number; upTo: number; lastAck: number; ended: { step: number; hash: number } | null;
 };
 
 export class RoomCore {
@@ -89,8 +93,10 @@ export class RoomCore {
       if (size > RELAY.maxMsgBytes) { sock.close(1009, "too big"); return; }
       if (me) {
         const now = this.env.now();
-        if (now - me.msgWindow >= 1000) { me.msgWindow = now; me.msgs = 0; }
-        if (++me.msgs > RELAY.maxMsgsPerSec) { sock.close(1008, "rate"); return; }
+        me.credit = Math.min(RELAY.msgBurst, me.credit + ((now - me.creditAt) * RELAY.maxMsgsPerSec) / 1000);
+        me.creditAt = now;
+        if (me.credit < 1) { sock.close(1008, "rate"); return; }
+        me.credit -= 1;
       }
       if (typeof data === "string") {
         let m: ClientMsg;
@@ -130,11 +136,12 @@ export class RoomCore {
     } else if (h.compat.city !== this.compat!.city && h.district === this.config.district) {
       return err("version", "the room's city differs from yours: reload to update");
     }
+    if (!isRadbroId(h.radbro)) return err("bad", "that Radbro isn't in this game: reload to update");
     const now = this.env.now();
     const p: Player = {
-      slot, sock, name: cleanName(String(h.name ?? "")), radbro: String(h.radbro ?? "652").slice(0, 8), touch: !!h.touch, easy: !!h.easy, ready: false,
+      slot, sock, name: cleanName(String(h.name ?? "")), radbro: h.radbro, touch: !!h.touch, easy: !!h.easy, ready: false,
       compat: h.compat, token: Math.floor(this.env.random() * 2 ** 32).toString(36) + Math.floor(this.env.random() * 2 ** 32).toString(36),
-      rtt: 0, msgs: 0, msgWindow: now, upTo: 0, lastAck: 0, ended: null,
+      rtt: 0, credit: RELAY.msgBurst, creditAt: now, upTo: 0, lastAck: 0, ended: null,
     };
     this.players[slot] = p;
     this.send(p, { t: "welcome", slot, token: p.token, host: this.hostSlot() === slot, room: this.code, players: this.info(), config: this.config, lag: this.env.lagMs });
@@ -149,7 +156,7 @@ export class RoomCore {
   private control(p: Player, m: ClientMsg): void {
     switch (m.t) {
       case "pick":
-        if (this.state !== "play") { p.radbro = String(m.radbro).slice(0, 8); p.ready = false; this.lobby(); }
+        if (this.state !== "play" && isRadbroId(m.radbro)) { p.radbro = m.radbro; p.ready = false; this.lobby(); }
         return;
       case "config":
         if (p.slot === this.hostSlot() && this.state !== "play" && m.seconds !== undefined && SECONDS_OK(m.seconds)) { this.config = { ...this.config, seconds: Math.round(m.seconds) }; this.lobby(); }

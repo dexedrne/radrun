@@ -52,7 +52,14 @@ const Online = lazy(() => import("../net/online.tsx"));
 
 export type TagScreen = "boot" | "menu" | "loading" | "match" | "results" | "online";
 export type HudRow = { slot: number; radbro: RadbroId; name: string; bag: number; holder: boolean; you: boolean; frozen: boolean; tags: number; falls: number };
-export type TagHud = { clock: number; countdown: number; phase: number; rows: HudRow[]; holder: number; local: number; frozen: number; lock: number; online: boolean; stall: boolean };
+export type TagHud = {
+  clock: number; countdown: number; phase: number; rows: HudRow[]; holder: number; local: number; frozen: number; lock: number; online: boolean;
+  /** Online: seconds the match has been waiting for the other player's inputs (0 = not waiting). */
+  wait: number;
+  /** Bag heat 0-1 and the holder's yank reach (m). */
+  heat: number;
+  reach: number;
+};
 type Flash = { text: string; sub?: string; color: string; t: number };
 
 export type TagUi = {
@@ -67,10 +74,12 @@ export type TagUi = {
   /** Online controls the results screen calls (set by the lazy net chunk). */
   net: { rematch: () => void; leave: () => void } | null;
   netStatus: string;
+  /** Online, at the results: the other player left the room (REMATCH goes back to the room to wait). */
+  netGone: boolean;
 };
 
 export const useTag = create<TagUi>(() => ({
-  screen: "boot", slots: [], names: [], hud: null, flash: null, load: { progress: 0, error: null }, agreed: null, net: null, netStatus: "",
+  screen: "boot", slots: [], names: [], hud: null, flash: null, load: { progress: 0, error: null }, agreed: null, net: null, netStatus: "", netGone: false,
 }));
 
 declare global {
@@ -138,13 +147,13 @@ function localSfx(ev: number): void {
 
 /** Fixed steps each frame, SFX, flashes, the 10 Hz HUD push and window.__tag. */
 function TagDriver({ game }: { game: TagGame }) {
-  const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0, shownTag: -1, go: false }), []);
+  const st = useMemo(() => ({ acc: 0, runId: -1, beep: 4, tags: 0, shown: [] as string[], go: false }), []);
   useFrame((_, delta) => {
     game.frame(delta);
     const m = game.match;
     if (!m) return;
     const ui = useTag.getState();
-    if (game.runId !== st.runId) { st.runId = game.runId; st.beep = 4; st.tags = 0; st.shownTag = -1; st.go = false; }
+    if (game.runId !== st.runId) { st.runId = game.runId; st.beep = 4; st.tags = 0; st.shown.length = 0; st.go = false; }
     localSfx(game.frameEvents);
     // Countdown beeps, GO.
     if (m.phase === PH_COUNTDOWN) {
@@ -152,10 +161,14 @@ function TagDriver({ game }: { game: TagGame }) {
       if (left < st.beep && left > 0) { st.beep = left; sfx.beep(); }
     }
     // GO and tags are presented from the match state, not from step events: online, a tag first seen in a rollback
-    // re-sim (the other player's press arrived late) still flashes, and one a rollback undoes never flashes twice.
+    // re-sim (the other player's press arrived late) still flashes, one a rollback undoes never flashes twice, and a
+    // tag that replaces a rolled-back one (an earlier step, or other players) flashes too: each tag is keyed by its
+    // step and players, and the recent keys are remembered.
     if (!st.go && m.phase !== PH_COUNTDOWN) { st.go = true; sfx.beep(true); flash(m.holder === game.local ? "YOU HOLD THE BAG" : "RUN!", m.holder === game.local ? "tag someone to pass it" : `${ui.names[m.holder] ?? "?"} holds the bag`, m.holder === game.local ? "#ff3355" : "#9fe6ff"); }
-    if (m.lastTagStep > st.shownTag) {
-      st.shownTag = m.lastTagStep;
+    const tagKey = `${m.lastTagStep}:${m.lastTagFrom}:${m.lastTagTo}:${m.lastTagKind}`;
+    if (m.lastTagStep >= 0 && !st.shown.includes(tagKey)) {
+      st.shown.push(tagKey);
+      if (st.shown.length > 16) st.shown.shift();
       st.tags++;
       const kind = m.lastTagKind === TAG_KIND_YOINK ? "YOINKED" : m.lastTagKind === TAG_KIND_YANK ? "YANKED" : "TAGGED";
       if (m.lastTagTo === game.local) { sfx.bonk(); flash(`${kind}!`, "you hold the bag · web-tangled", "#ff3355"); }
@@ -176,7 +189,10 @@ function TagDriver({ game }: { game: TagGame }) {
         frozen: m.freeze[i] > 0, tags: m.tags[i], falls: m.falls[i],
       });
       useTag.setState({
-        hud: { clock: m.clock / 120, countdown: m.countdown / 120, phase: m.phase, rows, holder: m.holder, local: game.local, frozen: m.freeze[game.local] / 120, lock: m.lock[game.local] / 120, online: !!game.link, stall: false },
+        hud: {
+          clock: m.clock / 120, countdown: m.countdown / 120, phase: m.phase, rows, holder: m.holder, local: game.local, frozen: m.freeze[game.local] / 120, lock: m.lock[game.local] / 120,
+          online: !!game.link, wait: game.link ? game.link.waitMs / 1000 : 0, heat: m.heat, reach: m.tunings[m.holder].yankRange,
+        },
       });
       // Name tags: bag clocks over the others.
       for (let i = 0; i < m.n; i++) {
@@ -284,7 +300,11 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
   );
 }
 
-function Hud() {
+/** Online: the waiting notice shows after this many seconds of waiting on the other player, LEAVE MATCH after these. */
+const STALL_SHOW_S = 0.4;
+const STALL_LEAVE_S = 5;
+
+function Hud({ onLeave }: { onLeave?: () => void }) {
   const hud = useTag(s => s.hud);
   const flashS = useTag(s => s.flash);
   const [now, setNow] = useState(performance.now());
@@ -302,6 +322,11 @@ function Hud() {
         <div style={{ fontSize: 13, marginTop: 2, color: holding ? "#ff6b86" : "#cdf3ff", textShadow: "0 1px 3px #000" }}>
           {hud.phase === PH_OVER ? "time!" : holding ? "you hold the bag · tag someone" : `${hud.rows[hud.holder]?.name ?? "?"} holds the bag · run`}
         </div>
+        {hud.heat > 0 && hud.phase !== PH_OVER && (
+          <div style={{ fontSize: 12, marginTop: 2, color: "#ffb347", textShadow: "0 1px 3px #000" }} data-testid="tag-heat">
+            bag heat · {holding ? "your" : "their"} yank reaches {Math.round(hud.reach)} m
+          </div>
+        )}
       </div>
       <div style={{ position: "absolute", top: safe("top", 10), left: safe("left", 12), ...panel, padding: "8px 10px", fontSize: 13, minWidth: 170 }} data-testid="tag-board">
         {[...hud.rows].sort((a, b) => a.bag - b.bag).map(r => (
@@ -323,6 +348,16 @@ function Hud() {
       {you && hud.frozen > 0 && hud.phase !== PH_OVER && (
         <div style={{ position: "absolute", top: "58%", width: "100%", textAlign: "center", fontSize: 18, color: "#f4f7ff", textShadow: "0 1px 3px #000" }}>web-tangled · {hud.frozen.toFixed(1)}</div>
       )}
+      {hud.wait >= STALL_SHOW_S && hud.phase !== PH_OVER && (
+        <div style={{ position: "absolute", top: "40%", width: "100%", padding: "0 16px", boxSizing: "border-box", textAlign: "center", textShadow: "0 1px 3px #000" }} data-testid="tag-wait">
+          <div style={{ fontSize: 20 }}>waiting for the other player · {Math.ceil(hud.wait)} s</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>their game stopped sending (a slow connection or a hidden tab); the match goes on when it's back</div>
+          {hud.wait >= STALL_LEAVE_S && onLeave && <button style={{ ...btn(false), marginTop: 8, fontSize: 13, pointerEvents: "auto" }} onClick={onLeave} data-testid="tag-wait-leave">LEAVE MATCH</button>}
+        </div>
+      )}
+      {hud.wait >= STALL_SHOW_S && hud.phase === PH_OVER && (
+        <div style={{ position: "absolute", top: "40%", width: "100%", textAlign: "center", fontSize: 16, textShadow: "0 1px 3px #000" }} data-testid="tag-wait">waiting for the other player's last inputs · {Math.ceil(hud.wait)} s</div>
+      )}
       {you && hud.lock > 0 && <div style={{ position: "absolute", top: "58%", width: "100%", textAlign: "center", fontSize: 18, textShadow: "0 1px 3px #000" }}>back on your feet · {hud.lock.toFixed(1)}</div>}
       <div id="rr-tag-arrow" style={{ position: "absolute", left: 0, top: 0, visibility: "hidden" }}>
         <div style={{ width: 0, height: 0, borderTop: "14px solid transparent", borderBottom: "14px solid transparent", borderLeft: `26px solid ${holding ? "#ffd23f" : "#ff3355"}`, filter: "drop-shadow(0 1px 2px #000)" }} />
@@ -337,6 +372,8 @@ function Hud() {
 function Results({ onRematch, onMenu }: { onRematch: () => void; onMenu: () => void }) {
   const hud = useTag(s => s.hud);
   const agreed = useTag(s => s.agreed);
+  const netStatus = useTag(s => s.netStatus);
+  const netGone = useTag(s => s.netGone);
   if (!hud) return null;
   const rows = [...hud.rows].sort((a, b) => a.bag - b.bag || a.falls - b.falls || b.tags - a.tags || a.slot - b.slot);
   const win = rows[0];
@@ -359,8 +396,9 @@ function Results({ onRematch, onMenu }: { onRematch: () => void; onMenu: () => v
           </tbody>
         </table>
         {agreed !== null && <div style={{ fontSize: 11, marginTop: 8, color: agreed ? "#8dff8a" : "#ff8a8a" }} data-testid="tag-agreed">{agreed ? "both players' results match" : "results differ between players (desync)"}</div>}
+        {hud.online && netStatus && <div style={{ fontSize: 13, marginTop: 8, color: "#ffd23f" }} data-testid="tag-net-status">{netStatus}</div>}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
-          <button style={btn(true)} onClick={onRematch} data-testid="tag-rematch">REMATCH</button>
+          <button style={btn(true)} onClick={onRematch} data-testid="tag-rematch">{netGone ? "BACK TO THE ROOM" : "REMATCH"}</button>
           <button style={btn(false)} onClick={onMenu} data-testid="tag-menu-btn">MENU</button>
         </div>
       </div>
@@ -498,7 +536,7 @@ export default function TagPage() {
       <TagScene game={game} />
       {screen === "menu" && <Menu radbro={radbro} setRadbro={setRadbro} bots={bots} setBots={setBots} level={level} setLevel={setLevel} ready={ready} onPlay={() => void play()} onOnline={() => { setOnline(true); useTag.setState({ screen: "online" }); }} />}
       {screen === "loading" && <Loading />}
-      {(inMatch || screen === "results") && <Hud />}
+      {(inMatch || screen === "results") && <Hud onLeave={toMenu} />}
       {screen === "results" && <Results onRematch={rematch} onMenu={toMenu} />}
       {touch && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
       {online && (

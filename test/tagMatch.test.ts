@@ -192,3 +192,38 @@ test("tuning per slot: touch widens the Yoink by 1 m; the holder's tuning carrie
   assert.equal(m.tunings[1].yankRange, TAG.yankRange);
   assert.ok(MOVE_RES > 0);
 });
+
+test("bag heat: a long hold grows the holder's reach and speed; a pass resets it; a snapshot load re-derives it", () => {
+  const m = mk(2, 4);
+  const h = m.holder, r = 1 - h, k = m.tunings[h];
+  const base = { yoink: k.yoinkRange, yank: k.yankRange, cap: k.speedCap, ys: k.yankSpeed };
+  place(m, h, 0); place(m, r, 6);
+  const from = Math.round(TAG.heatFrom * 120), full = Math.round(TAG.heatFull * 120);
+  while (m.step < from) m.stepWords(idle(2));
+  assert.equal(m.heat, 0);
+  assert.equal(k.yankRange, base.yank);
+  while (m.step < (from + full) / 2) m.stepWords(idle(2));
+  assert.ok(m.heat > 0.45 && m.heat < 0.55, `heat ${m.heat}`);
+  assert.ok(k.yankRange > base.yank && k.yoinkRange > base.yoink && k.speedCap > base.cap && k.yankSpeed > base.ys);
+  const snap = m.newSnap();
+  m.save(snap);
+  const mid = { heat: m.heat, yank: k.yankRange, hash: m.hash() };
+  while (m.step < full + 10) m.stepWords(idle(2));
+  assert.equal(m.heat, 1);
+  assert.equal(k.yankRange, base.yank + TAG.heatYank);
+  assert.equal(k.yoinkRange, base.yoink + TAG.heatYoink);
+  assert.equal(k.speedCap, base.cap + TAG.heatSpeed);
+  assert.equal(m.tunings[r].yankRange, TAG.yankRange, "runners never heat up");
+  m.load(snap);
+  assert.equal(m.heat, mid.heat);
+  assert.equal(k.yankRange, mid.yank);
+  assert.equal(m.hash(), mid.hash);
+  // The pass: the new holder starts cold and the old one's reach is back to normal.
+  place(m, r, 1);
+  m.stepWords(idle(2));
+  assert.equal(m.holder, r);
+  assert.equal(m.heat, 0);
+  assert.equal(k.yankRange, base.yank);
+  assert.equal(k.speedCap, base.cap);
+});
+

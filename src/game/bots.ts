@@ -286,6 +286,8 @@ export class SwingBot {
   cool = 0;
   red = 0;
   relAhead: number = SWING.releaseAhead;
+  /** Spider-tag (set by its tag bot): also yank him running away while the yank still reaches, like the tech bot. Off in the chase. */
+  yankAway = false;
   readonly T: Vec3 = { x: 0, y: 0, z: 0 };
   readonly stats: SwingStats = { swings: 0, bonks: 0, directSteps: 0, laneSteps: 0, laneSwitches: 0, stalls: 0, noRing: 0, zips: 0, leaps: 0, yanks: 0, perfect: 0 };
   private pose: TrackPose = { x: 0, y: 0, z: 0, phase: 0, ref: -1 };
@@ -764,7 +766,7 @@ export class SwingBot {
       // Round 12 fix, the tech bot also yanks him running away when the yank still gets there (its reach against his
       // speed away from it, with a margin).
       const away = -(rvx * ex + rvz * ez) / el / k.dt;
-      const reach = this.tech && el <= (k.yankSpeed - (away > 0 ? away : 0)) * k.yankTime * SWING.yankReach;
+      const reach = (this.tech || this.yankAway) && el <= (k.yankSpeed - (away > 0 ? away : 0)) * k.yankTime * SWING.yankReach;
       if ((rvx * ex + rvz * ez) / el >= -0.5 * rs || reach) {
         this.aimAt(round, inp, r.p.x, r.p.y, r.p.z);
         inp.zipPressed = true; inp.webPressed = false; inp.webHeld = false; inp.jumpPressed = false;
