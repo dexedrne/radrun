@@ -301,7 +301,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     audio.current.windAcc += delta;
     if (audio.current.windAcc >= 0.05) {
       audio.current.windAcc = 0;
-      sfx.wind(sp + (b.glideOn ? 8 : 0), inRound && !game.paused && r.phase === "chase" && !b.grounded);
+      sfx.wind(b.glideOn ? sp * 0.7 + 2 : sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
     }
     tickEv.current |= pe;
     const mp = music.probe();
