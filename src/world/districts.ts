@@ -113,7 +113,8 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
         // Round 12: the yank reaches across these 12 m streets, so he is the fastest here: Normal 2.3x sprinting from 90 m,
         // Degen 2.6x sprinting from 110 m (at 2.7x the bot caught him in ~31 s: faster is not always later). The
         // web-slinger swing (corner swings round these tight blocks caught Degen at 29 s): Degen 3.0x (2.95x / 3.05x: ~30 s).
-        normal: { gStar: 20, base: 0.5, mMax: 0.5, airMax: 0.5 },
+        // Level 6's night chase was too punishing by hand: ease Normal's initial sprint and top pace here.
+        normal: { gStar: 20, base: 0.35, mMax: 0.4, airMax: 0.4 },
         degen: { gStar: 40, base: 1.3, mMax: 0.5, airMax: 0.5, panicBudget: 10 },
       },
     },
