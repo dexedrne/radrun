@@ -71,12 +71,13 @@ function verifyGhost(game: PlayGame, spec: GhostSpec, source: GhostInfo["source"
 
 /**
  * `older`: a link from an earlier link version (v < LINK_VERSION). v1 links replay as Downtown with no
- * mutators; records made before the double jump / web zip replay without them (ghost format 1).
+ * mutators; records made before the double jump / web zip replay without them (ghost format 1); records made before
+ * the web-slinger swing (formats 1-4) replay with the round 12 swing and are labelled from an older version.
  */
 async function decodeGhost(game: PlayGame, g: StoredGhost, source: GhostInfo["source"], older = false): Promise<GhostChoice | null> {
   const dec = await unpackGhost(g.g);
   if (!dec) return null;
-  return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older);
+  return verifyGhost(game, { chaser: g.c, runner: g.r, difficulty: g.d, seed: g.s, claimed: g.t, log: dec.log, flags: dec.flags, mutators: g.mu ?? 0 }, source, older || dec.flags.swing === false);
 }
 const applyAudio = (s: Settings) => { setAudioVolumes(s.music, s.sfx, s.voice); setMuted(s.muted); setAudioLow(s.quality === "low"); setMusicStyle(s.musicStyle); setPadSettings(padSettingsOf(s)); };
 /** Auto quality may switch to Low: on High, never picked by hand, never switched before (?autoq=0 = off). */

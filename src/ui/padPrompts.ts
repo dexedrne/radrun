@@ -43,10 +43,10 @@ export function radrunPadControls(easyGrab = false): [string, string][] {
   return [
     ["{LS}", "run"],
     ["{RS}", "look / aim"],
-    [web, "swing (let go near the top = faster)"],
+    [web, "swing (let go near the top = perfect · steer into a cross street = corner swing)"],
     [keysOf("zip"), "zip where you look (red dashed ring on him = yank)"],
     [keysOf("jump"), "jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop)"],
-    [keysOf("slide"), "tap = slide · hold = charge a leap · in the air = dive"],
+    [keysOf("slide"), "tap = slide · hold = charge a leap · in the air = head-first dive (web out of it = fast swing)"],
     [`red ring on him + ${easyGrab ? keysOf("jump") : keysOf("web")}`, "YOINK"],
     [keysOf("face"), "look at him"],
     [`hold ${keysOf("retry")}`, "retry"],
@@ -70,7 +70,7 @@ export const MENU_LEGEND = { move: "{DPAD}", select: "{SOUTH}", back: "{EAST}" }
 /** The radbro.fun play guide's controller entries (one control per entry, no commas: the portal joins them with commas). */
 export const RADRUN_PAD_GUIDE: readonly string[] = [
   "Controller: left stick run · right stick look / aim",
-  `Controller ${plainKeys("web")}: hold to web swing (on the red ring: YOINK)`,
-  `Controller ${plainKeys("jump")}: jump / double jump / wall kick · ${plainKeys("slide")}: slide / hold to charge / dive`,
+  `Controller ${plainKeys("web")}: hold to web swing (let go near the top: perfect · on the red ring: YOINK)`,
+  `Controller ${plainKeys("jump")}: jump / double jump / wall kick · ${plainKeys("slide")}: slide / hold to charge / dive head first`,
   `Controller ${plainKeys("zip")}: zip where you look (on the red dashed ring: yank) · ${plainKeys("pause")}: pause`,
 ];

@@ -8,15 +8,17 @@ import { useAssetRuntime } from "react-three-game";
 import { Color, Matrix4, MeshBasicMaterial, Quaternion, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import type { PlayGame } from "../game/play.ts";
 import {
-  EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CLIMB, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN,
+  EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CLIMB, EV_DIVE, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_PERFECT, EV_RELEASE, EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP,
+  EV_WALLRUN, hangPoint,
 } from "../sim/player.ts";
 import {
-  A_ATTACH, A_BIGLAND, A_BONK, A_CLIMB, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP, A_WALLRUN, type Beat,
+  A_ATTACH, A_BIGLAND, A_BONK, A_CLIMB, A_DIVE, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP, A_WALLRUN, type Beat,
 } from "../anim/animMachine.ts";
 import { applyCmd, makeRig } from "./ActorsView.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
+import { airBones, airInput, placeRoot, stepAirPose, type AirPoseIn } from "./airPose.ts";
 
 const TINT = new Color("#9fe6ff");
 const GLOW = new Color("#1f5f80");
@@ -62,7 +64,8 @@ export function GhostView({ game }: { game: PlayGame }) {
   const st = useMemo(() => ({
     alpha: 0, doneT: 0, runId: -1, visible: false,
     q: new Quaternion(), m: new Matrix4(), u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(),
-    a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), qYaw: new Quaternion(),
+    a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), qYaw: new Quaternion(), hang: new Vector3(), pos: new Vector3(),
+    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
   }), []);
 
   // -5: fade, root, facing, rope tilt, animMachine.
@@ -81,7 +84,9 @@ export function GhostView({ game }: { game: PlayGame }) {
     for (const m of rig.materials) m.opacity = OPACITY * st.alpha;
 
     const p = game.ghostP;
-    const hook = !g.done && b.ropeSolid >= 0 ? 1 : -1;
+    // (a rope, or a corner swing's web on the corner post)
+    const hang = !g.done ? hangPoint(b, st.hang) : null;
+    const hook = hang ? 1 : -1;
     rig.hook = hook;
     rig.p.set(p.x, p.y, p.z);
     rig.hand.copy(rig.p);
@@ -101,15 +106,20 @@ export function GhostView({ game }: { game: PlayGame }) {
     if (fe & EV_SLIDE) ev |= A_SLIDE;
     if (fe & EV_ROLL) ev |= A_ROLL;
     if (fe & EV_BIGLAND) ev |= A_BIGLAND;
+    if (fe & EV_DIVE) ev |= A_DIVE;
     const vx = b.v.x, vy = b.v.y, vz = b.v.z;
     const speed = g.done ? 0 : Math.sqrt(vx * vx + vz * vz);
     const beat: Beat = gr.phase === "caught" ? "cheer" : "";
+    const clear = p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9);
+    const wall = g.done ? 0 : b.wallMode, ledge = g.done ? 0 : Math.min(2, b.ledgeMode), dive = !g.done && b.diveOn;
     applyCmd(rig.player, rig.machine.step({
       dt: rawDelta * game.timeScale, grounded: b.grounded || g.done, rope: hook >= 0, speed, vy, events: ev, landVy: b.landVy, panic: false, beat,
-      clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
-      wall: g.done ? 0 : b.wallMode, ledge: g.done ? 0 : Math.min(2, b.ledgeMode), slide: !g.done && b.slideT > 0 && b.grounded,
+      clearance: clear, wall, ledge, slide: !g.done && b.slideT > 0 && b.grounded, dive,
       wallSide: b.wallNx * -Math.cos(rig.yaw) + b.wallNz * Math.sin(rig.yaw) > 0 ? 1 : -1,
     }));
+    // The web-slinger air poses (as ActorsView's chaser).
+    const free = !b.grounded && !g.done && !hang && !b.zipOn && !b.yankOn && !wall && !ledge && beat === "";
+    stepAirPose(rig.air, airInput(st.ain, rawDelta * game.timeScale, dive && beat === "", free, beat === "" ? hang : null, p, vy, clear, (fe & EV_PERFECT) !== 0));
 
     const faceTo = (x: number, z: number, rate: number) => {
       if (x * x + z * z < 1e-4) return;
@@ -121,8 +131,8 @@ export function GhostView({ game }: { game: PlayGame }) {
     // Root: feet at p - 0.9; on the rope the body hangs from RightHand at p (as ActorsView's chaser).
     st.qYaw.setFromAxisAngle(st.up, rig.yaw);
     let tx = 0, ty = -0.9, tz = 0;
-    if (hook >= 0) {
-      const h = b.ropeA;
+    if (hang) {
+      const h = hang;
       st.u.set(h.x - p.x, h.y - p.y, h.z - p.z).normalize();
       st.v.set(vx, vy, vz);
       st.f.copy(st.v).addScaledVector(st.u, -st.v.dot(st.u));
@@ -141,8 +151,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     rig.ropeW += ((hook >= 0 ? 1 : 0) - rig.ropeW) * Math.min(1, (hook >= 0 ? 6 : 10) * rawDelta);
     const k = Math.min(1, 14 * rawDelta);
     rig.off.x += (tx - rig.off.x) * k; rig.off.y += (ty - rig.off.y) * k; rig.off.z += (tz - rig.off.z) * k;
-    rig.root.position.set(p.x + rig.off.x, p.y + rig.off.y, p.z + rig.off.z);
-    rig.root.quaternion.slerp(st.q, Math.min(1, 14 * rawDelta));
+    placeRoot(rig, st.q, st.pos.set(p.x + rig.off.x, p.y + rig.off.y, p.z + rig.off.z), hook >= 0, vx, vy, vz, rawDelta);
   }, FRAME.actors);
 
   // -4: mixer.
@@ -150,9 +159,10 @@ export function GhostView({ game }: { game: PlayGame }) {
     if (rig && st.visible) rig.player.update(delta * game.timeScale);
   }, FRAME.animator);
 
-  // -3: rope-hand correction (RightHand lands on p while hanging).
+  // -3: the air poses' limbs, then the rope-hand correction (RightHand lands on p while hanging).
   useFrame(() => {
     if (!rig || !st.visible) return;
+    airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
     const rh = rig.bones.rightHand;
     if (rh && rig.ropeW > 0.01) {
       rig.root.updateMatrixWorld(true);
@@ -170,7 +180,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     if (ro) {
       ro.visible = on && rig!.hook >= 0 && !!game.ghost;
       if (ro.visible) {
-        const h = game.ghost!.round.player.ropeA;
+        const h = st.hang;
         if (rig!.bones.rightHand) rig!.bones.rightHand.getWorldPosition(st.a); else st.a.copy(rig!.p);
         st.b.set(h.x, h.y, h.z);
         const len = st.a.distanceTo(st.b);

@@ -205,9 +205,12 @@ export function readChallenge(search: string): Challenge {
  * same runs replay differently); bests from before v5 are shown as the older build's. v=6 (round 12): the
  * structures between the buildings (every city changed), the straight zip, the charge, the tech moves, the yank,
  * the re-baked thief (pack v3) and ghost format 4 (the pitch column, C held); bests and ghosts from before v6 are
- * the older build's ("old city").
+ * the older build's ("old city"). v=7: the web-slinger swing (web length from your height, the surge through the
+ * bottom of the arc, the later release and wider perfect window, corner swings, the fast dive and the dive-into-swing)
+ * and ghost format 5; a v6 link's ghost (format 4) replays with the round 12 swing and opens labelled as from an older
+ * version; bests and kept ghosts from before v7 are the older build's.
  */
-export const LINK_VERSION = 6;
+export const LINK_VERSION = 7;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
 const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");

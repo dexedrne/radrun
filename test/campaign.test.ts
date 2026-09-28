@@ -28,9 +28,9 @@ test("campaign: 15 levels, 45 stars, stable numbering, every district and mutato
 });
 
 test("campaign: star evaluation", () => {
-  const l1 = LEVELS[0]; // catch / under 18 (round 12) / no falls
+  const l1 = LEVELS[0]; // catch / under 22 (the web-slinger swing; round 12: 18) / no falls
   assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 15 }), 75), [true, true, true]);
-  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 19, falls: 1 }), 71), [true, false, false]);
+  assert.deepEqual(evaluate(l1, "caught", stats({ catchTime: 23, falls: 1 }), 67), [true, false, false]);
   assert.deepEqual(evaluate(l1, "escaped", stats(), 0), [false, false, false], "no stars without the catch");
   const l2 = LEVELS[1]; // chain 4
   assert.equal(evaluate(l2, "caught", stats({ maxChain: 4 }), 40)[2], true);
@@ -109,23 +109,23 @@ test("campaign: progress storage round-trips and survives junk / blocked storage
   assert.deepEqual(loadProgress(blocked), emptyProgress());
 });
 
-test("links: v6 links carry version, district and mutators; unversioned links are older Downtown links", () => {
-  // v6 = round 12 (the structures, the straight zip / charge / tech / yank, pack v3, ghost format 4); v5 = round 11
+test("links: v7 links carry version, district and mutators; unversioned links are older Downtown links", () => {
+  // v7 = the web-slinger swing (ghost format 5; a v6 ghost replays with the round 12 swing); v6 = round 12 (the structures, the straight zip / charge / tech / yank, pack v3, ghost format 4); v5 = round 11
   // (the swing's timing lift, the re-baked swing routes, Chill's head start); v4 = round 9 (the
   // rebuilt cities, building-anchored swings, parkour); v3 = the double jump + web zip build (older links still
   // read the same and open with the "older build" note).
-  assert.equal(LINK_VERSION, 6);
+  assert.equal(LINK_VERSION, 7);
   const url = ghostUrl("652", "4764", "normal", 41.26, 777, "abcdEFGH_-12", M_WIND | M_SIXTY);
   const q = new URL(url).search;
   assert.equal(districtFromSearch(q), "docks");
   const c = readChallenge(q);
-  assert.equal(c.v, 6);
+  assert.equal(c.v, 7);
   assert.equal(c.mu, M_WIND | M_SIXTY);
   assert.equal(c.s, 777);
   assert.equal(c.t, 41.3);
   assert.equal(c.g, "abcdEFGH_-12");
   const plain = readChallenge(new URL(challengeUrl("652", "4764", "chill", 30)).search);
-  assert.equal(plain.v, 6);
+  assert.equal(plain.v, 7);
   assert.equal(plain.mu, 0);
   // A pre-round-4 link: no v, no m, no mu -> v1, Downtown, no mutators.
   const old = "?c=652&r=4764&d=normal&s=5&t=40.0&g=abcdEFGH_-12";

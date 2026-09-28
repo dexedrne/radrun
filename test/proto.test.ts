@@ -61,11 +61,12 @@ test("pendulum: one arc off a roof edge at 10 m/s ~2 s over ~36 m, dips below th
   assert.ok(a.dx > 26 && a.dx < 46, `arc covers ${a.dx.toFixed(1)} m`);
   assert.ok(a.dip > 4 && a.dip < 14, `dips ${a.dip.toFixed(1)} m below the takeoff roof`);
   assert.ok(a.vMax > 22 && a.vMax <= PLAYER.speedCap + 1e-9, `${a.vMax.toFixed(1)} m/s at the bottom`);
-  assert.ok(a.flingFwd > 4 && a.flingUp > 4, `fling ${a.flingFwd.toFixed(1)} forward, ${a.flingUp.toFixed(1)} up`);
+  // (held to the end, the web-slinger swing lets go high on the arc: more up than forward, no release boost)
+  assert.ok(a.flingFwd > 2.5 && a.flingUp > 4, `fling ${a.flingFwd.toFixed(1)} forward, ${a.flingUp.toFixed(1)} up`);
 });
 
 test("pendulum: without pump / speed-keeping / boost the rope never adds energy; the pump does", () => {
-  const plain = arc({ ...PLAYER, swingPump: 0, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
+  const plain = arc({ ...PLAYER, swingPump: 0, swingSurge: 0, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
   assert.ok(plain.eGain < 0.005, `energy grew ${(plain.eGain * 100).toFixed(2)}%`);
   const pumped = arc({ ...PLAYER, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
   assert.ok(pumped.eGain > 0.01, `the pump adds energy (${(pumped.eGain * 100).toFixed(2)}%)`);

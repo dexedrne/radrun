@@ -37,7 +37,7 @@ const d = ((DIFFICULTIES as readonly string[]).includes(q.get("d") ?? "") ? q.ge
 const round = new Round({ district: districtFromSearch(new URL(url).search), model, pack, difficulty: d, params: tj.difficulty[d], tuning: tj.player, chaser: "652", runner: "4764", seed: Number(q.get("seed") ?? 123) >>> 0, countdown: false , mutators: (Number(q.get("mu") ?? 0) >>> 0) & 127 });
 const swing = q.get("bot") === "swing";
 const chase = q.get("bot") === "chase";
-const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true, moves: q.has("moves") } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
+const predicted = swing ? { caught: false, kind: "", steps: -1, time: 0 } : runBotRound(round, chase ? { kind: "swing", k: 1, yoink: true, moves: q.has("moves") || q.has("tech"), tech: q.has("tech") } : { kind: "follow", k: Number(q.get("k") ?? 1.3), yoink: q.get("bot") === "yoink" }, emptyInput());
 if (!swing) console.log(`node prediction: ${predicted.caught ? "CAUGHT" : "ESCAPED"} (${predicted.kind || "-"}) at chase step ${predicted.steps} (${predicted.time.toFixed(2)} s)`);
 
 const browser = await puppeteer.launch({

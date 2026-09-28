@@ -11,7 +11,7 @@ import {
 import type { TagGame } from "../game/tagGame.ts";
 import {
   EV_ATTACH, EV_BIGLAND, EV_BONK, EV_CHARGE, EV_CHARGE_START, EV_CLIMB, EV_DIVE, EV_DJUMP, EV_JUMP, EV_LAND, EV_LEDGE, EV_POP, EV_REBOUND, EV_RELEASE,
-  EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN, EV_YANK, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER, type Body,
+  EV_ROLL, EV_SLIDE, EV_VAULT, EV_WALLJUMP, EV_WALLRUN, EV_YANK, EV_ZIP, EV_ZIP_END, LEDGE_HANG, RING_RUNNER, EV_PERFECT, hangPoint, type Body,
 } from "../sim/player.ts";
 import {
   A_ATTACH, A_BIGLAND, A_BONK, A_CHARGE, A_CLIMB, A_DIVE, A_DJUMP, A_JUMP, A_LAND, A_LEAP, A_LEDGE, A_POP, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP,
@@ -21,6 +21,7 @@ import { applyCmd, makeRig, rotateBoneWorld, type ActorRig } from "./ActorsView.
 import { makeBag } from "./PlayViews.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { FRAME } from "./frame.ts";
+import { airBones, airInput, placeRoot, stepAirPose, type AirPoseIn } from "./airPose.ts";
 import { PH_COUNTDOWN, PH_OVER } from "../game/tagMatch.ts";
 import type { RadbroId } from "../game/round.ts";
 
@@ -62,9 +63,9 @@ function evBits(fe: number): number {
   return ev;
 }
 
-/** Where a body's web goes this frame (rope anchor, zip / yank target), or null. */
+/** Where a body's web goes this frame (rope anchor, corner post, zip / yank target), or null. */
 function webEnd(b: Body, game: TagGame, slot: number, out: Vector3): Vector3 | null {
-  if (b.ropeSolid >= 0) return out.set(b.ropeA.x, b.ropeA.y, b.ropeA.z);
+  if (hangPoint(b, out)) return out;
   if (b.zipOn) return out.set(b.zipP.x, b.zipP.y, b.zipP.z);
   if (b.yankOn) {
     const m = game.match!, t = m.target[slot];
@@ -113,7 +114,8 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
   const tmp = useMemo(() => ({
     q: new Quaternion(), qYaw: new Quaternion(), qPose: new Quaternion(), m: new Matrix4(), eu: new Euler(),
     u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(), a: new Vector3(), b: new Vector3(), c: new Vector3(), e: new Vector3(),
-    pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(), fwd: new Vector3(),
+    pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(), fwd: new Vector3(), pos: new Vector3(),
+    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
   }), []);
 
   // -5: roots, facing, rope tilt, animMachine (as ActorsView's chaser branch, for every slot).
@@ -128,7 +130,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
       const b = m.bodies[i], p = game.renderPs[i];
       rig.p.set(p.x, p.y, p.z);
       const over = m.phase === PH_OVER;
-      const anchor = !over && b.ropeSolid >= 0 ? tmp.a.set(b.ropeA.x, b.ropeA.y, b.ropeA.z) : null;
+      const anchor = !over ? hangPoint(b, tmp.a) : null;
       rig.hook = anchor ? 1 : -1;
       rig.zip = !over && (b.zipOn || b.yankOn);
       const vx = b.v.x, vy = b.v.y, vz = b.v.z;
@@ -139,11 +141,16 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
       if (m.phase === PH_COUNTDOWN) beat = "idle";
       else if (over) beat = i === game.winner ? "cheer" : i === m.holder ? "flop" : "idle";
       const wallSide = nx * -Math.cos(rig.yaw) + nz * Math.sin(rig.yaw) > 0 ? 1 : -1;
+      const clear = p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9);
       applyCmd(rig.player, rig.machine.step({
         dt: rawDelta, grounded: b.grounded || beat === "idle" || beat === "cheer" || beat === "flop", rope: anchor !== null, speed, vy, events: evBits(game.slotEvents[i] ?? 0),
-        landVy: b.landVy, panic: false, beat, clearance: p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9),
+        landVy: b.landVy, panic: false, beat, clearance: clear,
         wall, ledge, slide, wallSide, zip: rig.zip, charge: !over && b.chargeT > 0, dive: !over && b.diveOn,
       }));
+      // The web-slinger air poses (as ActorsView's chaser).
+      const free = !b.grounded && !anchor && !rig.zip && !wall && !ledge && beat === "";
+      stepAirPose(rig.air, airInput(tmp.ain, rawDelta, !over && b.diveOn && beat === "", free, beat === "" ? anchor : null, p, vy, clear,
+        ((game.slotEvents[i] ?? 0) & EV_PERFECT) !== 0));
       const faceTo = (x: number, z: number, rate: number) => {
         if (x * x + z * z < 1e-4) return;
         rig.yaw += wrap(Math.atan2(x, z) - rig.yaw) * Math.min(1, rate * rawDelta);
@@ -185,8 +192,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
       rig.ropeW += ((hanging ? 1 : 0) - rig.ropeW) * Math.min(1, (hanging ? 6 : 10) * rawDelta);
       const k = Math.min(1, 14 * rawDelta);
       rig.off.x += (tx - rig.off.x) * k; rig.off.y += (ty - rig.off.y) * k; rig.off.z += (tz - rig.off.z) * k;
-      rig.root.position.set(p.x + rig.off.x, p.y + rig.off.y, p.z + rig.off.z);
-      rig.root.quaternion.slerp(tmp.q, Math.min(1, 14 * rawDelta));
+      placeRoot(rig, tmp.q, tmp.pos.set(p.x + rig.off.x, p.y + rig.off.y, p.z + rig.off.z), hanging, vx, vy, vz, rawDelta);
       // Your own Radbro fades when the camera is close (as in single-player).
       if (i === game.local) {
         const want = !over && game.rig.bodyDist < 2 ? 0.4 : 1;
@@ -216,6 +222,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
         rotateBoneWorld(rig.bones.leftArm, tmp.fwd, -POSE.leftArmBack * rig.ropeW, tmp);
         if (Math.abs(rig.hipPitch) > 1e-3) rotateBoneWorld(rig.bones.hips, tmp.fwd, rig.hipPitch, tmp);
       }
+      airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {
         rig.root.updateMatrixWorld(true);

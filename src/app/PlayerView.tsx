@@ -7,10 +7,12 @@ import { usePrefab } from "react-three-game";
 import { Quaternion, Vector3 } from "three";
 import type { Sandbox } from "../game/sandbox.ts";
 import { FRAME } from "./frame.ts";
+import { hangPoint } from "../sim/player.ts";
 
 export function PlayerView({ game }: { game: Sandbox }) {
   const prefab = usePrefab();
   const tmp = useMemo(() => ({
+    hang: { x: 0, y: 0, z: 0 },
     up: new Vector3(0, 1, 0), dir: new Vector3(), q: new Quaternion(), qYaw: new Quaternion(), qTilt: new Quaternion(), yaw: game.rig.yaw,
   }), [game]);
   useFrame((_, delta) => {
@@ -27,8 +29,8 @@ export function PlayerView({ game }: { game: Sandbox }) {
       tmp.yaw += d * Math.min(1, 12 * delta);
     }
     tmp.qYaw.setFromAxisAngle(tmp.up, tmp.yaw);
-    if (b.ropeSolid >= 0) {
-      const h = b.ropeA;
+    const h = hangPoint(b, tmp.hang);
+    if (h) {
       tmp.dir.set(h.x - p.x, h.y - p.y, h.z - p.z).normalize();
       tmp.qTilt.setFromUnitVectors(tmp.up, tmp.dir);
       tmp.q.multiplyQuaternions(tmp.qTilt, tmp.qYaw);

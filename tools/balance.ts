@@ -18,13 +18,17 @@ const PUBLIC = path.resolve(import.meta.dirname, "..", "public");
 const LEVELS = path.join(PUBLIC, "levels");
 
 /** Round 12: falls per round, web presses with nothing ringed per minute (swing bots), yank catches. */
-export type Row = { label: string; target: string; caught: number; n: number; median: number; p25: number; p75: number; yoinks: number; pass: boolean | null; falls: number; noRingPerMin: number; yanks: number };
+export type Row = {
+  label: string; target: string; caught: number; n: number; median: number; p25: number; p75: number; yoinks: number; pass: boolean | null; falls: number; noRingPerMin: number; yanks: number;
+  /** The web-slinger swing (swing bots): corner swings, dives and perfect releases per round. */
+  corners: number; dives: number; perfect: number;
+};
 
 const q = (xs: number[], f: number) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(f * xs.length))] : NaN);
 
-export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1, mutators = 0, district: DistrictId = "downtown"): { times: number[]; caught: number; yoinks: number; falls: number; noRing: number; seconds: number; yanks: number } {
+export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning: Tuning, table: DifficultyTable, d: Difficulty, bot: BotOptions, n: number, seed0 = 1, mutators = 0, district: DistrictId = "downtown"): { times: number[]; caught: number; yoinks: number; falls: number; noRing: number; seconds: number; yanks: number; corners: number; dives: number; perfect: number } {
   const times: number[] = [];
-  let caught = 0, yoinks = 0, falls = 0, noRing = 0, seconds = 0, yanks = 0;
+  let caught = 0, yoinks = 0, falls = 0, noRing = 0, seconds = 0, yanks = 0, corners = 0, dives = 0, perfect = 0;
   const inp = emptyInput();
   for (let s = 0; s < n; s++) {
     const round = new Round({ model, index, pack, difficulty: d, params: table[d], tuning, chaser: "652", runner: "4764", seed: seed0 + s, countdown: false, mutators, district });
@@ -32,10 +36,11 @@ export function runConfig(model: CityModel, index: CityIndex, pack: Pack, tuning
     if (r.caught) { caught++; times.push(r.time); if (r.kind === "yoink") yoinks++; if (r.kind === "yank") yanks++; }
     falls += r.falls;
     noRing += r.swing?.noRing ?? 0;
+    corners += r.swing?.corners ?? 0; dives += r.swing?.dives ?? 0; perfect += r.swing?.perfect ?? 0;
     seconds += r.steps / 120;
   }
   times.sort((a, b) => a - b);
-  return { times, caught, yoinks, falls, noRing, seconds, yanks };
+  return { times, caught, yoinks, falls, noRing, seconds, yanks, corners, dives, perfect };
 }
 
 export function balance(n: number, table: DifficultyTable, tuning: Tuning, model: CityModel, pack: Pack, only?: string, district: DistrictId = "downtown"): Row[] {
@@ -68,6 +73,7 @@ export function balance(n: number, table: DifficultyTable, tuning: Tuning, model
     return {
       label: c.label, target: c.target, caught: r.caught, n, median: med, p25: q(r.times, 0.25), p75: q(r.times, 0.75), yoinks: r.yoinks, pass: c.check(r.caught, med),
       falls: r.falls / n, noRingPerMin: r.seconds > 0 ? (60 * r.noRing) / r.seconds : 0, yanks: r.yanks,
+      corners: r.corners / n, dives: r.dives / n, perfect: r.perfect / n,
     };
   });
 }
@@ -97,7 +103,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`${id}: pack ${pack.hash} (${pack.junctions.length} junctions, ${pack.edges.length} edges)`);
     for (const r of balance(n, difficulty, player, model, pack, only, id)) {
       const pct = ((100 * r.caught) / r.n).toFixed(0).padStart(3);
-      const extra = r.label.includes("swing") ? `  falls ${r.falls.toFixed(2)}/round  no-ring webs ${r.noRingPerMin.toFixed(2)}/min  yanks ${r.yanks}` : "";
+      const extra = r.label.includes("swing")
+        ? `  falls ${r.falls.toFixed(2)}/round  no-ring webs ${r.noRingPerMin.toFixed(2)}/min  yanks ${r.yanks}  corners ${r.corners.toFixed(1)} dives ${r.dives.toFixed(1)} perfect ${r.perfect.toFixed(1)}/round`
+        : "";
       console.log(`  ${r.label.padEnd(34)} caught ${pct}%  median ${isNaN(r.median) ? "  -  " : r.median.toFixed(1).padStart(5)} s  (p25 ${isNaN(r.p25) ? "-" : r.p25.toFixed(1)}, p75 ${isNaN(r.p75) ? "-" : r.p75.toFixed(1)})  yoinks ${r.yoinks}${extra}   target ${r.target}  ${r.pass ? "ok" : "MISS"}`);
     }
   }

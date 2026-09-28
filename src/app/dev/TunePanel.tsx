@@ -70,14 +70,25 @@ const PLAYER_GROUPS: [string, Slider<keyof Tuning>[]][] = [
     ["kickChainUp", 0, 3, 0.05], ["diveMinDrop", 0, 20, 0.5], ["diveSpeed", 0, 25, 0.25], ["diveGravity", 1, 3, 0.05], ["yankSpeed", 15, 45, 0.5],
     ["yankTime", 0.2, 1.5, 0.05], ["yankCooldown", 0, 6, 0.1], ["airTurn", 0, 5, 0.05], ["flowCap", 0, 5, 0.25], ["flowDecay", 0.5, 6, 0.1],
   ]],
+  // The web-slinger swing (docs/specs/2026-09-27-web-slinger-swing.md): player only.
+  ["web-slinger swing (player only)", [
+    ["anchorHeightGain", 0, 1, 0.01], ["anchorHeightAhead", 0, 1, 0.01], ["anchorHeightFree", 0, 40, 0.5], ["anchorUpMax", 10, 50, 0.5],
+    ["swingSurge", 0, 20, 0.25], ["swingSurgeCos", 0.5, 0.99, 0.005], ["swingReelPerSpeed", 0, 2, 0.05], ["releasePerfectUp", 0, 8, 0.25], ["autoReleaseKeep", 0, 1, 0.05],
+  ]],
+  ["corner swing (player only)", [
+    ["cornerReach", 4, 25, 0.5], ["cornerMinSpeed", 0, 20, 0.5], ["cornerStick", 0.2, 1, 0.02], ["cornerGravity", 0, 1, 0.05],
+    ["cornerBoost", 0, 10, 0.25], ["cornerMaxT", 0.3, 3, 0.05], ["cornerExitCos", 0.8, 1, 0.005],
+  ]],
+  ["dive (player only)", [["diveCap", 0, 70, 0.5], ["diveTurn", 0, 4, 0.05], ["diveCarryDecay", 0, 20, 0.25], ["diveKeep", 1, 4, 0.05], ["diveSwingT", 0, 1.5, 0.05]]],
 ];
-const PLAYER_TOGGLES: (keyof Tuning)[] = ["wallRun", "ledgeGrab", "vault", "slide", "autoRelease", "bonk", "charge", "dive"];
+const PLAYER_TOGGLES: (keyof Tuning)[] = ["wallRun", "ledgeGrab", "vault", "slide", "autoRelease", "bonk", "charge", "dive", "cornerSwing"];
 const CAMERA_SLIDERS: Slider<keyof CameraTuning>[] = [
   ["fov", 55, 75, 1], ["sensitivity", 0.0005, 0.006, 0.0001], ["armGround", 3, 10, 0.25], ["armAir", 3, 12, 0.25],
   ["armRope", 3, 14, 0.25], ["armWall", 3, 12, 0.25], ["armBlend", 0.5, 10, 0.5], ["shoulder", 0, 1.5, 0.05], ["ropeBias", 0, 0.6, 0.05],
   ["ropeBiasMax", 0, 8, 0.25], ["fovBoost", 0, 25, 1], ["fovSpeedLo", 0, 20, 0.5], ["fovSpeedHi", 10, 45, 0.5], ["fovEase", 0.5, 10, 0.5],
   ["wallAway", 0, 3, 0.1], ["nearWallFor", 0, 2, 0.05], ["armMin", 0, 6, 0.1], ["dodgeRate", 0.5, 20, 0.5], ["webClear", 0, 2, 0.05], ["wallCam", 0, 4, 0.1],
   ["zipFov", 0, 15, 0.5], ["armZip", 3, 12, 0.25], ["armDive", 3, 14, 0.25], ["chargeArm", 0, 2, 0.05], ["chargeFov", 0, 8, 0.25],
+  ["speedArm", 0, 5, 0.1], ["lagY", 0, 12, 0.25], ["lagYMax", 0, 4, 0.1], ["lookAhead", 0, 0.2, 0.005], ["lookAheadMax", 0, 4, 0.1], ["diveFov", 0, 12, 0.5],
 ];
 /** Round 12 structure knobs (§9; per district, re-derived in the sandbox; Save -> npm run level -- --all bakes them). */
 const STRUCTURE_SLIDERS: Slider<keyof StructureKnobs>[] = [
