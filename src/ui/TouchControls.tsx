@@ -31,12 +31,15 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
   const jumpBtn = useRef<HTMLDivElement>(null);
   const zipBtn = useRef<HTMLDivElement>(null);
   const slideBtn = useRef<HTMLDivElement>(null);
+  const glideBtn = useRef<HTMLDivElement>(null);
   const t = useRef<Track>({ stick: -1, ox: 0, oy: 0, look: -1, lx: 0, ly: 0, web: -1, wx: 0, wy: 0 });
 
   // Unmount (pause, results) releases everything the thumbs were holding.
   useEffect(() => () => {
     input.setStick(0, 0);
     input.touchWebUp();
+    input.touchSlideUp();
+    input.touchGlideUp();
     input.touchFace = false;
   }, [input]);
 
@@ -167,6 +170,13 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerCancel={() => { input.touchSlideUp(); press(slideBtn.current, false); if (slideBtn.current) slideBtn.current.style.outline = ""; }}
         style={round(56, { right: safe("right", 236), bottom: safe("bottom", 26), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         SLIDE
+      </div>
+      <div ref={glideBtn} data-testid="touch-glide"
+        onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchGlideDown(); press(glideBtn.current, true); }}
+        onPointerUp={e => { e.stopPropagation(); input.touchGlideUp(); press(glideBtn.current, false); }}
+        onPointerCancel={() => { input.touchGlideUp(); press(glideBtn.current, false); }}
+        style={round(56, { right: safe("right", 236), bottom: safe("bottom", 96), background: "rgba(70,160,220,0.65)", fontSize: 11 })}>
+        GLIDE
       </div>
       {/* ZIP: web-zip to the ringed anchor / the roof ahead; dimmed while it recharges */}
       {zip >= 0 && <div ref={zipBtn} data-testid="touch-zip"

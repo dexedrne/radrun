@@ -18,7 +18,7 @@ import { applyCmd, makeRig } from "./ActorsView.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
-import { airBones, airInput, placeRoot, stepAirPose, type AirPoseIn } from "./airPose.ts";
+import { airBones, airInput, placeRoot, placeWings, stepAirPose, type AirPoseIn } from "./airPose.ts";
 
 const TINT = new Color("#9fe6ff");
 const GLOW = new Color("#1f5f80");
@@ -57,6 +57,7 @@ export function GhostView({ game }: { game: PlayGame }) {
   useEffect(() => () => {
     if (!rig) return;
     rig.player.dispose();
+    rig.wing.geometry.dispose();
     for (const m of rig.materials) m.dispose();
   }, [rig]);
   const rope = useRef<Mesh>(null);
@@ -65,7 +66,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     alpha: 0, doneT: 0, runId: -1, visible: false,
     q: new Quaternion(), m: new Matrix4(), u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(),
     a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), qYaw: new Quaternion(), hang: new Vector3(), pos: new Vector3(),
-    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
+    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false, glide: false } as AirPoseIn,
   }), []);
 
   // -5: fade, root, facing, rope tilt, animMachine.
@@ -119,7 +120,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     }));
     // The web-slinger air poses (as ActorsView's chaser).
     const free = !b.grounded && !g.done && !hang && !b.zipOn && !b.yankOn && !wall && !ledge && beat === "";
-    stepAirPose(rig.air, airInput(st.ain, rawDelta * game.timeScale, dive && beat === "", free, beat === "" ? hang : null, p, vy, clear, (fe & EV_PERFECT) !== 0));
+    stepAirPose(rig.air, airInput(st.ain, rawDelta * game.timeScale, dive && beat === "", free, beat === "" ? hang : null, p, vy, clear, (fe & EV_PERFECT) !== 0, b.glideOn));
 
     const faceTo = (x: number, z: number, rate: number) => {
       if (x * x + z * z < 1e-4) return;
@@ -163,6 +164,7 @@ export function GhostView({ game }: { game: PlayGame }) {
   useFrame(() => {
     if (!rig || !st.visible) return;
     airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
+    placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
     const rh = rig.bones.rightHand;
     if (rh && rig.ropeW > 0.01) {
       rig.root.updateMatrixWorld(true);

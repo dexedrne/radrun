@@ -21,7 +21,7 @@ import { applyCmd, makeRig, rotateBoneWorld, type ActorRig } from "./ActorsView.
 import { makeBag } from "./PlayViews.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { FRAME } from "./frame.ts";
-import { airBones, airInput, placeRoot, stepAirPose, type AirPoseIn } from "./airPose.ts";
+import { airBones, airInput, placeRoot, placeWings, stepAirPose, type AirPoseIn } from "./airPose.ts";
 import { PH_COUNTDOWN, PH_OVER } from "../game/tagMatch.ts";
 import type { RadbroId } from "../game/round.ts";
 
@@ -85,7 +85,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
     tagRigs.length = 0;
     rigList.forEach((r, i) => { tagRigs[i] = r; if (r) r.root.visible = false; });
     return () => {
-      for (const r of rigList) { if (!r) continue; r.player.dispose(); for (const m of r.materials) m.dispose(); }
+      for (const r of rigList) { if (!r) continue; r.player.dispose(); r.wing.geometry.dispose(); for (const m of r.materials) m.dispose(); }
       tagRigs.length = 0;
     };
   }, [rigList]);
@@ -115,7 +115,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
     q: new Quaternion(), qYaw: new Quaternion(), qPose: new Quaternion(), m: new Matrix4(), eu: new Euler(),
     u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(), a: new Vector3(), b: new Vector3(), c: new Vector3(), e: new Vector3(),
     pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(), fwd: new Vector3(), pos: new Vector3(),
-    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
+    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false, glide: false } as AirPoseIn,
   }), []);
 
   // -5: roots, facing, rope tilt, animMachine (as ActorsView's chaser branch, for every slot).
@@ -150,7 +150,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
       // The web-slinger air poses (as ActorsView's chaser).
       const free = !b.grounded && !anchor && !rig.zip && !wall && !ledge && beat === "";
       stepAirPose(rig.air, airInput(tmp.ain, rawDelta, !over && b.diveOn && beat === "", free, beat === "" ? anchor : null, p, vy, clear,
-        ((game.slotEvents[i] ?? 0) & EV_PERFECT) !== 0));
+        ((game.slotEvents[i] ?? 0) & EV_PERFECT) !== 0, b.glideOn));
       const faceTo = (x: number, z: number, rate: number) => {
         if (x * x + z * z < 1e-4) return;
         rig.yaw += wrap(Math.atan2(x, z) - rig.yaw) * Math.min(1, rate * rawDelta);
@@ -223,6 +223,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
         if (Math.abs(rig.hipPitch) > 1e-3) rotateBoneWorld(rig.bones.hips, tmp.fwd, rig.hipPitch, tmp);
       }
       airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
+      placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {
         rig.root.updateMatrixWorld(true);

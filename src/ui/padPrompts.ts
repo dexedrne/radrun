@@ -46,6 +46,7 @@ export function radrunPadControls(easyGrab = false): [string, string][] {
     [web, "swing (let go near the top = perfect · steer into a cross street = corner swing)"],
     [keysOf("zip"), "zip where you look (red dashed ring on him = yank)"],
     [keysOf("jump"), "jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop)"],
+    [`hold ${keysOf("glide")}`, "wingsuit in the air; release to drop"],
     [keysOf("slide"), "tap = slide · hold = charge a leap · in the air = head-first dive (web out of it = fast swing)"],
     [`red ring on him + ${easyGrab ? keysOf("jump") : keysOf("web")}`, "YOINK"],
     [keysOf("face"), "look at him"],
@@ -58,7 +59,7 @@ export function radrunPadControls(easyGrab = false): [string, string][] {
 /** The in-round reminder line (first 10 s of a round) on a pad. */
 export function radrunPadHud(practice: boolean, easyGrab: boolean): string {
   const web = easyGrab ? `hold ${keysOf("jump")}` : `hold ${keysOf("web")}`;
-  const base = `{LS} run · ${keysOf("jump")} jump (x2 in the air, wall kick) · ${web} = web · ${keysOf("slide")} slide · ${LAYOUT.zip.map(b => `{${b}}`)[0]} zip`;
+  const base = `{LS} run · ${keysOf("jump")} jump (x2 in the air, wall kick) · ${web} = web · hold ${keysOf("glide")} = glide · ${keysOf("slide")} slide · ${LAYOUT.zip.map(b => `{${b}}`)[0]} zip`;
   return practice
     ? `${base} · hold ${keysOf("retry")} = back to start · ${keysOf("pause")} = menu`
     : `${base} · red ring = ${easyGrab ? keysOf("jump") : keysOf("web")} to YOINK · ${LAYOUT.face.map(b => `{${b}}`)[0]} look at him · hold ${keysOf("retry")} retry`;

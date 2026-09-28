@@ -29,6 +29,7 @@ export const B_ZIP = 8;
 export const B_SLIDE = 16;
 /** Format 4 (round 12): C held (the charge / dive). */
 export const B_SLIDE_HELD = 32;
+export const B_GLIDE = 64;
 /** Format 4: the pitch column's resolution (sine x PITCH_RES, in -PITCH_RES..PITCH_RES). */
 export const PITCH_RES = 100;
 /** Chase steps a record can hold (the 90 s clock only runs down; +1 s slack). */
@@ -116,11 +117,11 @@ export const quantPitch = (s: number): number => {
 };
 
 /** Record from the latch's camera-space move (fwd / right, keys + stick), buttons and (round 12) the pitch sine. */
-export function recFromInput(rec: InputRec, yaw: number, fwd: number, right: number, jump: boolean, webPressed: boolean, webHeld: boolean, zip = false, slide = false, slideHeld = false, pitchSin = 0): InputRec {
+export function recFromInput(rec: InputRec, yaw: number, fwd: number, right: number, jump: boolean, webPressed: boolean, webHeld: boolean, zip = false, slide = false, slideHeld = false, pitchSin = 0, glideHeld = false): InputRec {
   rec.yaw = quantYaw(yaw);
   rec.fwd = quantMove(fwd);
   rec.right = quantMove(right);
-  rec.bits = (jump ? B_JUMP : 0) | (webPressed ? B_WEB_PRESSED : 0) | (webHeld ? B_WEB_HELD : 0) | (zip ? B_ZIP : 0) | (slide ? B_SLIDE : 0) | (slideHeld ? B_SLIDE_HELD : 0);
+  rec.bits = (jump ? B_JUMP : 0) | (webPressed ? B_WEB_PRESSED : 0) | (webHeld ? B_WEB_HELD : 0) | (zip ? B_ZIP : 0) | (slide ? B_SLIDE : 0) | (slideHeld ? B_SLIDE_HELD : 0) | (glideHeld ? B_GLIDE : 0);
   rec.pitch = quantPitch(pitchSin);
   return rec;
 }
@@ -131,7 +132,7 @@ export function recFromFrame(rec: InputRec, f: InputFrame): InputRec {
   const q = quantYaw(yaw);
   const sy = YAW_SIN[q], cy = YAW_COS[q];
   // move = -sy*fwd + cy*right, -cy*fwd - sy*right  =>  fwd = -(mx sy + mz cy), right = mx cy - mz sy
-  return recFromInput(rec, yaw, -(f.moveX * sy + f.moveZ * cy), f.moveX * cy - f.moveZ * sy, f.jumpPressed, f.webPressed, f.webHeld, f.zipPressed, f.slidePressed, f.slideHeld, f.aimY);
+  return recFromInput(rec, yaw, -(f.moveX * sy + f.moveZ * cy), f.moveX * cy - f.moveZ * sy, f.jumpPressed, f.webPressed, f.webHeld, f.zipPressed, f.slidePressed, f.slideHeld, f.aimY, f.glideHeld);
 }
 
 /**
@@ -165,6 +166,7 @@ export function buildFrame(f: InputFrame, rec: InputRec, v: Vec3, touch: boolean
   f.zipPressed = (rec.bits & B_ZIP) !== 0;
   f.slidePressed = (rec.bits & B_SLIDE) !== 0;
   f.slideHeld = (rec.bits & B_SLIDE_HELD) !== 0;
+  f.glideHeld = (rec.bits & B_GLIDE) !== 0;
   return f;
 }
 
@@ -338,7 +340,7 @@ export function decodeBytes(b: Uint8Array): { log: GhostLog; flags: GhostFlags }
     readCol(r, log.yaw, n, true, 0, YAW_RES - 1);
     readCol(r, log.fwd, n, false, -MOVE_MAX, MOVE_MAX);
     readCol(r, log.right, n, false, -MOVE_MAX, MOVE_MAX);
-    readCol(r, log.bits, n, false, 0, format >= FORMAT_TECH ? 63 : format === FORMAT_PARKOUR ? 31 : format === FORMAT_MOVES ? 15 : 7);
+    readCol(r, log.bits, n, false, 0, format === FORMAT ? 127 : format >= FORMAT_TECH ? 63 : format === FORMAT_PARKOUR ? 31 : format === FORMAT_MOVES ? 15 : 7);
     if (format >= FORMAT_TECH) readCol(r, log.pitch, n, false, -PITCH_RES, PITCH_RES);
     if (r.i !== b.length) return null;
     const flags: GhostFlags = { touch: (fl & 1) !== 0, easy: (fl & 2) !== 0 };

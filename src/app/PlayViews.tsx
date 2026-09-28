@@ -301,7 +301,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
     audio.current.windAcc += delta;
     if (audio.current.windAcc >= 0.05) {
       audio.current.windAcc = 0;
-      sfx.wind(sp, inRound && !game.paused && r.phase === "chase" && !b.grounded);
+      sfx.wind(sp + (b.glideOn ? 8 : 0), inRound && !game.paused && r.phase === "chase" && !b.grounded);
     }
     tickEv.current |= pe;
     const mp = music.probe();
@@ -366,7 +366,7 @@ export function PlayDriver({ game }: { game: PlayGame }) {
       hints.tick(dt, {
         active: !BOT_PAGE && game.mode === "round" && !game.paused && (st.screen === "chase" || st.screen === "practice") && r.phase === "chase",
         grounded: b.grounded, rope: b.ropeSolid >= 0, ring, chain: b.chainCount, touch: st.touch, easyGrab: game.camera.easyGrab,
-        djumped: (tev & EV_DJUMP) !== 0, zipped: (tev & EV_ZIP) !== 0, moves: r.tuning.webZip,
+        djumped: (tev & EV_DJUMP) !== 0, gliding: b.glideOn, zipped: (tev & EV_ZIP) !== 0, moves: r.tuning.webZip,
         wallRan: (tev & EV_WALLRUN) !== 0, kicked: (tev & EV_WALLJUMP) !== 0, slid: (tev & EV_SLIDE) !== 0, speed: Math.sqrt(b.v.x * b.v.x + b.v.z * b.v.z),
         charged: (tev & EV_CHARGE) !== 0, charge: r.tuning.charge,
       });

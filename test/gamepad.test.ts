@@ -76,8 +76,8 @@ test("the pad records the same input word as the keyboard and mouse", () => {
     feed(p3, b3, snap(undefined, { EAST: 1 }));
     assert.deepEqual(p3.sample(emptyRec(), yaw), k3.sample(emptyRec(), yaw));
   }
-  // L1 / R3 = Q (look at him)
-  const p4 = new InputLatch(); feed(p4, new PadButtons(), snap(undefined, { L1: 1 }));
+  // R3 = Q (look at him); L1 is held glide.
+  const p4 = new InputLatch(); feed(p4, new PadButtons(), snap(undefined, { R3: 1 }));
   assert.equal(p4.towardRunner, true);
   // easy grab: Cross is Space (press = jump + web, hold = web held)
   const k5 = new InputLatch(), p5 = new InputLatch();

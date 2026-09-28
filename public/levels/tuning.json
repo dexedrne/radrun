@@ -183,6 +183,13 @@
     "diveTurn": 0.9,
     "diveCarryDecay": 5,
     "diveKeep": 2.5,
+    "glide": true,
+    "glideSink": 2.6,
+    "glidePitchSpeed": 13,
+    "glideTurn": 1.3,
+    "glideDiveAccel": 10,
+    "glideDrag": 0.01,
+    "glideCap": 42,
     "diveSwingT": 0.4
   },
   "camera": {

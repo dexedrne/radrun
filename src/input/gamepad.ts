@@ -63,13 +63,14 @@ export const PAD = {
 } as const;
 
 /** What a RadRun action is bound to (the prompts and the controls lists read this table too). */
-export type PadAction = "jump" | "web" | "zip" | "slide" | "face" | "retry" | "pause" | "mute";
+export type PadAction = "jump" | "web" | "zip" | "slide" | "glide" | "face" | "retry" | "pause" | "mute";
 export const LAYOUT: Record<PadAction, readonly PadButton[]> = {
   jump: ["SOUTH"],
   web: ["R2"],
   zip: ["R1", "L2"],
   slide: ["EAST"],
-  face: ["L1", "R3"],
+  glide: ["L1"],
+  face: ["R3"],
   retry: ["NORTH"],
   pause: ["START"],
   mute: ["SELECT"],
@@ -197,6 +198,7 @@ export function padToLatch(l: InputLatch, s: PadSnap, b: PadButtons, look: LookS
   l.padJumpHeld = any(held, LAYOUT.jump);
   l.padWeb = any(held, LAYOUT.web);
   l.padSlideHeld = any(held, LAYOUT.slide);
+  l.padGlideHeld = any(held, LAYOUT.glide);
   l.padFace = any(held, LAYOUT.face);
   // Edges only on the pad's own transitions (a latch cleared by a blur or a new round never re-presses a held button).
   if (any(pressed, LAYOUT.jump)) l.padPress("jump");

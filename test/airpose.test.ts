@@ -37,7 +37,19 @@ function rig(seed: number): { root: Group; model: Group; bone: (n: string) => Bo
   return { root, model, bone: n => bones.get(n)! };
 }
 
-const inp = (o: Partial<AirPoseIn>): AirPoseIn => ({ dt: 1 / 60, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false, ...o });
+const inp = (o: Partial<AirPoseIn>): AirPoseIn => ({ dt: 1 / 60, dive: false, fall: false, glide: false, hanging: false, arc: 0, perfect: false, near: false, ...o });
+
+test("glide spreads both arms and legs and eases out on release", () => {
+  const a = newAirPose(), r = rig(6);
+  for (let i = 0; i < 60; i++) stepAirPose(a, inp({ glide: true }));
+  assert.ok(a.glide > 0.95 && a.sky < 0.05);
+  airBones(a, poseBones(r.model), r.root, false);
+  const left = dirOf(r.bone("LeftArm"), r.bone("LeftForeArm"));
+  const right = dirOf(r.bone("RightArm"), r.bone("RightForeArm"));
+  assert.ok(left.x * right.x < 0, "arms spread to opposite sides");
+  for (let i = 0; i < 60; i++) stepAirPose(a, inp({}));
+  assert.ok(a.glide < 0.05);
+});
 const dirOf = (a: Bone, b: Bone) => b.getWorldPosition(new Vector3()).sub(a.getWorldPosition(new Vector3())).normalize();
 
 test("air pose weights: the dive and the skydive ease in, let go near the ground; a perfect release flips, once, on time", () => {

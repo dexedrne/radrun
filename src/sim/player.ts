@@ -33,10 +33,12 @@ export type InputFrame = {
   slidePressed: boolean;
   /** Round 12: C / SLIDE held (tap = slide, hold = charge, release = launch; in the air a fresh press dives). */
   slideHeld: boolean;
+  /** Hold wingsuit glide while airborne without a web. */
+  glideHeld: boolean;
 };
 
 export const emptyInput = (): InputFrame => ({
-  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false, zipPressed: false, slidePressed: false, slideHeld: false,
+  moveX: 0, moveZ: 0, aimX: 1, aimY: 0, aimZ: 0, jumpPressed: false, webHeld: false, webPressed: false, zipPressed: false, slidePressed: false, slideHeld: false, glideHeld: false,
 });
 
 // Per-step event bits (Body.events is reset at the start of every step).
@@ -195,6 +197,7 @@ export type Body = {
   chargeAirT: number;
   /** Dive (C held from a fresh press in the air). */
   diveOn: boolean;
+  glideOn: boolean;
   /** Wall kicks chained without touching the ground or the rope. */
   kicks: number;
   /** Rebound: seconds since the last bonk, the speed into the face and its normal. */
@@ -325,6 +328,7 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     chargeT: 0,
     chargeAirT: 0,
     diveOn: false,
+    glideOn: false,
     kicks: 0,
     rebT: 1e3,
     rebVin: 0,
@@ -413,7 +417,7 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.upKick = src.upKick;
   dst.zipKind = src.zipKind; dst.zipAx = src.zipAx; dst.zipAy = src.zipAy; dst.zipAz = src.zipAz; dst.popBuf = src.popBuf; dst.zipLeft = src.zipLeft; dst.zipFrom = src.zipFrom;
   dst.yankOk = src.yankOk; dst.yankOn = src.yankOn; dst.yankT = src.yankT; dst.yankCd = src.yankCd;
-  dst.chargeT = src.chargeT; dst.chargeAirT = src.chargeAirT; dst.diveOn = src.diveOn; dst.kicks = src.kicks;
+  dst.chargeT = src.chargeT; dst.chargeAirT = src.chargeAirT; dst.diveOn = src.diveOn; dst.glideOn = src.glideOn; dst.kicks = src.kicks;
   dst.rebT = src.rebT; dst.rebVin = src.rebVin; dst.rebNx = src.rebNx; dst.rebNz = src.rebNz;
   dst.tech = src.tech; dst.flow = src.flow; dst.flowT = src.flowT;
   dst.capX = src.capX; dst.diveT = src.diveT; dst.ropeDive = src.ropeDive;
@@ -440,7 +444,7 @@ export function resetMoves(b: Body): void {
   b.liftOn = b.upKick = false;
   b.zipKind = 0; b.popBuf = 0; b.zipLeft = ZIP_FULL;
   b.yankOk = b.yankOn = false; b.yankT = b.yankCd = 0;
-  b.chargeT = b.chargeAirT = 0; b.diveOn = false; b.kicks = 0; b.rebT = 1e3;
+  b.chargeT = b.chargeAirT = 0; b.diveOn = b.glideOn = false; b.kicks = 0; b.rebT = 1e3;
   b.flow = 0; b.flowT = 0;
   b.capX = 0; b.diveT = 1e3; b.ropeDive = false; b.cornerOn = false; b.cornerSolid = -1; b.cornerT = 0;
 }
@@ -463,7 +467,7 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.i32(b.liftOn ? 1 : 0).i32(b.upKick ? 1 : 0);
   h.i32(b.zipKind).f64(b.zipAx).f64(b.zipAy).f64(b.zipAz).f64(b.popBuf).i32(b.zipLeft).i32(b.zipFrom);
   h.i32(b.yankOk ? 1 : 0).i32(b.yankOn ? 1 : 0).f64(b.yankT).f64(b.yankCd);
-  h.f64(b.chargeT).f64(b.chargeAirT).i32(b.diveOn ? 1 : 0).i32(b.kicks).f64(b.rebT).f64(b.rebVin).f64(b.rebNx).f64(b.rebNz);
+  h.f64(b.chargeT).f64(b.chargeAirT).i32(b.diveOn ? 1 : 0).i32(b.glideOn ? 1 : 0).i32(b.kicks).f64(b.rebT).f64(b.rebVin).f64(b.rebNx).f64(b.rebNz);
   h.i32(b.tech).i32(b.flow).f64(b.flowT);
   h.f64(b.capX).f64(b.diveT).i32(b.ropeDive ? 1 : 0).i32(b.cornerOn ? 1 : 0).i32(b.cornerSolid);
   h.f64(b.cornerX).f64(b.cornerY).f64(b.cornerZ).f64(b.cornerR).f64(b.cornerT).f64(b.cornerDx).f64(b.cornerDz);
@@ -779,7 +783,7 @@ function attach(b: Body, a: AnchorHit, k: Tuning, w: SimWorld): void {
   b.ropeUp = false;
   b.liftOn = false;
   // A web out of a dive (or just after one) keeps the dive's speed when it goes taut.
-  b.ropeDive = k.diveSwingT > 0 && b.diveT <= k.diveSwingT;
+  b.ropeDive = b.glideOn || (k.diveSwingT > 0 && b.diveT <= k.diveSwingT);
   b.cornerOn = false;
   b.wallMode = 0;
   b.ledgeMode = 0;
@@ -1632,6 +1636,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
   }
   if (inp.webPressed && !locked && b.ringId === RING_NONE && b.ropeSolid < 0 && !b.zipOn && !b.yankOn) b.events |= EV_NOANCHOR;
 
+  const glideSpeed = Math.sqrt(v.x * v.x + v.z * v.z);
+  b.glideOn = k.glide && inp.glideHeld && !b.grounded && b.ropeSolid < 0 && !b.cornerOn && !b.zipOn && !b.yankOn &&
+    b.wallMode === 0 && b.ledgeMode === 0 && !b.diveOn && glideSpeed >= 6;
+
   // Forces.
   let scripted = false, reeling = false, air = 0;
   if (b.zipOn) {
@@ -1646,7 +1654,9 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     const dx = tx - p.x, dy = b.zipP.y - p.y, dz = tz - p.z;
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d > 1e-6) {
-      const sp = (k.speedCap > 0 && k.zipSpeed > k.speedCap ? k.speedCap : k.zipSpeed) / d;
+      const carry = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+      const zipSpeed = k.glide && (b.glideOn || b.capX > 0) ? Math.max(k.zipSpeed, carry) : k.zipSpeed;
+      const sp = (k.speedCap > 0 ? Math.min(zipSpeed, k.speedCap + b.capX) : zipSpeed) / d;
       const f = Math.min(1, k.zipPull * dt);
       v.x += (dx * sp - v.x) * f;
       v.y += (dy * sp - v.y) * f;
@@ -1694,6 +1704,23 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     b.cornerT += dt;
     v.y -= k.gravity * k.cornerGravity * dt;
     v.y -= v.y * Math.min(1, CORNER_HOLD * dt);
+  } else if (b.glideOn) {
+    // The canopy spends horizontal energy to arrest the fall or climb. A dive can turn lost height back into speed;
+    // the per-step energy budget never lets pitching up create energy.
+    const hs0 = Math.sqrt(v.x * v.x + v.z * v.z), vy0 = v.y;
+    const pitch = Math.max(-0.8, Math.min(0.8, inp.aimY));
+    const wantVy = -k.glideSink + pitch * k.glidePitchSpeed;
+    v.y += Math.max(-18 * dt, Math.min(18 * dt, wantVy - v.y));
+    const budget = Math.max(0, hs0 * hs0 + vy0 * vy0 - 2 * k.gravity * v.y * dt - k.glideDrag * hs0 * hs0 * dt);
+    if (v.y * v.y > budget) v.y = (v.y < 0 ? -1 : 1) * Math.sqrt(budget);
+    let tx = mx, tz = mz, tl = Math.sqrt(tx * tx + tz * tz);
+    if (tl < 0.1) { tx = inp.aimX; tz = inp.aimZ; tl = Math.sqrt(tx * tx + tz * tz); }
+    if (tl > 0.1 && v.x * tx + v.z * tz >= -0.2 * hs0 * tl) turnToward(v, tx / tl, tz / tl, k.glideTurn * dt);
+    const down = pitch < 0 ? -pitch : 0;
+    if (hs0 > 1 && down > 0) { const gain = down * k.glideDiveAccel * dt / hs0; v.x += v.x * gain; v.z += v.z * gain; }
+    const hs = Math.sqrt(v.x * v.x + v.z * v.z), limit = Math.sqrt(Math.max(0, budget - v.y * v.y));
+    if (hs > limit && hs > 0) { v.x *= limit / hs; v.z *= limit / hs; }
+    if (w.wind !== undefined) { v.x += w.wind.x * dt; v.z += w.wind.z * dt; }
   } else if (!b.grounded) {
     const onRope = b.ropeSolid >= 0;
     v.y -= k.gravity * (onRope ? k.swingGravity : b.diveOn ? k.diveGravity : 1) * dt;
@@ -1796,8 +1823,8 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     // (§6.8 flow: each pip raises the cap by flowCap.) The web-slinger dive: diving, the cap is diveCap, and the speed
     // over the usual cap after it (capX) wears off at diveCarryDecay.
     const cap0 = k.speedCap > 0 ? k.speedCap + b.flow * k.flowCap : 0;
-    if (b.diveOn && cap0 > 0 && k.diveCap > cap0) {
-      capSpeed(v, k.diveCap);
+    if ((b.diveOn || b.glideOn) && cap0 > 0 && (b.diveOn ? k.diveCap : k.glideCap) > cap0) {
+      capSpeed(v, b.diveOn ? k.diveCap : k.glideCap);
       const sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
       b.capX = sp > cap0 ? sp - cap0 : 0;
     } else {
@@ -2076,7 +2103,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     const hs = Math.sqrt(v.x * v.x + v.z * v.z);
     b.kickSolid = -1;
     const along = hs > 1e-6 ? (mx * v.x + mz * v.z) / hs : 0;
-    if (b.landVy < k.rollMinVy && hs >= 6 && (along >= 0.3 || b.slideBuf > 0)) {
+    if ((b.glideOn && hs >= 6) || (b.landVy < k.rollMinVy && hs >= 6 && (along >= 0.3 || b.slideBuf > 0))) {
       b.rollT = k.rollTime;
       b.events |= EV_ROLL;
     } else if (b.landVy < k.stumbleVy) {
@@ -2086,8 +2113,10 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
       b.events |= EV_BIGLAND;
     } else if (k.slide && (b.slideBuf > 0 || (inp.slideHeld && b.diveOn)) && hs >= k.slideMinSpeed) startSlide(b, k);
     b.diveOn = false;
+    b.glideOn = false;
   }
   if (b.grounded) {
+    b.glideOn = false;
     b.chainCount = 0;
     b.airJumps = k.airJumps;
     b.kickSolid = -1;

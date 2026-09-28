@@ -22,7 +22,8 @@ backend. `npm run build && npm run preview` serves the production build on http:
 | Mouse | look / aim (PLAY captures the mouse; click the canvas if the browser refused) |
 | WASD | run |
 | Space | jump; **Space again in the air = double jump** (once per airtime, not on the rope; landing, a rope grab, a wall run or a ledge grab recharges it); on a wall (or just off one) = **wall kick** (round 12: each kick without touching the ground or the rope goes 0.8 m/s higher, three times); hanging on a ledge = climb-jump; **at the end of a zip = zip pop** (round 12); **right as you slam a wall = rebound kick** (round 12) |
-| LMB hold | **swing**: the yellow ring sits on a rim, a corner, a facade, or (round 12) a **cable across the street** or a gantry / skybridge / tank / billboard - whatever your aim (and your speed) points at - and glides along it as you turn; **the higher you are, the higher and further ahead it goes** (a longer web: a long sweeping arc that bottoms out over the street). Hold to swing: you **speed up through the bottom of the arc**; let go **near the top of the forward arc** (32-58 degrees past the bottom) for a **perfect release**: the web flashes white, a ding, +4.5 m/s and a pop up (just past the bottom still lifts you, round 11's timed release; held to the end the web lets go by itself with no boost). **Steer into a cross street at speed** (stick / keys 40+ degrees off your way, web held) and you **swing round the building's corner**. LMB on a roof with a ring = the web pulls you up and off the edge into the swing. No ring = nothing tall enough ahead: run, vault, zip, leap or drop off instead |
+| LMB hold | **swing**: the yellow ring sits on a rim, a corner, a facade, or (round 12) a **cable across the street** or a gantry / skybridge / tank / billboard - whatever your aim (and your speed) points at - and glides along it as you turn; **the higher you are, the higher and further ahead it goes** (a longer web: a long sweeping arc that bottoms out over the street). Hold to stay attached through the arc and around corners; you **speed up through the bottom**. Let go **near the top of the forward arc** (32-58 degrees past the bottom) for a **perfect release**: the web flashes white, a ding, +4.5 m/s and a pop up. A wall or ground impact can cut the web with a red snap; the snapping-web mutator can cut it too. LMB on a roof with a ring pulls you up and off the edge. No ring = nothing tall enough ahead: run, vault, zip, leap or drop off instead |
+| G hold in the air | **wingsuit glide** without a web: spread the arms and legs, keep forward speed with a slow sink. Look down to dive and gain speed; pull up to trade speed for height. Steer with WASD and mouse aim. Speed and height are capped by the energy you carry into the glide. Release G to drop; a web or zip keeps your speed, and landing becomes a roll |
 | C | round 12: **tap = slide** (while running fast; Space out of a slide = slide-jump), **hold = charge a leap** (a ring fills at your feet, yellow at full after 0.7 s; let go - or press Space - to launch: from a roof up to ~10 m up and 30 m across, from a wall run / run-up a big wall jump, from a ledge hang straight up, on the rope a **slingshot**), **in the air = dive** (a fresh press with 6+ m under you, held: head first, faster than a fall - up to 46 m/s - and the stick steers it; **web out of it and the swing keeps the dive's speed**: the dive-into-swing; land holding C to slide into a charge) |
 | E / Shift | round 12: **zip where you look** - a straight pull at 30 m/s along the camera (tilted up 8 degrees) to the first thing it hits within 45 m: a rim = up and the **ledge pop** onto that roof at 12 m/s; a facade = a wall run (fast, at an angle), else a run-up, else a push off; a **cable** = a fling past it along the zip, or with LMB held you swing on it; a roof top = you land. A **white diamond** shows the target every frame (grey = out of zips / cooling down). Nothing hit = the ringed anchor if it is within 15 degrees of the aim, else the **zip fan** (the same ray again 10 and 20 degrees off the aim, 8 ways round, up first: falling down a canyon while you look at him still finds a facade, a rim or a cable), else **no zip** (the grey X; nothing spent). **Two zips per airtime** (landing, a rope grab, a wall run or a ledge grab refills them), 0.35 s apart; a second E or LMB ends a zip early. When the **red dashed ring** is on him (within 12 m on Normal / 9 m on Degen, in the aim cone, in sight; no yank on Chill), E is the **web-yank**: a homing zip at him for 0.7 s (a miss: 2.5 s before the next) |
 | (by themselves) | **wall run** (hit a facade at an angle while airborne), **run-up** (hit it head-on with the stick into it: ~5 m up the wall, then a ledge grab if the top is in reach), **ledge grab + climb** (a roof edge within reach in front of you), **vault** (a low rooftop box ahead while running), **landing roll** (a hard landing with the stick forward) |
@@ -44,6 +45,7 @@ credits (tap to show it), so the whole title fits on one screen.
 | Drag on the right half | look / aim |
 | WEB (hold) | web the ringed building; let go to release (near the top of the arc = perfect); the stick into a cross street at speed = corner swing; slide the thumb while holding to turn the camera. Turns red = YOINK |
 | JUMP | jump; tap again in the air = double jump; on a wall = wall kick; end of a zip = zip pop |
+| GLIDE (hold) | wingsuit in the air: steer and pitch with the right-side drag; release to drop; landing rolls |
 | SLIDE | tap = slide, hold = charge a leap (the button wears a yellow ring; let go to launch), in the air = head-first dive, held (small, left of JUMP) |
 | ZIP | zip where you look (the drag on the right half sets the pitch too; the white diamond is drawn larger on touch); on the red dashed ring = the yank; dimmed while it recharges |
 | HIM (hold) | ease the camera toward him |
@@ -72,7 +74,8 @@ move switches back to the keyboard prompts. More than one pad: the one pressed l
 | Cross | A | jump; again in the air = double jump; on a wall = wall kick; end of a zip = zip pop; right at a wall slam = rebound |
 | Circle | B | tap = slide, hold = **charge a leap**, in the air = head-first **dive** (web out of it for a fast swing; the C key) |
 | R1 or L2 | RB or LT | **zip where you look**; on the red dashed ring = the **yank** (E / Shift) |
-| L1 or R3 | LB or RS click | ease the camera toward him (Q) |
+| L1 (hold) | LB (hold) | wingsuit glide in the air; right stick pitches down for speed and up for height |
+| R3 | RS click | ease the camera toward him (Q) |
 | Triangle (hold 1 s) | Y (hold 1 s) | retry mid-round (practice: back to the start roof) |
 | Options | Menu | pause |
 | Create | View | mute |
@@ -141,14 +144,13 @@ C / Circle / SLIDE dive, every round 12 move as before); the swing itself got th
 - **Speed through the bottom.** The surge adds speed along the swing through the bottom of the arc (from ~37 degrees
   before it, full at the bottom, to ~11 degrees past it). The climb after that is yours to time.
 - **Release.** Let go in the **perfect window**, 32-58 degrees past the bottom on the way up: +4.5 m/s along your
-  flight and a 2.5 m/s pop up, the web flashes white, and your Radbro flips (every other one a twirl). The web lets go
-  by itself at 58 degrees (was 50) with no release boost, so holding on is slower than timing it; round 11's timed
-  lift past 15 degrees is +6 m/s up (was 11, the perfect pop and the later release took its place). A scripted chain
-  down the Downtown avenues: 23 m/s timed (round 12: 21), 16 m/s just holding the web (round 12: 13.5).
+  flight and a 2.5 m/s pop up, the web flashes white, and your Radbro flips (every other one a twirl). The web stays
+  attached while held, including at the top of an arc and through a corner swing. A ground or wall hit or the
+  snapping-web mutator cuts it with a red snap effect. Round 11's timed lift past 15 degrees is +6 m/s up.
 - **Corner swings.** Swinging (or flying with the web held) at 9+ m/s, turn the stick 40+ degrees toward a cross
   street as you pass a building's corner on that side: a web goes onto the corner and you swing round it, level and
-  at full speed, until you face where the stick points (or let go of the stick or the web, or 1.4 s pass), then +3 m/s
-  along the new street. Jump lets go with a hop. Needs the building to stand over you and 5 m of air under you.
+  at full speed while held. Let go to launch along the new street. Jump lets go with a hop. Needs the building to
+  stand over you and 5 m of air under you.
 - **The dive.** C in the air (6+ m under you), held: head first, faster than a fall (up to 46 m/s; a fall stops at 32),
   and the stick turns it. **Web out of a dive** (or within 0.4 s of it) and the swing keeps the dive's speed when the
   web goes taut; the speed over 32 m/s is carried and wears off at 5 m/s each second: the dive-into-swing.

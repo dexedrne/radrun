@@ -324,6 +324,14 @@ export type Tuning = {
   diveCarryDecay: number;
   diveKeep: number;
   diveSwingT: number;
+  /** Wingsuit: a held, energy-limited glide (G / LB); pitch is the camera's aim sine. */
+  glide: boolean;
+  glideSink: number;
+  glidePitchSpeed: number;
+  glideTurn: number;
+  glideDiveAccel: number;
+  glideDrag: number;
+  glideCap: number;
 };
 
 export const DT = 1 / 120;
@@ -532,6 +540,13 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   diveCarryDecay: 5,
   diveKeep: 2.5,
   diveSwingT: 0.4,
+  glide: true,
+  glideSink: 2.6,
+  glidePitchSpeed: 13,
+  glideTurn: 1.3,
+  glideDiveAccel: 10,
+  glideDrag: 0.01,
+  glideCap: 42,
 });
 
 /**
@@ -542,7 +557,7 @@ export const SWING_OFF = {
   // (the one shared key the swing retuned: the runner's pendulum lets go where it always did)
   swingReleaseCos: 0.64,
   anchorHeightGain: 0, anchorHeightAhead: 0, swingSurge: 0, swingReelPerSpeed: 0, releasePerfectUp: 0, autoReleaseKeep: 1, autoRelease: true, cornerSwing: false,
-  diveCap: 0, diveTurn: 0, diveKeep: 0, diveSwingT: 0,
+  diveCap: 0, diveTurn: 0, diveKeep: 0, diveSwingT: 0, glide: false,
 } as const satisfies Partial<Tuning>;
 /**
  * The whole round 12 swing for the replay of an older ghost: SWING_OFF plus the round 12 values of the player-only keys
@@ -592,6 +607,7 @@ export const TECH_KEYS: readonly (keyof Tuning)[] = [
   "swingPerfectCos", "releasePerfect", "reboundWindow", "reboundKeep", "kickChainUp", "dive", "diveMinDrop", "diveSpeed", "diveGravity",
   "yankRange", "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
   "zipPopWindow", "zipPopUp", "zipPopFwd", "zipLift", "zipAimMin", "zipAimMax", "zipRigAssist", "zipAssistCos", "zipFanCos",
+  "glide", "glideSink", "glidePitchSpeed", "glideTurn", "glideDiveAccel", "glideDrag", "glideCap",
   ...SWING_KEYS,
 ];
 /** Player-only keys the runner never uses (double jump, slide, round 12 tech): left out of the bake's tuning hash. */
@@ -686,7 +702,7 @@ export const TUNABLE_KEYS = [
   "yankSpeed", "yankTime", "yankCooldown", "airTurn", "flowCap", "flowDecay",
   "anchorHeightGain", "anchorHeightAhead", "anchorHeightFree", "anchorUpMax", "swingSurge", "swingSurgeCos", "swingReelPerSpeed", "releasePerfectUp", "autoReleaseKeep",
   "cornerSwing", "cornerReach", "cornerMinSpeed", "cornerStick", "cornerGravity", "cornerBoost", "cornerMaxT", "cornerExitCos",
-  "diveCap", "diveTurn", "diveCarryDecay", "diveKeep", "diveSwingT",
+  "diveCap", "diveTurn", "diveCarryDecay", "diveKeep", "diveSwingT", "glide", "glideSink", "glidePitchSpeed", "glideTurn", "glideDiveAccel", "glideDrag", "glideCap",
 ] as const satisfies readonly (keyof Tuning)[];
 
 export type CameraTuning = {

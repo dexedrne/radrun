@@ -27,6 +27,7 @@ export class InputLatch {
   touchWeb = false;
   touchFace = false;
   touchSlideHeld = false;
+  touchGlideHeld = false;
   /**
    * Round 14 gamepad (input/gamepad.ts padToLatch): the left stick (camera-space, like the touch stick), the right
    * stick's look since the last frame (rad; the frame turns the camera with it) and the held buttons. The pad's
@@ -39,6 +40,7 @@ export class InputLatch {
   padWeb = false;
   padJumpHeld = false;
   padSlideHeld = false;
+  padGlideHeld = false;
   padFace = false;
   /** Easy grab: Space press also counts as a web press (Yoink), Space held = web held. */
   easyGrab = false;
@@ -99,6 +101,8 @@ export class InputLatch {
   touchSlideUp(): void {
     this.touchSlideHeld = false;
   }
+  touchGlideDown(): void { this.touchGlideHeld = true; }
+  touchGlideUp(): void { this.touchGlideHeld = false; }
   /** A gamepad press (the pad's own button edge): the same edges as Space / LMB / E / C. */
   padPress(what: "jump" | "web" | "zip" | "slide"): void {
     if (what === "jump") { this.jumpEdge = true; if (this.easyGrab) this.webEdge = true; }
@@ -109,7 +113,7 @@ export class InputLatch {
   /** The pad left play (menus, pause): nothing it held stays held. */
   padRelease(): void {
     this.padX = this.padY = this.padLookX = this.padLookY = 0;
-    this.padWeb = this.padJumpHeld = this.padSlideHeld = this.padFace = false;
+    this.padWeb = this.padJumpHeld = this.padSlideHeld = this.padGlideHeld = this.padFace = false;
   }
   /** C / SLIDE held right now. */
   get slideHeldNow(): boolean {
@@ -121,7 +125,7 @@ export class InputLatch {
   clear(): void {
     this.keys.clear();
     this.stickX = this.stickY = 0;
-    this.touchWeb = this.touchFace = this.touchSlideHeld = false;
+    this.touchWeb = this.touchFace = this.touchSlideHeld = this.touchGlideHeld = false;
     this.lmb = this.rmb = false;
     this.jumpEdge = this.webEdge = this.zipEdge = this.slideEdge = false;
     this.mouseDX = this.mouseDY = 0;
@@ -159,7 +163,7 @@ export class InputLatch {
     const webHeldNow = this.webHeldNow;
     // (Round 12: the camera pitch rides along as a sine, and C held.)
     recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge,
-      this.slideHeldNow || this.slideEdge, Math.sin(pitch));
+      this.slideHeldNow || this.slideEdge, Math.sin(pitch), this.keys.has("KeyG") || this.touchGlideHeld || this.padGlideHeld);
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;
@@ -191,6 +195,7 @@ export class InputLatch {
     f.zipPressed = this.zipEdge;
     f.slidePressed = this.slideEdge;
     f.slideHeld = this.slideHeldNow || this.slideEdge;
+    f.glideHeld = this.keys.has("KeyG") || this.touchGlideHeld || this.padGlideHeld;
     this.jumpEdge = false;
     this.webEdge = false;
     this.zipEdge = false;

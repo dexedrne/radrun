@@ -39,6 +39,7 @@ export const RADRUN: GameInfo = {
     "Mouse: look / aim",
     "WASD: run",
     "Space: jump (again in the air: double jump)",
+    "Hold G in the air: wingsuit glide (pitch down for speed / pull up for height / release to drop)",
     "Hold left button: web swing (let go near the top: perfect release)",
     "Steer into a cross street while swinging: swing round the corner",
     "E / Shift: zip straight where you look (on the red dashed ring: yank him)",

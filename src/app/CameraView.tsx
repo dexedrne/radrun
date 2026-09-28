@@ -16,7 +16,7 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
   const prefab = usePrefab();
   const tmp = useMemo(() => ({
     m: new Matrix4(), eye: new Vector3(), at: new Vector3(), up: new Vector3(0, 1, 0), hook: { x: 0, y: 0, z: 0 }, se: { x: 0, y: 0, z: 0 }, sa: { x: 0, y: 0, z: 0 },
-    p: { x: 0, y: 0, z: 0 }, drop: 0, web: { ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0 },
+    p: { x: 0, y: 0, z: 0 }, drop: 0, glideFov: 0, web: { ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0 },
   }), []);
   const hit: SegmentHit = useMemo(() => {
     const idx = game.world.index;
@@ -73,7 +73,8 @@ export function CameraView({ game, ropeDrop = 0 }: { game: ViewGame; ropeDrop?: 
       cam.quaternion.setFromRotationMatrix(tmp.m);
     }
     if (cam instanceof PerspectiveCamera) {
-      const fov = scripted ? game.camera.fov : rigFov(r);
+      tmp.glideFov += ((b.glideOn ? 3 : 0) - tmp.glideFov) * Math.min(1, 5 * delta);
+      const fov = scripted ? game.camera.fov : rigFov(r) + tmp.glideFov;
       if (Math.abs(cam.fov - fov) > 0.01) {
         cam.fov = fov;
         cam.updateProjectionMatrix();

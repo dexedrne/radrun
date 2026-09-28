@@ -257,10 +257,12 @@ export function Title(props: {
           ) : touch ? (
             <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = perfect, steer into a cross street = corner swing ·
             <b>ZIP</b> = zip where you look (red dashed ring on him = <b>yank</b>) · JUMP (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
+            hold <b>GLIDE</b> in the air = wingsuit; pitch down for speed, up for height ·
             <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = head-first <b>dive</b> (web out of it = fast swing) · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
           ) : (
             <><b>controls</b> · mouse look/aim · WASD run · LMB hold = <b>swing</b> (let go near the top = perfect; steer into a cross street = corner swing) ·
             E / Shift = <b>zip where you look</b> (red dashed ring on him = <b>yank</b>) · Space jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
+            hold G in the air = <b>wingsuit glide</b> (look down for speed, pull up for height) ·
             C tap = slide · C hold = <b>charge a leap</b> · C in the air = head-first <b>dive</b> (web out of it = fast swing) · ledges and low walls are climbed / vaulted by themselves ·
             red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
           )}
@@ -439,11 +441,11 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
           <div style={{ background: "rgba(14,16,30,0.6)", padding: "3px 8px", borderRadius: 5, opacity: 0.85 }}>
             {pad ? <PadText text={radrunPadHud(practice, easyGrab)} /> : practice
               ? (touch
-                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · SLIDE = slide · II = menu"
-                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · C slide · E/Shift zip · hold R = back to start · Esc = menu`)
+                ? "left thumb run · drag right to look · hold WEB = swing · GLIDE in air · ZIP = web-zip · SLIDE = slide · II = menu"
+                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · hold G in air = glide · C slide · E/Shift zip · hold R = back to start · Esc = menu`)
               : touch
-                ? "left thumb run · drag right to look · hold WEB = swing · ZIP = web-zip · SLIDE = slide · red ring = WEB to YOINK"
-                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · C slide · E/Shift zip · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
+                ? "left thumb run · drag right to look · hold WEB = swing · GLIDE in air · ZIP = web-zip · SLIDE = slide · red ring = WEB to YOINK"
+                : `WASD run · Space jump (x2 in the air, wall kick) · ${easyGrab ? "hold Space" : "hold LMB"} = web · hold G in air = glide · C slide · E/Shift zip · red ring = ${easyGrab ? "Space" : "LMB"} to YOINK · Q look at him · hold R retry`}
           </div>
         )}
       </div>

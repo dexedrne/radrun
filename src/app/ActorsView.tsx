@@ -33,7 +33,8 @@ import { AnimPlayer } from "./animPlayer.ts";
 import { CLIP_META, clipsPath, handHeight, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
-import { airBones, airInput, newAirPose, placeRoot, poseBones, stepAirPose, type AirPose, type AirPoseIn, type PoseBones } from "./airPose.ts";
+import { airBones, airInput, newAirPose, placeRoot, placeWings, poseBones, stepAirPose, wingMesh, type AirPose, type AirPoseIn, type PoseBones } from "./airPose.ts";
+import { RADBRO_COLOR } from "../ui/strings.ts";
 
 const UP = new Vector3(0, 1, 0);
 
@@ -76,6 +77,7 @@ export type ActorRig = {
   /** The web-slinger air poses (airPose.ts): weights / flip clock, the limb bones, the eased root orientation under the flip. */
   air: AirPose;
   pose: PoseBones;
+  wing: ReturnType<typeof wingMesh>;
   qBase: Quaternion;
 };
 
@@ -104,6 +106,9 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
   const root = new Group();
   root.name = `radbro-${id}`;
   root.add(model);
+  const wing = wingMesh(RADBRO_COLOR[id].body);
+  root.add(wing);
+  materials.push(wing.material);
   const meta = CLIP_META[id]?.clips ?? {};
   const ref = meta.Idle?.hips.start;
   const own = ((src as unknown as { animations?: AnimationClip[] }).animations ?? []) as AnimationClip[];
@@ -130,7 +135,7 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
     },
     yaw: 0, off: new Vector3(0, -0.9, 0), ropeW: 0, look: 0, arm: 0, prevPhase: PHASE_GROUND, prevP: new Vector3(), vel: new Vector3(),
     fade: 1, p: new Vector3(), hand: new Vector3(), hook: -1, zip: false, charging: false, chargeOn: false, roll: 0, pitch: 0, hipPitch: 0, phaseT: 0, prevT: 0,
-    air: newAirPose(), pose: poseBones(model), qBase: new Quaternion(),
+    air: newAirPose(), pose: poseBones(model), wing, qBase: new Quaternion(),
   };
 }
 
@@ -163,6 +168,7 @@ function Radbro({ id }: { id: RadbroId }) {
     return () => {
       rigs.delete(id);
       rig.player.dispose();
+      rig.wing.geometry.dispose();
       for (const m of rig.materials) m.dispose();
     };
   }, [id, rig]);
@@ -194,7 +200,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
     u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(), a: new Vector3(), b: new Vector3(),
     pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(), fwd: new Vector3(),
     anchor: new Vector3(), n: { x: 0, z: 0 }, qPose: new Quaternion(), e: new Vector3(), eu: new Euler(), pos: new Vector3(),
-    ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
+    ain: { dt: 0, dive: false, fall: false, glide: false, hanging: false, arc: 0, perfect: false, near: false } as AirPoseIn,
   }), []);
 
   // -5: roots, facing, rope tilt, animMachine.
@@ -326,7 +332,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
       const clear = p.y - 0.9 - game.index.groundBelow(p.x, p.z, p.y - 0.9);
       const free = !grounded && !anchor && !zip && !wall && !ledge && beat === "";
       stepAirPose(rig.air, airInput(tmp.ain, delta, dive && beat === "", free, beat === "" ? anchor : null, p, vy, clear,
-        isChaser && (game.frameEvents & EV_PERFECT) !== 0));
+        isChaser && (game.frameEvents & EV_PERFECT) !== 0, isChaser && b.glideOn && beat === ""));
 
       // Facing (slerp 12 rad/s toward velocity; scripted beats face the other one).
       const faceTo = (x: number, z: number, rate: number) => {
@@ -439,6 +445,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
       }
       // The air poses' limbs (dive, skydive, swing tuck / reach, flip), before the hand correction.
       airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
+      placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
       // Hand correction: shift the root so RightHand sits on its target (weighted while the hang blends in).
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {

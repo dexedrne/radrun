@@ -9,7 +9,7 @@
 // (each upper and lower limb bone turned so it points where the pose wants it, in the body's frame: rig-agnostic, it
 // only needs the Mixamo-style bone names every Radbro rig has) and blends by the eased weights, so the clip underneath
 // still shows through as the weights fade.
-import { Quaternion, Vector3, Matrix4, type Bone, type Object3D } from "three";
+import { Quaternion, Vector3, Matrix4, BufferGeometry, Float32BufferAttribute, Mesh, MeshBasicMaterial, DoubleSide, type Bone, type Object3D } from "three";
 import type { ActorRig } from "./ActorsView.tsx";
 
 export type PoseBones = {
@@ -33,10 +33,33 @@ export function poseBones(model: Object3D): PoseBones {
   };
 }
 
+/** Two cloth panels, one from each wrist to the waist and ankle; vertices follow the posed bones. */
+export function wingMesh(color: string): Mesh<BufferGeometry, MeshBasicMaterial> {
+  const g = new BufferGeometry();
+  g.setAttribute("position", new Float32BufferAttribute(new Float32Array(18), 3));
+  const m = new Mesh(g, new MeshBasicMaterial({ color, side: DoubleSide, transparent: true, opacity: 0.82, depthWrite: false }));
+  m.visible = false;
+  m.frustumCulled = false;
+  return m;
+}
+
+const W = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+export function placeWings(mesh: Mesh<BufferGeometry, MeshBasicMaterial>, root: Object3D, b: PoseBones, weight: number): void {
+  mesh.visible = weight > 0.05 && !!(b.lHand && b.lUp && b.lFoot && b.rHand && b.rUp && b.rFoot);
+  if (!mesh.visible) return;
+  root.updateMatrixWorld(true);
+  for (const [i, bone] of [b.lHand!, b.lUp!, b.lFoot!, b.rHand!, b.rUp!, b.rFoot!].entries()) root.worldToLocal(bone.getWorldPosition(W[i]));
+  const a = mesh.geometry.getAttribute("position");
+  for (let i = 0; i < 6; i++) a.setXYZ(i, W[i].x, W[i].y, W[i].z);
+  a.needsUpdate = true;
+  mesh.material.opacity = 0.82 * weight;
+}
+
 /** Eased pose weights and the flip clock of one character. */
 export type AirPose = {
   dive: number;
   sky: number;
+  glide: number;
   /** Swing layer: its weight and, of it, the tuck share (1 = the bottom of the arc, 0 = its ends). */
   swing: number;
   tuck: number;
@@ -47,7 +70,7 @@ export type AirPose = {
   /** Seconds since mounted (the skydive flutter). */
   t: number;
 };
-export const newAirPose = (): AirPose => ({ dive: 0, sky: 0, swing: 0, tuck: 0, flipT: -1, flipKind: 0, flips: 0, t: 0 });
+export const newAirPose = (): AirPose => ({ dive: 0, sky: 0, glide: 0, swing: 0, tuck: 0, flipT: -1, flipKind: 0, flips: 0, t: 0 });
 
 export type AirPoseIn = {
   dt: number;
@@ -55,6 +78,7 @@ export type AirPoseIn = {
   dive: boolean;
   /** A long fall with nothing else going on (no web, zip, wall or ledge), falling fast with room below. */
   fall: boolean;
+  glide: boolean;
   /** Hanging from a web (rope or corner) and, then, the cosine of the web's angle from straight down (1 = the bottom). */
   hanging: boolean;
   arc: number;
@@ -67,7 +91,7 @@ export type AirPoseIn = {
 /** Pose timing: flip length (s), ease rates in / out (1/s). */
 export const AIR = {
   flipFor: 0.62,
-  diveIn: 7, diveOut: 9, skyIn: 2.6, skyOut: 7, nearOut: 14, swingIn: 6, swingOut: 8, tuckRate: 5,
+  diveIn: 7, diveOut: 9, skyIn: 2.6, skyOut: 7, glideIn: 8, glideOut: 10, nearOut: 14, swingIn: 6, swingOut: 8, tuckRate: 5,
   /** The swing's tuck: from this cosine from straight down (full at tuckFull). */
   tuckFrom: 0.82, tuckFull: 0.97,
   /** The skydive's head-up tilt (rad) and flutter (rad-ish amplitude, rad/s). */
@@ -83,6 +107,7 @@ export function stepAirPose(a: AirPose, i: AirPoseIn): void {
   const out = i.near ? AIR.nearOut : 0;
   a.dive = ease(a.dive, i.dive && !i.hanging && !i.near ? 1 : 0, AIR.diveIn, out || AIR.diveOut, i.dt);
   a.sky = ease(a.sky, i.fall && !i.dive && !i.hanging && !i.near ? 1 : 0, AIR.skyIn, out || AIR.skyOut, i.dt);
+  a.glide = ease(a.glide, i.glide && !i.hanging && !i.near ? 1 : 0, AIR.glideIn, out || AIR.glideOut, i.dt);
   a.swing = ease(a.swing, i.hanging ? 1 : 0, AIR.swingIn, AIR.swingOut, i.dt);
   const t = i.hanging ? Math.max(0, Math.min(1, (i.arc - AIR.tuckFrom) / (AIR.tuckFull - AIR.tuckFrom))) : a.tuck;
   a.tuck += (t - a.tuck) * Math.min(1, AIR.tuckRate * i.dt);
@@ -96,7 +121,7 @@ export function stepAirPose(a: AirPose, i: AirPoseIn): void {
 /** The flip's bell (0 -> 1 -> 0 over the flip): how much the tuck pose shows. */
 const flipBell = (a: AirPose) => (a.flipT < 0 ? 0 : Math.sin((Math.PI * a.flipT) / AIR.flipFor));
 /** Anything in the air pose moving the root this frame (the view rotates the root's offset with it). */
-export const airRootWeight = (a: AirPose): number => Math.max(a.dive, a.sky, a.flipT >= 0 ? 1 : 0);
+export const airRootWeight = (a: AirPose): number => Math.max(a.dive, a.sky, a.glide, a.flipT >= 0 ? 1 : 0);
 
 const V = { u: new Vector3(), f: new Vector3(), x: new Vector3(), h: new Vector3(), m: new Matrix4(), q: new Quaternion(), qf: new Quaternion(), ax: new Vector3() };
 
@@ -116,17 +141,18 @@ const FALL_VY = -7, FALL_CLEAR = 4.5, NEAR_MIN = 2.2, NEAR_T = 0.09;
  * ground below. Fills and returns `out`.
  */
 export function airInput(out: AirPoseIn, dt: number, dive: boolean, air: boolean, hang: { x: number; y: number; z: number } | null,
-  p: { x: number; y: number; z: number }, vy: number, clearance: number, perfect: boolean): AirPoseIn {
+  p: { x: number; y: number; z: number }, vy: number, clearance: number, perfect: boolean, glide = false): AirPoseIn {
   out.dt = dt;
   out.dive = dive;
-  out.fall = air && vy < FALL_VY && clearance > FALL_CLEAR;
+  out.fall = air && !glide && vy < FALL_VY && clearance > FALL_CLEAR;
+  out.glide = glide;
   out.hanging = hang !== null;
   if (hang) {
     const dx = hang.x - p.x, dy = hang.y - p.y, dz = hang.z - p.z, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
     out.arc = l > 1e-6 ? dy / l : 0;
   } else out.arc = 0;
   out.perfect = perfect;
-  out.near = (air || dive) && vy < 0 && clearance < Math.max(NEAR_MIN, -vy * NEAR_T);
+  out.near = (air || dive || glide) && vy < 0 && clearance < Math.max(NEAR_MIN, -vy * NEAR_T);
   return out;
 }
 
@@ -170,6 +196,11 @@ export function airRoot(a: AirPose, yaw: number, vx: number, vy: number, vz: num
     V.f.set(hx * s, -c, hz * s);
     q.slerp(basis(V.u, V.f, V.q), a.sky * (1 - a.dive));
   }
+  if (a.glide > 1e-3) {
+    V.u.set(hx * 0.99, 0.14, hz * 0.99).normalize();
+    V.f.set(0, -1, 0).addScaledVector(V.u, V.u.y).normalize();
+    q.slerp(basis(V.u, V.f, V.q), a.glide);
+  }
 }
 
 /** The flip on top of the root's orientation (a front flip about the body's side axis, or a twirl about its long axis). */
@@ -185,9 +216,10 @@ export function airFlip(a: AirPose, q: Quaternion): void {
 
 type Dir = readonly [number, number, number];
 /** Limb directions in the body frame as (right, up, forward) for the right side (the left mirrors right). */
-const POSES: Record<"dive" | "sky" | "tuck" | "reach" | "flip" | "twirl", Partial<Record<"arm" | "fore" | "up" | "leg" | "chest", Dir>>> = {
+const POSES: Record<"dive" | "sky" | "glide" | "tuck" | "reach" | "flip" | "twirl", Partial<Record<"arm" | "fore" | "up" | "leg" | "chest", Dir>>> = {
   dive: { arm: [0.3, -1, -0.3], fore: [0.2, -1, -0.2], up: [0.06, -1, -0.12], leg: [0.03, -1, -0.25], chest: [0, 1, -0.15] },
   sky: { arm: [0.8, 0.45, -0.35], fore: [0.35, 0.8, -0.45], up: [0.35, -0.9, -0.15], leg: [0.15, -0.45, -0.9], chest: [0, 1, -0.3] },
+  glide: { arm: [1, 0.03, 0.1], fore: [1, -0.05, 0.15], up: [0.25, -0.95, -0.1], leg: [0.22, -0.9, -0.2], chest: [0, 1, 0.05] },
   // (swing: the legs and the free left arm only)
   tuck: { arm: [0.35, -0.5, 0.6], fore: [0.1, 0.4, 0.9], up: [0.12, -0.45, 0.9], leg: [0.05, -1, 0.1] },
   reach: { arm: [0.9, 0.05, 0.2], fore: [0.85, 0.2, 0.3], up: [0.08, -1, 0.35], leg: [0.05, -1, 0.2] },
@@ -241,6 +273,7 @@ export function airBones(a: AirPose, bones: PoseBones, root: Object3D, webArm: b
   const ws: [keyof typeof POSES, number][] = [
     ["dive", a.dive * (1 - flip)],
     ["sky", a.sky * (1 - a.dive) * (1 - flip)],
+    ["glide", a.glide * (1 - flip)],
     ["tuck", sw * a.tuck * 0.85],
     ["reach", sw * (1 - a.tuck) * 0.6],
     [a.flipKind === 0 ? "flip" : "twirl", flip],
