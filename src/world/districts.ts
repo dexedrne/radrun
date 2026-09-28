@@ -149,7 +149,8 @@ export const DISTRICTS: Readonly<Record<DistrictId, District>> = {
         chill: { base: -0.05, yoinkRange: 0.5 },
         // Round 12: Normal 1.6x, Degen 2.5x against the round 12 table. The web-slinger swing: Degen 2.45x sprinting from
         // 75 m (the median had dropped to 39 s).
-        normal: { gStar: 20, base: -0.2, mMax: 0.2, airMax: 0.2 },
+        // Held webs shifted this chase beyond the 40 s Normal target; a slightly easier sprint restores it.
+        normal: { gStar: 20, base: -0.3, mMax: 0.2, airMax: 0.2 },
         degen: { base: 0.75, gStar: 5, mMax: 0.4, airMax: 0.4, panicBudget: -5 },
       },
     },
