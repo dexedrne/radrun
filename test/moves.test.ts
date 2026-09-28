@@ -385,7 +385,7 @@ test("ghost: a run with double jumps, zips and slides records B_ZIP / B_SLIDE, r
   for (let i = 0; i < log.n; i++) { if (log.bits[i] & B_ZIP) zipBits++; if (log.bits[i] & B_SLIDE) slideBits++; }
   assert.ok(zipBits >= 2 && slideBits >= 10, `zip bits ${zipBits}, slide bits ${slideBits}`);
   const bytes = encodeBytes(log, flags);
-  assert.equal(bytes[0], 5, "format 5");
+  assert.equal(bytes[0], 6, "format 6");
   const back = await unpackGhost(await packGhost(log, flags));
   assert.ok(back);
   assert.equal(back.flags.moves, undefined, "the moves ruleset");

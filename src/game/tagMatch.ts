@@ -8,7 +8,7 @@
 //      (ties -> the lower slot; the tag-back player is skipped); everyone else has none. Each slot's SimWorld.runner
 //      is a copy of that target, so the slot order of step 2 does not matter. The holder's Yoink / yank reach grows
 //      with his bag heat (TAG.heatFrom-heatFull s without a pass), so no hold lasts the whole match.
-//   2. bodies: each slot steps from the frame rebuilt from its 40-bit input word (net/wire.ts); a frozen or
+//   2. bodies: each slot steps from the frame rebuilt from its 41-bit input word (net/wire.ts); a frozen or
 //      fall-locked body gets its move and buttons zeroed (it keeps its aim; gravity still applies).
 //   3. tags on POST-step positions: the holder against each runner in ascending slot order; the first hit passes.
 //   4. falls: respawn on the last safe roof, then fallLock s with no input.
@@ -279,7 +279,7 @@ export class TagMatch {
     }
   }
 
-  /** One fixed 120 Hz step from one 40-bit input word per slot (net/wire.ts). */
+  /** One fixed 120 Hz step from one 41-bit input word per slot (net/wire.ts). */
   stepWords(words: ArrayLike<number>): void {
     const n = this.n;
     for (let i = 0; i < n; i++) copyBody(this.prev[i], this.bodies[i]);

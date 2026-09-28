@@ -1,9 +1,9 @@
-// Online wire format (src/net/wire.ts; multiplayer design §4): the 40-bit input word is the ghost record bit for bit, the
+// Online wire format (src/net/wire.ts; multiplayer design §4): the 41-bit input word is the ghost record bit for bit, the
 // prediction clears only the press bits, and every binary message round-trips.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  B_JUMP, B_SLIDE, B_SLIDE_HELD, B_WEB_HELD, B_WEB_PRESSED, B_ZIP, PITCH_RES, YAW_RES, emptyRec, type InputRec,
+  B_GLIDE, B_JUMP, B_SLIDE, B_SLIDE_HELD, B_WEB_HELD, B_WEB_PRESSED, B_ZIP, PITCH_RES, YAW_RES, emptyRec, type InputRec,
 } from "../src/game/ghost.ts";
 import {
   CODE_ALPHABET, cleanName, decodeAck, decodeDesync, decodeFill, decodeInput, decodePing, decodePong, decodeRelayInput, decodeSlotHash,
@@ -16,14 +16,14 @@ const rec = (yaw: number, fwd: number, right: number, bits: number, pitch: numbe
 
 test("word: every record field round-trips, extremes included", () => {
   const rand = mulberry32(3);
-  const cases = [rec(0, 0, 0, 0, 0), rec(YAW_RES - 1, 127, -127, 63, PITCH_RES), rec(512, -64, 64, B_SLIDE_HELD, -PITCH_RES), rec(1, -1, 1, B_JUMP | B_ZIP, -1)];
+  const cases = [rec(0, 0, 0, 0, 0), rec(YAW_RES - 1, 127, -127, 127, PITCH_RES), rec(512, -64, 64, B_SLIDE_HELD | B_GLIDE, -PITCH_RES), rec(1, -1, 1, B_JUMP | B_ZIP, -1)];
   for (let i = 0; i < 2000; i++) {
-    cases.push(rec(Math.floor(rand() * YAW_RES), Math.floor(rand() * 255) - 127, Math.floor(rand() * 255) - 127, Math.floor(rand() * 64), Math.floor(rand() * 201) - 100));
+    cases.push(rec(Math.floor(rand() * YAW_RES), Math.floor(rand() * 255) - 127, Math.floor(rand() * 255) - 127, Math.floor(rand() * 128), Math.floor(rand() * 201) - 100));
   }
   const out = emptyRec();
   for (const c of cases) {
     const w = packWord(c);
-    assert.ok(Number.isInteger(w) && w >= 0 && w < 2 ** 40);
+    assert.ok(Number.isInteger(w) && w >= 0 && w < 2 ** 41);
     assert.deepEqual(unpackWord(w, out), c);
   }
 });
@@ -33,15 +33,15 @@ test("the press bits are the ghost record's edge buttons", () => {
 });
 
 test("prediction: clears jump / web press / zip / slide press, keeps web held, C held, aim and move", () => {
-  const all = B_JUMP | B_WEB_PRESSED | B_WEB_HELD | B_ZIP | B_SLIDE | B_SLIDE_HELD;
+  const all = B_JUMP | B_WEB_PRESSED | B_WEB_HELD | B_ZIP | B_SLIDE | B_SLIDE_HELD | B_GLIDE;
   const c = rec(700, -30, 90, all, -42);
   const p = unpackWord(predictWord(packWord(c)), emptyRec());
-  assert.deepEqual(p, rec(700, -30, 90, B_WEB_HELD | B_SLIDE_HELD, -42));
+  assert.deepEqual(p, rec(700, -30, 90, B_WEB_HELD | B_SLIDE_HELD | B_GLIDE, -42));
   assert.equal(predictWord(predictWord(packWord(c))), predictWord(packWord(c)));
 });
 
 test("messages round-trip", () => {
-  const words = [0, 1, 2 ** 40 - 1, packWord(rec(3, -5, 7, 9, -11))];
+  const words = [0, 1, 2 ** 41 - 1, packWord(rec(3, -5, 7, B_GLIDE | 9, -11))];
   assert.deepEqual(decodeInput(encodeInput({ firstStep: 123456, words })), { firstStep: 123456, words });
   assert.deepEqual(decodeInput(encodeInput({ firstStep: 9, words, ackStep: 4, hashStep: 60, hash: 0xdeadbeef })), { firstStep: 9, words, ackStep: 4, hashStep: 60, hash: 0xdeadbeef });
   assert.throws(() => encodeInput({ firstStep: 0, words: new Array(MAX_INPUT_COUNT + 1).fill(0) }));

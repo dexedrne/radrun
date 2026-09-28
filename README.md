@@ -25,7 +25,7 @@ npm run relay        # the SPIDER-TAG online relay, locally on :8787 (or the Wor
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · hold LMB to swing on the building, cable or
 fixture ahead (let go near the top of the arc = a perfect release) · E / Shift zip straight where you look
 (two per airtime; on the red dashed ring = web-yank him) · Space jump (again in the air = double jump; on a
-wall = wall kick; end of a zip = pop; right at a wall slam = rebound) · C tap = slide, hold = charge a leap,
+wall = wall kick; end of a zip = pop; right at a wall slam = rebound) · hold G in the air = wingsuit glide · C tap = slide, hold = charge a leap,
 in the air = dive · wall runs, run-ups, ledge grabs + climbs, vaults and landing rolls happen by themselves ·
 red ring on him + LMB = YOINK · Q / RMB ease the camera toward him · R retry (hold 1 s mid-round) · M mute ·
 Esc pause. Round 9 (webs on buildings, a real pendulum, parkour, the taller cities):
@@ -33,7 +33,7 @@ Esc pause. Round 9 (webs on buildings, a real pendulum, parkour, the taller citi
 zip, the charge, the tech moves, the yank): `docs/specs/2026-09-26-round12-spider-tag.md`; PLAY.md "Moving".
 
 Controller (round 14): a DualSense / DualShock or an Xbox pad plays everything, menus included (left stick run,
-right stick look, R2 swing, Cross / A jump, Circle / B slide / charge / dive, R1 or L2 zip, Options pause); the
+right stick look, R2 / RT swing, L1 / LB wingsuit glide, Cross / A jump, Circle / B slide / charge / dive, R1 or L2 zip, R3 / RS click look at him, Options pause); the
 prompts switch to PlayStation or Xbox glyphs when a pad is used and back when a key, a click or the mouse is.
 PLAY.md "Controller".
 

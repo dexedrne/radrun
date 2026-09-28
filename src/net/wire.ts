@@ -1,19 +1,20 @@
 // Online wire format (multiplayer design §4). Pure TS shared by the client, the relay and the tests; no DOM.
 //
-// One step of one player's input is the ghost record (game/ghost.ts InputRec) packed into a 40-bit "word", kept as a
-// plain JS number (an integer below 2^40, so it is exact) and sent as 5 bytes:
+// One step of one player's input is the ghost record (game/ghost.ts InputRec) packed into a 41-bit "word", kept as a
+// plain JS number (an integer below 2^41, so it is exact) and sent as 6 bytes:
 //   bits  0-9   yaw          (0..1023, 1024 per turn)
 //   bits 10-17  fwd          (int8, 1/64 steps)
 //   bits 18-25  right        (int8)
 //   bits 26-31  buttons      jump, webPressed, webHeld, zip, slide, slideHeld (the record's bits, ghost FORMAT 4)
 //   bits 32-39  pitch        (int8, the pitch sine x 100; round 12's straight zip)
-// multiplayer design §3.4 planned a 31-bit word; round 12 added the pitch column and the C-held bit, so a step is 5 bytes.
+//   bit  40     glideHeld    (held wingsuit, ghost format 6)
+// multiplayer design §3.4 planned a 31-bit word; round 12 added pitch and C-held; glide adds the sixth byte.
 //
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
 import type { InputRec } from "../game/ghost.ts";
 
 /** Bumped on any change to the wire format or the online match rules (2: the web-slinger swing changed the sim). */
-export const NET_VERSION = 2;
+export const NET_VERSION = 3;
 
 const LO = 4294967296;
 /**
@@ -26,7 +27,7 @@ const s8 = (v: number) => ((v & 0xff) << 24) >> 24;
 
 export function packWord(r: InputRec): number {
   const lo = ((r.yaw & 0x3ff) | ((r.fwd & 0xff) << 10) | ((r.right & 0xff) << 18) | ((r.bits & 0x3f) << 26)) >>> 0;
-  return (r.pitch & 0xff) * LO + lo;
+  return ((r.pitch & 0xff) | ((r.bits & 64) << 2)) * LO + lo;
 }
 
 export function unpackWord(w: number, out: InputRec): InputRec {
@@ -34,7 +35,7 @@ export function unpackWord(w: number, out: InputRec): InputRec {
   out.yaw = lo & 0x3ff;
   out.fwd = s8(lo >>> 10);
   out.right = s8(lo >>> 18);
-  out.bits = (lo >>> 26) & 0x3f;
+  out.bits = ((lo >>> 26) & 0x3f) | ((hi & 256) >>> 2);
   out.pitch = s8(hi);
   return out;
 }
@@ -48,9 +49,9 @@ export function predictWord(w: number): number {
 const putWord = (v: DataView, o: number, w: number) => {
   const lo = w % LO;
   v.setUint32(o, lo, true);
-  v.setUint8(o + 4, (w - lo) / LO);
+  v.setUint16(o + 4, (w - lo) / LO, true);
 };
-const getWord = (v: DataView, o: number) => v.getUint8(o + 4) * LO + v.getUint32(o, true);
+const getWord = (v: DataView, o: number) => v.getUint16(o + 4, true) * LO + v.getUint32(o, true);
 
 // ---- binary messages ------------------------------------------------------------------------------------------
 
@@ -64,11 +65,11 @@ export const MSG_PONG = 0x84;
 export const MSG_DESYNC = 0x86;
 
 /**
- * At most this many steps per INPUT message (8 + 128 x 5 + 12 = 660 B, under the relay's 1 KB message cap): a
+ * At most this many steps per INPUT message (8 + 128 x 6 + 12 = 788 B, under the relay's 1 KB message cap): a
  * catch-up after a hitch sends a few big INPUTs, never a burst of small ones.
  */
 export const MAX_INPUT_COUNT = 128;
-export const WORD_BYTES = 5;
+export const WORD_BYTES = 6;
 
 export type InputMsg = {
   firstStep: number;

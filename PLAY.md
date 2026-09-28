@@ -400,7 +400,7 @@ their inputs: after 0.4 s the screen says "waiting for the other player · N s",
 inputs come back both games catch up (up to 30 steps a frame) and play on. The same holds at the horn: the results
 show once both players' last inputs are in.
 
-How it works (multiplayer design §3-§5): both clients run the same deterministic match; only inputs travel, 5 bytes per step
+How it works (multiplayer design §3-§5): both clients run the same deterministic match; only inputs travel, 6 bytes per step
 (`src/net/wire.ts`), sent 30 times a second (never more than 40 messages a second: a catch-up after a hitch goes out
 as a few messages of up to 128 steps, and the relay allows 90 a second with bursts of 180). Your Radbro answers at once; the other one is predicted (their last
 input, presses cleared) and corrected by rollback when their real input arrives (`src/net/rollback.ts`), so a tag
@@ -573,12 +573,15 @@ says it is **from an older version** ("replayed with its own swing"); one that d
 older build". Bests and kept ghosts from before v7 are the older build's (the old best shows as the older build's on
 your first catch).
 
+`v=8` adds held webs and the wingsuit glide. Ghost format 6 records the glide button; format 5 keeps the earlier
+automatic web release and no glide. The runner packs are v4 and online input words are 6 bytes (network v3).
+
 Plain `?c=652&r=4764&d=normal&t=41.2` links (no `g`) still work: they preselect the title and show "beat
 41.2 s" (claimed, not checked).
 
 How it stays exact: the sim only reads the horizontal aim direction, (round 12) the camera pitch as a sine, the
 move vector and the buttons, so a live round steps with the input **rebuilt from its quantised record** (yaw in
-1024 steps per turn, move in 1/64 steps, pitch in 1/100 steps; `src/game/ghost.ts`, record format 5). The replay feeds the same records to a second Round with the same
+1024 steps per turn, move in 1/64 steps, pitch in 1/100 steps; `src/game/ghost.ts`, record format 6). The replay feeds the same records to a second Round with the same
 seed and gets the same result bit for bit. sin/cos come from a table built with + - * / only, so a link
 made in Chrome replays the same in Safari or Firefox. The link string is varint RLE of per-step changes,
 deflate-raw (CompressionStream), base64url.

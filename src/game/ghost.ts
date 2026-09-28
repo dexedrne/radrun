@@ -38,11 +38,13 @@ export const GHOST_MAX_STEPS = ROUND.seconds * 120 + 120;
  * Record format: 1 = before the double jump / web zip (bits 0-7; replayed with those moves off), 2 = with them
  * (+ B_ZIP), 3 = round 9 (+ B_SLIDE; building anchors and parkour), 4 = round 12 (+ B_SLIDE_HELD and the pitch
  * column: the straight zip, the charge, the dive), 5 = the web-slinger swing (the same columns as 4; the swing's
- * physics changed, so the format says which one the record was made with). Formats 1-4 still decode and replay with
+ * physics changed, so the format says which one the record was made with), 6 = held webs and wingsuit glide.
+ * Formats 1-4 still decode and replay with
  * the round 12 swing (SWING_R12; formats 1-3 also with pitch 0 and the charge and dive off), but only links from older
  * builds carry them.
  */
-export const FORMAT = 5;
+export const FORMAT = 6;
+const FORMAT_SWING = 5;
 const FORMAT_TECH = 4;
 const FORMAT_PARKOUR = 3;
 const FORMAT_MOVES = 2;
@@ -58,7 +60,7 @@ export const emptyRec = (): InputRec => ({ yaw: 0, fwd: 0, right: 0, bits: 0, pi
  * for a format-1/2 record (made before the slide; missing = on), charge = false for formats 1-3 and swing = false
  * for formats 1-4 (made before the web-slinger swing: replayed with the round 12 swing).
  */
-export type GhostFlags = { touch: boolean; easy: boolean; moves?: boolean; slide?: boolean; charge?: boolean; swing?: boolean };
+export type GhostFlags = { touch: boolean; easy: boolean; moves?: boolean; slide?: boolean; charge?: boolean; swing?: boolean; glide?: boolean };
 
 /** A decoded ghost ready to race: the round it belongs to, the claimed time and the record. */
 export type GhostSpec = {
@@ -185,6 +187,7 @@ export function roundTuning(t: Tuning, flags: GhostFlags): Tuning {
     ...(flags.moves === false ? { ...MOVES_OFF, ...CHARGE_OFF } : flags.slide === false ? { ...SLIDE_OFF, ...CHARGE_OFF } : flags.charge === false ? CHARGE_OFF : {}),
     // (every older format predates the web-slinger swing)
     ...(flags.swing === false || flags.charge === false || flags.slide === false || flags.moves === false ? SWING_R12 : {}),
+    ...(flags.glide === false ? { glide: false, autoRelease: true } : {}),
   };
 }
 
@@ -314,7 +317,7 @@ function readCol(r: Reader, col: Col, n: number, wrap: boolean, lo: number, hi: 
  */
 export function encodeBytes(log: GhostLog, flags: GhostFlags): Uint8Array {
   const w = new Writer();
-  const format = flags.moves === false ? FORMAT_OLD : flags.slide === false ? FORMAT_MOVES : flags.charge === false ? FORMAT_PARKOUR : flags.swing === false ? FORMAT_TECH : FORMAT;
+  const format = flags.moves === false ? FORMAT_OLD : flags.slide === false ? FORMAT_MOVES : flags.charge === false ? FORMAT_PARKOUR : flags.swing === false ? FORMAT_TECH : flags.glide === false ? FORMAT_SWING : FORMAT;
   w.byte(format);
   w.byte((flags.touch ? 1 : 0) | (flags.easy ? 2 : 0));
   w.uv(log.n);
@@ -331,7 +334,7 @@ export function decodeBytes(b: Uint8Array): { log: GhostLog; flags: GhostFlags }
   try {
     const r = new Reader(b);
     const format = r.byte();
-    if (format !== FORMAT && format !== FORMAT_TECH && format !== FORMAT_PARKOUR && format !== FORMAT_MOVES && format !== FORMAT_OLD) return null;
+    if (format !== FORMAT && format !== FORMAT_SWING && format !== FORMAT_TECH && format !== FORMAT_PARKOUR && format !== FORMAT_MOVES && format !== FORMAT_OLD) return null;
     const fl = r.byte();
     const n = r.uv();
     if (n < 1 || n > GHOST_MAX_STEPS) return null;
@@ -347,7 +350,8 @@ export function decodeBytes(b: Uint8Array): { log: GhostLog; flags: GhostFlags }
     if (format === FORMAT_OLD) flags.moves = false;
     if (format === FORMAT_OLD || format === FORMAT_MOVES) flags.slide = false;
     if (format < FORMAT_TECH) flags.charge = false;
-    if (format < FORMAT) flags.swing = false;
+    if (format < FORMAT_SWING) flags.swing = false;
+    if (format < FORMAT) flags.glide = false;
     return { log, flags };
   } catch {
     return null;

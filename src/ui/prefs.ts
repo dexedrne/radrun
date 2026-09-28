@@ -208,9 +208,10 @@ export function readChallenge(search: string): Challenge {
  * the older build's ("old city"). v=7: the web-slinger swing (web length from your height, the surge through the
  * bottom of the arc, the later release and wider perfect window, corner swings, the fast dive and the dive-into-swing)
  * and ghost format 5; a v6 link's ghost (format 4) replays with the round 12 swing and opens labelled as from an older
- * version; bests and kept ghosts from before v7 are the older build's.
+ * version; bests and kept ghosts from before v7 are the older build's. v=8: held webs, wingsuit glide, ghost format 6,
+ * runner pack v4; format-5 ghosts keep their old automatic release and have no glide.
  */
-export const LINK_VERSION = 7;
+export const LINK_VERSION = 8;
 const mapParam = () => (PAGE_DISTRICT === "downtown" ? "" : `&m=${PAGE_DISTRICT}`);
 
 const muParam = (mu: number) => (mu ? `&mu=${mu}` : "");

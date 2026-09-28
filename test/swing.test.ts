@@ -70,12 +70,19 @@ test("SWING_R12 steps exactly like the round 12 build (a golden digest of swings
   assert.equal(h.hex(), "fcf6b555");
 });
 
-test("ghost format 5 = the web-slinger swing; a format-4 record decodes as the round 12 swing (swing: false)", () => {
+test("ghost formats 6, 5 and 4 keep their own glide and swing rules", () => {
   const log = new GhostLog(10);
   for (let i = 0; i < 10; i++) log.push({ yaw: i, fwd: 64, right: 0, bits: 36, pitch: 3 });
   const now = encodeBytes(log, { touch: false, easy: false });
-  assert.equal(now[0], 5);
+  assert.equal(now[0], 6);
   assert.equal(decodeBytes(now)?.flags.swing, undefined);
+  const prior = encodeBytes(log, { touch: false, easy: false, glide: false });
+  assert.equal(prior[0], 5);
+  const p = decodeBytes(prior);
+  assert.ok(p);
+  assert.equal(p.flags.glide, false);
+  assert.equal(p.flags.swing, undefined);
+  assert.equal(roundTuning(PLAYER, p.flags).autoRelease, true);
   const old = encodeBytes(log, { touch: false, easy: false, swing: false });
   assert.equal(old[0], 4);
   const d = decodeBytes(old);

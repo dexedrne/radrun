@@ -1,7 +1,7 @@
 // The Spider-tag session outside React (one per ?tag page): the camera rig, the input latch, the fixed stepper and
 // the current TagMatch. Offline it steps the match itself with bots in the other slots; online a NetLink (the lazy
 // net chunk: rollback + transport) owns the stepping and calls back fresh() for each new step. Either way the local
-// slot's input is a quantised record packed into the 40-bit word (net/wire.ts), exactly what goes over the wire.
+// slot's input is a quantised record packed into the 41-bit word (net/wire.ts), exactly what goes over the wire.
 import { createBody, emptyInput, EV_FALL, type Body, type InputFrame, type SimWorld } from "../sim/player.ts";
 import { FixedStepper } from "../sim/stepper.ts";
 import type { CameraTuning, Tuning } from "../sim/tuning.ts";

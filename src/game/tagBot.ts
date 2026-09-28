@@ -3,7 +3,7 @@
 // junction roof far from the holder, not past him, re-picked every 1.5 s or when reached / cut off.
 //
 // The SwingBot reads a Round (its player body, "the runner" = where it is going, the tuning, the world). A small view
-// object stands in for that Round; the bot never writes to it. Its input goes through the 40-bit word like a human's,
+// object stands in for that Round; the bot never writes to it. Its input goes through the 41-bit word like a human's,
 // so a bot slot replays and runs online exactly like a player slot. Deterministic: no Math.random, sqrt-only maths.
 import { SwingBot } from "./bots.ts";
 import { RM_LOOK } from "../runner/runner.ts";

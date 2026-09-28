@@ -24,7 +24,7 @@ export const PHASE_LEDGE = 4;
 /** Round 12: a straight zip (ref = the zip target's anchor index). */
 export const PHASE_ZIP = 5;
 /** The pack format the bake writes (and the only one read). */
-export const PACK_VERSION = 3;
+export const PACK_VERSION = 4;
 
 export const EVT_TAKEOFF = 1;
 export const EVT_ATTACH = 2;
@@ -60,8 +60,8 @@ export type PackEdgeHeader = {
 };
 
 export type PackHeader = {
-  /** 3 = round 12 (zip phase, charge / leap events; the anchor table as round 9's v2). */
-  version: 3;
+  /** 4 = held-web and glide physics; 3 = round 12 zip phase and charge / leap events. */
+  version: 4;
   city: string;
   tuning: string;
   /** v2: web anchor points, flat x, y, z in cm (a rope sample's ref indexes it). */

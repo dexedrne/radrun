@@ -274,8 +274,8 @@ test("pack v3 (round 12): a zip hop records the zip phase on its target's anchor
   const types = new Set<number>();
   for (let i = 1; i < lr.events.length; i += 3) types.add(lr.events[i]);
   assert.ok(types.has(EVT_CHARGE) && types.has(EVT_LEAP), `charge + leap events (${[...types]})`);
-  assert.equal(PACK_VERSION, 3);
+  assert.equal(PACK_VERSION, 4);
   // A v2 pack is rejected.
-  const v2 = encodePack({ version: 2 as unknown as 3, city: "x", tuning: "y", anchors: [], junctions: [], edges: [] }, new Int16Array(0));
+  const v2 = encodePack({ version: 2 as unknown as 4, city: "x", tuning: "y", anchors: [], junctions: [], edges: [] }, new Int16Array(0));
   assert.throws(() => decodePack(v2));
 });
