@@ -187,6 +187,8 @@ export type Body = {
   zipLeft: number;
   /** The roof a zip started from (it drags you across it instead of landing you back on it), or -1. */
   zipFrom: number;
+  /** Speed carried into a zip from a wingsuit glide. */
+  zipCarry: number;
   /** Web-yank: he is in yank range (the red dashed ring; updated only inside stepBody), yanking, seconds in, cooldown left. */
   yankOk: boolean;
   yankOn: boolean;
@@ -321,6 +323,7 @@ export function createBody(x: number, y: number, z: number, roofId: number): Bod
     popBuf: 0,
     zipLeft: ZIP_FULL,
     zipFrom: -1,
+    zipCarry: 0,
     yankOk: false,
     yankOn: false,
     yankT: 0,
@@ -415,7 +418,7 @@ export function copyBody(dst: Body, src: Body): Body {
   dst.parkour = src.parkour;
   dst.liftOn = src.liftOn;
   dst.upKick = src.upKick;
-  dst.zipKind = src.zipKind; dst.zipAx = src.zipAx; dst.zipAy = src.zipAy; dst.zipAz = src.zipAz; dst.popBuf = src.popBuf; dst.zipLeft = src.zipLeft; dst.zipFrom = src.zipFrom;
+  dst.zipKind = src.zipKind; dst.zipAx = src.zipAx; dst.zipAy = src.zipAy; dst.zipAz = src.zipAz; dst.popBuf = src.popBuf; dst.zipLeft = src.zipLeft; dst.zipFrom = src.zipFrom; dst.zipCarry = src.zipCarry;
   dst.yankOk = src.yankOk; dst.yankOn = src.yankOn; dst.yankT = src.yankT; dst.yankCd = src.yankCd;
   dst.chargeT = src.chargeT; dst.chargeAirT = src.chargeAirT; dst.diveOn = src.diveOn; dst.glideOn = src.glideOn; dst.kicks = src.kicks;
   dst.rebT = src.rebT; dst.rebVin = src.rebVin; dst.rebNx = src.rebNx; dst.rebNz = src.rebNz;
@@ -442,7 +445,7 @@ export function resetMoves(b: Body): void {
   b.relT = b.lastWallT = b.touchT = 1e3;
   b.lastRope = b.lastWall = b.touchWall = b.kickSolid = -1;
   b.liftOn = b.upKick = false;
-  b.zipKind = 0; b.popBuf = 0; b.zipLeft = ZIP_FULL;
+  b.zipKind = 0; b.popBuf = 0; b.zipLeft = ZIP_FULL; b.zipCarry = 0;
   b.yankOk = b.yankOn = false; b.yankT = b.yankCd = 0;
   b.chargeT = b.chargeAirT = 0; b.diveOn = b.glideOn = false; b.kicks = 0; b.rebT = 1e3;
   b.flow = 0; b.flowT = 0;
@@ -471,6 +474,7 @@ export function hashBody(b: Body, h: Fnv1a = new Fnv1a()): Fnv1a {
   h.i32(b.tech).i32(b.flow).f64(b.flowT);
   h.f64(b.capX).f64(b.diveT).i32(b.ropeDive ? 1 : 0).i32(b.cornerOn ? 1 : 0).i32(b.cornerSolid);
   h.f64(b.cornerX).f64(b.cornerY).f64(b.cornerZ).f64(b.cornerR).f64(b.cornerT).f64(b.cornerDx).f64(b.cornerDz);
+  if (b.zipCarry > 0) h.f64(b.zipCarry);
   return h;
 }
 
@@ -849,6 +853,7 @@ function release(b: Body, k: Tuning, boost: boolean, up: number = k.releaseUp): 
 }
 
 function startZip(b: Body, a: ZipAim, k: Tuning): void {
+  b.zipCarry = b.glideOn ? Math.sqrt(b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z) : 0;
   b.zipOn = true;
   b.zipT = 0;
   b.zipKind = a.kind;
@@ -888,6 +893,7 @@ const ZIP_LANDED = 2;
  */
 function endZip(b: Body, k: Tuning, w: SimWorld, how: number, inp: InputFrame): void {
   b.zipOn = false;
+  b.zipCarry = 0;
   b.zipCd = k.zipCooldown;
   b.events |= EV_ZIP_END;
   const v = b.v;
@@ -1654,8 +1660,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     const dx = tx - p.x, dy = b.zipP.y - p.y, dz = tz - p.z;
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d > 1e-6) {
-      const carry = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-      const zipSpeed = k.glide && (b.glideOn || b.capX > 0) ? Math.max(k.zipSpeed, carry) : k.zipSpeed;
+      const zipSpeed = b.zipCarry > 0 ? Math.max(k.zipSpeed, b.zipCarry) : k.zipSpeed;
       const sp = (k.speedCap > 0 ? Math.min(zipSpeed, k.speedCap + b.capX) : zipSpeed) / d;
       const f = Math.min(1, k.zipPull * dt);
       v.x += (dx * sp - v.x) * f;

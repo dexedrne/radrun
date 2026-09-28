@@ -6,6 +6,7 @@ import { PLAYER } from "../src/sim/tuning.ts";
 import { InputLatch } from "../src/input/input.ts";
 import { LookShaper, PAD_DEFAULTS, PB, PadButtons, padToLatch, type PadSnap } from "../src/input/gamepad.ts";
 import { B_GLIDE, buildFrame, emptyRec } from "../src/game/ghost.ts";
+import { emptyAnchor } from "../src/world/cityQuery.ts";
 
 const world: SimWorld = { index: new CityIndex({ solids: [], lowestRoof: 0 } as unknown as CityModel), runner: null };
 const body = () => {
@@ -54,4 +55,22 @@ test("glide landing rolls", () => {
   for (let i = 0; i < 240 && !b.grounded; i++) stepBody(b, f, PLAYER, roof);
   assert.equal(b.grounded, true);
   assert.ok(b.events & EV_ROLL);
+});
+
+test("a zip out of a glide carries its entry speed", () => {
+  const a = emptyAnchor();
+  a.solid = 0; a.ax = a.px = 24; a.ay = a.py = 90; a.az = a.pz = 0; a.nx = -1; a.rim = true;
+  const w: SimWorld = { index: new CityIndex({ solids: [{ id: 0, kind: "roof", landable: true, x0: 24, x1: 30, z0: -4, z1: 4, top: 90 }], lowestRoof: 0 } as unknown as CityModel), runner: null, forceAnchor: a };
+  const b = createBody(0, 70, 0, -1);
+  b.grounded = false; b.v.x = 31;
+  const f = { ...emptyInput(), glideHeld: true, moveX: 1, aimX: 1 };
+  stepBody(b, f, PLAYER, w);
+  const speed = Math.hypot(b.v.x, b.v.y, b.v.z);
+  f.zipPressed = true;
+  stepBody(b, f, PLAYER, w);
+  assert.equal(b.zipOn, true);
+  assert.ok(b.zipCarry >= speed - 0.01, `${b.zipCarry} vs ${speed}`);
+  f.zipPressed = false;
+  for (let i = 0; i < 10; i++) stepBody(b, f, PLAYER, w);
+  assert.ok(Math.hypot(b.v.x, b.v.y, b.v.z) >= speed - 1, "zip keeps glide speed during pull");
 });
