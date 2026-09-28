@@ -11,7 +11,7 @@ import { DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Quater
 import type { ViewGame } from "./viewGame.ts";
 import { FRAME } from "./frame.ts";
 import { lowQuality } from "./quality.tsx";
-import { chargeLevel, emptyZipAim, hangPoint, zipAim, EV_NOANCHOR, EV_PERFECT, EV_RELEASE, EV_AUTORELEASE } from "../sim/player.ts";
+import { chargeLevel, emptyZipAim, hangPoint, zipAim, EV_NOANCHOR, EV_PERFECT, EV_RELEASE, EV_AUTORELEASE, EV_SNAP } from "../sim/player.ts";
 import { emptyAnchor } from "../world/cityQuery.ts";
 import { useUi } from "../ui/store.ts";
 
@@ -41,6 +41,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
   const flash = useRef<Mesh>(null);
   const chargeGeo = useMemo(() => Array.from({ length: CHARGE_SEGS + 1 }, (_, i) => new RingGeometry(0.55, 0.8, 40, 1, Math.PI / 2, (2 * Math.PI * i) / CHARGE_SEGS)), []);
   const chargeMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.9, depthTest: false, side: DoubleSide }), []);
+  const flashMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", toneMapped: false }), []);
   const diamondMat = useMemo(() => new MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
   const fl = useMemo(() => ({ t: 0, a: new Vector3(), b: new Vector3() }), []);
   const ringMat = useMemo(() => new MeshBasicMaterial({ color: "#ffe14d", transparent: true, opacity: 0.95, depthTest: false, side: DoubleSide }), []);
@@ -152,7 +153,8 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
     }
     // Round 12 perfect release: the web just let go of flashes white (a thicker line) for a moment.
     if (hang) { if (!ropeFrom?.(fl.a)) fl.a.set(p.x, p.y + 0.25, p.z); fl.b.set(hang.x, hang.y, hang.z); }
-    if ((game.frameEvents & EV_PERFECT) && (game.frameEvents & (EV_RELEASE | EV_AUTORELEASE))) fl.t = PERFECT_FLASH;
+    if (game.frameEvents & EV_SNAP) { fl.t = PERFECT_FLASH; flashMat.color.set("#ff695c"); }
+    else if ((game.frameEvents & EV_PERFECT) && (game.frameEvents & (EV_RELEASE | EV_AUTORELEASE))) { fl.t = PERFECT_FLASH; flashMat.color.set("#ffffff"); }
     fl.t = Math.max(0, fl.t - delta);
     const fm = flash.current;
     if (fm) {
@@ -233,7 +235,7 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       <mesh ref={charge} material={chargeMat} geometry={chargeGeo[1]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={10} visible={false} />
       <mesh ref={flash} visible={false}>
         <cylinderGeometry args={[WEB_THICK, WEB_THICK, 1, 6]} />
-        <meshBasicMaterial color="#ffffff" toneMapped={false} />
+        <primitive object={flashMat} attach="material" />
       </mesh>
       <mesh ref={shadow} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
         <circleGeometry args={[0.65, 20]} />

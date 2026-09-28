@@ -49,7 +49,7 @@ test("round 11 web from a roof: the web pulls you up and off the edge into the s
 test("timing: a release in the perfect window flings you higher than one at the bottom, and higher and faster than holding to the auto-release", () => {
   // (Round 11's timed lift past swingSweetCos stays; the web-slinger swing moved the auto-release later on the arc and
   // widened the perfect window, and a swing held to the end gets no release boost.)
-  const k: Tuning = { ...PLAYER };
+  const k: Tuning = { ...PLAYER, autoRelease: true };
   const perfectDeg = Math.acos(k.swingPerfectCos) * 180 / Math.PI;
   const fling = (pol: "perfect" | "bottom" | "hold") => {
     const b = createBody(4, 48, 29, -1); // flying down the avenue at 16 m/s

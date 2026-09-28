@@ -360,7 +360,7 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
   swingAlign: 2.5,
   releaseBoost: 2,
   releaseUp: 3,
-  autoRelease: true,
+  autoRelease: false,
   autoReleaseBelow: 2.5,
   autoReleaseUp: 0,
   bonk: true,
@@ -541,7 +541,7 @@ export const PLAYER: Readonly<Tuning> = Object.freeze({
 export const SWING_OFF = {
   // (the one shared key the swing retuned: the runner's pendulum lets go where it always did)
   swingReleaseCos: 0.64,
-  anchorHeightGain: 0, anchorHeightAhead: 0, swingSurge: 0, swingReelPerSpeed: 0, releasePerfectUp: 0, autoReleaseKeep: 1, cornerSwing: false,
+  anchorHeightGain: 0, anchorHeightAhead: 0, swingSurge: 0, swingReelPerSpeed: 0, releasePerfectUp: 0, autoReleaseKeep: 1, autoRelease: true, cornerSwing: false,
   diveCap: 0, diveTurn: 0, diveKeep: 0, diveSwingT: 0,
 } as const satisfies Partial<Tuning>;
 /**

@@ -128,7 +128,7 @@ function oneSwing(k: Tuning): { vMax: number; cosAtRelease: number } {
 
 test("the surge: faster through the bottom of the arc; held to the end the web lets go later (higher) on the arc", () => {
   const cap = { speedCap: 60 };
-  const on = oneSwing({ ...PLAYER, ...cap }), off = oneSwing({ ...PLAYER, ...cap, swingSurge: 0 });
+  const on = oneSwing({ ...PLAYER, ...cap, autoRelease: true }), off = oneSwing({ ...PLAYER, ...cap, autoRelease: true, swingSurge: 0 });
   assert.ok(on.vMax > off.vMax + 1.5, `bottom speed ${on.vMax.toFixed(1)} vs ${off.vMax.toFixed(1)} m/s`);
   const r12 = oneSwing({ ...PLAYER, ...SWING_R12, ...cap });
   assert.ok(on.cosAtRelease < r12.cosAtRelease - 0.05, `auto-release at cos ${on.cosAtRelease.toFixed(2)} vs ${r12.cosAtRelease.toFixed(2)}`);
@@ -181,7 +181,7 @@ function corner(k: Tuning, zc: number) {
 
 test("corner swing: steering into the cross street at speed webs the corner and swings round it, speed kept, no bonk", () => {
   for (const zc of [33, 37, 41]) {
-    const c = corner(PLAYER, zc);
+    const c = corner({ ...PLAYER, autoRelease: true }, zc);
     assert.ok(c.started > 0 && c.ended > c.started, `z ${zc}: a corner swing (${c.started} -> ${c.ended})`);
     assert.ok(!c.bonk, `z ${zc}: no bonk`);
     assert.ok(c.turn > 0.9, `z ${zc}: turned ${(c.turn * 180 / Math.PI).toFixed(0)} deg`);
@@ -209,7 +209,7 @@ test("the dive: faster than a fall (diveCap), turned by the stick; a web out of 
     }
     return { fall, swing, rel, capX };
   };
-  const dive = run(PLAYER, true), plain = run(PLAYER, false);
+  const dive = run({ ...PLAYER, autoRelease: true }, true), plain = run({ ...PLAYER, autoRelease: true }, false);
   assert.ok(dive.fall > PLAYER.speedCap + 8 && dive.fall <= PLAYER.diveCap + 1e-9, `dive ${dive.fall.toFixed(1)} m/s`);
   assert.ok(plain.fall <= PLAYER.speedCap + 1e-9, `fall ${plain.fall.toFixed(1)} m/s`);
   assert.ok(dive.capX > 0, "the dive's extra speed is carried");

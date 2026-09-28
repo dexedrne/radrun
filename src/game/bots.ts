@@ -487,6 +487,17 @@ export class SwingBot {
     return P.y >= T.y - SWING.climbTo || P.y >= b.ropeP.y - round.tuning.autoReleaseBelow - 2;
   }
 
+  /** The chaser chooses the old fling window himself; player input never gets released by the sim. */
+  private endArc(round: Round): boolean {
+    const b = round.player, P = b.p, A = b.ropeP, v = b.v;
+    if (b.ropeSolid < 0 || !b.ropeTaut) return false;
+    const rx = P.x - A.x, ry = P.y - A.y, rz = P.z - A.z;
+    const rh = Math.sqrt(rx * rx + rz * rz), vh = Math.sqrt(v.x * v.x + v.z * v.z);
+    return (b.ropeUp && v.y <= 0) || P.y > A.y - round.tuning.autoReleaseBelow ||
+      (v.y > 0 && rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh &&
+        -ry / Math.sqrt(rx * rx + ry * ry + rz * rz) < round.tuning.swingReleaseCos);
+  }
+
   /** The ring the sim will compute this step with this input (its anchor in this.anc). */
   private ring(round: Round, inp: InputFrame): number {
     const b = round.player;
@@ -602,7 +613,7 @@ export class SwingBot {
       if (b.ropeSolid >= 0) {
         const h = b.ropeP;
         const past = (P.x - h.x) * tx + (P.z - h.z) * tz;
-        held = !(d < SWING.dropRope || this.upTo(round) || (past >= 0 && b.v.y >= SWING.releaseVy && T.y <= P.y + SWING.climbTo));
+        held = !(this.endArc(round) || d < SWING.dropRope || this.upTo(round) || (past >= 0 && b.v.y >= SWING.releaseVy && T.y <= P.y + SWING.climbTo));
         if (!held) this.letGo = d < SWING.dropRope ? "direct:near" : this.upTo(round) ? "direct:up" : "direct:past";
       } else if (!b.grounded) {
         if (this.cool <= 0 && this.rescue(round, inp)) held = true;
@@ -637,8 +648,8 @@ export class SwingBot {
         // Round 12: the full-kit bot holds on to the auto-release like a Normal human; the tech bot lets go in the
         // perfect window. The classic bot keeps round 11's early release.
         held = this.moves
-          ? !(this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && T.y > P.y + SWING.perfectBelow && this.perfect(round)))
-          : !(this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
+          ? !(this.endArc(round) || this.upTo(round) || (high && past >= this.relAhead && b.v.y > 0) || (this.tech && T.y > P.y + SWING.perfectBelow && this.perfect(round)))
+          : !(this.endArc(round) || this.upTo(round) || (past >= this.relAhead && b.v.y > 0 && (high || b.v.y >= SWING.releaseTan * hs) && T.y <= P.y + SWING.climbTo));
         if (!held) this.letGo = this.upTo(round) ? "lane:up" : high ? "lane:high" : "lane:other";
       } else {
         this.setMove(inp, dx + lx, dz + lz);

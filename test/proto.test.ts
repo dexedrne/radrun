@@ -56,7 +56,7 @@ function arc(k: Tuning): Arc {
 }
 
 test("pendulum: one arc off a roof edge at 10 m/s ~2 s over ~36 m, dips below the roof, fast at the bottom, flings forward + up", () => {
-  const a = arc(PLAYER);
+  const a = arc({ ...PLAYER, autoRelease: true });
   assert.ok(a.t > 1.5 && a.t < 2.8, `arc ${a.t.toFixed(2)} s`);
   assert.ok(a.dx > 26 && a.dx < 46, `arc covers ${a.dx.toFixed(1)} m`);
   assert.ok(a.dip > 4 && a.dip < 14, `dips ${a.dip.toFixed(1)} m below the takeoff roof`);
@@ -66,9 +66,9 @@ test("pendulum: one arc off a roof edge at 10 m/s ~2 s over ~36 m, dips below th
 });
 
 test("pendulum: without pump / speed-keeping / boost the rope never adds energy; the pump does", () => {
-  const plain = arc({ ...PLAYER, swingPump: 0, swingSurge: 0, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
+  const plain = arc({ ...PLAYER, autoRelease: true, swingPump: 0, swingSurge: 0, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
   assert.ok(plain.eGain < 0.005, `energy grew ${(plain.eGain * 100).toFixed(2)}%`);
-  const pumped = arc({ ...PLAYER, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
+  const pumped = arc({ ...PLAYER, autoRelease: true, swingKeepSpeed: 1, releaseBoost: 0, releaseUp: 0 });
   assert.ok(pumped.eGain > 0.01, `the pump adds energy (${(pumped.eGain * 100).toFixed(2)}%)`);
   assert.ok(pumped.vMax > plain.vMax, "faster through the bottom with the pump");
 });

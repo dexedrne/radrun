@@ -1200,7 +1200,7 @@ function startWall(b: Body, k: Tuning, w: SimWorld, solid: number, nx: number, n
   if (nx !== 0) p.x = f + nx * k.halfWidth; else p.z = f + nz * k.halfWidth;
   const vn = v.x * nx + v.z * nz;
   if (vn < 0) { v.x -= vn * nx; v.z -= vn * nz; }
-  if (b.ropeSolid >= 0) release(b, k, false);
+  if (b.ropeSolid >= 0) { release(b, k, false); if (!k.autoRelease) b.events |= EV_SNAP; }
   b.wallMode = mode;
   b.wallT = 0;
   b.wallSolid = solid;
@@ -1852,6 +1852,11 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         }
       }
     }
+    if (!k.autoRelease && b.ropeTaut && v.y > 0) {
+      const rx = p.x - P.x, rz = p.z - P.z;
+      const rh = Math.sqrt(rx * rx + rz * rz), vh = Math.sqrt(v.x * v.x + v.z * v.z);
+      if (rh > 1e-6 && vh > 1 && rx * v.x + rz * v.z > 0.5 * rh * vh) b.ropeUp = true;
+    }
     // Line check every losSteps steps (and the snapping-webs mutator): the web snaps, no boost. Round 10: the
     // physics rope (body -> pivot) is checked, not the drawn line to the rim, so a podium corner between you
     // and a tower's rim no longer snaps a swing that clears it.
@@ -1900,9 +1905,12 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         if (hs1 > 1e-6) { v.x *= hs0 / hs1; v.z *= hs0 / hs1; }
       }
     }
-    const hs = Math.sqrt(v.x * v.x + v.z * v.z), ml = Math.sqrt(mx * mx + mz * mz);
-    if (b.cornerT >= k.cornerMaxT || ml < 0.3 || (hs > 1e-6 && v.x * mx + v.z * mz >= k.cornerExitCos * hs * ml) ||
-      v.x * b.cornerDx + v.z * b.cornerDz < -0.5 * hs) cornerEnd(b, k, true);
+    // Current play holds through the turn; old-link tuning keeps its original timed exit.
+    if (k.autoRelease) {
+      const hs = Math.sqrt(v.x * v.x + v.z * v.z), ml = Math.sqrt(mx * mx + mz * mz);
+      if (b.cornerT >= k.cornerMaxT || ml < 0.3 || (hs > 1e-6 && v.x * mx + v.z * mz >= k.cornerExitCos * hs * ml) ||
+        v.x * b.cornerDx + v.z * b.cornerDz < -0.5 * hs) cornerEnd(b, k, true);
+    }
   }
 
   // The zip ends at its target (zipStop short; a facade: just off the wall), or early after zipMaxTime.
@@ -1955,7 +1963,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
         if (!b.grounded) {
           b.grounded = true;
           landed = true;
-          if (b.ropeSolid >= 0) { b.lastRope = b.ropeSolid; b.relT = 0; b.ropeSolid = -1; }
+          if (b.ropeSolid >= 0) { b.lastRope = b.ropeSolid; b.relT = 0; b.ropeSolid = -1; if (!k.autoRelease) b.events |= EV_SNAP; }
           if (b.wallMode > 0) endWall(b, 0);
           b.roofId = s.id;
           b.chainCount = 0;
@@ -1992,7 +2000,7 @@ export function stepBody(b: Body, inp: InputFrame, k: Tuning, w: SimWorld): void
     }
   }
   // A corner swing that meets a facade or lands is over (no boost; the contact below takes it).
-  if (b.cornerOn && (b.grounded || contact >= 0)) { b.cornerOn = false; b.lastRope = b.cornerSolid; b.relT = 0; }
+  if (b.cornerOn && (b.grounded || contact >= 0)) { b.cornerOn = false; b.lastRope = b.cornerSolid; b.relT = 0; if (!k.autoRelease) b.events |= EV_SNAP; }
   // A zip that meets a facade: its own target face = arrived; anything else in the way ends it.
   if (b.zipOn && contact >= 0) endZip(b, k, w, b.zipKind === ZIP_FACE && contact === b.zipWall ? ZIP_ARRIVE : ZIP_EARLY, inp);
   // A wall push can move the body away from the pivot: pay the rope out so |p - pivot| <= len holds.

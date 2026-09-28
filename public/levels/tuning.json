@@ -17,7 +17,7 @@
     "swingAlign": 2.5,
     "releaseBoost": 2,
     "releaseUp": 3,
-    "autoRelease": true,
+    "autoRelease": false,
     "autoReleaseBelow": 2.5,
     "autoReleaseUp": 0,
     "bonk": true,
