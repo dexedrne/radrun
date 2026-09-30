@@ -3,7 +3,7 @@
 // signs match Entries and relay logins with no wallet popup. It can never withdraw or send funds anywhere. The key
 // lives in this browser's local storage, one per (chain, vault, player); losing it just means authorising a new one.
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import type { Address, Hex } from "viem";
+import { maxUint128, type Address, type Hex } from "viem";
 import { MAX_SESSION_TTL_S, ZERO_ADDRESS, type SessionAuth } from "./eip712.ts";
 import { sameAddress } from "./units.ts";
 
@@ -64,7 +64,9 @@ export function sessionTerms(pick: bigint, vaultMaxStake: bigint, nowS: number, 
   const maxStake = pick < vaultMaxStake ? pick : vaultMaxStake;
   if (maxStake <= 0n) throw new Error("pick a stake above zero");
   const ttl = Math.min(o.ttlS ?? SESSION_DEFAULTS.ttlS, MAX_SESSION_TTL_S - 120);
-  return { maxStake, cap: maxStake * (o.capTimes ?? SESSION_DEFAULTS.capTimes), expiry: BigInt(Math.floor(nowS) + ttl) };
+  // The cap is a uint128 on chain: a vault with no stake cap (maxStake = 2^128 - 1) must not overflow it.
+  const cap = maxStake * (o.capTimes ?? SESSION_DEFAULTS.capTimes);
+  return { maxStake, cap: cap > maxUint128 ? maxUint128 : cap, expiry: BigInt(Math.floor(nowS) + ttl) };
 }
 
 export const sessionAuth = (player: Address, sessionKey: Address, t: SessionTerms, nonce: bigint): SessionAuth =>

@@ -520,6 +520,7 @@ export class WagerApp {
     try {
       await this.syncClock();
       const sim = await this.d.simFor(o.district);
+      if (!config.sims[o.district]) throw wagerError("version", "wager matches aren't played in this city: pick another one");
       if (!sameSim(sim, config.sims[o.district])) throw wagerError("version", "this page's game differs from the referee's: reload to update");
       const listed = o.listed && !o.opponent;
       const e: Entry = {
@@ -564,6 +565,7 @@ export class WagerApp {
     try {
       await this.syncClock();
       const sim = await this.d.simFor(o.district);
+      if (!config.sims[o.district]) throw wagerError("version", "wager matches aren't played in this city: pick another one");
       if (!sameSim(sim, config.sims[o.district])) throw wagerError("version", "this page's game differs from the referee's: reload to update");
       const theirs = entryFromJson(o.entry);
       if (theirs.rules !== rulesHash(makeRules(o.district, sim))) throw wagerError("version", "this match was made on another version of the game");

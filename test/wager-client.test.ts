@@ -114,6 +114,8 @@ test("session keys: defaults (cap 10x, 3 days, clamped to the vault), the limits
   assert.equal(sessionTerms(5000n * E18, 1000n * E18, now).maxStake, 1000n * E18, "clamped to the vault's maxStake");
   assert.ok(sessionTerms(1n, 10n, now, { ttlS: 90 * 86_400 }).expiry < BigInt(now + MAX_SESSION_TTL_S), "never past 30 days");
   assert.throws(() => sessionTerms(0n, 10n, now));
+  const u128 = 2n ** 128n - 1n;
+  assert.equal(sessionTerms(u128, u128, now).cap, u128, "a vault with no stake cap: the total stays a uint128");
   const key = acct(5).address, other = acct(6).address;
   const on = { key, expiry: BigInt(now + 3600), maxStake: 100n, cap: 300n, used: 250n };
   assert.equal(checkSession(null, key, 10n, now).ok, false);
@@ -587,6 +589,9 @@ test("page errors: relay down, region blocked, a rejected signature, a join the 
     const offer = { ...[...relay.offers.values()][0]?.offer, holdersOnly: true, minSeries: 0, creator: relay.card(acct(4).address), opponent: null, deadline: fake.time + 3600, stake: (10n * E18).toString() } as never;
     assert.equal(x.joinProblem(offer), "Radbro holders only");
     assert.equal(x.joinProblem({ ...(offer as object), holdersOnly: false, opponent: acct(5).address } as never), "this invite is for another player");
+    // A city the relay doesn't referee: said as such (not "reload to update").
+    assert.equal(await x.create({ stake: 10n * E18, roundSeconds: 90, district: "docks", listed: true, opponent: null, holdersOnly: false, minSeries: 0 }), null);
+    assert.match(useWager.getState().notice!.text, /aren't played in this city/);
   } finally { for (const x of xs) x.stop(); restore(); }
 });
 
