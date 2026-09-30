@@ -727,7 +727,12 @@ dev relay is not.
 - **Additions to `src/net/rollback.ts` / `session.ts`** (additive; the live mode never receives a FILL):
   - apply `FILL` for any slot, including its own (overwrite the word, rewind);
   - echo `PROBE`;
-  - catch up from step 0 after a reconnect.
+  - catch up from step 0 after a reconnect;
+  - predict up to 72 steps (600 ms) ahead of the other player's newest word instead of the online 24. The sealed
+    release delivers it a whole round trip later, and a stall would also hold back this player's own words past
+    their deadlines (at a 280 ms round trip almost every step was filled);
+  - send the words a frame sampled at that frame's last step (still at most one INPUT per 25 ms), so a low frame
+    rate doesn't leave half of them waiting a frame past their deadlines.
 - **Checks.** netsim gates 1-2 and the self-test must stay green.
 
 ### 7.5 Dev-only test wallet
