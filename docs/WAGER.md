@@ -320,6 +320,9 @@ districts (40-95 KB each). At startup it checks `selfTestHash() === SELFTEST_HAS
    - `by: "session"`: the signer must equal `vault.sessionOf(player).key` and the session must be unexpired.
    - `by: "wallet"`: viem `verifyTypedData` (EOA, ERC-1271, ERC-6492).
 4. The relay accepts each challenge once; one that is expired or already used is refused (`auth`).
+   - On the lobby socket a refused login is followed by a fresh `challenge`, so the client can try again. On a room
+     socket it closes the socket.
+   - The lobby sends the open list (`offers`) right after `challenge`, before any login: listed offers are public.
 
 ### 4.3 Lobby, offers and pairing
 
@@ -335,6 +338,10 @@ districts (40-95 KB each). At startup it checks `selfTestHash() === SELFTEST_HAS
 - The creator has at most 3 open offers.
 
 The offer is listed, or kept unlisted (reachable by its invite link or id). `entry.opponent != 0` makes a named invite.
+
+**`session {auth, sig}`.** Accepted before login too (a first session key cannot log in yet). The relay checks that the
+wallet signed the `SessionAuth`, simulates `openSession`, and only then has the relayer send it (at most 20 a day per
+IP).
 
 **`join {entry, sig}` (the joiner's Entry names the creator as `opponent`).** Accepted when:
 - The terms pair with the creator's Entry exactly as `lock` would require.
@@ -384,20 +391,23 @@ The phases are `waiting → between → playing → (between → playing)* → d
    - The relay sends `round {result, score, draws}`.
    - Clients send `end {step, hash}`. A hash that differs from the referee's is a `desync` flag on that side, and the
      referee's result stands.
+   - After the round that decides the series, the room waits up to 5 s for both `end` hashes before deciding.
 6. **Between rounds** (`betweenRoundsMs` = 15 s): both READY starts the next round early; otherwise it starts when the
    timer ends.
 7. **Disconnects.**
    - If a socket closes after round 1 has started, the relay sends `drop {side, graceMs}` and keeps filling that
      player's inputs.
-   - A player who returns within `reconnectGraceMs` (20 s) gets `back`, the current `start` again, and every sealed
-     word so far, and catches up.
+   - A player who returns within `reconnectGraceMs` (20 s) gets `back`, the current `start` again, and every word so
+     far, and catches up. The catch-up is its own slot's words (received or filled; `INPUT_OUT` carrying its own
+     slot, and `FILL`) and the opponent's sealed words, in step order, both slots interleaved in 128-step chunks.
    - A player who does not return **forfeits the series** (`forfeit`, `why: "disconnect"`). If both players are gone
      past the grace, the series is void (`error`).
 8. **Relay failure.**
    - The room persists the series header at init and every finished round.
    - A room that restarts mid-round cannot recover that round's inputs, so the series is **void (`error`)**.
    - A relay fault never picks a winner.
-   - Never deploy the wager Worker while series are live: the deploy tool checks `GET /health` first.
+   - Never deploy the wager Worker while series are live: the deploy tool checks `GET /health` first. It answers
+     `ok` with an `x-wager-live` header, the number of series locked or being played; deploy only at 0.
 9. **Decision.** Covered in §5.7 (signing) and §6.3 (holds).
 
 ### 4.5 Records and ratings (the lobby's smurf protection)
@@ -462,12 +472,12 @@ The review page is `?wager&review=<matchId>`: the flags, the replay, and the two
 
 | Limit | Value | Our use |
 |---|---|---|
-| DO CPU per request or WebSocket message (Free and Paid) | 30 s | Incremental replay costs 2.3-8.4 µs per step, about 0.3-1.0 ms of CPU per second of play. One 4-step INPUT costs about 30 µs of sim. A cold replay of a whole 3:00 round costs 0.3-0.9 s, and is only needed by the CLI or verify page |
+| DO CPU per request or WebSocket message (Free and Paid) | 30 s | Measured (upper bounds: the machine ran at load 30-40 on 16 cores). The referee (sim, snapshots, flag evidence, view rebuilds) costs 11-13 µs of CPU per step in Node against 5.8-6.6 µs for the bare sim: 22-26 µs per 4-step INPUT. A whole series through the room averaged 72-206 µs of wall time per INPUT message, at most 52 ms (a round's end). In workerd (`wrangler dev`, DEV-only `POST /dev/bench`): a 90 s round of incremental stepping in 119-216 ms; a cold re-verify of a 3 × 90 s series in 481 ms (about 170 ms warm), and 1.25 s of CPU in a fresh Node process (`npm run wager:verify`) |
 | Stateless Worker CPU, Free | 10 ms | Routing only: never run the sim outside a DO |
 | Workers Free requests (per account, **shared with `radrun-relay`**) | 100,000 a day, with incoming WS messages billed 20:1 | A 3 × 90 s series is about 21k messages ≈ 1,060 requests, so about 90 series a day on the free plan alongside the live relay. Move to Workers Paid, or a separate account, before a public launch |
 | DO duration, Free | 13,000 GB-s a day | About 51 GB-s per series (128 MB × ~400 s) |
 | DO SQLite storage, Free | 5 GB | A series log is about 0.4-0.6 MB as JSON, and about 40-120 KB stored gzipped |
-| Script size | 3 MB (Free) | Sim + 5 districts + viem is well under that |
+| Script size | 3 MB (Free) | 748 KB minified, 210 KB gzipped (sim, five city models, viem) |
 
 A Vercel function is **not** used for the referee. A DO has 30 s of CPU per message against a need of about 1 ms. The
 independent re-checks are the browser verify page and `npm run wager:verify`.
@@ -631,14 +641,16 @@ Clients can submit the same `settlement` themselves.
 
 ### 6.2 Flags
 
-Computed by the referee from its canonical match plus the relay's arrival times. The thresholds are starting values.
+Computed by the referee from its canonical match plus the relay's arrival times. The evidence accumulates per player
+over the series, and each kind is reported once per player, with the round in which it first crossed its threshold.
+The thresholds are starting values.
 The relay lane calibrates them so that the repo's `TagBot` at `sharp` is flagged, and ordinary human play recorded on the
 dev relay is not.
 
 | Kind | Signal | Starting threshold |
 |---|---|---|
-| `reaction` | Steps from the moment the holder's ring turns red on the runner (`ringId === RING_RUNNER`) to the web press that Yoinks | median < 18 steps (150 ms) over ≥ 5 events, or ≥ 3 events < 10 steps |
-| `aim` | Yaw error at Yoink/yank presses against the exact bearing to the target | median ≤ 1 yaw unit (0.35°) over ≥ 5 presses |
+| `reaction` | Steps from the moment the holder's ring turns red on the runner (`ringId === RING_RUNNER`) to the web press that Yoinks (a Yoink within 30 steps of another web press is spam, not a reaction, and is not counted) | median < 18 steps (150 ms) over ≥ 5 events, or ≥ 3 events < 10 steps |
+| `aim` | Yaw error against the target's bearing **in the player's own view**: the relay rebuilds the state that client showed when it sampled the word (the opponent steps it had released to it by then, then `predictWord`), because over a network an aimbot aims at its prediction, not at the canonical state. Sampled at Yoink/yank presses, and every 4 steps while the holder chases his target within 15 m | median ≤ 1 yaw unit (0.35°) over ≥ 5 presses, or ≤ 2 units over ≥ 24 chase samples |
 | `periodic` | Coefficient of variation of the intervals between presses | < 0.03 over ≥ 12 presses |
 | `late-inputs` | Median arrival slack against the deadline, and the fraction filled | median slack < 10 ms, or > 5% of steps filled, with a relay-measured round trip < 150 ms |
 | `desync` | The client's `end` hash differs from the referee's | any |
@@ -762,6 +774,9 @@ dev relay is not.
   - `FAUCET`, `FAUCET_TOKENS`, `FAUCET_ETH`
 - **Relay secrets** (`wrangler secret put`): `REFEREE_KEY`, `RELAYER_KEY`, `FAUCET_KEY` (test networks only), and an
   optional `RPC_URL_PRIVATE`.
+- **Relay, `DEV=1` only** (local tests and the local end-to-end): `DEV_RADBRO_HOLDERS` (a mock collection,
+  `0xaddr=652,4764;0xother=`, instead of Ethereum reads), `DEV_RADBRO_V2` / `DEV_RADBRO_V1` (a mock ERC-721's address on
+  the local chain), and the `POST /dev/bench` route.
 - **Tools.** A 0600 env file outside the repo per deployment. It holds `DEPLOYER_KEY`, `REFEREE_KEY`, `RELAYER_KEY`,
   `FAUCET_KEY`, `WAGER_OWNER`, `WAGER_HOUSE`, `WAGER_TOKEN`, `WAGER_FEE_BPS`, `WAGER_HOLDER_FEE_BPS`,
   `WAGER_MAX_STAKE`, `WAGER_MAX_BALANCE`, `WAGER_SETTLE_WINDOW` and `RPC_URL_PRIVATE`.
