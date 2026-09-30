@@ -92,10 +92,11 @@ path. The worst a stolen hot key can do:
 |---|---|
 | `contracts/foundry.toml` | solc 0.8.37, `evm_version = "prague"`, optimizer 200. Remaps OpenZeppelin to `../node_modules` (pinned in package.json) and forge-std to `lib/` |
 | `contracts/src/interfaces/IGameVault.sol` | **Frozen:** structs, events, errors, function signatures, EIP-712 typehash constants |
-| `contracts/src/GameVault.sol` | `contract GameVault is IGameVault, EIP712("RadRun GameVault", "1"), Ownable2Step, Pausable, ReentrancyGuard` |
+| `contracts/src/GameVault.sol` | `contract GameVault is IGameVault, EIP712("RadRun GameVault", "1"), Ownable2Step, Pausable, ReentrancyGuardTransient` |
 | `contracts/src/TestSpiderTag.sol` | The test token (§3.8) |
 | `contracts/test/**` | Unit, fuzz and invariant tests, plus quirk-token mocks (§9.1) |
 | `contracts/script/**` | Deploy scripts driven by `tools/wager-deploy.ts` |
+| `src/wager/vaultAbi.ts` | The vault ABI for viem, **generated** from the build (`npm run wager:deploy -- --abi`; `test/wager-contracts.test.ts` checks it) |
 
 Constructor:
 ```solidity
@@ -122,6 +123,8 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 - **`withdraw(amount)` / `withdrawTo(amount, to)`.** Only the caller's own free balance: `free -= amount`, then
   `safeTransfer`. Never paused, no other party involved.
   - `withdrawTo` lets a player whose own address the token blocks send to another address.
+  - The vault's balance must fall by exactly `amount` (otherwise `TransferMismatch`): a token that takes more from the
+    vault than it pays out would leave the vault owing more than it holds. The same check guards `withdrawHouse`.
 - **`openSession(auth, walletSig)`.**
   - Checks:
     - `walletSig` is valid for `auth.player` (OpenZeppelin `SignatureChecker`: ECDSA or ERC-1271).
@@ -131,7 +134,9 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
     - `sessionKey != 0`.
   - Stores `Session{key, expiry, maxStake, cap, used: 0}`, replacing any previous session, and increments the nonce.
   - Paused: reverts.
-- **`revokeSession()`.** Deletes the caller's session and increments the nonce.
+- **`revokeSession()`.** Deletes the caller's session and increments the nonce. Never paused.
+- A session is live while `now < expiry`. `SessionOpened` carries the nonce its SessionAuth used; `SessionRevoked`
+  carries the new nonce.
 - **`lock(a, sigA, b, sigB)`.** The checks, in order:
   1. The vault is not paused.
   2. `a.matchId == b.matchId` and the match is `None`.
@@ -168,12 +173,14 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 - **`refundExpired(matchId)`.** A `Locked` match with `now > settleBy`: both stakes go back to free. Void reason 3.
   Anyone may call it; it is never paused.
 - **`withdrawHouse()`.** Sends `houseAccrued` to `house`, zeroes it and lowers `totalLiabilities`. Anyone may call it.
+  With nothing accrued it reverts `ZeroAmount`.
 - **Owner only:** `setHouseFees(fee, holderFee)` (each ≤ 500), `setCaps(maxStake, maxBalance)` (nonzero),
   `setReferee(addr)` (nonzero), `pause()` / `unpause()`.
 - **Time.** Every deadline uses `block.timestamp`. Never use `block.number`: on Robinhood Chain (Arbitrum Nitro) it is
   the parent chain's block number.
 - **Randomness.** None on-chain (`prevrandao` is constant there). Match seeds are a commit-reveal (§5.5).
-- **Reentrancy.** `nonReentrant` on everything that calls the token. Checks, then effects, then the transfer.
+- **Reentrancy.** `nonReentrant` on everything that transfers the token. Checks, then effects, then the transfer
+  (a deposit credits only after checking the received amount). `lock` only reads `balanceOf` (a staticcall).
 
 ### 3.3 EIP-712
 
@@ -880,7 +887,7 @@ are **frozen**. If one must change, the change lands as a new commit on `feat/wa
 | Lane (branch) | Owns |
 |---|---|
 | `feat/wager` (this design) | `docs/WAGER.md`, `contracts/foundry.toml`, `contracts/src/interfaces/IGameVault.sol`, `src/wager/{eip712,log,replay,protocol,config}.ts`, `src/wager/deployments.json` (after this, only the deploy tool writes it), `test/wager-shared.test.ts`, `package.json` / `package-lock.json` (the viem and OpenZeppelin deps and every `wager:*` script are already in), `.gitignore` |
-| `feat/wager-contracts` | `contracts/src/GameVault.sol`, `contracts/src/TestSpiderTag.sol`, `contracts/test/**`, `contracts/script/**`, `contracts/lib/**` + `.gitmodules` (forge-std), `tools/wager-deploy.ts` (local / testnet deploy, the token probe, source verification, writing the deployment; the mainnet mode only runs with an explicit go-ahead flag) |
+| `feat/wager-contracts` | `contracts/src/GameVault.sol`, `contracts/src/TestSpiderTag.sol`, `contracts/test/**`, `contracts/script/**`, `contracts/snapshots/**`, `contracts/README.md`, `contracts/lib/**` + `contracts/foundry.lock` + `.gitmodules` (forge-std), `tools/wager-deploy.ts` (local / testnet deploy, the token probe, source verification, writing the deployment; the mainnet mode only runs with an explicit go-ahead flag), `src/wager/vaultAbi.ts` (generated), `test/wager-contracts.test.ts` |
 | `feat/wager-relay` | `relay/wager/**` (wrangler.toml, `src/*`, `dev.ts`, types), `test/wager-relay*.test.ts`, `tools/wager-verify.ts` |
 | `feat/wager-client` | `src/wager/**` except the shared files above, the one route in `src/main.tsx`, additive FILL/PROBE/reconnect support in `src/net/rollback.ts` and `src/net/session.ts`, series HUD and cosmetics hooks in `src/app/TagPage.tsx` and the tag render files, `test/wager-client*.test.ts`, `tools/wager-e2e.ts` |
 | Nobody | `relay/src/**`, `relay/wrangler.toml`, `relay/dev.ts` (the live relay), `src/net/wire.ts`, `src/game/tagMatch.ts` and the sim, `public/levels/**`, README/PLAY (no link to `?wager`) |
