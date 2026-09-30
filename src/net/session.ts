@@ -7,13 +7,18 @@
 //
 // The session is built the moment `start` arrives (before the models load), so the other player's first inputs
 // queue in its rollback instead of being dropped.
+//
+// Wager rounds (docs/WAGER.md §5.3, §7.4; `wager: true`): the relay is authoritative. A FILL replaces the word of a
+// late or dropped slot, this client's own included (the match rolls back to it), words the relay already filled for
+// this client are never sent, and after a reconnect the relay's sealed words from step 1 on (both slots) are kept
+// back past the rollback rings' reach and applied as the match catches up. The live relay never sends any of this.
 import { TagMatch, type TagSlot } from "../game/tagMatch.ts";
 import type { NetLink } from "../game/tagGame.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import type { CityIndex, CityModel } from "../world/cityModel.ts";
 import { Rollback } from "./rollback.ts";
 import type { Transport } from "./transport.ts";
-import { MAX_INPUT_COUNT, MSG_ACK, MSG_DESYNC, MSG_INPUT_OUT, decodeDesync, decodeRelayInput, encodeInput, type StartMsg } from "./wire.ts";
+import { MAX_INPUT_COUNT, MSG_ACK, MSG_DESYNC, MSG_FILL, MSG_INPUT_OUT, decodeDesync, decodeFill, decodeRelayInput, encodeInput, type StartMsg } from "./wire.ts";
 
 const STEP_MS = 1000 / 120;
 /** Local words per INPUT message in steady play (30 Hz at 120 Hz). */
@@ -54,15 +59,26 @@ export class OnlineSession implements NetLink {
   broken: string | null = null;
   /** Called once when the result is final (the final hash). */
   onFinal: ((hash: number) => void) | null = null;
+  /** Wager round: the relay's FILLs and sealed words are final (see the header). */
+  readonly wager: boolean;
+  /** Per slot: relay words past the rollback rings' reach, applied in order as the match catches up (wager rounds). */
+  private readonly backlog: { first: number; words: number[]; force: boolean }[][];
+  private kept = 0;
+  /** Words the relay filled for this slot (stats). */
+  filled = 0;
+  /** The newest own step the relay holds as final (filled, or sealed and sent back after a reconnect): never sent again. */
+  private relayOwnTo = 0;
 
-  constructor(o: { model: CityModel; index: CityIndex; tuning: Tuning; start: StartMsg; local: number; transport: SessionTransport }) {
+  constructor(o: { model: CityModel; index: CityIndex; tuning: Tuning; start: StartMsg; local: number; transport: SessionTransport; wager?: boolean }) {
     const s = o.start;
     this.start = s;
     this.local = o.local;
     this.t = o.transport;
+    this.wager = !!o.wager;
     const slots: TagSlot[] = s.slots.map(p => ({ radbro: p.radbro as TagSlot["radbro"], touch: p.touch, easy: p.easy, name: p.name }));
     this.match = new TagMatch({ model: o.model, index: o.index, tuning: o.tuning, slots, seed: s.seed, seconds: s.config.seconds });
     this.rb = new Rollback(this.match, o.local, { inputDelay: s.inputDelay });
+    this.backlog = Array.from({ length: this.match.n }, () => []);
     this.outFirst = this.rb.nextLocal;
   }
 
@@ -70,13 +86,14 @@ export class OnlineSession implements NetLink {
   onBinary(b: Uint8Array): void {
     if (b[0] === MSG_INPUT_OUT) {
       const m = decodeRelayInput(b);
-      if (!m || m.slot === this.local || m.slot >= this.match.n || this.broken) return;
-      try {
-        this.rb.receive(m.slot, m.firstStep, m.words);
-      } catch (e) {
-        this.broken = String((e as Error).message ?? e);
-        console.error("[radrun-online] can't apply the other player's inputs:", this.broken);
-      }
+      if (!m || m.slot >= this.match.n || this.broken) return;
+      if (m.slot === this.local && !this.wager) return;
+      this.take(m.slot, m.firstStep, m.words, m.slot === this.local);
+    } else if (b[0] === MSG_FILL && this.wager) {
+      const f = decodeFill(b);
+      if (!f || f.slot >= this.match.n || this.broken) return;
+      if (f.slot === this.local) this.filled += f.count;
+      this.take(f.slot, f.firstStep, new Array<number>(f.count).fill(f.word), true);
     } else if (b[0] === MSG_DESYNC) {
       const step = decodeDesync(b);
       this.desyncs++;
@@ -86,11 +103,55 @@ export class OnlineSession implements NetLink {
     }
   }
 
+  /** Relay words into the rollback: the part within the rings' reach now, the rest kept back in order (wager rounds). */
+  private take(slot: number, first: number, words: number[], force: boolean): void {
+    if (!this.wager) {
+      try {
+        this.rb.receive(slot, first, words);
+      } catch (e) {
+        this.broken = String((e as Error).message ?? e);
+        console.error("[radrun-online] can't apply the other player's inputs:", this.broken);
+      }
+      return;
+    }
+    if (slot === this.local) this.relayOwnTo = Math.max(this.relayOwnTo, first + words.length - 1);
+    this.backlog[slot].push({ first, words, force });
+    this.kept++;
+    this.drain();
+  }
+
+  /** Apply the kept-back words the match can now take, each slot's oldest first. */
+  private drain(): void {
+    const top = this.rb.horizon - 1;
+    for (let slot = 0; slot < this.backlog.length && !this.broken; slot++) {
+      const q = this.backlog[slot];
+      while (q.length) {
+        const b = q[0];
+        if (b.first > top) break;
+        const n = Math.min(b.words.length, top - b.first + 1);
+        try {
+          for (let k = 0; k < n; k++) {
+            if (b.force) this.rb.force(slot, b.first + k, b.words[k]);
+            else this.rb.receive(slot, b.first + k, [b.words[k]]);
+          }
+        } catch (e) {
+          this.broken = String((e as Error).message ?? e);
+          console.error("[radrun-online] can't apply the relay's inputs:", this.broken);
+          return;
+        }
+        if (n < b.words.length) { q[0] = { ...b, first: b.first + n, words: b.words.slice(n) }; break; }
+        q.shift();
+        this.kept--;
+      }
+    }
+  }
+
   /** Steps to run this frame: whatever the relay clock says we are behind (at most MAX_STEPS_PER_FRAME). */
   stepsFor(_delta: number): number {
     const m = this.match, rb = this.rb;
     const now = this.t.relayNow();
     const exact = (now - this.start.startAtMs) / STEP_MS;
+    if (this.kept) this.drain();
     rb.catchUp();
     this.pump(now);
     if (exact <= 0) { this.alpha = 0; this.waitSince = -1; return 0; }
@@ -114,8 +175,15 @@ export class OnlineSession implements NetLink {
   step(word: number): boolean {
     const rb = this.rb, m = this.match;
     if (rb.nextLocal <= m.endStep && rb.nextLocal <= m.step + 1 + rb.inputDelay) {
-      rb.addLocal(word);
-      this.out.push(word);
+      if (this.wager && (rb.nextLocal <= this.relayOwnTo || rb.has(this.local, rb.nextLocal))) {
+        // The relay filled this step already (this client was late or away): its word stands, so skip it.
+        this.flush();
+        rb.nextLocal++;
+        this.outFirst = rb.nextLocal;
+      } else {
+        rb.addLocal(word);
+        this.out.push(word);
+      }
     }
     const n = this.out.length;
     if (n >= MAX_INPUT_COUNT || (n && rb.nextLocal > m.endStep)) this.flush();
@@ -125,6 +193,7 @@ export class OnlineSession implements NetLink {
     }
     const ok = rb.advance();
     if (!ok && m.step < m.endStep) this.stallFrames++;
+    if (this.kept) this.drain();
     return ok;
   }
 
