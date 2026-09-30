@@ -41,17 +41,41 @@ async function loadLog(t: string, net: WagerNetId): Promise<SeriesLog> {
   return (await r.json()) as SeriesLog;
 }
 
-/** The logHash the vault recorded for this match (MatchSettled or MatchVoided), or null. */
-async function chainLogHash(log: SeriesLog, net: WagerNetId): Promise<{ hash: Hex; event: string } | null> {
+type ChainEnd =
+  | { event: "MatchSettled"; logHash: Hex; winner: Address; feeBps: number; mutual: boolean }
+  | { event: "MatchVoided"; logHash: Hex; reason: number };
+
+/** How the vault closed this match (its MatchSettled or MatchVoided event), or null. */
+async function chainEnd(log: SeriesLog, net: WagerNetId): Promise<ChainEnd | null> {
   const d = DEPLOYMENTS[net];
   const rpc = opt("--rpc") ?? d.rpc[0];
   const c = createPublicClient({ transport: http(rpc) });
-  for (const eventName of ["MatchSettled", "MatchVoided"] as const) {
-    const logs = await c.getContractEvents({ address: log.vault as Address, abi: VAULT_ABI, eventName, args: { matchId: log.matchId }, fromBlock: BigInt(d.deployBlock ?? 0) });
-    const last = logs[logs.length - 1] as unknown as { args: { logHash: Hex } } | undefined;
-    if (last) return { hash: last.args.logHash, event: eventName };
-  }
-  return null;
+  const from = BigInt(d.deployBlock ?? 0);
+  const s = await c.getContractEvents({ address: log.vault as Address, abi: VAULT_ABI, eventName: "MatchSettled", args: { matchId: log.matchId }, fromBlock: from });
+  const ls = s[s.length - 1];
+  if (ls) return { event: "MatchSettled", logHash: ls.args.logHash!, winner: ls.args.winner!, feeBps: Number(ls.args.feeBps), mutual: !!ls.args.mutual };
+  const v = await c.getContractEvents({ address: log.vault as Address, abi: VAULT_ABI, eventName: "MatchVoided", args: { matchId: log.matchId }, fromBlock: from });
+  const lv = v[v.length - 1];
+  return lv ? { event: "MatchVoided", logHash: lv.args.logHash!, reason: Number(lv.args.reason) } : null;
+}
+
+/**
+ * Does the vault's close agree with the log? A referee Result must carry the log's hash and pay the log's winner at one
+ * of the two captured fees (or void a void). A refund after the settle window (reason 3) and anything both players
+ * signed themselves (settleMutual) are not the referee's word: they are reported, not judged.
+ */
+export function judgeChainEnd(log: SeriesLog, e: ChainEnd): { ok: boolean | null; text: string } {
+  if (e.event === "MatchVoided" && e.reason === 3) return { ok: null, text: "refunded after the settle window: nobody settled it (no Result)" };
+  if ((e.event === "MatchSettled" && e.mutual) || (e.event === "MatchVoided" && e.reason === 2)) return { ok: null, text: `${e.event === "MatchSettled" ? "settled" : "voided"} by both players' own signatures (settleMutual), not by the referee` };
+  const bad: string[] = [];
+  if (e.logHash.toLowerCase() !== log.logHash.toLowerCase()) bad.push(`its logHash ${e.logHash} is not the log's`);
+  if (e.event === "MatchSettled") {
+    const w = log.outcome.kind === "win" && log.outcome.winner !== null ? log.players[log.outcome.winner] : null;
+    if (!w || w.toLowerCase() !== e.winner.toLowerCase()) bad.push(`it paid ${e.winner}, but the log's outcome is ${log.outcome.kind === "win" ? log.players[log.outcome.winner!] : "a void"}`);
+    if (e.feeBps !== log.feeBps && e.feeBps !== log.holderFeeBps) bad.push(`its fee ${e.feeBps} bps is neither captured fee`);
+  } else if (log.outcome.kind !== "void") bad.push("the referee voided a series the log says was won");
+  const what = e.event === "MatchSettled" ? `MatchSettled: paid ${e.winner}, fee ${e.feeBps} bps` : `MatchVoided (referee)`;
+  return bad.length ? { ok: false, text: `on-chain ${what}: DIFFERS from the log (${bad.join("; ")})` } : { ok: true, text: `on-chain ${what}, logHash ${e.logHash}: matches the log` };
 }
 
 async function main(): Promise<number> {
@@ -86,9 +110,13 @@ async function main(): Promise<number> {
   for (const f of log.flags) out.push(`flag: ${f.side === 0 ? "A" : "B"} ${f.kind} ${f.value} (limit ${f.limit}) round ${f.round}${f.note ? `: ${f.note}` : ""}`);
   let chainOk: boolean | null = null;
   if (flag("--chain")) {
-    const c = await chainLogHash(log, netArg);
-    chainOk = !!c && c.hash.toLowerCase() === log.logHash.toLowerCase();
-    out.push(c ? `on-chain ${c.event} logHash ${c.hash}: ${chainOk ? "matches the log" : "DIFFERS from the log"}` : "no MatchSettled / MatchVoided for this match on-chain yet");
+    const e = await chainEnd(log, netArg);
+    if (!e) out.push("no MatchSettled / MatchVoided for this match on-chain yet");
+    else {
+      const j = judgeChainEnd(log, e);
+      chainOk = j.ok;
+      out.push(j.text);
+    }
   }
   const ok = v.ok && chainOk !== false;
   out.push(ok ? `VERIFIED: the replay gives the logged result (${ms.toFixed(0)} ms, cold)` : `NOT VERIFIED:\n  ${v.problems.join("\n  ")}`);

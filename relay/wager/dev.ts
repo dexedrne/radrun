@@ -63,7 +63,8 @@ async function main() {
     if (settings.chainId !== 31337) throw new Error("--anvil keys are for the local anvil only");
     keys = { referee: anvilKey(8), relayer: anvilKey(9), faucet: anvilKey(6) };
   }
-  const port = Number(opt("--port") ?? new URL(settings.deployment.relay ?? "http://127.0.0.1:5402").port ?? 5402);
+  // --port, else the deployment's relay port (an https relay has none: 5402).
+  const port = Number(opt("--port")) || Number(new URL(settings.deployment.relay ?? "http://127.0.0.1:5402").port) || 5402;
   const r = await startNodeRelay({ port, settings, keys, dbDir: opt("--db") ?? null, log: m => console.log(m) });
   const sv = r.services;
   console.log(`[wager-relay] ${settings.net} (chain ${settings.chainId}, vault ${settings.vault ?? "not deployed"}) on ${r.url}`);

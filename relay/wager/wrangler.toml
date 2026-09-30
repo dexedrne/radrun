@@ -5,9 +5,10 @@
 # Local:   npm run wager:relay:worker   (wrangler 4.141.0 dev --env dev; or npm run wager:relay: Node, no Cloudflare tooling)
 # Deploy:  only after the vault is deployed (src/wager/deployments.json has its address), and never while series are
 #          live (GET /health answers "ok" with an x-wager-live header: deploy only when it is 0). From relay/wager:
-#            npx wrangler@4.141.0 secret put REFEREE_KEY      (and RELAYER_KEY, FAUCET_KEY; optionally RPC_URL_PRIVATE)
-#            npx wrangler@4.141.0 deploy --define __BUILD_ID__:'"<git short sha of the site build>"'
-#          Mainnet ("send it" only): the same with --env main (Worker radrun-wager-relay-main, no faucet).
+#            npx wrangler@4.141.0 secret put REFEREE_KEY --env ""      (and RELAYER_KEY, FAUCET_KEY; optionally RPC_URL_PRIVATE)
+#            npx wrangler@4.141.0 deploy --env "" --define __BUILD_ID__:'"<git short sha of the site build>"'
+#          (--env "" is the top level: the test network.) Mainnet ("send it" only): the same with --env main (Worker
+#          radrun-wager-relay-main, no faucet).
 name = "radrun-wager-relay"
 main = "src/worker.ts"
 compatibility_date = "2026-09-01"
@@ -78,6 +79,9 @@ ROUND_SECONDS = "20,60,90,120"
 DISTRICTS = "downtown,market,docks,towers,vertigo"
 NEW_ACCOUNT_MAX_STAKE = "100000000000000000000"
 NEW_ACCOUNT_SERIES = "3"
+LATE_MS = "100"
+RECONNECT_GRACE_MS = "20000"
+JOIN_GRACE_MS = "60000"
 HOLD_ON_FLAGS = "1"
 FAUCET = "1"
 FAUCET_TOKENS = "1000000000000000000000"
@@ -114,3 +118,5 @@ RECONNECT_GRACE_MS = "20000"
 JOIN_GRACE_MS = "60000"
 HOLD_ON_FLAGS = "1"
 FAUCET = "0"
+FAUCET_TOKENS = "0"
+FAUCET_ETH = "0"
