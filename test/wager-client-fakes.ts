@@ -17,7 +17,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { ERC20_ABI, GAME_VAULT_ABI } from "../src/wager/abi.ts";
 import {
   OUTCOME_VOID, OUTCOME_WIN, VOID_REFEREE, VOID_TIMEOUT, ZERO_ADDRESS, capturedFees, entryDigest, entryFromJson, entryTypedData, loginTypedData,
-  makeRules, payout, random32, resultDigest, resultTypedData, rulesHash, sessionAuthDigest, sessionAuthFromJson, sessionAuthTypedData, type Entry, type Result,
+  makeRules, payout, random32, resultDigest, resultTypedData, reviewTypedData, rulesHash, sessionAuthDigest, sessionAuthFromJson, sessionAuthTypedData, type Entry, type Result,
   type SessionAuth, type SimCompat,
 } from "../src/wager/eip712.ts";
 import {
@@ -327,6 +327,8 @@ export class FakeChain {
     const hx = (n: bigint | number) => numberToHex(n);
     switch (method) {
       case "eth_chainId": return hx(this.chainId);
+      case "evm_increaseTime": this.time += Number(params[0]); return hx(Number(params[0]));
+      case "evm_mine": this.block++; return "0x0";
       case "net_version": return String(this.chainId);
       case "eth_blockNumber": return hx(this.block);
       case "eth_gasPrice": return hx(1_000_000_000n);
@@ -440,6 +442,8 @@ export type RoomInit = {
   verify?: (player: Address, sig: Hex, by: "session" | "wallet", challenge: Hex, expiry: number, relay: string) => Promise<boolean>;
   holder?: (a: Address) => boolean;
   holdOnFlags?: boolean;
+  /** Tests: flag the winner as if the referee's metrics caught a script (the real relay computes these). */
+  forceFlag?: boolean;
   onEnd?: (log: SeriesLog, outcome: SeriesOutcome) => void;
 };
 
@@ -652,8 +656,12 @@ export class FakeRoom {
   }
 
   /** The relay clock's tick: fills past deadlines, sealed release. */
+  /** Stop the room's clock (the relay is shutting down). */
+  dispose(): void { this.disposed = true; }
+  private disposed = false;
+
   private tick(): void {
-    if (this.outcome) return;
+    if (this.outcome || this.disposed) return;
     if (this.cur) this.pump();
     this.o.clock.setTimeout(() => this.tick(), 4);
   }
@@ -761,6 +769,7 @@ export class FakeRoom {
     this.timerGen++;
     this.phase = "deciding";
     const o = this.o;
+    if (o.forceFlag && outcome.kind === "win" && outcome.winner !== null) this.flags.push({ side: outcome.winner, kind: "reaction", round: Math.max(1, this.rounds.length), value: 9, limit: 18, note: "forced by the test relay" });
     const rules = makeRules(o.district, this.sim);
     const shares: [Hex, Hex] = [this.seats[0].share ?? `0x${"00".repeat(32)}`, this.seats[1].share ?? `0x${"00".repeat(32)}`];
     const log: SeriesLog = {
@@ -777,6 +786,20 @@ export class FakeRoom {
     o.onEnd?.(log, outcome);
     if (held) { this.pushState(); return; }
     await this.signAndSubmit(outcome.kind === "win" ? outcome.winner : null);
+  }
+
+  /** The owner's review of a held series: settle as replayed, or void. */
+  async review(decision: 1 | 2): Promise<void> {
+    if (this.phase !== "held" || !this.outcome || !this.log) throw new Error("not held");
+    if (decision === 2) {
+      this.outcome = { kind: "void", winner: null, reason: "review", score: this.outcome.score };
+      this.log.outcome = this.outcome;
+      this.all({ t: "outcome", outcome: this.outcome, logHash: this.log.logHash, held: false, flags: this.flags });
+      await this.signAndSubmit(null);
+    } else {
+      this.all({ t: "outcome", outcome: this.outcome, logHash: this.log.logHash, held: false, flags: this.flags });
+      await this.signAndSubmit(this.outcome.winner);
+    }
   }
 
   /** Sign the Result (the holder rate for a holder winner) and submit it. */
@@ -803,6 +826,7 @@ export class FakeRoom {
 export type RelayOpts = {
   chain: FakeChain; net: WagerNetId; assets: Record<string, SimAssets>; clock?: Clock; roundSeconds?: number[]; timing?: Partial<Record<keyof typeof WAGER_TIMING, number>>;
   holders?: Set<string>; radbros?: Record<string, number[]>; newAccountSeries?: number; newAccountMaxStake?: bigint; holdOnFlags?: boolean; regionBlocked?: boolean;
+  forceFlag?: boolean;
 };
 
 type LobbyConn = { sock: Sock; player: Address | null; challenge: { challenge: Hex; expiry: number } | null };
@@ -819,6 +843,8 @@ export class FakeRelay {
   readonly relayer = acct(9);
   readonly faucet = acct(0);
   base = "http://127.0.0.1:0";
+  private srv: http.Server | null = null;
+  private readonly sockets = new Set<WebSocket>();
 
   constructor(o: RelayOpts) {
     this.o = o;
@@ -970,7 +996,7 @@ export class FakeRelay {
     const room = new FakeRoom({
       matchId: a.matchId, chainId: c.chainId, vault: c.vault, players: [m.playerA, m.playerB], cards: [this.card(m.playerA), this.card(m.playerB)], stake: m.stake,
       feeBps: m.feeBps, holderFeeBps: m.holderFeeBps, roundSeconds: m.roundSeconds, district, assets: this.o.assets[district], settleBy: Number(m.settleBy), clock: this.clock,
-      timing: this.o.timing, holdOnFlags: this.o.holdOnFlags,
+      timing: this.o.timing, holdOnFlags: this.o.holdOnFlags, forceFlag: this.o.forceFlag,
       sign: r => this.referee.signTypedData(resultTypedData(c.chainId, c.vault, r)),
       submit: async (r, sig) => {
         const res = await this.relay(encodeFunctionData({ abi: GAME_VAULT_ABI, functionName: "settle", args: [r, sig] }));
@@ -983,7 +1009,7 @@ export class FakeRelay {
       },
       verify: (p, sig, by, ch, exp, relay) => this.verifyLogin(p, sig, by, ch, exp, relay === "fake" ? "fake" : relay),
       holder: addr => !!this.o.holders?.has(addr.toLowerCase()),
-      onEnd: (_log, outcome) => { const st = this.status.get(a.matchId.toLowerCase())!; st.outcome = outcome; st.state = room.phase === "held" ? "held" : st.state; },
+      onEnd: (_log, outcome) => { const st = this.status.get(a.matchId.toLowerCase())!; st.outcome = outcome; if (room.phase === "held") st.state = "held"; },
     });
     this.rooms.set(a.matchId.toLowerCase(), room);
     return room;
@@ -1026,7 +1052,16 @@ export class FakeRelay {
       const ethTx = await c.mine(this.faucet.address, address, "0x", E18 / 100n);
       return { status: 200, json: { tokenTx, ethTx, tokens: (10_000n * E18).toString(), eth: (E18 / 100n).toString() } };
     }
-    if (path === "/review" && method === "POST") return { status: 501, text: "not in the fake" };
+    if (path === "/review" && method === "POST") {
+      const q = JSON.parse(body) as { matchId: Hex; decision: 1 | 2; logHash: Hex; sig: Hex };
+      const room = this.rooms.get(q.matchId.toLowerCase());
+      if (!room?.log || room.log.logHash !== q.logHash) return { status: 400, text: "unknown match or log" };
+      const signer = await recoverTypedDataAddress({ ...reviewTypedData(c.chainId, c.vault, { matchId: q.matchId, decision: q.decision, logHash: q.logHash }), signature: q.sig }).catch(() => ZERO_ADDRESS);
+      if (signer.toLowerCase() !== c.owner.toLowerCase()) return { status: 403, text: "only the vault owner reviews" };
+      await room.review(q.decision);
+      const st = this.status.get(q.matchId.toLowerCase())!;
+      return { status: 200, json: { ...st, series: room.state(null) } };
+    }
     return { status: 404, text: "not found" };
   }
 
@@ -1047,9 +1082,12 @@ export class FakeRelay {
       });
     });
     const wss = new WebSocketServer({ noServer: true });
+    this.srv = srv;
     srv.on("upgrade", (req, sock, head) => {
       const u = new URL(req.url ?? "/", this.base);
       wss.handleUpgrade(req, sock, head, (ws: WebSocket) => {
+        this.sockets.add(ws);
+        ws.on("close", () => this.sockets.delete(ws));
         const s: Sock = { send: d => { try { ws.send(d); } catch { /* closed */ } }, close: (code, reason) => ws.close(code ?? 1000, reason) };
         let h: { message(d: string | Uint8Array): void; close(): void } | null = null;
         if (u.pathname === "/lobby") h = this.openLobby(s);
@@ -1063,6 +1101,16 @@ export class FakeRelay {
       });
     });
     return new Promise(r => srv.listen(port, host, () => r(srv)));
+  }
+
+  /** Stop serving: every socket dropped (as a crashed relay would), the rooms' clocks stopped. */
+  async stop(): Promise<void> {
+    for (const r of this.rooms.values()) r.dispose();
+    for (const ws of this.sockets) (ws as unknown as { terminate(): void }).terminate();
+    this.sockets.clear();
+    const s = this.srv;
+    this.srv = null;
+    if (s) { s.closeAllConnections(); await new Promise(r => s.close(() => r(null))); }
   }
 }
 
