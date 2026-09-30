@@ -356,18 +356,24 @@ async function main() {
       log("--- a flagged winner: held for review, then the owner's review settles it");
       await stack.stopRelay();
       await stack.startRelay({ hold: true });
-      pa = await open(BA, `&devwallet=1&bot=${FAKE ? "normal" : "sharp"}`);
-      pb = await open(BB, "&devwallet=2&bot=normal");
+      // Both players are the sharp bot, so whoever wins is one: only flags against the winner hold a series.
+      const sharp = FAKE ? "normal" : "sharp";
+      pa = await open(BA, `&devwallet=1&bot=${sharp}`);
+      pb = await open(BB, `&devwallet=2&bot=${sharp}`);
       await connected(pa, A);
       await connected(pb, B);
       const before = [await free(A), await free(B)];
       const id = await create(pa, "link");
-      const jb = await joinByLink(BB, id, "&devwallet=2&bot=normal");
+      const jb = await joinByLink(BB, id, `&devwallet=2&bot=${sharp}`);
       await waitMatch(jb);
       await waitMatch(pa);
       for (const p of [pa, jb]) await click(p, "wager-ready", 60_000);
       await playOut([pa, jb], pa, 600_000);
-      await pa.waitForSelector(sel("wager-held"), { timeout: 60_000 });
+      await pa.waitForSelector(sel("wager-held"), { timeout: 60_000 }).catch(async () => {
+        // Say why: the relay's log has the outcome and every flag it raised.
+        const lg = await (await fetch(`${relayUrl}/log/${id}`)).json().catch(() => null) as { outcome?: unknown; flags?: unknown } | null;
+        throw new Error(`the series wasn't held: outcome ${JSON.stringify(lg?.outcome)}, flags ${JSON.stringify(lg?.flags)}`);
+      });
       await shot(pa, "held");
       expect((await locked(A)) === 100n * E18, "a held series keeps both stakes locked");
       const owner = await open(BB, `&review=${id}&devwallet=0`);
