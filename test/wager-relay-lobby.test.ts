@@ -302,6 +302,16 @@ test("fees: an entry capped below the fee on show is refused (no fee-free matche
   const ed = h.entry({ player: C.acct.address });
   await h.send(C.c, { t: "create", entry: ed, sig: await h.sign(C.key, ed), listed: true });
   assert.match(errOf(C.c)?.message ?? "", /paused/);
+  // The owner raises the fee after an offer went up: its Entry can't lock any more, so a join withdraws it.
+  h.fv.paused = false;
+  const D = await h.player();
+  const ee = h.entry({ player: C.acct.address });
+  await h.send(C.c, { t: "create", entry: ee, sig: await h.sign(C.key, ee), listed: true });
+  h.fv.houseFeeBps = 400;
+  const bd = h.entry({ player: D.acct.address, matchId: ee.matchId, opponent: C.acct.address, feeCapBps: 400 });
+  await h.send(D.c, { t: "join", entry: bd, sig: await h.sign(D.key, bd) });
+  assert.match(errOf(D.c)?.message ?? "", /older fee/);
+  assert.equal(h.last(D.c, "unoffer")?.matchId, ee.matchId);
 });
 
 test("join races: two joins that wait on the chain at the same time never put a player in two series", async () => {

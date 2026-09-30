@@ -556,9 +556,9 @@ export class WagerLobbyCore {
     if (this.settledCount(me) < o.minSeries) fail("forbidden", `this offer wants players with ${o.minSeries}+ settled series`);
     if (!this.conns(a.player).length) { this.removeOffer(o.matchId, "creator-left"); fail("gone", "the creator left"); }
     if (this.busy(me) || this.busy(a.player)) fail("busy", "one of you is still in an unsettled series");
-    // The vault's fee may have gone up since the offer: then the creator's Entry can't lock any more.
-    if (!(await this.termsOk(a).then(() => true, () => false))) { this.removeOffer(o.matchId, "cancelled"); fail("gone", "that offer was made under an older fee: it's withdrawn"); }
     await this.termsOk(b);
+    // The vault's fee may have gone up since the offer: then the creator's Entry can't lock any more.
+    if (a.feeCapBps < (await this.d.chain.info()).houseFeeBps) { this.removeOffer(o.matchId, "cancelled"); fail("gone", "that offer was made under an older fee: it's withdrawn"); }
     await this.stakeOk(me, b.stake);
     await this.entrySig(b, sig);
     if ((await this.d.chain.freeOf(a.player)) < a.stake) { this.removeOffer(o.matchId, "cancelled"); fail("balance", "the creator no longer has the stake free"); }
