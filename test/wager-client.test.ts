@@ -25,7 +25,10 @@ import { SeriesClient, type RoomTransport } from "../src/wager/series.ts";
 import { WagerApp, useWager } from "../src/wager/app.ts";
 import { MAX_SESSION_TTL_S, entryFromJson, loginTypedData, makeRules, rulesHash, resultTypedData, type Result } from "../src/wager/eip712.ts";
 import { MSG_PROBE, MSG_PROBE_ECHO, WAGER_PROTOCOL, decodeProbe, encodeProbe, type LobbyServerMsg } from "../src/wager/protocol.ts";
-import { simCompat, type SimAssets } from "../src/wager/replay.ts";
+import { simCompat, type SeriesVerdict, type SimAssets } from "../src/wager/replay.ts";
+import { matchChecks } from "../src/wager/verifyChecks.ts";
+import type { SeriesLog } from "../src/wager/log.ts";
+import type { MatchEnd } from "../src/wager/chain.ts";
 import { sameSim } from "../src/wager/assets.ts";
 import { FakeChain, FakeRelay, acct, type Sock } from "./wager-client-fakes.ts";
 
@@ -636,4 +639,105 @@ test("ABI: every vault function, event and error the client uses is in the contr
   const theirs = new Set(gameVaultAbi.map(sig));
   const missing = GAME_VAULT_ABI.map(e => sig(e as never)).filter(s => !theirs.has(s));
   assert.deepEqual(missing, [], "the generated ABI has every entry the client calls, with the same types");
+});
+
+test("lobby socket: signing in again as the same player keeps the socket (the relay would withdraw that player's offers); another player reconnects", async () => {
+  const fake = new FakeChain(), relay = new FakeRelay({ chain: fake, net: "local", assets: { downtown: assets } });
+  relay.base = "http://relay.test";
+  const [a, b] = [acct(1), acct(2)];
+  const signer = (x: PrivateKeyAccount) => ({ player: x.address, by: () => "wallet" as const, signTyped: (td: ReturnType<typeof loginTypedData>) => x.signTypedData(td) });
+  const seen: LobbyServerMsg[] = [];
+  const socks: WsLike[] = [];
+  const lc = new LobbyClient("http://relay.test", "local", 31337, fake.vault, signer(a), { state: () => undefined, msg: m => seen.push(m), error: e => assert.fail(e.message) }, lobbyWs(relay, socks));
+  try {
+    lc.connect();
+    await until(() => seen.some(m => m.t === "welcome"), "welcome");
+    // A session key went on (the page calls relogin): the same player, so the signed-in socket stays.
+    lc.relogin(signer(a));
+    await tick(20);
+    assert.equal(socks.length, 1, "no new socket");
+    assert.equal(socks[0].readyState, 1, "the first socket is still open");
+    assert.equal(lc.state, "online");
+    // Another account in the wallet: a new socket signed in as that player.
+    lc.relogin(signer(b));
+    await until(() => seen.filter(m => m.t === "welcome").length >= 2, "second welcome");
+    assert.equal(socks.length, 2);
+    assert.equal(socks[0].readyState, 3, "the old socket closed");
+    const w = seen.filter(m => m.t === "welcome").at(-1) as Extract<LobbyServerMsg, { t: "welcome" }>;
+    assert.equal(w.you.address.toLowerCase(), b.address.toLowerCase());
+    // Browsing (no signer) then a wallet: that one must sign in, so it reconnects.
+    lc.relogin(null);
+    await until(() => lc.state === "online" && socks.length === 3, "browsing");
+    lc.relogin(signer(a));
+    await until(() => seen.filter(m => m.t === "welcome").length >= 3, "third welcome");
+    assert.equal(socks.length, 4);
+  } finally {
+    lc.close();
+  }
+});
+
+test("wallet: one accountsChanged / chainChanged listener at a time, whatever the account switches; none after disconnect", async () => {
+  const fake = new FakeChain(), relay = new FakeRelay({ chain: fake, net: "local", assets: { downtown: assets } });
+  const base = "http://relay.test";
+  relay.base = base;
+  const restore = relayFetch(relay, base);
+  (globalThis as { localStorage?: unknown }).localStorage ??= { getItem: () => null, setItem() {}, removeItem() {} };
+  const x = mkApp(fake, relay, base);
+  try {
+    await x.start();
+    const [alice, bob] = [acct(1), acct(2)];
+    const ls = new Map<string, Set<(...a: never[]) => void>>();
+    const p = Object.assign(testWallet(alice, fake), {
+      on(ev: string, fn: (...a: never[]) => void) { if (!ls.has(ev)) ls.set(ev, new Set()); ls.get(ev)!.add(fn); },
+      removeListener(ev: string, fn: (...a: never[]) => void) { ls.get(ev)?.delete(fn); },
+    });
+    const fire = (ev: string, arg: unknown) => { for (const f of [...(ls.get(ev) ?? [])]) (f as (a: unknown) => void)(arg); };
+    const n = (ev: string) => ls.get(ev)?.size ?? 0;
+    await x.connect(wallet(p, "alice"));
+    assert.equal(useWager.getState().address, alice.address);
+    assert.deepEqual([n("accountsChanged"), n("chainChanged")], [1, 1]);
+    fire("accountsChanged", [bob.address]);
+    await until(() => useWager.getState().address === bob.address, "switched to bob");
+    assert.deepEqual([n("accountsChanged"), n("chainChanged")], [1, 1], "the old pair came off");
+    fire("accountsChanged", [alice.address]);
+    await until(() => useWager.getState().address === alice.address, "back to alice");
+    assert.deepEqual([n("accountsChanged"), n("chainChanged")], [1, 1]);
+    fire("accountsChanged", []);
+    assert.equal(useWager.getState().address, null, "disconnected");
+    assert.deepEqual([n("accountsChanged"), n("chainChanged")], [0, 0]);
+  } finally {
+    x.stop();
+    restore();
+  }
+});
+
+test("verify page checks: the log is this match's; a timeout refund stores no log hash; a settle pays the replayed winner", () => {
+  const vault = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
+  const matchId = `0x${"11".repeat(32)}` as Hex, logHash = `0x${"22".repeat(32)}` as Hex, zero = `0x${"00".repeat(32)}` as Hex, tx = `0x${"33".repeat(32)}` as Hex;
+  const [a, b] = [acct(1).address, acct(2).address];
+  const log = { chainId: 31337, vault, matchId, players: [a, b], logHash, outcome: { kind: "win", winner: 0, reason: "played", score: [2, 1] } } as unknown as SeriesLog;
+  const verdict: SeriesVerdict = { ok: true, problems: [], rounds: [], score: [2, 1], winner: 0 };
+  const page = { chainId: 31337, vault, matchId };
+  const run = (end: MatchEnd | null | undefined, o: { log?: SeriesLog; page?: typeof page; held?: boolean } = {}) =>
+    matchChecks({ log: o.log ?? log, verdict, end, held: !!o.held, page: o.page ?? page });
+  const oks = (cs: ReturnType<typeof run>) => cs.map(c => c.ok);
+  const settled = (winner: Address, h = logHash): MatchEnd => ({ kind: "settled", winner, loser: winner === a ? b : a, payout: 194n, fee: 6n, feeBps: 300, logHash: h, mutual: false, tx });
+  assert.deepEqual(oks(run(settled(a))), [true, true, true, true], "settled to the replayed winner with the log's hash");
+  assert.deepEqual(oks(run(settled(b))), [true, true, true, false], "the vault paid the other player");
+  assert.deepEqual(oks(run(settled(a, zero))), [true, true, false, true], "another log hash on chain");
+  assert.deepEqual(oks(run(undefined)), [true, true, null]);
+  assert.match(run(null, { held: true }).at(-1)!.text, /held for review/);
+  // A held series nobody reviewed, refunded after the settle window: the vault stores no log hash for that.
+  const refund = run({ kind: "voided", reason: 3, logHash: zero, tx });
+  assert.deepEqual(oks(refund), [true, true, true]);
+  assert.match(refund.at(-1)!.text, /refunded after the settle window/);
+  // A review that voided it (the referee's void carries the log hash); the log says void too.
+  const reviewed = { ...log, outcome: { kind: "void", winner: null, reason: "review", score: [2, 1] } } as unknown as SeriesLog;
+  assert.deepEqual(oks(run({ kind: "voided", reason: 1, logHash, tx }, { log: reviewed })), [true, true, true, true]);
+  assert.deepEqual(oks(run({ kind: "voided", reason: 1, logHash, tx })), [true, true, true, false], "a void on chain for a log that says won");
+  // A log for another match, vault or network is never this match's.
+  assert.equal(run(settled(a), { log: { ...log, matchId: `0x${"44".repeat(32)}` } as SeriesLog })[0].ok, false);
+  assert.equal(run(settled(a), { log: { ...log, vault: acct(5).address } as SeriesLog })[0].ok, false);
+  assert.equal(run(settled(a), { log: { ...log, chainId: 46630 } as SeriesLog })[0].ok, false);
+  assert.equal(run(undefined, { page: { ...page, vault: null as never } })[0].ok, true, "the vault not known yet: the rest still checks");
 });

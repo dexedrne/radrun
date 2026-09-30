@@ -89,6 +89,8 @@ export class WagerApp {
   private skew = 0;
   private refreshT: ReturnType<typeof setInterval> | null = null;
   private readonly timers = new Set<ReturnType<typeof setInterval>>();
+  /** The wallet's accountsChanged / chainChanged listeners (removed before new ones go on). */
+  private listening: { p: Eip1193; onAcc: (accs: string[]) => void; onChain: (id: string) => void } | null = null;
   /** Called when a match of ours locks (the page opens the series). */
   onLocked: ((matchId: Hex, district: string) => void) | null = null;
 
@@ -153,6 +155,7 @@ export class WagerApp {
   }
 
   stop(): void {
+    this.unlisten();
     this.lobby?.close();
     this.lobby = null;
     if (this.refreshT) clearInterval(this.refreshT);
@@ -190,18 +193,29 @@ export class WagerApp {
     const d = this.d.dep;
     this.walletClient = walletClientFor(viemChain(d, this.d.rpc), w.provider, address);
     this.set({ wallet: w, address, chainOk: (await walletChainId(w.provider).catch(() => 0)) === d.chainId });
+    // One pair of listeners at a time: an account switch calls this again, and a stale pair would switch twice.
+    this.unlisten();
     const onAcc = (accs: string[]) => { const a = accs?.[0]; if (!a) this.disconnect(); else if (!sameAddress(a, this.s.address)) void this.useWallet(w, getAddress(a)); };
     const onChain = (id: string) => this.set({ chainOk: Number.parseInt(id, 16) === d.chainId });
-    w.provider.removeListener?.("accountsChanged", onAcc as never);
     w.provider.on?.("accountsChanged", onAcc as never);
     w.provider.on?.("chainChanged", onChain as never);
+    this.listening = { p: w.provider, onAcc, onChain };
     this.keyAcct = this.chain ? loadSessionKey(this.keys, d.chainId, this.chain.vault, address) : null;
     this.set({ sessionKey: this.keyAcct?.address ?? null });
     await this.refresh();
     this.lobby?.relogin(this.signer());
   }
 
+  private unlisten(): void {
+    const l = this.listening;
+    this.listening = null;
+    if (!l) return;
+    l.p.removeListener?.("accountsChanged", l.onAcc as never);
+    l.p.removeListener?.("chainChanged", l.onChain as never);
+  }
+
   disconnect(): void {
+    this.unlisten();
     this.walletClient = null;
     this.keyAcct = null;
     this.set({ wallet: null, address: null, bal: null, session: null, sessionKey: null, you: null, chainOk: false });

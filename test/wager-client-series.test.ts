@@ -55,6 +55,8 @@ function series(o: Opts) {
   type C = {
     side: 0 | 1; name: string; sock: Sock | null; h: ReturnType<FakeRoom["attach"]> | null; session: OnlineSession | null; start: WagerStartMsg | null;
     rnd: () => number; yaw: number; finals: Map<number, number>; rounds: RoundMsg[]; outcome: OutcomeMsg | null; firstStart: number; starts: number;
+    /** Per round: the words the relay filled for this client's own slot (its session's count at the horn). */
+    filled: Map<number, number>;
   };
   const deliver = (c: C, d: string | Uint8Array) => {
     if (typeof d !== "string") {
@@ -69,7 +71,7 @@ function series(o: Opts) {
       if (!c.firstStart) c.firstStart = now;
       const local = c.side === 0 ? m.slotOfA : 1 - m.slotOfA;
       const s = new OnlineSession({ model, index, tuning, start: m, local, transport: tr(c), wager: true });
-      s.onFinal = h => c.finals.set(m.round, h >>> 0);
+      s.onFinal = h => { c.finals.set(m.round, h >>> 0); c.filled.set(m.round, s.filled); };
       c.session = s;
     } else if (m.t === "round") {
       c.rounds.push(m);
@@ -82,7 +84,7 @@ function series(o: Opts) {
   };
   const toRelay = (c: C, d: string | Uint8Array) => { const h = c.h, sock = c.sock; if (!h || !sock) return; later(o.leg, () => { if (c.sock === sock) h.message(d); }); };
   const tr = (c: C) => ({ relayNow: () => now, sendJson: (m: unknown) => toRelay(c, JSON.stringify(m)), sendBinary: (b: Uint8Array) => toRelay(c, b) });
-  const mk = (side: 0 | 1, name: string): C => ({ side, name, sock: null, h: null, session: null, start: null, rnd: mulberry32(side + 11), yaw: 0, finals: new Map(), rounds: [], outcome: null, firstStart: 0, starts: 0 });
+  const mk = (side: 0 | 1, name: string): C => ({ side, name, sock: null, h: null, session: null, start: null, rnd: mulberry32(side + 11), yaw: 0, finals: new Map(), rounds: [], outcome: null, firstStart: 0, starts: 0, filled: new Map() });
   const connect = (c: C) => { c.sock = mkSock(c); c.h = room.attach(c.side, c.sock); };
   const word = (c: C) => {
     const r = c.rnd;
@@ -157,7 +159,9 @@ test("wager rounds: a hidden tab gets its own inputs filled (FILL for its own sl
   assert.ok(r1.result, "round 1 finished");
   assert.ok(r1.fills[r1.slotOfA === 0 ? 1 : 0] > 300, `the relay filled B's slot (${r1.fills})`);
   for (const c of P) assert.equal(c.finals.get(1), r1.result!.hash, `${c.name} ends round 1 on the referee's hash`);
-  assert.ok(P[1].session === null || P[1].session.filled >= 0);
+  const own = P[1].filled.get(1) ?? 0;
+  assert.ok(own > 300, `B's session took the relay's FILLs for its own slot (${own})`);
+  assert.ok((P[0].filled.get(1) ?? 0) < 20, `A, never hidden, needed (almost) none (${P[0].filled.get(1)})`);
   assert.equal(room.flags.filter(f => f.kind === "desync").length, 0, "no desync");
 });
 

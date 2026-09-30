@@ -11,6 +11,7 @@ import {
 import type { SeriesLog } from "./log.ts";
 import type { WagerNetId } from "./config.ts";
 import { wagerError, type WagerError } from "./errors.ts";
+import { sameAddress } from "./units.ts";
 
 // ---- HTTP -------------------------------------------------------------------------------------------------------------
 
@@ -96,6 +97,8 @@ export class LobbyClient {
   signer: LoginSigner | null;
   /** Refused logins on this socket: the relay never re-challenges by itself, so the client asks again (bounded). */
   private refused = 0;
+  /** The player this socket is signed in as (null: browsing, or not signed in yet). */
+  private loggedAs: Address | null = null;
   private readonly base: string;
   private readonly net: WagerNetId;
   private readonly chainId: number;
@@ -124,6 +127,7 @@ export class LobbyClient {
     this.set(this.tries ? "retrying" : "connecting");
     const ws = this.mkWs(wsUrl(this.base, WAGER_ROUTES.lobby));
     this.ws = ws;
+    this.loggedAs = null;
     ws.onopen = () => {
       if (this.ws !== ws) { try { ws.close(1000, "bye"); } catch { /* closed */ } return; }
       this.refused = 0;
@@ -142,6 +146,7 @@ export class LobbyClient {
       this.pingT = null;
       if (this.ws !== ws) return;
       this.ws = null;
+      this.loggedAs = null;
       if (this.stopped) { this.set("closed"); return; }
       const why = e?.reason || "";
       if (/region|version/.test(why)) { this.set("closed", why); return; }
@@ -163,7 +168,7 @@ export class LobbyClient {
       }
       return;
     }
-    if (m.t === "welcome") { this.tries = 0; this.refused = 0; this.set("online"); }
+    if (m.t === "welcome") { this.tries = 0; this.refused = 0; this.loggedAs = this.signer?.player ?? null; this.set("online"); }
     if (m.t === "error" && m.code === "auth" && this.state === "login") {
       // A refused login keeps the socket open (a session key the relay can't see yet, a stale challenge): ask for a
       // fresh challenge a couple of times, then browse without logging in.
@@ -181,9 +186,14 @@ export class LobbyClient {
     return true;
   }
 
-  /** Sign in again (a new session key, or the wallet just connected). */
+  /**
+   * Sign in again (the wallet just connected or changed account). A socket already signed in as the same player is
+   * kept (a new session key changes nothing on it): closing it would make the relay withdraw that player's offers.
+   */
   relogin(signer: LoginSigner | null): void {
+    const keep = !!signer && sameAddress(signer.player, this.loggedAs) && this.ws?.readyState === 1;
     this.signer = signer;
+    if (keep) return;
     this.close();
     this.tries = 0;
     this.connect();
@@ -202,6 +212,7 @@ export class LobbyClient {
     this.retryT = this.pingT = null;
     const ws = this.ws;
     this.ws = null;
+    this.loggedAs = null;
     if (ws) { try { ws.close(1000, "bye"); } catch { /* closed */ } }
     this.set("closed");
   }
