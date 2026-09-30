@@ -184,6 +184,24 @@ test("wager rounds: a player who stays away past the grace forfeits the series",
   assert.ok(v.ok, v.problems.join("; "));
 });
 
+test("wager rounds: a 280 ms round trip on both sides never holds back a player's own words (no fills)", () => {
+  // The sealed release hands over the other player's words a whole round trip later than the live mode: a stall on
+  // them used to hold back this player's own words too, which then missed their deadlines (almost every step filled).
+  const { room, P } = series({ leg: 140, fps: 60, seconds: 12 });
+  const r1 = room.rounds[0];
+  assert.ok(r1?.result, "round 1 finished");
+  assert.deepEqual(r1.fills, [0, 0], `fills ${r1.fills}`);
+  for (const c of P) assert.equal(c.finals.get(1), r1.result!.hash, `${c.name} ends round 1 on the referee's hash`);
+});
+
+test("wager rounds: at 12 frames a second the words a frame samples go out that frame and make their deadlines", () => {
+  const { room, P } = series({ leg: 40, fps: 12, seconds: 12 });
+  const r1 = room.rounds[0];
+  assert.ok(r1?.result, "round 1 finished");
+  assert.deepEqual(r1.fills, [0, 0], `fills ${r1.fills}`);
+  for (const c of P) assert.equal(c.finals.get(1), r1.result!.hash, `${c.name} ends round 1 on the referee's hash`);
+});
+
 test("Rollback.force: the relay's word replaces a confirmed local word and the match re-simulates to the straight run's hash", () => {
   const mkMatch = () => new TagMatch({ model, index, tuning, slots: [{ radbro: "652" }, { radbro: "4764" }], seed: 77, seconds: 20 });
   const rnd = mulberry32(5), w: number[][] = [[], []];

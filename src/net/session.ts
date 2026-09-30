@@ -32,6 +32,15 @@ export const SEND_GAP_MS = 25;
 const SEND_WAIT_MS = 40;
 /** Steps a frame may run while catching up with the relay clock. */
 export const MAX_STEPS_PER_FRAME = 30;
+/**
+ * Wager rounds predict this far ahead of the other player's newest word (72 steps, 600 ms) instead of the online
+ * default. The sealed release hands over a step only once both words are in, so the other player's words arrive a
+ * whole round trip of this player's later than in the live mode, or only at their deadline when filled (up to
+ * lateMs + 150 ms, plus this player's one-way time). Stalling on them would also hold back this player's own words
+ * (they are sampled as the match steps), which then miss their own deadlines and get filled: at a 280 ms round trip
+ * almost every step was.
+ */
+export const WAGER_MAX_ROLLBACK = 72;
 
 /** The transport as the session uses it (tests drive it with a fake clock). */
 export type SessionTransport = Pick<Transport, "relayNow" | "sendJson" | "sendBinary">;
@@ -68,6 +77,8 @@ export class OnlineSession implements NetLink {
   filled = 0;
   /** The newest own step the relay holds as final (filled, or sealed and sent back after a reconnect): never sent again. */
   private relayOwnTo = 0;
+  /** Steps left in this frame (stepsFor's count): a wager round sends its words at the frame's last step. */
+  private frameLeft = 0;
 
   constructor(o: { model: CityModel; index: CityIndex; tuning: Tuning; start: StartMsg; local: number; transport: SessionTransport; wager?: boolean }) {
     const s = o.start;
@@ -77,7 +88,7 @@ export class OnlineSession implements NetLink {
     this.wager = !!o.wager;
     const slots: TagSlot[] = s.slots.map(p => ({ radbro: p.radbro as TagSlot["radbro"], touch: p.touch, easy: p.easy, name: p.name }));
     this.match = new TagMatch({ model: o.model, index: o.index, tuning: o.tuning, slots, seed: s.seed, seconds: s.config.seconds });
-    this.rb = new Rollback(this.match, o.local, { inputDelay: s.inputDelay });
+    this.rb = new Rollback(this.match, o.local, { inputDelay: s.inputDelay, ...(this.wager ? { maxRollback: WAGER_MAX_ROLLBACK } : {}) });
     this.backlog = Array.from({ length: this.match.n }, () => []);
     this.outFirst = this.rb.nextLocal;
   }
@@ -164,6 +175,7 @@ export class OnlineSession implements NetLink {
     else if (this.waitSince < 0) this.waitSince = now;
     const n = Math.max(0, Math.min(MAX_STEPS_PER_FRAME, target - m.step));
     this.behind = target - m.step - n;
+    this.frameLeft = n;
     return n;
   }
 
@@ -186,8 +198,11 @@ export class OnlineSession implements NetLink {
       }
     }
     const n = this.out.length;
+    this.frameLeft--;
     if (n >= MAX_INPUT_COUNT || (n && rb.nextLocal > m.endStep)) this.flush();
-    else if (n >= SEND_EVERY) {
+    else if (this.wager ? n > 0 && this.frameLeft <= 0 : n >= SEND_EVERY) {
+      // Wager rounds send what the frame sampled at its last step (every word has a deadline: at a low frame rate,
+      // words held for the next frame would miss it); the live mode sends every SEND_EVERY words. Both keep the gap.
       const now = this.t.relayNow();
       if (now - this.lastSend >= SEND_GAP_MS) this.flush(now);
     }
