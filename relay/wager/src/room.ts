@@ -139,6 +139,7 @@ const END_WAIT_MS = 5_000;
 const PROBE_EVERY_MS = 1_000;
 const PLAY_TICK_MS = 25;
 const MAX_JSON = 4096;
+const MAX_QUEUED = 16;
 const DEFAULT_PICKS: [string, string] = ["652", "4764"];
 
 const clampName = (s: string) => s.slice(0, 20);
@@ -343,6 +344,8 @@ export class WagerRoomCore {
       if (size > (typeof data === "string" ? MAX_JSON : WAGER_LIMITS.maxMsgBytes)) { c.closed = true; sock.close(1009, "too big"); this.closed(c); return; }
       if (!spend(c.bucket, now, WAGER_LIMITS.maxMsgsPerSec, WAGER_LIMITS.msgBurst)) { c.closed = true; sock.close(1008, "rate"); this.closed(c); return; }
       if (typeof data !== "string") { this.binary(c, data instanceof Uint8Array ? data : new Uint8Array(data)); return; }
+      // JSON waits behind a message that waits on the chain (login, an own-Radbro pick): a client sends a few, never a pile.
+      if (c.queue.length >= MAX_QUEUED) { c.closed = true; sock.close(1008, "rate"); this.closed(c); return; }
       c.queue.push(data);
       this.drain(c, relayBase);
     };
@@ -931,6 +934,8 @@ export class WagerRoomCore {
     this.settleRetryAt = null;
     const retry = () => {
       if (this.p?.phase !== "signed") return;
+      // Past settleBy the vault takes no Result: the stakes wait for refundExpired (the lobby's sweep notices it).
+      if (this.d.clock.now() / 1000 > this.p.settleBy) { this.log("the settle window closed unsettled: refundExpired returns the stakes"); return; }
       this.settleRetryAt = this.d.clock.now() + 30_000;
       this.schedule();
     };

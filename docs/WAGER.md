@@ -354,6 +354,8 @@ IP).
 - The creator's lobby socket is still connected; an offer is withdrawn when its creator leaves.
 - Neither player is in another unsettled series (checked again, with no wait, just before the offer is taken).
 - The joiner's `feeCapBps` ≥ the offer's fee, `min(houseFeeBps, creator's cap)`.
+- The creator's Entry still passes its signature check (its session key may have been used up by another of their
+  offers, revoked or replaced). Otherwise the offer is withdrawn, since `lock` would revert.
 
 **Lock.**
 1. The lobby sends `matched {a, b}` to both players.
@@ -361,6 +363,8 @@ IP).
 3. On receipt (soft confirmation, under a second) it sends `locked {tx}` and initialises the room (`POST` internal:
    the offer terms, both Entries, the chain's `matchOf`).
 4. If the relayer fails, either player can send `lock` with the two signed Entries it already has.
+5. No receipt within the 30 s is not a failure: the lock may still land. The offer stays taken, and the lobby's sweep
+   initialises the room if it lands (both players then get `locked`) or drops the pairing after the Entries' deadlines.
 
 **Relayer queue.**
 - One DO, a local nonce, EIP-1559 fees of 2 × the base fee.
@@ -645,7 +649,7 @@ Clients can submit the same `settlement` themselves.
 | **House-picked seeds / first holder** | Commit-reveal seeds (§5.5) and first-holder alternation in round 2 (§5.6) |
 | **Host-set match length, self-declared assists** | Terms are fixed in both signed Entries. Assists are off for both slots. The relay ignores `config` and `hello.touch/easy` |
 | **Relay or referee misbehaviour** | Every Result commits to a public log that anyone can replay. A lying referee is provable. Stakes are capped per match. Nothing the relay holds can move free balances |
-| **Quota exhaustion / spam** | Per-IP socket and message limits, per-player offer limits, offers need a funded vault balance and a signed Entry. It is a separate Worker (but the same account quota, see §4.10) |
+| **Quota exhaustion / spam** | Per-IP socket and message limits, at most 16 messages waiting per socket, per-player offer limits, offers need a funded vault balance and a signed Entry. It is a separate Worker (but the same account quota, see §4.10) |
 
 ### 6.2 Flags
 

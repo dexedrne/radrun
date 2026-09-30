@@ -327,6 +327,71 @@ test("join races: two joins that wait on the chain at the same time never put a 
   assert.deepEqual(h.fv.sent, ["lock", "lock"]);
 });
 
+test("join: an offer its creator's session key no longer covers is withdrawn, not locked", async () => {
+  const h = await lobbyHarness();
+  // A's key covers one 100-token match in all (cap 150): the second offer can't lock once the first has.
+  const A = await h.player({ keyCap: 150n * E18 }), B = await h.player(), C = await h.player();
+  const offer = async () => {
+    const e = h.entry({ player: A.acct.address });
+    await h.send(A.c, { t: "create", entry: e, sig: await h.sign(A.key, e), listed: true });
+    return e;
+  };
+  const o1 = await offer(), o2 = await offer();
+  const join = async (by: typeof B, a: EntryJson) => {
+    const b = h.entry({ player: by.acct.address, matchId: a.matchId, opponent: a.player });
+    const before = by.c.msgs.length;
+    await h.send(by.c, { t: "join", entry: b, sig: await h.sign(by.key, b) });
+    return by.c.msgs.slice(before);
+  };
+  await join(B, o1);
+  await eventually(() => h.last(B.c, "locked"));
+  // (A's series settles, so A is free to play again as far as the lobby knows.)
+  h.sql.exec("UPDATE matches SET state = 'settled'");
+  const r = (await join(C, o2)).find(m => m.t === "error");
+  assert.equal(r?.code, "gone");
+  assert.equal(h.last(C.c, "unoffer")?.matchId, o2.matchId);
+  assert.equal(h.lobby.offerCount(), 0);
+  assert.deepEqual(h.fv.sent, ["lock"], "no lock that would revert");
+});
+
+test("lock: a receipt that is late is not a failure; the offer stays taken and the players hear when the room has it", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player(), C = await h.player();
+  const a = h.entry({ player: A.acct.address });
+  await h.send(A.c, { t: "create", entry: a, sig: await h.sign(A.key, a), listed: true });
+  // The lock is sent but has not landed yet: no receipt, and the chain still says None.
+  h.fv.holdReceipts = true;
+  const matchOf = h.fv.matchOf.bind(h.fv);
+  h.fv.matchOf = async id => ({ ...(await matchOf(id)), ...(h.fv.holdReceipts ? { state: 0 } : {}) });
+  const b = h.entry({ player: B.acct.address, matchId: a.matchId, opponent: A.acct.address });
+  await h.send(B.c, { t: "join", entry: b, sig: await h.sign(B.key, b) });
+  await eventually(() => B.c.msgs.some(m => m.t === "tx" && m.status === "failed"));
+  await flush();
+  assert.equal(h.lobby.offerCount(), 0, "not relisted: the lock may still land");
+  assert.equal(h.last(C.c, "offer")?.offer.matchId, a.matchId);
+  assert.equal(h.last(C.c, "unoffer")?.reason, "matched");
+  const row = h.sql.exec("SELECT state, lock_tx FROM matches WHERE match_id = ?", a.matchId)[0];
+  assert.equal(row.state, "locking");
+  assert.ok(row.lock_tx);
+  // It landed: the room (from the lobby's sweep) reports the chain's pair, and both players hear it is locked.
+  h.fv.holdReceipts = false;
+  await h.lobby.update({ matchId: a.matchId, players: [A.acct.address, B.acct.address], stake: a.stake, phase: "waiting", outcome: null, held: false, heldSides: [], lockTx: null });
+  assert.equal(h.last(A.c, "locked")?.tx, row.lock_tx);
+  assert.equal(h.last(B.c, "locked")?.tx, row.lock_tx);
+  assert.equal(h.lobby.live(), 1);
+});
+
+test("a socket that piles up messages waiting on the chain is closed", async () => {
+  const h = await lobbyHarness();
+  const p = await h.player();
+  const e = h.entry({ player: p.acct.address });
+  const m = JSON.stringify({ t: "create", entry: e, sig: await h.sign(p.key, e), listed: true });
+  const all = Array.from({ length: 20 }, () => h.lobby.message(p.c, m));
+  assert.equal(p.c.closed, "rate");
+  await Promise.all(all);
+  assert.equal(h.fv.sent.length, 0);
+});
+
 test("cards: an address that never logged in gets no Ethereum reads", async () => {
   const h = await lobbyHarness();
   const stranger = newAccount().address;

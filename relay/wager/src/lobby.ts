@@ -93,6 +93,8 @@ type PlayerRow = {
 };
 
 const MAX_JSON = 4096;
+/** A socket with more messages than this still waiting is closed (a client sends one at a time). */
+const MAX_QUEUED = 16;
 const DAY = 86_400_000;
 const WEB: readonly Cosmetic["web"][] = ["classic", "gold", "ice", "toxic", "violet", "rose"];
 const TRAIL: readonly Cosmetic["trail"][] = ["none", "spark", "ribbon", "comet"];
@@ -138,6 +140,8 @@ export class WagerLobbyCore {
   private readonly d: LobbyDeps;
   private readonly offers = new Map<string, OfferRec>();
   private readonly chains = new Map<string, Promise<void>>();
+  /** Messages each socket has waiting (bounded: most wait on the chain, and the RPC's limits are everyone's). */
+  private readonly depth = new Map<string, number>();
   private readonly settling = new Set<string>();
 
   constructor(d: LobbyDeps) {
@@ -207,13 +211,20 @@ export class WagerLobbyCore {
     if (!m || typeof m !== "object") return Promise.resolve();
     // One message at a time per socket (logins and joins wait on the chain).
     const id = c.state.id;
+    const depth = (this.depth.get(id) ?? 0) + 1;
+    if (depth > MAX_QUEUED) { c.close(1008, "rate"); return Promise.resolve(); }
+    this.depth.set(id, depth);
     const prev = this.chains.get(id) ?? Promise.resolve();
     const next = prev.then(() => this.handle(c, m)).catch(e => {
       if (e instanceof LobbyError) this.sendTo(c, { t: "error", code: e.code, message: e.message });
       else { this.log(`error: ${errMsg(e)}`); this.sendTo(c, { t: "error", code: "busy", message: "the relay could not do that right now: try again" }); }
     });
     this.chains.set(id, next);
-    return next.finally(() => { if (this.chains.get(id) === next) this.chains.delete(id); });
+    return next.finally(() => {
+      if (this.chains.get(id) === next) this.chains.delete(id);
+      const n = (this.depth.get(id) ?? 1) - 1;
+      if (n > 0) this.depth.set(id, n); else this.depth.delete(id);
+    });
   }
 
   /** Wait for a socket's queued messages (tests). */
@@ -538,6 +549,10 @@ export class WagerLobbyCore {
     await this.stakeOk(me, b.stake);
     await this.entrySig(b, sig);
     if ((await this.d.chain.freeOf(a.player)) < a.stake) { this.removeOffer(o.matchId, "cancelled"); fail("balance", "the creator no longer has the stake free"); }
+    // The creator's session key may have been used up (another of their offers locked), revoked or replaced since the
+    // offer went up: then lock() would revert every time, so the offer goes now.
+    const creatorOk = await this.entrySig(a, rec.sig).then(() => true, () => false);
+    if (!creatorOk) { this.removeOffer(o.matchId, "cancelled"); fail("gone", "that offer can't be played any more: its creator's session key no longer covers it"); }
     // Taken: from here the offer is this pair's (a second joiner finds it gone). The checks above waited on the chain,
     // so another join may have paired either player meanwhile: check again with no await before taking it.
     if (!this.offers.has(o.matchId)) fail("gone", "that offer is gone");
@@ -574,6 +589,12 @@ export class WagerLobbyCore {
     const why = await this.d.chain.simulate(relayer.address, call);
     if (why) { await failed(why); return; }
     await this.track("lock", id, relayer, call, notify, async (ok, h, err) => {
+      if (!ok && h && err === "timeout") {
+        // No receipt yet is not a failure: the lock may still land. The sweep takes it from here (it initialises the
+        // room if it lands, which tells both players, and drops it after the deadlines if not); the offer stays taken.
+        this.d.sql.exec("UPDATE matches SET lock_tx = ? WHERE match_id = ? AND state = 'locking'", h.hash, id);
+        return;
+      }
       if (!ok || !h) { await failed(err); return; }
       const m = await this.d.chain.matchOf(id);
       if (m.state !== MS_LOCKED) { await failed("the match is not locked"); return; }
@@ -605,7 +626,10 @@ export class WagerLobbyCore {
         id, state, u.players[0].toLowerCase(), u.players[1].toLowerCase(), u.stake, u.lockTx);
       r = this.match(id)!;
     } else if (r.state !== "settled" && r.state !== "voided") {
-      this.d.sql.exec("UPDATE matches SET state = ? WHERE match_id = ?", state, id);
+      // The room's players are the chain's (matchOf): records follow them.
+      this.d.sql.exec("UPDATE matches SET state = ?, a = ?, b = ? WHERE match_id = ?", state, u.players[0].toLowerCase(), u.players[1].toLowerCase(), id);
+      // A lock whose receipt came late: the room has it now.
+      if (r.state === "locking" && r.lock_tx) for (const p of u.players) this.toPlayer(p, { t: "locked", matchId: id, tx: r.lock_tx as Hex });
     }
     if (u.outcome) r.j.outcome = u.outcome;
     if (u.held && !r.j.heldCounted) {

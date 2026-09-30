@@ -11,7 +11,7 @@ import { gunzipSync as gunzipBuf } from "node:zlib";
 import { firstHolderSlot, seriesLogHash, type RoundResult, type SeriesLog } from "../src/wager/log.ts";
 import { WAGER_PROTOCOL, type WagerStartMsg } from "../src/wager/protocol.ts";
 import { MockRadbroSource } from "../relay/wager/src/radbro.ts";
-import { FailingRadbro, eventually, newAccount, roomHarness, type RoomClient, type RoomHarness } from "./wager-relay-fakes.ts";
+import { FailingRadbro, eventually, flush, newAccount, roomHarness, sleep, type RoomClient, type RoomHarness } from "./wager-relay-fakes.ts";
 
 /** Both players in, picked, seeded and READY: round 1 starts. */
 async function readyUp(h: RoomHarness, ca: RoomClient, cb: RoomClient): Promise<WagerStartMsg> {
@@ -326,6 +326,33 @@ test("a relay restart between rounds: both back within the grace, the series goe
   assert.equal(a2.last("start")?.round, 2);
   await idleUntil(a2, () => a2.last("settled"), 120_000);
   assert.deepEqual(a2.last("outcome")?.outcome, { kind: "win", winner: 0, reason: "played", score: [2, 0] });
+});
+
+test("a Result the vault won't take is retried until settleBy, then left to refundExpired", async () => {
+  const h = await roomHarness({ judge: win(0), vars: { HOLD_ON_FLAGS: "0" } });
+  h.fv.referee = newAccount().address; // the vault's referee was rotated: this relay's signature is refused
+  const ca = h.client(), cb = h.client();
+  await readyUp(h, ca, cb);
+  await idleUntil(ca, () => ca.last("settlement"), 120_000);
+  await eventually(() => h.calls.settleErrors.length > 0, h.clock);
+  (h.room as unknown as { p: { settleBy: number } }).p.settleBy = Math.floor(h.clock.now() / 1000) + 90;
+  const n0 = h.calls.settles.length;
+  const run = async (ms: number) => { for (let t = 0; t < ms; t += 5_000) { h.clock.tick(5_000); await flush(6); await sleep(1); } };
+  await run(120_000);
+  const n = h.calls.settles.length;
+  assert.ok(n - n0 >= 2 && n - n0 <= 4, `retried every 30 s until settleBy (${n - n0})`);
+  await run(600_000);
+  assert.equal(h.calls.settles.length, n, "no retries after settleBy");
+  assert.equal(h.room.nextDeadline(), null);
+});
+
+test("a socket that piles up JSON behind a message waiting on the chain is closed", async () => {
+  const h = await roomHarness();
+  const c = h.client(0);
+  const hello = JSON.stringify({ t: "hello", v: WAGER_PROTOCOL, matchId: h.matchId, compat: c.compat() });
+  for (let i = 0; i < 20; i++) c.h.message(hello);
+  await c.until(() => c.closed);
+  assert.equal(c.closed, "rate");
 });
 
 test("a room for an id that never locked writes nothing (no storage for strangers' ids)", async () => {
