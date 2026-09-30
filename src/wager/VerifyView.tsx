@@ -19,14 +19,12 @@ import { simAssets } from "./assets.ts";
 import type { MatchEnd } from "./chain.ts";
 import type { MatchStatus } from "./protocol.ts";
 import { ReplayLink } from "./replayLink.ts";
+import { matchChecks, type Check } from "./verifyChecks.ts";
 import { keepObj } from "./LobbyView.tsx";
 import { ConnectWallet } from "./WalletPanel.tsx";
 import { Amount, C, Notice, Section, TxLink, btn, label, small } from "./ui.tsx";
 import { classifyError } from "./errors.ts";
 import { bpsText, sameAddress, shortAddress } from "./units.ts";
-
-/** ok: passed; false: failed; null: not there yet (a live or held series has nothing on chain). */
-type Check = { ok: boolean | null; text: string };
 
 const hex8 = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
 const sec = (steps: number) => `${(steps / 120).toFixed(1)} s`;
@@ -113,21 +111,9 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
     setWatching(link);
   };
 
-  const checks: Check[] = [];
-  if (log && verdict) {
-    checks.push({ ok: verdict.ok, text: verdict.ok ? "the replay of every round gives the logged results and outcome" : "the replay found problems (below)" });
-    if (end === undefined) checks.push({ ok: null, text: "reading the chain…" });
-    else if (end === null) checks.push({ ok: null, text: status?.state === "held" ? "held for review: nothing on chain until the review (or a refund after the settle window)" : "not settled on chain yet" });
-    else {
-      checks.push({ ok: end.logHash.toLowerCase() === log.logHash.toLowerCase(), text: end.logHash.toLowerCase() === log.logHash.toLowerCase() ? "the log's hash equals the one the vault stored at settle" : `the vault stored ${end.logHash}, the log hashes to ${log.logHash}` });
-      if (end.kind === "settled") {
-        const w = log.outcome.winner === null ? null : log.players[log.outcome.winner];
-        checks.push({ ok: log.outcome.kind === "win" && sameAddress(w, end.winner), text: log.outcome.kind === "win" && sameAddress(w, end.winner) ? `the vault paid the replayed winner (${shortAddress(end.winner)})` : "the vault's winner differs from the log's" });
-      } else {
-        checks.push({ ok: log.outcome.kind === "void" || end.reason === 3, text: end.reason === 3 ? "refunded after the settle window (nobody settled it)" : log.outcome.kind === "void" ? "voided, as the log says" : "the vault voided a series the log says was won" });
-      }
-    }
-  }
+  const checks: Check[] = log && verdict
+    ? matchChecks({ log, verdict, end, held: status?.state === "held", page: { chainId: dep.chainId, vault: app.chain?.vault ?? null, matchId } })
+    : [];
   const failed = checks.some(c => c.ok === false);
   const pending = !failed && checks.some(c => c.ok === null);
   const allOk = checks.length > 0 && !failed && !pending;
