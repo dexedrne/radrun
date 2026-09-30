@@ -422,15 +422,28 @@ IP).
 - `holdersOnly` and `minSeries` hold.
 - The creator's lobby socket is still connected; an offer is withdrawn when its creator leaves.
 - Neither player is in another unsettled series (checked again, with no wait, just before the offer is taken).
-- The joiner's `feeCapBps` ≥ the vault's `houseFeeBps`.
+- The joiner's `feeCapBps` ≥ the vault's `houseFeeBps`, and so is the creator's (an offer made before the owner raised
+  the fee is withdrawn).
 - The creator's Entry still passes its signature check (its session key may have been used up by another of their
   offers, revoked or replaced). Otherwise the offer is withdrawn, since `lock` would revert.
 
 **Lock.**
 1. The lobby never sends the creator's open Entry signature (opponent 0) to anyone: whoever holds it can pair it with
-   any account (`lock` can't know who the lobby vetted). On a join it asks the creator's page to sign a **named** Entry
-   for the joiner (`opponent` = the joiner, the same terms, a deadline of a few minutes), with the session key, so
-   there is no popup (a wallet-only creator gets one). That named Entry and the joiner's are what lock.
+   any account (`lock` can't know who the lobby vetted). The open list and `/match/<id>` carry the Entry's terms only.
+   On a join the offer is taken (`unoffer … matched`, both players busy) and the lobby asks the creator's page to sign
+   a **named** Entry for the joiner:
+   - `sign {matchId, entry, joiner}` to the creator's sockets: the offer's terms with `opponent` = the joiner and
+     `deadline = min(the offer's deadline, now + namedTtlS)` (300 s).
+   - The creator's page signs it with the session key (no popup; a wallet-only creator gets one) only when every term
+     equals the Entry that page itself created, the name is the joiner's and the deadline is a few minutes away, and
+     answers `signed {matchId, sig}`; anything else gets `signed {matchId, sig: null, why}`.
+   - The lobby checks the signature as `lock` would. A refusal, a bad signature, the creator leaving or no answer
+     within `signWaitMs` (45 s) fails the join (`gone`) and withdraws the offer.
+   - A named invite (`opponent` already set at create) needs no `sign` round: its Entry pairs with nobody else.
+
+   The named Entry and the joiner's are what lock. When such a lock fails, a named invite goes back up (its Entry
+   still names only that player) but an open offer doesn't: a named Entry for that joiner is out, so the creator makes
+   a new offer (or cancels the id on chain).
 2. The lobby checks `vault.referee()` equals its `REFEREE_KEY` address, so it never locks a match it can't settle.
 3. The lobby sends `matched {a, b}` (both named Entries) to both players.
 4. It simulates `lock` with `eth_call`, then the relayer sends it.
@@ -444,9 +457,9 @@ IP).
 
 **Relayer queue.**
 - One DO, a local nonce, EIP-1559 fees of 2 × the base fee.
-- A gas limit per call (for example 400k for `lock` and `openSession`): a player whose account is a contract (or an
-  EIP-7702 delegate) can make its ERC-1271 check cost any amount of gas, and the relayer only pays for bounded calls.
-  Above the limit the player submits the call themselves.
+- A gas limit per call (`RELAYER_GAS`: 400k for `lock` and `openSession`, 200k for `settle`, 150k for a faucet
+  send): a player whose account is a contract (or an EIP-7702 delegate) can make its ERC-1271 check cost any amount of
+  gas, and the relayer only pays for bounded calls. Above the limit the player submits the call themselves.
 - Receipts are polled every 250 ms with a 30 s timeout.
 - On an error it resyncs the nonce from `pending`.
 
@@ -459,9 +472,13 @@ The phases are `waiting → between → playing → (between → playing)* → d
    - `hello {compat}`: the client's `simCompat` for the district must equal the referee's, otherwise `version` and
      "reload to update".
    - Then login. Only `playerA` and `playerB` (from `matchOf`) get a seat; anyone else gets `full`. A room only
-     initialises for a match the lobby paired (its `matches` row names the same two players).
+     initialises for a match the lobby paired (its `matches` row names the same two players; the lobby's
+     `/internal/paired`): a lock sent straight to the vault with Entries the lobby never vetted gets no room, and its
+     settle window refunds it.
    - A player who reconnects takes their seat back. A session-key login never replaces a live seat from another IP
-     or browser; that takes a wallet login.
+     (`forbidden`); a wallet login can (a player moving to another device). The room remembers each seat's login IPs
+     and whether a session-key login came from an IP the player's lobby sockets hadn't used when the lobby paired them
+     (§6.3).
 2. **Before round 1** (`joinGraceMs` = 60 s from the lock):
    - Both players must connect and `pick` a Radbro (§4.6).
    - Each sends its `seed` share once, after the `series` message has shown the relay's `seedCommit`.
@@ -499,7 +516,9 @@ The phases are `waiting → between → playing → (between → playing)* → d
      away past it, the series is void (`error`), not a forfeit.
    - A relay fault never picks a winner.
    - Never deploy the wager Worker while series are live: the deploy tool checks `GET /health` first. It answers
-     `ok` with an `x-wager-live` header, the number of series locked or being played; deploy only at 0.
+     `ok` with an `x-wager-live` header, the number of series locked or being played; deploy only at 0. Its
+     `x-wager-relayer-wei` and `x-wager-faucet-wei` headers are the gas the relayer and the faucet have left (read at
+     most once a minute): every gasless call and faucet claim spends them, so the owner tops them up.
 9. **Decision.** Covered in §5.7 (signing) and §6.3 (holds). The room signs with the key of the referee the match
    locked under (`refereeOf(matchId)`); after a rotation the Worker keeps the old key (`REFEREE_KEY_PREV`) until every
    match locked under it has closed.
@@ -581,7 +600,7 @@ independent re-checks are the browser verify page and `npm run wager:verify`.
 
 | Store | Contents |
 |---|---|
-| `WagerLobby` SQLite | `players(address PK, name, rating, wins, losses, forfeits, voids, held, first_seen, last_seen, cosmetic)`, `offers(match_id PK, json, deadline)`, `matches(match_id PK, state, a, b, stake, lock_tx, settle_tx, ended_at)`, `radbro_cache(address PK, json, at)`, `faucet(address PK, at)`, `ip_counters` |
+| `WagerLobby` SQLite | `players(address PK, name, rating, wins, losses, forfeits, voids, held, first_seen, last_seen, cosmetic)`, `offers(match_id PK, json, deadline)`, `matches(match_id PK, state, a, b, stake, lock_tx, settle_tx, ended_at, json)` (json: the two signed named Entries, the players' lobby IPs at pairing, the outcome), `radbro_cache(address PK, json, at)`, `faucet(address PK, at)`, `ip_counters` |
 | `WagerRoom` SQLite | `series(json)` and `rounds(round PK, json)` while live. At the end, `log` holds the gzipped SeriesLog JSON |
 | Serving | `GET /log/<id>` serves the stored gzip with `Content-Encoding: gzip`, `Content-Type: application/json`, a year of cache, and CORS `*` (public) |
 
@@ -750,17 +769,19 @@ dev relay is not.
 | `reaction` | Steps from the moment the holder's ring turns red on the runner (`ringId === RING_RUNNER`) to the web press that Yoinks (a Yoink within 30 steps of another web press is spam, not a reaction, and is not counted) | median < 18 steps (150 ms) over ≥ 5 events, or ≥ 3 events < 10 steps |
 | `aim` | Yaw error against the target's bearing **in the player's own view**: the relay rebuilds the state that client showed when it sampled the word (the opponent steps it had released to it by then, then `predictWord`), because over a network an aimbot aims at its prediction, not at the canonical state. Sampled at Yoink/yank presses, and every 2 steps while the holder chases his target within 15 m | median ≤ 1 yaw unit (0.35°) over ≥ 5 presses, or over ≥ 16 chase samples |
 | `periodic` | Coefficient of variation of the intervals between presses | < 0.03 over ≥ 12 presses |
-| `late-inputs` | Median arrival slack against the deadline, and the fraction filled | median slack < 10 ms, or > 5% of steps filled, with a relay-measured round trip < 150 ms |
+| `late-inputs` | Median arrival slack against the deadline, and the fraction filled | median slack < 10 ms, or > 20% of steps filled (an honest page's frame stalls filled 5-17% a round in the end-to-end runs, and a filled step only costs its own player), with a relay-measured round trip < 150 ms |
 | `desync` | The client's `end` hash differs from the referee's | any |
 | `result-mismatch` | Both clients' final hashes agree with each other but not with the referee | any (this points to a referee or sim problem: always hold) |
 | `rtt` | Reserved: probe round trips inconsistent with input timing | - |
+| `session-key` | On the loser: the series was won by their forfeit or over their idle play (fewer than 3 web presses, or more than half their steps filled while connected), and their seat signed in by session key from an IP their lobby sockets hadn't used, or both seats came from one IP | any (it holds the series, §6.3) |
 
 ### 6.3 Holds
 
 - **Held:** flags against the **winner**, or any `result-mismatch`, put the series in `held` when `HOLD_ON_FLAGS=1`
   (the default). So does a series won by a forfeit, or against a loser who idled, when the loser's seat logged in by
-  session key from an IP or browser the player hadn't used before, or both seats share an IP: that is what a copied
-  session key looks like (§2).
+  session key from an IP the player's lobby sockets hadn't used when the lobby paired them, or both seats share an IP:
+  that is what a copied session key looks like (§2). It is recorded as a `session-key` flag on the loser. Friends on
+  one network who play each other and one leaves see their series wait for the review; nobody loses anything by it.
 - **Not held:** flags against the loser alone are recorded, but the series settles: a cheater who lost anyway just
   loses.
 - **Resolving a held series:** it waits for the owner's review (§4.9). If nobody reviews it before `settleBy`, anyone
@@ -800,32 +821,49 @@ dev relay is not.
 - **Banner.** The deployment label ("BETA · TESTNET") is always visible, with the network name and the short address.
 - **Wallet panel.**
   - Balances: the token in the wallet, free and locked in the vault.
-  - **Deposit:** approve exactly the amount, then deposit, with each transaction's state shown.
-  - **Withdraw:** an amount, or all.
+  - **Deposit:** approve exactly the amount, then deposit, with each transaction's state shown, and a warning never to
+    send tokens straight to the vault's address (they would only be surplus, §3.6).
+  - **Withdraw:** an amount, or all. With a token that taxes the vault as sender, "all" takes out the most that fits
+    with its tax (from a simulated withdraw's `TransferMismatch(asked, moved)`), since the tax comes out of the same
+    free balance.
   - **Faucet:** on test networks only.
   - **Session:** "play without popups" (sign a SessionAuth; the relayer submits it). It shows the limits,
-    used/cap and expiry, and has **Revoke**.
+    used/cap and expiry, and has **Revoke**. The defaults are small (§3.4: 3 × the stake picked, 12 hours).
   - "Submit it yourself" fallbacks for `lock`, `settle` and `refundExpired`.
 - **Lobby.**
   - Open offers, with creator cards: name, rating, W-L, forfeits, NEW tag, holder badge. Each shows the stake, round
     length, district and the fee (with "1.5% if you win holding a Radbro").
   - **Create:** stake; round length (60/90/120); district; listed, invite link or named opponent; holders only; minimum
     series.
-  - **My offers:** cancel, copy the invite link.
+  - **My offers:** cancel (the lobby withdraws it), **on chain** (the wallet also sends `cancel(matchId)`, so no
+    signature for that id can ever lock), copy the invite link.
+  - **Pairing:** when someone joins an open offer, the creator's page signs the named Entry by itself (§4.3) and says
+    who joined; "lock it yourself" appears if the relayer is slow. A relayer lock with no receipt within its wait
+    (the lobby's `tx … failed: timeout`) reads as "may still land", not as a failure, and the lobby's `locked` after it
+    opens the series; locking it yourself after the relayer's lock landed opens the series too.
 - **Series.**
   - Before round 1: both cards, the Radbro pick (the roster plus owned ids), READY, timers.
   - In a round: the existing HUD plus a series scoreboard ("ROUND 2 · 1-0") and the opponent's connection state.
   - Between rounds: the round result.
   - At the end: the winner, the payout credited, the fee and the settle state (signing → settled, with the
     transaction). A held series shows **"held for review"** with `settleBy`.
+  - After `settleBy` on a match still locked: **refund both stakes** (`refundExpired`) and **take back your stake**
+    (`reclaim`, a transaction that names only you).
+  - **Settle it between you** (the referee is gone: the relay unreachable, a held series, or no signature for a
+    minute): one player picks the result (I won / they won / void) and signs a `Result` with the wallet; the page shows
+    a code (`radrun-settle:…`, `src/wager/mutual.ts`) to send the other player, whose page checks that it names this
+    match, was signed by the opponent's wallet and would be accepted (a win at the match's full fee), countersigns
+    with its own wallet and submits `settleMutual`. Session keys can't sign it.
   - A "verify this match" link.
 - **History.** Built from events (§3.9): date, opponent, stake, result, payout, transaction links and verify links.
 - **Verify.**
   1. It fetches `/log/<matchId>` and the chain's `MatchSettled`/`MatchVoided` for that match.
-  2. It checks that the log names this match, vault and chain, checks the log hash against the on-chain `logHash`
-     and runs `verifySeries` against the district's model and tuning. A refund after the settle window (void reason
-     3) stores no log hash, so that one reads as refunded instead. A held series voided on review keeps its rounds
-     and outcome reason `review`, which verifies.
+  2. It checks that the log names this match, vault and chain, hashes the log's contents (never trusting its own
+     `logHash` field) and compares that with the on-chain `logHash`, and runs `verifySeries` against the district's
+     model and tuning. A refund after the settle window (void reason 3) stores no log hash, so that one reads as
+     refunded instead. A held series voided on review keeps its rounds and outcome reason `review`, which verifies. A
+     settle both players signed themselves (`mutual`, or void reason 2) is their own agreement: the page says so and
+     doesn't hold it to the log.
   3. It shows every round (the logged result against the replayed one, the seeds with commit and reveal), the flags and
      a clear verdict.
   4. **Watch:** replays a round in the 3D view through a `ReplayLink` that implements `NetLink`.
@@ -856,6 +894,9 @@ dev relay is not.
   production build drops it.
 - **What checks it.** A test builds for production and fails if `dist/` contains `devWallet`, any anvil key or any
   anvil address.
+- **`&badhash`** (dev and test builds only, like `&devwallet` and `&bot`): the page reports a wrong final state hash at
+  every round's end. Two such pages make a `result-mismatch`, which the end-to-end uses to walk the dispute path
+  (held, then voided on review).
 
 ---
 
@@ -875,7 +916,7 @@ dev relay is not.
   - `VITE_WAGER_NETS`: comma-separated deployments this build offers, the first being the default. Unset turns the
     page off.
   - `VITE_WAGER_RELAY_URL` and `VITE_WAGER_RPC`: optional overrides.
-  - Dev only: `&net=`, `&relay=`, `&rpc=`, `&devwallet=`.
+  - Dev only: `&net=`, `&relay=`, `&rpc=`, `&devwallet=`, `&bot=`, `&badhash`.
 - **Relay vars** (`relay/wager/wrangler.toml [vars]`):
   - `WAGER_NET`, `ALLOWED_ORIGINS`, `DEV`, `RPC_URLS`, `ETH_RPC_URLS`, `REGION_BLOCK`, `ROUND_SECONDS`, `DISTRICTS`
   - `NEW_ACCOUNT_MAX_STAKE`, `NEW_ACCOUNT_SERIES`, `LATE_MS`, `RECONNECT_GRACE_MS`, `JOIN_GRACE_MS`, `HOLD_ON_FLAGS`
@@ -952,7 +993,14 @@ dev relay is not.
 - **Seats and entries:**
   - A stranger opening a room socket, or joining a named invite: refused.
   - Entries that don't pair (stake, round length, rules, opponent, deadline, caps, new account, holders-only,
-    min-series): refused before any transaction.
+    min-series), and match ids that don't start with their creator: refused before any transaction.
+  - An open offer's signature never reaches anyone (the open list, `matched`, every socket): the creator's page is
+    asked for a named Entry with the offer's exact terms and a short deadline, and that is what locks. A refusal, no
+    answer in time or a bad signature fails the join, withdraws the offer and sends nothing. A named invite locks
+    with its create-time Entry, no `sign` round.
+  - A lock that reverts `MatchExists` because other players took the id is a failed lock (the pairing is dropped).
+  - A lock on chain the lobby never paired gets no room; a session-key login never takes a live seat from another IP,
+    a wallet login can.
 - **Login:** a replayed challenge, an expired one, a wrong signer, a revoked or expired session: refused.
 - **Inputs:**
   - Sealed release: a client never receives the opponent's step `s` before its own step `s` is in.
@@ -967,15 +1015,23 @@ dev relay is not.
   - The holder fee is chosen for a holder winner (mocked Ethereum reads). An RPC failure means no perk.
   - Region block on and off.
   - The faucet is refused on a mainnet chain id.
-- **Relayer:** the queue serialises nonces, and a failed transaction resyncs.
-- **Flags:** `TagBot` sharp is flagged (held); ordinary recorded play is not.
+- **Relayer:** the queue serialises nonces, a failed transaction resyncs, and a call estimated above its gas limit is
+  never sent.
+- **Flags:** `TagBot` sharp is flagged (held); ordinary recorded play is not. A forfeit after a session-key sign-in
+  from a new IP, and idle play with both seats on one IP, are held with a `session-key` flag.
+- **Referee rotation:** a match is signed with the key it locked under (`REFEREE_KEY_PREV`); with only the new key
+  nothing is signed and the settle window refunds it.
 - **Measured and reported:** per-message referee CPU and a cold whole-series re-verify, in `wrangler dev` (workerd)
   and in Node.
 
 ### 9.3 Client (`node --test test/wager-client*.test.ts`)
 
-- **Units:** config parsing; amount parsing and formatting with decimals; session defaults and limits; EIP-6963
-  discovery (mock events); chain add/switch fallback.
+- **Units:** config parsing; amount parsing and formatting with decimals; session defaults (3 ×, 12 h) and limits;
+  EIP-6963 discovery (mock events); chain add/switch fallback; the settle code two players pass each other.
+- **The vault on the fake chain:** creator-bound match ids, fee caps under the house fee, `cancel`, `reclaim` after
+  `settleBy` (history shows it), `settleMutual` with the signatures in the right seats.
+- **Named entries:** the creator's page signs only its own offer's exact terms, naming the joiner, with a short
+  deadline, once; any other stake, fee cap, name or deadline is refused.
 - **Rollback:** the FILL own-slot override passes the netsim harness (gates 1 and 2 still pass) and the
   `OnlineSession` tests.
 - **A fake wager room:** a best-of-3 in `session.test.ts` style.
@@ -984,29 +1040,36 @@ dev relay is not.
 
 ### 9.4 End to end (`npm run wager:e2e`: local, no testnet)
 
-Ports: anvil 5401 (`--chain-id 31337`), wager relay stand-in 5402, site 5403 (a `build:test` preview).
+Ports: anvil 8547 (`--chain-id 31337`), wager relay stand-in 8820, site 5430 (a `build:test` preview), each taken
+strictly (`--anvil-port`, `--relay-port`, `--site-port` pick others). Screenshots of every screen with `--shots DIR`.
 
-1. **Deploy.** `forge script` deploys `TestSpiderTag` and `GameVault` with anvil keys (referee #8, relayer #9, house
-   #7). The tool writes the `local` deployment.
+1. **Deploy.** `forge script` deploys `TestSpiderTag` and `GameVault` with anvil keys (owner #0, referee #8, relayer #9,
+   house #7). The tool writes the `local` deployment (and the run puts `deployments.json` back afterwards).
 2. **Browsers.** Two headless Chromiums (`--headless=new`, throwaway profiles) open
    `?wager&net=local&devwallet=1` and `&devwallet=2` with `&bot=normal`.
-3. **Play and settle.**
-   - Each gets tokens from the faucet, approves and deposits 1,000, and authorises a session key.
-   - One creates a 100-token invite with 20 s rounds (the local relay allows `ROUND_SECONDS=20,60,90,120`); the other
-     joins by the link.
-   - They play the full best-of-3, and the series is settled (`HOLD_ON_FLAGS=0` for this run).
-   - Check: winner free = 1,094, loser 900, house 6 (97/3 of the 200 pot); `totalLiabilities` = token balance.
-   - Both withdraw, and the wallet balances are checked.
-4. **Verify.** A third page opens `?wager&verify=<matchId>`: verdict OK, the same winner, `logHash` equal to the
-   chain's.
-5. **Other paths:**
-   - an offer cancelled: no lock;
-   - a lock where player B never connects: void, and balances restored;
-   - a lock with the relay stopped, anvil `evm_increaseTime` past `settleBy`, then `refundExpired`: balances restored;
-   - a mid-series tab close: forfeit after the grace;
-   - `HOLD_ON_FLAGS=1` with `&bot=sharp` on both sides and 60 s rounds (three 20 s rounds between bots often give the
-     referee too few Yoinks and chases to flag): held, then an owner-signed review settles it.
-6. **Cleanup.** Every process is stopped by its own PID.
+3. **Funding.** Each gets tokens from the faucet, approves and deposits 1,000, and authorises a session key.
+4. **Scenarios** (`--only` picks some; 100-token stakes, 20 s rounds: the local relay allows
+   `ROUND_SECONDS=20,60,90,120`):
+   - `cancel`: a listed offer cancelled in the lobby (no match on chain), and one cancelled on chain (state
+     `Cancelled`).
+   - `open`: B finds A's listed offer in the lobby and joins; A's page signs the named Entry; the full best of 3;
+     settled 97/3 (the winner +94 net, the loser -100, the house +6, `totalLiabilities` = the token balance); the
+     verify page says VERIFIED; A's history lists it.
+   - `invite`: an invite link between two (mock) Radbro holders: whoever wins pays the holder rate, 1.5% (the `open`
+     series, with no holders, paid 3%).
+   - `fee0`: the owner sets the house fee to 0: the winner takes the whole pot, the house nothing (then back to 3%).
+   - `noshow`: B never connects: void, stakes back.
+   - `forfeit`: B closes the tab mid-series: A wins by forfeit after the grace (+94).
+   - `dispute`: both pages report a wrong end hash (`&badhash`, `HOLD_ON_FLAGS=1`): `result-mismatch`, held; the
+     owner's review voids it; both stakes back; the verify page accepts the void.
+   - `hold`: both sides the sharp bot with 60 s rounds (three 20 s rounds between bots often give the referee too few
+     Yoinks and chases to flag): held, then the owner's review settles it.
+   - `mutual`: the relay stops after the lock; A signs "I won" and passes the code; B's page checks it, countersigns
+     and submits `settleMutual`: A +94, the house +6.
+   - `refund`: the relay stops after the lock; anvil `evm_increaseTime` past `settleBy`; A reclaims its own stake (a
+     transaction naming only A), then `refundExpired` releases B's.
+   - `withdraw`: both withdraw everything to their wallets; the vault stays solvent.
+5. **Cleanup.** Every process is stopped by its own PID.
 
 ---
 
@@ -1014,6 +1077,8 @@ Ports: anvil 5401 (`--chain-id 31337`), wager relay stand-in 5402, site 5403 (a 
 
 The three builders branch from `feat/wager` at the commit that adds this file and work in parallel. The shared files
 are **frozen**. If one must change, the change lands as a new commit on `feat/wager`, and all three lanes rebase onto it.
+The three lanes are now merged into `feat/wager`, with the relay and the client fitted to the vault's security-review
+changes (creator-bound match ids, named Entries, `cancel`, `reclaim`, `refereeOf`, fee caps that must cover the fee).
 
 | Lane (branch) | Owns |
 |---|---|
@@ -1057,6 +1122,8 @@ Every commit keeps `npm test`, `npm run typecheck` and `npm run build` green.
 - **Cross-engine determinism:** Safari on iPhone is still unchecked (PLAY.md). The referee is authoritative anyway: an
   engine that disagrees only shows its player a wrong screen, and the self-test gate refuses it at join.
 - **Flag thresholds:** they need calibration on real human sessions (§6.2).
+- **The copied-key hold (§6.3)** keys on IPs: players who share a network (a household, a LAN party) and forfeit or
+  idle get held for review too. Watch how often that happens in the beta before tightening or loosening it.
 - **Per-token Radbro models:** only the five rigged ids have models. Other holders play on a roster body with their
   badge and id.
 - **Sanctions screening scope:** ask Robinhood Chain whether "associated with a sanctioned address" covers calldata
