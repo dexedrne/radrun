@@ -875,7 +875,8 @@ Ports: anvil 5401 (`--chain-id 31337`), wager relay stand-in 5402, site 5403 (a 
    - a lock where player B never connects: void, and balances restored;
    - a lock with the relay stopped, anvil `evm_increaseTime` past `settleBy`, then `refundExpired`: balances restored;
    - a mid-series tab close: forfeit after the grace;
-   - `HOLD_ON_FLAGS=1` with `&bot=sharp`: held, then an owner-signed review settles it.
+   - `HOLD_ON_FLAGS=1` with `&bot=sharp` on both sides and 60 s rounds (three 20 s rounds between bots often give the
+     referee too few Yoinks and chases to flag): held, then an owner-signed review settles it.
 6. **Cleanup.** Every process is stopped by its own PID.
 
 ---

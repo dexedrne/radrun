@@ -232,10 +232,10 @@ async function fund(p: Page) {
   await waitText(p, "wager-session", /session key on/, 60_000);
 }
 /** Create an offer (an invite link, or listed); returns its match id. */
-async function create(p: Page, mode: "link" | "listed"): Promise<Hex> {
+async function create(p: Page, mode: "link" | "listed", secs = 20): Promise<Hex> {
   await click(p, "wager-new");
   await fill(p, "wager-create-stake", "100");
-  await click(p, "wager-create-secs-20");
+  await click(p, `wager-create-secs-${secs}`);
   await click(p, mode === "link" ? "wager-create-link" : "wager-create-listed");
   await click(p, "wager-create-submit");
   await p.waitForSelector(`${sel("wager-mine")} ${sel("wager-offer")}`, { timeout: 30_000 });
@@ -356,14 +356,16 @@ async function main() {
       log("--- a flagged winner: held for review, then the owner's review settles it");
       await stack.stopRelay();
       await stack.startRelay({ hold: true });
-      // Both players are the sharp bot, so whoever wins is one: only flags against the winner hold a series.
+      // Both players are the sharp bot, so whoever wins is one: only flags against the winner hold a series. The
+      // rounds are 60 s: the referee's flags need a few Yoinks and chases per player (docs/WAGER.md §6.2), which
+      // three 20 s rounds between bots often don't give.
       const sharp = FAKE ? "normal" : "sharp";
       pa = await open(BA, `&devwallet=1&bot=${sharp}`);
       pb = await open(BB, `&devwallet=2&bot=${sharp}`);
       await connected(pa, A);
       await connected(pb, B);
       const before = [await free(A), await free(B)];
-      const id = await create(pa, "link");
+      const id = await create(pa, "link", FAKE ? 20 : 60);
       const jb = await joinByLink(BB, id, `&devwallet=2&bot=${sharp}`);
       await waitMatch(jb);
       await waitMatch(pa);
