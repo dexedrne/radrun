@@ -92,7 +92,7 @@ async function lobbyHarness(vars: Vars = {}) {
 
 const errOf = (c: TConn) => [...c.msgs].reverse().find(m => m.t === "error") as Extract<LobbyServerMsg, { t: "error" }> | undefined;
 
-test("login: by wallet or session key; a replayed, expired or forged login is refused and a new challenge follows", async () => {
+test("login: by wallet or session key; a replayed, expired or forged login is refused; hello again for a new challenge", async () => {
   const h = await lobbyHarness();
   const a = newAccount();
   const c = h.conn();
@@ -113,7 +113,11 @@ test("login: by wallet or session key; a replayed, expired or forged login is re
   await h.hello(d);
   await h.send(d, m);
   assert.equal(errOf(d)?.code, "auth");
-  assert.equal(d.msgs.filter(x => x.t === "challenge").length, 2, "a fresh challenge to try again");
+  assert.equal(d.msgs.filter(x => x.t === "challenge").length, 1, "no new challenge by itself (a client that signs every challenge would loop)");
+  await h.hello(d);
+  assert.equal(d.msgs.filter(x => x.t === "challenge").length, 2, "hello again for a fresh one");
+  await h.send(d, await h.loginMsg(d, a.address, a));
+  assert.equal(h.last(d, "welcome")?.you.address, a.address);
   // Replayed on the same socket (the challenge was single use).
   await h.send(c, m);
   assert.equal(errOf(c)?.code, "auth");

@@ -355,6 +355,8 @@ export type RoomHarness = Awaited<ReturnType<typeof roomHarness>>;
 export async function roomHarness(o: {
   vars?: Vars; judge?: (r: RoundReferee) => RoundResult; radbro?: RadbroSource | ((a: Address, b: Address) => RadbroSource); roundSeconds?: number;
   stake?: bigint; district?: string;
+  /** A fixed relay secret (a deterministic series; the tests' players pick fixed shares too). */
+  secret?: Hex;
 } = {}) {
   const clock = new FakeClock();
   const fv = new FakeVault(() => Math.floor(clock.now() / 1000));
@@ -383,7 +385,9 @@ export async function roomHarness(o: {
   };
   const src = typeof o.radbro === "function" ? o.radbro(a.address, b.address) : (o.radbro ?? new MockRadbroSource(new Map()));
   const radbro = new RadbroReader({ src, now: () => clock.now(), cacheMs: 600_000 });
-  const mk = () => new WagerRoomCore({ matchId, clock, sql, settings, chain: fv, sims: SIMS, radbro, referee, lobby, build: "test", judge: o.judge });
+  const mk = () => new WagerRoomCore({
+    matchId, clock, sql, settings, chain: fv, sims: SIMS, radbro, referee, lobby, build: "test", judge: o.judge, ...(o.secret ? { random32: () => o.secret! } : {}),
+  });
   const sql = nodeSql();
   room = mk();
   await room.init({ match: m, lockTx: null, cards: [card(a.address), card(b.address)] });

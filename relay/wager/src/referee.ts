@@ -58,7 +58,7 @@ const VIEW_RING = 128;
 /** A client samples a word up to this long before it sends it (the session batches INPUTs: 25-40 ms). */
 const VIEW_BATCH_MS = 45;
 /** Chase-tracking samples: every this many steps. */
-const TRACK_EVERY = 4;
+const TRACK_EVERY = 2;
 
 type Evidence = { reactions: number[]; aimErr: number[]; intervals: number[]; slackMs: number[]; track: number[] };
 /** Tracking-error histogram bins (yaw units; the last bin holds everything wider). */
@@ -298,8 +298,8 @@ export class RoundReferee {
     const hi = T - 2 * this.oneWay[k];
     const cHi = Math.min(t0, this.releasedBy(hi)), cLo = Math.min(t0, this.releasedBy(hi - VIEW_BATCH_MS));
     let best = Infinity, last = -1;
-    for (let i = 0; i < 4; i++) {
-      const c = cLo + Math.round(((cHi - cLo) * i) / 3);
+    for (let i = 0; i < 3; i++) {
+      const c = cLo + Math.round(((cHi - cLo) * i) / 2);
       if (c === last) continue;
       last = c;
       if (c < 0 || this.snapStep[c % VIEW_RING] !== c) continue;

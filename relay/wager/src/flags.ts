@@ -23,8 +23,8 @@ export const FLAG_LIMITS = {
    * (free to move). A script aims at the target exactly; a hand on a mouse or stick does not.
    */
   trackRange: 15,
-  trackMedianUnits: 2,
-  trackMinSamples: 24,
+  trackMedianUnits: 1,
+  trackMinSamples: 16,
   /** periodic: coefficient of variation of the intervals between web presses. */
   periodicCv: 0.03,
   periodicMinPresses: 12,

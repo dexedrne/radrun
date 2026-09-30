@@ -112,14 +112,14 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
       const hr = toReq(req, url);
       const g = gate(route, hr, s, country(req));
       if (g) return write(res, g);
-      if (route.kind !== "health" && !limiter.ok(req.socket.remoteAddress ?? "", clock.now())) return write(res, jsonRes(429, { error: "slow down", code: "rate" }));
+      if (route.kind !== "health" && !limiter.ok(req.socket.remoteAddress ?? "", clock.now())) return write(res, jsonRes(429, { error: "slow down", message: "slow down", code: "rate" }));
       if (route.kind === "health" || route.kind === "lobby") return write(res, await lobbyHttp(lobby, hr, meta(req)));
       if (route.kind === "log") return write(res, await roomHttp(room(route.matchId), hr));
       if (route.kind === "review") {
         const b = await readBody(req);
         let id: string | null = null;
         try { id = (JSON.parse(b) as { matchId?: string }).matchId ?? null; } catch { /* bad */ }
-        if (!id || !/^0x[0-9a-fA-F]{64}$/.test(id)) return write(res, jsonRes(400, { error: "bad review", code: "bad" }));
+        if (!id || !/^0x[0-9a-fA-F]{64}$/.test(id)) return write(res, jsonRes(400, { error: "bad review", message: "bad review", code: "bad" }));
         return write(res, await roomHttp(room(id.toLowerCase() as Hex), { ...hr, url: new URL("/review", url), text: async () => b }));
       }
       if (route.kind === "bench") return write(res, await bench(hr, async d => (await sv.sims.district(d))?.assets ?? null));

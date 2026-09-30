@@ -70,7 +70,7 @@ export function gate(r: Route, req: HttpReq, s: WagerSettings, country: string |
   const needsOrigin = r.kind === "lobby-ws" || r.kind === "room-ws" || r.kind === "review" || (r.kind === "lobby" && r.path === WAGER_ROUTES.faucet);
   if (needsOrigin && !originOk(req.header("origin"), s)) return text(403, "origin not allowed");
   const regional = r.kind === "lobby-ws" || r.kind === "room-ws" || (r.kind === "lobby" && r.path === WAGER_ROUTES.faucet);
-  if (regional && regionBlocked(country, s)) return jsonRes(403, { error: "not available in your region", code: "region" });
+  if (regional && regionBlocked(country, s)) return jsonRes(403, { error: "not available in your region", message: "not available in your region", code: "region" });
   if ((r.kind === "lobby-ws" || r.kind === "room-ws") && (req.header("upgrade") ?? "").toLowerCase() !== "websocket") return text(426, "expected a websocket");
   return null;
 }
@@ -116,12 +116,12 @@ export async function lobbyHttp(core: WagerLobbyCore, req: HttpReq, meta: Meta):
     if (p === WAGER_ROUTES.config) return jsonRes(200, await core.config(meta.country));
     if (p.startsWith(WAGER_ROUTES.player)) {
       const a = addr(p.slice(WAGER_ROUTES.player.length));
-      return a ? jsonRes(200, await core.card(a)) : jsonRes(400, { error: "bad address", code: "bad" });
+      return a ? jsonRes(200, await core.card(a)) : jsonRes(400, { error: "bad address", message: "bad address", code: "bad" });
     }
     if (p === WAGER_ROUTES.recent) return jsonRes(200, await core.recent(Number(req.url.searchParams.get("limit") ?? 20)));
     if (p.startsWith(WAGER_ROUTES.match)) {
       const id = matchIdIn(p.slice(WAGER_ROUTES.match.length));
-      return id ? jsonRes(200, await core.matchStatus(id)) : jsonRes(400, { error: "bad match id", code: "bad" });
+      return id ? jsonRes(200, await core.matchStatus(id)) : jsonRes(400, { error: "bad match id", message: "bad match id", code: "bad" });
     }
     if (p === WAGER_ROUTES.faucet) {
       const r = await core.faucetClaim(await body(req), meta.ip, meta.country);
@@ -146,8 +146,8 @@ export async function lobbyHttp(core: WagerLobbyCore, req: HttpReq, meta: Meta):
     }
     return text(404, "not found");
   } catch (e) {
-    if (e instanceof LobbyError) return jsonRes(e.code === "gone" ? 503 : 400, { error: e.message, code: e.code });
-    return jsonRes(502, { error: errMsg(e), code: "chain" });
+    if (e instanceof LobbyError) return jsonRes(e.code === "gone" ? 503 : 400, { error: e.message, message: e.message, code: e.code });
+    return jsonRes(502, { error: errMsg(e), message: errMsg(e), code: "chain" });
   }
 }
 
@@ -169,7 +169,7 @@ export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpR
   try {
     if (p.startsWith(WAGER_ROUTES.log)) {
       const gz = core.logGz();
-      if (!gz) return jsonRes(404, { error: "no log yet: the series is not over", code: "gone" });
+      if (!gz) return jsonRes(404, { error: "no log yet: the series is not over", message: "no log yet: the series is not over", code: "gone" });
       return {
         status: 200,
         headers: { ...CORS_PUBLIC, "content-type": "application/json", "content-encoding": "gzip", "cache-control": "public, max-age=31536000, immutable" },
@@ -178,9 +178,9 @@ export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpR
     }
     if (p === WAGER_ROUTES.review) {
       const r = await body<ReviewRequest>(req);
-      if (!r) return jsonRes(400, { error: "bad review", code: "bad" });
+      if (!r) return jsonRes(400, { error: "bad review", message: "bad review", code: "bad" });
       const out = await core.review(r);
-      return out.ok ? jsonRes(200, roomStatus(core)) : jsonRes(out.status, { error: out.message, code: out.code });
+      return out.ok ? jsonRes(200, roomStatus(core)) : jsonRes(out.status, { error: out.message, message: out.message, code: out.code });
     }
     if (p === "/internal/init") {
       const b = await body<RoomInit & { match: ChainMatch & { stake: string } }>(req);
@@ -200,7 +200,7 @@ export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpR
     }
     return text(404, "not found");
   } catch (e) {
-    return jsonRes(502, { error: errMsg(e), code: "chain" });
+    return jsonRes(502, { error: errMsg(e), message: errMsg(e), code: "chain" });
   }
 }
 

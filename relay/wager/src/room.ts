@@ -76,6 +76,8 @@ export type RoomDeps = {
   log?: Logger;
   /** Tests only: decide round results another way (to reach draws). */
   judge?: (r: RoundReferee) => RoundResult;
+  /** Tests only: the relay secret's randomness (default: crypto.getRandomValues). */
+  random32?: () => Hex;
 };
 
 type Persist = {
@@ -265,7 +267,7 @@ export class WagerRoomCore {
     const players: [Address, Address] = [m.playerA, m.playerB];
     cards ??= (await Promise.all(players.map(a => this.d.lobby.card(a)))) as [PlayerCard, PlayerCard];
     const now = this.d.clock.now();
-    const secret = random32();
+    const secret = (this.d.random32 ?? random32)();
     this.p = {
       v: 1, matchId: this.matchId, chainId: this.d.chain.chainId, vault: this.d.chain.vault, players, stake: m.stake.toString(), feeBps: m.feeBps,
       holderFeeBps: m.holderFeeBps, roundSeconds: m.roundSeconds, district: sim.district, rules: sim.rules, rulesHash: sim.rulesHash, settleBy: m.settleBy,
@@ -489,8 +491,10 @@ export class WagerRoomCore {
 
   private seed(side: Side, c: Conn, share: unknown): void {
     const p = this.p!;
-    if (p.phase !== "waiting") { this.error(c, "bad", "seed shares are sent before round 1"); return; }
     if (!isHex32(share)) { this.error(c, "bad", "a seed share is 32 bytes"); return; }
+    // A reconnecting client sends its share again: the same one is fine at any time, a different one is refused.
+    if (p.shares[side] === share.toLowerCase()) return;
+    if (p.phase !== "waiting") { this.error(c, "bad", "seed shares are sent before round 1"); return; }
     if (p.shares[side]) { this.error(c, "bad", "your seed share is already in"); return; }
     p.shares[side] = share.toLowerCase() as Hex;
     this.save();

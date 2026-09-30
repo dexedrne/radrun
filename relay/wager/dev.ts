@@ -4,7 +4,8 @@
 //   node relay/wager/dev.ts [--port 5402] [--net local] [--keys FILE | --anvil] [--db DIR]     (npm run wager:relay)
 //
 // Settings are the Worker's [vars] names, from the environment (docs/WAGER.md §8); DEV defaults to "1" here (localhost
-// origins, the x-dev-country header, DEV_RADBRO_* mocks). The deployment comes from src/wager/deployments.json, read at
+// origins, the x-dev-country header, DEV_RADBRO_* mocks), and on the local net FAUCET to "1" and ROUND_SECONDS to
+// "20,60,90,120". The deployment comes from src/wager/deployments.json, read at
 // startup, so a local deploy that just wrote it is picked up.
 // Keys (REFEREE_KEY, RELAYER_KEY, FAUCET_KEY): --keys FILE (KEY=VALUE lines; refused unless its mode is 0600), else the
 // same names in the environment, else --anvil (anvil's public dev accounts, as the local deploy assigns them: referee #8,
@@ -46,6 +47,11 @@ async function main() {
   if (opt("--net")) vars.WAGER_NET = opt("--net");
   const net = (vars.WAGER_NET ?? "local") as WagerNetId;
   vars.WAGER_NET = net;
+  // The local end-to-end (docs/WAGER.md §9.4): the faucet and 20 s rounds, unless the environment says otherwise.
+  if (net === "local") {
+    vars.FAUCET ??= "1";
+    vars.ROUND_SECONDS ??= "20,60,90,120";
+  }
   const table = JSON.parse(fs.readFileSync(new URL("../../src/wager/deployments.json", import.meta.url), "utf8")) as Record<string, Partial<Deployment>>;
   const settings = parseSettings(vars, table[net]);
   let keys: Keys = { referee: vars.REFEREE_KEY, relayer: vars.RELAYER_KEY, faucet: vars.FAUCET_KEY };

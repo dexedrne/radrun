@@ -14,7 +14,7 @@ import { seriesLogHash, type SeriesLog, type Side } from "../src/wager/log.ts";
 import { verifySeries } from "../src/wager/replay.ts";
 import type { RoomServerMsg } from "../src/wager/protocol.ts";
 import type { ClientMsg } from "../src/net/wire.ts";
-import type { LocalAccount } from "viem";
+import { keccak256, toBytes, type Hex, type LocalAccount } from "viem";
 import { Humanize, SIMS, eventually, flush, roomHarness, type RoomClient, type RoomHarness } from "./wager-relay-fakes.ts";
 
 class Player {
@@ -25,6 +25,8 @@ class Player {
   /** Human-like input (reaction delay and aim wobble) instead of the raw bot. */
   human: Humanize | null = null;
   humanLike = false;
+  /** A fixed seed share (a deterministic series). */
+  share: Hex | null = null;
   private setup = false;
   private readyFor = 0;
   /** Tamper with the final hash this client reports. */
@@ -50,7 +52,7 @@ class Player {
       if (st.phase === "waiting" && !this.setup) {
         this.setup = true;
         this.c.sendJson({ t: "pick", radbro: this.side ? "4764" : "652", own: null });
-        this.c.sendJson({ t: "seed", share: random32() });
+        this.c.sendJson({ t: "seed", share: this.share ?? random32() });
         this.c.sendJson({ t: "ready" });
       }
       if (st.phase === "between" && this.readyFor !== st.round && !st.ready[this.side]) {
@@ -88,15 +90,20 @@ class Player {
 
 async function series(o: {
   roundSeconds?: number; vars?: Record<string, string>; levels?: [BotLevel, BotLevel]; legs?: [number, number]; human?: [boolean, boolean];
+  /** Fixes the relay secret and both shares: the whole series is deterministic. */
+  seed?: number;
   liars?: [((h: number) => number) | null, ((h: number) => number) | null];
 }) {
-  const h = await roomHarness({ vars: o.vars, roundSeconds: o.roundSeconds });
+  const fixed = (k: number) => (o.seed === undefined ? null : keccak256(toBytes(`series-${o.seed}-${k}`)));
+  const h = await roomHarness({ vars: o.vars, roundSeconds: o.roundSeconds, ...(o.seed === undefined ? {} : { secret: fixed(0)! }) });
   const legs = o.legs ?? [15, 30];
   const ps = [new Player(h, h.a, 0, o.levels?.[0] ?? "normal", legs[0]), new Player(h, h.b, 1, o.levels?.[1] ?? "normal", legs[1])];
   ps[0].liar = o.liars?.[0] ?? null;
   ps[1].liar = o.liars?.[1] ?? null;
   ps[0].humanLike = o.human?.[0] ?? false;
   ps[1].humanLike = o.human?.[1] ?? false;
+  ps[0].share = fixed(1);
+  ps[1].share = fixed(2);
   await ps[0].c.login(h.a);
   await ps[1].c.login(h.b);
   const dt = 1000 / 60;
@@ -113,7 +120,7 @@ async function series(o: {
 }
 
 test("both clients agree: the referee signs the win, its logHash is the published log's, the replay confirms it, settle pays 97/3", async t => {
-  const { h, ps, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "0" } });
+  const { h, ps, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "0" }, seed: 1 });
   const o = outcome.outcome;
   assert.equal(o.kind, "win");
   assert.equal(o.reason, "played");
@@ -144,7 +151,7 @@ test("both clients agree: the referee signs the win, its logHash is the publishe
 });
 
 test("a client that lies about its final hash is flagged desync; the referee's result stands", async () => {
-  const { log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "0" }, liars: [null, x => (x ^ 0x5a5a5a5a) >>> 0] });
+  const { log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "0" }, liars: [null, x => (x ^ 0x5a5a5a5a) >>> 0], seed: 2 });
   assert.ok(log.flags.some(f => f.side === 1 && f.kind === "desync"));
   assert.ok(!log.flags.some(f => f.side === 0 && f.kind === "desync"));
   assert.ok(!log.flags.some(f => f.kind === "result-mismatch"));
@@ -156,7 +163,7 @@ test("a client that lies about its final hash is flagged desync; the referee's r
 
 test("both clients agree with each other but not with the referee: held for review (result-mismatch)", async () => {
   const lie = (x: number) => (x ^ 0x1234) >>> 0;
-  const { h, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "1" }, liars: [lie, lie] });
+  const { h, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "1" }, liars: [lie, lie], seed: 3 });
   assert.equal(outcome.held, true);
   assert.ok(log.flags.some(f => f.kind === "result-mismatch"));
   assert.equal(h.room.phase, "held");
@@ -164,7 +171,7 @@ test("both clients agree with each other but not with the referee: held for revi
 });
 
 test("online, the sharp TagBot is flagged against its own view and a human-like player is not; a flagged winner is held", async t => {
-  const { h, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "1" }, levels: ["sharp", "sharp"], human: [false, true], roundSeconds: 60 });
+  const { h, log, outcome } = await series({ vars: { HOLD_ON_FLAGS: "1" }, levels: ["sharp", "sharp"], human: [false, true], roundSeconds: 60, seed: 4 });
   const bot = log.flags.filter(f => f.side === 0), hum = log.flags.filter(f => f.side === 1);
   t.diagnostic(`winner ${outcome.outcome.winner}, flags ${JSON.stringify(log.flags)}`);
   assert.ok(bot.some(f => f.kind === "aim"), JSON.stringify(log.flags));

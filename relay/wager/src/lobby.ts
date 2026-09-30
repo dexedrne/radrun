@@ -221,7 +221,8 @@ export class WagerLobbyCore {
 
   private async handle(c: LobbyConn, m: LobbyClientMsg): Promise<void> {
     const s = c.state;
-    if (!s.hello) {
+    if (!s.hello || (m.t === "hello" && !s.player)) {
+      // hello again before logging in (after a refused login): a fresh challenge.
       if (m.t !== "hello") { c.close(1008, "hello first"); return; }
       if (m.v !== WAGER_PROTOCOL) fail("version", "the game changed: reload to update");
       if (m.net !== this.d.settings.net) fail("version", `this relay runs ${this.d.settings.net}, not ${String(m.net)}`);
@@ -262,11 +263,8 @@ export class WagerLobbyCore {
     c.save();
     const r = await checkLogin(this.d.chain, ch, m, this.now);
     if (!r.ok) {
-      // A fresh challenge so the client can try again on the same socket.
-      c.state.ch = newChallenge(this.now, c.state.relay, this.d.settings.timing.challengeTtlMs);
-      c.save();
+      // No new challenge by itself (a client that signs every challenge would loop): hello again for one.
       this.sendTo(c, { t: "error", code: "auth", message: r.why });
-      this.sendTo(c, { t: "challenge", ...c.state.ch });
       return;
     }
     c.state.player = r.player;
@@ -703,16 +701,16 @@ export class WagerLobbyCore {
 
   // ---- faucet (test networks only) ----------------------------------------------------------------------------------
 
-  async faucetClaim(body: unknown, ip: string, country: string | null): Promise<{ status: number; body: FaucetReply | { error: string; code: WagerErrorCode } }> {
+  async faucetClaim(body: unknown, ip: string, country: string | null): Promise<{ status: number; body: FaucetReply | { error: string; message: string; code: WagerErrorCode } }> {
     const s = this.d.settings, q = this.d.faucet;
-    if (!s.faucet || !q || !s.vault) return { status: 404, body: { error: "no faucet here", code: "gone" } };
-    if (regionBlocked(country, s)) return { status: 403, body: { error: "not available in your region", code: "region" } };
+    if (!s.faucet || !q || !s.vault) return { status: 404, body: { error: "no faucet here", message: "no faucet here", code: "gone" } };
+    if (regionBlocked(country, s)) return { status: 403, body: { error: "not available in your region", message: "not available in your region", code: "region" } };
     const a = addr((body as { address?: unknown } | null)?.address);
-    if (!a || a === ZERO) return { status: 400, body: { error: "send {address}", code: "bad" } };
+    if (!a || a === ZERO) return { status: 400, body: { error: "send {address}", message: "send {address}", code: "bad" } };
     const k = a.toLowerCase(), now = this.now;
     const last = this.d.sql.exec("SELECT at FROM faucet WHERE address = ?", k)[0];
-    if (last && now - Number(last.at) < DAY) return { status: 429, body: { error: "this address already claimed today", code: "rate" } };
-    if (!this.ipCount(ip, "faucet", WAGER_LIMITS.faucetPerIpPerDay)) return { status: 429, body: { error: "too many claims from here today", code: "rate" } };
+    if (last && now - Number(last.at) < DAY) return { status: 429, body: { error: "this address already claimed today", message: "this address already claimed today", code: "rate" } };
+    if (!this.ipCount(ip, "faucet", WAGER_LIMITS.faucetPerIpPerDay)) return { status: 429, body: { error: "too many claims from here today", message: "too many claims from here today", code: "rate" } };
     this.d.sql.exec("INSERT OR REPLACE INTO faucet (address, at) VALUES (?, ?)", k, now);
     const i = await this.d.chain.info();
     let tokenTx: Hex | null = null, ethTx: Hex | null = null, eth = 0n;
@@ -724,7 +722,7 @@ export class WagerLobbyCore {
       }
     } catch (e) {
       if (!tokenTx) this.d.sql.exec("DELETE FROM faucet WHERE address = ?", k);
-      return { status: 502, body: { error: `the faucet failed: ${errMsg(e)}`, code: "chain" } };
+      return { status: 502, body: { error: `the faucet failed: ${errMsg(e)}`, message: `the faucet failed: ${errMsg(e)}`, code: "chain" } };
     }
     return { status: 200, body: { tokenTx, ethTx, tokens: s.faucetTokens.toString(), eth: eth.toString() } };
   }

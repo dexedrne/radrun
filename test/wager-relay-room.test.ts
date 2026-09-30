@@ -307,8 +307,14 @@ test("picks: an own Radbro must be owned on Ethereum; a rigged one plays as its 
   assert.equal(cb.last("error")?.code, "forbidden");
   cb.sendJson({ t: "pick", radbro: "../x", own: null });
   await cb.until(() => cb.all("error").length === 2);
-  for (const c of [ca, cb]) { c.sendJson({ t: "seed", share: random32() }); c.sendJson({ t: "ready" }); }
+  const shares = [random32(), random32()];
+  for (const [i, c] of [ca, cb].entries()) { c.sendJson({ t: "seed", share: shares[i] }); c.sendJson({ t: "ready" }); }
+  // A reconnecting client sends the same share again: no error; another share is refused.
+  ca.sendJson({ t: "seed", share: shares[0] });
+  cb.sendJson({ t: "seed", share: random32() });
   await ca.until(() => ca.last("start"));
+  assert.equal(ca.all("error").length, 0);
+  assert.equal(cb.all("error").length, 3);
   const st = ca.last("start")!;
   assert.equal(st.slots[st.slotOfA].name, "#42");
   assert.equal(st.slots[st.slotOfA].radbro, "4764");

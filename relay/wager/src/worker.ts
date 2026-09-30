@@ -79,8 +79,8 @@ export default {
     if (route.kind === "none") return toResponse(text(404, "not found"));
     const ip = req.headers.get("cf-connecting-ip") ?? "";
     const upgrade = route.kind === "lobby-ws" || route.kind === "room-ws";
-    if (!upgrade && route.kind !== "health" && !limiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", code: "rate" }));
-    if (route.kind === "room-ws" && !roomLimiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", code: "rate" }));
+    if (!upgrade && route.kind !== "health" && !limiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", message: "slow down", code: "rate" }));
+    if (route.kind === "room-ws" && !roomLimiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", message: "slow down", code: "rate" }));
     // Who is asking, stamped here (client-sent x-wager-* headers are overwritten).
     const headers = new Headers(req.headers);
     headers.set("x-wager-ip", ip);
@@ -97,7 +97,7 @@ export default {
       const body = await req.text();
       let id: string | null = null;
       try { id = (JSON.parse(body) as { matchId?: string }).matchId ?? null; } catch { /* bad json */ }
-      if (!id || !/^0x[0-9a-fA-F]{64}$/.test(id)) return toResponse(jsonRes(400, { error: "bad review", code: "bad" }));
+      if (!id || !/^0x[0-9a-fA-F]{64}$/.test(id)) return toResponse(jsonRes(400, { error: "bad review", message: "bad review", code: "bad" }));
       headers.set("x-wager-match", normId(id));
       return room(normId(id)).fetch(new Request(req.url, { method: "POST", headers, body }));
     }
