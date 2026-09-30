@@ -112,3 +112,14 @@ test("the Node stand-in: routes, sockets, logins, gates, faucet and the public l
     await r.close();
   }
 });
+
+test("POST /review answers with the series' MatchStatus (or the refusal)", async () => {
+  const { roomStatus } = await import("../relay/wager/src/http.ts");
+  const { roomHarness } = await import("./wager-relay-fakes.ts");
+  const h = await roomHarness();
+  const st = roomStatus(h.room);
+  assert.equal(st.matchId, h.matchId);
+  assert.equal(st.state, "locked");
+  assert.equal(st.series?.phase, "waiting");
+  assert.equal(st.offer, null);
+});

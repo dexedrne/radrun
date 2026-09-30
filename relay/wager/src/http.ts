@@ -7,7 +7,7 @@
 // regionBlocked. The public reads (/config, /match, /log, /player, /recent) are CORS * and never gated: withdrawing and
 // verifying never need this relay anyway.
 import type { Hex } from "viem";
-import { WAGER_ROUTES, type ReviewRequest } from "../../../src/wager/protocol.ts";
+import { WAGER_ROUTES, type MatchStatus, type ReviewRequest, type SeriesPhase } from "../../../src/wager/protocol.ts";
 import { verifySeries, roundMatch, type SimAssets } from "../../../src/wager/replay.ts";
 import type { SeriesLog } from "../../../src/wager/log.ts";
 import { mulberry32 } from "../../../src/sim/math.ts";
@@ -153,6 +153,17 @@ export async function lobbyHttp(core: WagerLobbyCore, req: HttpReq, meta: Meta):
 
 // ---- a room's routes ------------------------------------------------------------------------------------------------------
 
+/** MatchStatus.state for a series phase. */
+export const statusOfPhase = (ph: SeriesPhase): MatchStatus["state"] =>
+  ph === "waiting" ? "locked" : ph === "between" || ph === "playing" || ph === "deciding" ? "playing" : ph;
+
+/** A room's series as a MatchStatus (POST /review answers with it). */
+export function roomStatus(core: WagerRoomCore): MatchStatus {
+  const st = core.status();
+  if (!st) return { matchId: core.matchId, state: "unknown", offer: null, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
+  return { matchId: core.matchId, state: statusOfPhase(st.series.phase), offer: null, ...st };
+}
+
 export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpRes> {
   const p = req.url.pathname;
   try {
@@ -169,7 +180,7 @@ export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpR
       const r = await body<ReviewRequest>(req);
       if (!r) return jsonRes(400, { error: "bad review", code: "bad" });
       const out = await core.review(r);
-      return out.ok ? jsonRes(200, { ok: true, status: core.status() }) : jsonRes(out.status, { error: out.message, code: out.code });
+      return out.ok ? jsonRes(200, roomStatus(core)) : jsonRes(out.status, { error: out.message, code: out.code });
     }
     if (p === "/internal/init") {
       const b = await body<RoomInit & { match: ChainMatch & { stake: string } }>(req);

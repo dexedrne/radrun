@@ -63,6 +63,8 @@ const metaOf = (req: Request): Meta => ({
 });
 
 const limiter = new IpLimiter();
+/** Room sockets per IP (each wakes a Durable Object and may read the chain). */
+const roomLimiter = new IpLimiter(30, 10_000);
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -78,6 +80,7 @@ export default {
     const ip = req.headers.get("cf-connecting-ip") ?? "";
     const upgrade = route.kind === "lobby-ws" || route.kind === "room-ws";
     if (!upgrade && route.kind !== "health" && !limiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", code: "rate" }));
+    if (route.kind === "room-ws" && !roomLimiter.ok(ip, Date.now())) return toResponse(jsonRes(429, { error: "slow down", code: "rate" }));
     // Who is asking, stamped here (client-sent x-wager-* headers are overwritten).
     const headers = new Headers(req.headers);
     headers.set("x-wager-ip", ip);
@@ -157,7 +160,7 @@ export class WagerLobby {
   }
 
   private async arm(): Promise<void> {
-    if ((this.core.offerCount() > 0 || this.core.live() > 0) && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000);
+    if (this.core.pending() > 0 && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + 60_000);
   }
 
   async fetch(req: Request): Promise<Response> {

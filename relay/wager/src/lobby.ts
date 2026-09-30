@@ -605,21 +605,25 @@ export class WagerLobbyCore {
     const call = vaultCall(this.d.chain.vault, "settle", [result, sig]);
     const state = result.outcome === 1 ? "settled" : "voided";
     const notify = (m: LobbyServerMsg) => { for (const p of req.players) this.toPlayer(p, m); };
-    const why = relayer ? await this.d.chain.simulate(relayer.address, call) : "no relayer";
-    if (why) {
-      const m = await this.d.chain.matchOf(id);
-      if (m.state === MS_SETTLED || m.state === MS_VOIDED) {
-        await this.finish(id, await this.d.chain.settleTxOf(id), m.state === MS_SETTLED ? "settled" : "voided");
+    // In flight from here (a repeated request while this one simulates must not send it twice).
+    this.settling.add(id);
+    try {
+      const why = relayer ? await this.d.chain.simulate(relayer.address, call) : "no relayer";
+      if (why) {
+        this.settling.delete(id);
+        const m = await this.d.chain.matchOf(id);
+        if (m.state === MS_SETTLED || m.state === MS_VOIDED) await this.finish(id, await this.d.chain.settleTxOf(id), m.state === MS_SETTLED ? "settled" : "voided");
+        else if (relayer) this.log(`settle ${id.slice(0, 10)} would fail: ${why}`);
         return;
       }
-      if (relayer) this.log(`settle ${id.slice(0, 10)} would fail: ${why}`);
-      return;
-    }
-    this.settling.add(id);
-    await this.track("settle", id, relayer!, call, notify, async (ok, h) => {
+      await this.track("settle", id, relayer!, call, notify, async (ok, h) => {
+        this.settling.delete(id);
+        if (ok && h) await this.finish(id, h.hash, state);
+      });
+    } catch (e) {
       this.settling.delete(id);
-      if (ok && h) await this.finish(id, h.hash, state);
-    });
+      throw e;
+    }
   }
 
   /** A settle or void is confirmed on-chain: records, ratings, the room. */
@@ -665,7 +669,7 @@ export class WagerLobbyCore {
     if (!r && !rs) return { matchId: id, state: "unknown", offer: null, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
     const ph = rs?.series?.phase;
     const state: MatchStatus["state"] = r?.state === "settled" || r?.state === "voided" ? r.state
-      : ph === "waiting" ? "locked" : ph === "between" || ph === "playing" || ph === "deciding" ? "playing" : ph === "held" || ph === "signed" || ph === "settled" || ph === "voided" ? ph
+      : ph ? (ph === "waiting" ? "locked" : ph === "between" || ph === "playing" || ph === "deciding" ? "playing" : ph)
       : r?.state === "locking" || r?.state === "locked" ? "locked" : "unknown";
     return {
       matchId: id, state, offer: null, series: rs?.series ?? null, outcome: rs?.outcome ?? r?.j.outcome ?? null, settlement: rs?.settlement ?? null,
@@ -690,6 +694,11 @@ export class WagerLobbyCore {
   /** Series that are being played (the deploy tool refuses to redeploy the relay while any are). */
   live(): number {
     return Number(this.d.sql.exec("SELECT COUNT(*) AS n FROM matches WHERE state IN ('locking', 'locked', 'playing')")[0]?.n ?? 0);
+  }
+
+  /** Anything the sweep still has to watch: open offers, and matches not yet settled or voided on-chain. */
+  pending(): number {
+    return this.offers.size + Number(this.d.sql.exec("SELECT COUNT(*) AS n FROM matches WHERE state NOT IN ('settled', 'voided')")[0]?.n ?? 0);
   }
 
   // ---- faucet (test networks only) ----------------------------------------------------------------------------------

@@ -148,7 +148,8 @@ export class WagerRoomCore {
   private p: Persist | null = null;
   private rounds: RoundLog[] = [];
   private sim: DistrictSim | null = null;
-  private initP: Promise<boolean> | null = null;
+  private initChain: Promise<unknown> = Promise.resolve();
+  private notLockedAt: number | null = null;
   private readonly seats: [Conn | null, Conn | null] = [null, null];
   private readonly conns = new Set<Conn>();
   private readonly rtts: [number[], number[]] = [[], []];
@@ -195,31 +196,45 @@ export class WagerRoomCore {
     return this.p?.phase ?? null;
   }
 
-  /** Called by the lobby right after the lock confirms (idempotent). */
-  init(o: RoomInit): Promise<boolean> {
-    if (this.p) return this.ensure();
-    this.initP ??= this.initFrom(o.match, o.lockTx, o.cards);
-    return this.initP;
+  /** One initialisation at a time (the lobby's init and players' hellos can race). */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const p = this.initChain.then(fn, fn);
+    this.initChain = p.catch(() => {});
+    return p;
   }
 
-  /** Load or initialise from the chain (a player may have submitted the lock themselves). */
+  /** Called by the lobby right after the lock confirms (idempotent). */
+  init(o: RoomInit): Promise<boolean> {
+    return this.serial(async () => {
+      if (this.p) {
+        if (!this.p.lockTx && o.lockTx) { this.p.lockTx = o.lockTx; this.save(); }
+        return this.sim ? !this.p.error : this.resume();
+      }
+      return this.initFrom(o.match, o.lockTx, o.cards);
+    });
+  }
+
+  /**
+   * Load or initialise from the chain (a player may have submitted the lock themselves). "Not locked" is remembered
+   * for a few seconds only: a player can arrive just before the lock confirms.
+   */
   ensure(): Promise<boolean> {
     if (this.p && this.sim) return Promise.resolve(!this.p.error);
-    this.initP ??= (async () => {
-      if (this.p) return this.resume();
+    return this.serial(async () => {
+      if (this.p) return this.sim ? !this.p.error : this.resume();
+      const now = this.d.clock.now();
+      if (this.notLockedAt !== null && now - this.notLockedAt < 3_000) return false;
       const m = await this.d.chain.matchOf(this.matchId);
-      if (m.state !== MS_LOCKED) return false;
+      if (m.state !== MS_LOCKED) { this.notLockedAt = now; return false; }
       return this.initFrom(m, null);
-    })();
-    const p = this.initP;
-    p.catch(() => { if (this.initP === p) this.initP = null; });
-    return p;
+    });
   }
 
   private async resume(): Promise<boolean> {
     const p = this.p!;
     const sim = await this.d.sims.district(p.district);
     if (!sim) { p.error = `district ${p.district} is not refereed here any more`; this.save(); return false; }
+    if (this.sim) return !p.error;
     this.sim = sim;
     if (p.phase === "playing") {
       // The round in flight is gone with the old instance: a relay fault never picks a winner (docs/WAGER.md §4.4.8).
@@ -240,7 +255,6 @@ export class WagerRoomCore {
   }
 
   private async initFrom(m: ChainMatch, lockTx: Hex | null, cards?: [PlayerCard, PlayerCard]): Promise<boolean> {
-    if (this.p) return this.resume();
     if (m.state !== MS_LOCKED) return false;
     const sim = await this.d.sims.byRules(m.rules);
     if (!sim) {
@@ -914,8 +928,12 @@ export class WagerRoomCore {
     this.schedule();
   }
 
-  /** The chain says the match is closed (a player or anyone submitted settle / refundExpired). */
+  /**
+   * The lobby's periodic check: initialise from the chain if nobody has yet (a lock the lobby lost track of), and
+   * notice a match closed without us (a player's own settle, or refundExpired after a stuck series).
+   */
   async syncChain(): Promise<void> {
+    await this.ensure().catch(() => false);
     const p = this.p;
     if (!p || p.phase === "settled" || p.phase === "voided") return;
     const m = await this.d.chain.matchOf(this.matchId);

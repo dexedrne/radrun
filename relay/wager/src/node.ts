@@ -93,6 +93,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
   };
 
   const limiter = new IpLimiter(600, 10_000);
+  const roomLimiter = new IpLimiter(300, 10_000);
   const country = (req: http.IncomingMessage) => (s.dev ? String(req.headers["x-dev-country"] ?? "") || null : null);
   const toReq = (req: http.IncomingMessage, url: URL): HttpReq => ({
     method: req.method ?? "GET", url, header: n => { const v = req.headers[n.toLowerCase()]; return v === undefined ? null : Array.isArray(v) ? v[0] : v; }, text: () => readBody(req),
@@ -133,6 +134,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
     const route = routeOf("GET", url, s.dev);
     const hr = toReq(req, url);
     if ((route.kind !== "lobby-ws" && route.kind !== "room-ws") || gate(route, hr, s, country(req))) { socket.destroy(); return; }
+    if (route.kind === "room-ws" && !roomLimiter.ok(req.socket.remoteAddress ?? "", clock.now())) { socket.destroy(); return; }
     const m = meta(req);
     wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
       sockets.add(ws);

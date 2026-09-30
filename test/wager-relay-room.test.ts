@@ -313,3 +313,21 @@ test("picks: an own Radbro must be owned on Ethereum; a rigged one plays as its 
   assert.equal(st.slots[st.slotOfA].name, "#42");
   assert.equal(st.slots[st.slotOfA].radbro, "4764");
 });
+
+test("a player who arrives before the lock confirms is let in once it has (no stale 'not locked')", async () => {
+  const h = await roomHarness();
+  // A fresh room for a match that is not locked yet.
+  const id = random32();
+  const fresh = new (h.room.constructor as typeof import("../relay/wager/src/room.ts").WagerRoomCore)({
+    ...(h.room as unknown as { d: import("../relay/wager/src/room.ts").RoomDeps }).d, matchId: id, sql: (await import("../relay/wager/src/node.ts")).nodeSql(),
+  });
+  assert.equal(await fresh.ensure(), false);
+  h.fv.forceLock({ matchId: id, a: h.a.address, b: h.b.address, stake: h.stake, rules: h.sim.rulesHash, roundSeconds: 20 });
+  assert.equal(await fresh.ensure(), false, "remembered for a moment");
+  h.clock.tick(3_001);
+  assert.equal(await fresh.ensure(), true);
+  assert.equal(fresh.phase, "waiting");
+  // The lobby's init afterwards only adds the lock transaction.
+  assert.equal(await fresh.init({ match: await h.fv.matchOf(id), lockTx: `0x${"cd".repeat(32)}` }), true);
+  assert.equal(fresh.status()?.lockTx, `0x${"cd".repeat(32)}`);
+});

@@ -7,8 +7,8 @@
 // origins, the x-dev-country header, DEV_RADBRO_* mocks). The deployment comes from src/wager/deployments.json, read at
 // startup, so a local deploy that just wrote it is picked up.
 // Keys (REFEREE_KEY, RELAYER_KEY, FAUCET_KEY): --keys FILE (KEY=VALUE lines; refused unless its mode is 0600), else the
-// same names in the environment, else --anvil (anvil's public dev accounts: referee #8, relayer #9, faucet #0; local
-// anvil only). Keys are never printed.
+// same names in the environment, else --anvil (anvil's public dev accounts, as the local deploy assigns them: referee #8,
+// relayer #9, faucet #6; the local anvil only). Keys are never printed.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -55,7 +55,7 @@ async function main() {
     keys = { referee: f.REFEREE_KEY ?? keys.referee, relayer: f.RELAYER_KEY ?? keys.relayer, faucet: f.FAUCET_KEY ?? keys.faucet };
   } else if (flag("--anvil")) {
     if (settings.chainId !== 31337) throw new Error("--anvil keys are for the local anvil only");
-    keys = { referee: anvilKey(8), relayer: anvilKey(9), faucet: anvilKey(0) };
+    keys = { referee: anvilKey(8), relayer: anvilKey(9), faucet: anvilKey(6) };
   }
   const port = Number(opt("--port") ?? new URL(settings.deployment.relay ?? "http://127.0.0.1:5402").port ?? 5402);
   const r = await startNodeRelay({ port, settings, keys, dbDir: opt("--db") ?? null, log: m => console.log(m) });
