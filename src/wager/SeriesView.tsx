@@ -23,6 +23,7 @@ import { roomCompat } from "./assets.ts";
 import { Amount, C, Card, Holder, Notice, Portrait, Section, TxLink, WEB_COLORS, btn, label, small, useNow } from "./ui.tsx";
 import { bpsText, clockText, dateText, relTime, roundText, shortAddress } from "./units.ts";
 import { keepParams } from "./site.ts";
+import { ConnectWallet } from "./WalletPanel.tsx";
 
 const VOID_TEXT: Record<string, string> = {
   noshow: "a player didn't arrive before round 1, so the series is void: nobody pays, both stakes are back",
@@ -310,7 +311,15 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     );
   }
   if (!st || me === null) {
-    return <Section testid="wager-series" style={{ maxWidth: 620, margin: "0 auto" }}>{header}<div>{conn === "login" ? "signing in to the match…" : conn === "reconnecting" ? "reconnecting…" : "joining the match…"}</div></Section>;
+    return (
+      <Section testid="wager-series" style={{ maxWidth: 620, margin: "0 auto" }}>
+        {header}
+        {!signer ? (
+          // No wallet yet (a new device, or one this page never connected): nothing can sign in to the room.
+          <><div style={{ marginBottom: 8 }}>connect the wallet you play with to join this match</div><ConnectWallet app={app} /></>
+        ) : <div>{conn === "login" ? "signing in to the match…" : conn === "reconnecting" ? "reconnecting…" : "joining the match…"}</div>}
+      </Section>
+    );
   }
 
   const opp = st.players[other!];
