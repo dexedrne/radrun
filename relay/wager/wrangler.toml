@@ -35,7 +35,8 @@ new_sqlite_classes = ["WagerLobby", "WagerRoom"]
 # Every name is listed in src/wager/config.ts WAGER_ENV. Amounts are token base units (the test token has 18 decimals).
 [vars]
 WAGER_NET = "rh-testnet"
-ALLOWED_ORIGINS = "https://radrun.vyvanse.beer"
+# The site, and a local dev server (npm run dev, port 4870) trying the testnet beta with &net=rh-testnet.
+ALLOWED_ORIGINS = "https://radrun.vyvanse.beer,http://localhost:4870,http://127.0.0.1:4870"
 # "1" only under wrangler dev: localhost origins, the x-dev-country header, /dev/bench, DEV_RADBRO_* mocks.
 DEV = "0"
 # Empty: the deployment's public RPCs (RPC_URL_PRIVATE, a secret, goes first when set) and RADBRO.rpc for Ethereum.
