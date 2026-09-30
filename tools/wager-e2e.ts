@@ -75,7 +75,10 @@ async function realStack(): Promise<Stack> {
   for (const f of ["tools/wager-deploy.ts", "relay/wager/dev.ts"]) {
     if (!fs.existsSync(path.join(root, f))) throw new Error(`${f} isn't here yet (the contracts and relay lanes add it): run with --fake, or after the lanes merge`);
   }
-  const anvil = run("anvil", path.join(os.homedir(), ".foundry/bin/anvil"), ["--host", "127.0.0.1", "--port", String(PORTS.rpc), "--chain-id", "31337", "--silent"]);
+  // Foundry's default install path, else whatever `anvil` is on PATH (or $ANVIL).
+  const foundry = path.join(os.homedir(), ".foundry/bin/anvil");
+  const anvilBin = process.env.ANVIL ?? (fs.existsSync(foundry) ? foundry : "anvil");
+  const anvil = run("anvil", anvilBin, ["--host", "127.0.0.1", "--port", String(PORTS.rpc), "--chain-id", "31337", "--silent"]);
   await waitHttp(rpcUrl, "anvil", 30_000, JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }));
   // The local deploy uses anvil's dev accounts (owner #0, faucet #6, house #7, referee #8, relayer #9) and writes the
   // local deployment into src/wager/deployments.json (the site build below and the relay read it); the file is put
