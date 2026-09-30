@@ -625,3 +625,15 @@ test("clock: entries and session expiries follow the chain's clock, not a device
     restore();
   }
 });
+
+test("ABI: every vault function, event and error the client uses is in the contracts lane's generated vaultAbi.ts", async t => {
+  const file = new URL("../src/wager/vaultAbi.ts", import.meta.url);
+  if (!fs.existsSync(file)) { t.skip("src/wager/vaultAbi.ts arrives with the contracts lane"); return; }
+  const { gameVaultAbi } = (await import(file.href)) as { gameVaultAbi: readonly { type: string; name?: string; inputs?: unknown[]; outputs?: unknown[] }[] };
+  const ty = (p: { type: string; components?: unknown[] }): string => (p.type === "tuple" ? `(${(p.components ?? []).map(c => ty(c as never)).join(",")})` : p.type);
+  const sig = (e: { type: string; name?: string; inputs?: unknown[]; outputs?: unknown[] }) =>
+    `${e.type} ${e.name}(${(e.inputs ?? []).map(i => ty(i as never)).join(",")})${e.outputs ? `->${e.outputs.map(o => ty(o as never)).join(",")}` : ""}${e.type === "event" ? `|${(e.inputs as { indexed?: boolean }[]).map(i => (i.indexed ? 1 : 0)).join("")}` : ""}`;
+  const theirs = new Set(gameVaultAbi.map(sig));
+  const missing = GAME_VAULT_ABI.map(e => sig(e as never)).filter(s => !theirs.has(s));
+  assert.deepEqual(missing, [], "the generated ABI has every entry the client calls, with the same types");
+});

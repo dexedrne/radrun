@@ -8,8 +8,8 @@
 //   options: --port-base N (anvil N+1, relay N+2, site N+3; default 5400) · --only main,cancel,noshow,refund,forfeit,hold
 //            --swgl (software GL; default: the GPU through ANGLE/GL) · --keep (leave the processes up) · --shots DIR
 //
-// Keys: anvil's public test keys only (deployer / faucet #0, house #7, referee #8, relayer #9; players #1 and #2), passed
-// to child processes in the environment, never on a command line. Every process is stopped by its own PID. Headless
+// Keys: anvil's public test keys only (owner #0, players #1 and #2, faucet #6, house #7, referee #8, relayer #9); the deploy
+// tool and the relay pick them themselves (--anvil), so no key is ever on a command line or in this file's output. Every process is stopped by its own PID. Headless
 // Chromium runs with throwaway profiles.
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -31,12 +31,6 @@ const ONLY = new Set(opt("only", "cancel,noshow,refund,forfeit,hold,main").split
 const SHOTS = opt("shots", "");
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "radrun-wager-e2e-"));
 const E18 = 10n ** 18n;
-const ANVIL_KEYS = {
-  deployer: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-  house: "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
-  referee: "0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97",
-  relayer: "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
-} as const;
 const PLAYER = [1, 2].map(i => privateKeyToAccount(([
   "", "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d", "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
 ] as Hex[])[i]).address);
@@ -83,26 +77,29 @@ async function realStack(): Promise<Stack> {
   }
   const anvil = run("anvil", path.join(os.homedir(), ".foundry/bin/anvil"), ["--host", "127.0.0.1", "--port", String(PORTS.rpc), "--chain-id", "31337", "--silent"]);
   await waitHttp(rpcUrl, "anvil", 30_000, JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }));
-  const keyEnv = { DEPLOYER_KEY: ANVIL_KEYS.deployer, REFEREE_KEY: ANVIL_KEYS.referee, RELAYER_KEY: ANVIL_KEYS.relayer, FAUCET_KEY: ANVIL_KEYS.deployer };
-  const addr = (k: Hex) => privateKeyToAccount(k).address;
-  const dep = run("deploy", process.execPath, ["tools/wager-deploy.ts", "--net", "local"], {
-    ...keyEnv, RPC_URL_PRIVATE: rpcUrl, WAGER_OWNER: addr(ANVIL_KEYS.deployer), WAGER_HOUSE: addr(ANVIL_KEYS.house),
-    WAGER_FEE_BPS: "300", WAGER_HOLDER_FEE_BPS: "150", WAGER_MAX_STAKE: (1000n * E18).toString(), WAGER_MAX_BALANCE: (100_000n * E18).toString(), WAGER_SETTLE_WINDOW: "86400",
-  });
+  // The local deploy uses anvil's dev accounts (owner #0, faucet #6, house #7, referee #8, relayer #9) and writes the
+  // local deployment into src/wager/deployments.json (the site build below and the relay read it); the file is put
+  // back as it was at the end, so a run leaves the tree clean.
+  const deployments = path.join(root, "src/wager/deployments.json");
+  const original = fs.readFileSync(deployments, "utf8");
+  const dep = run("deploy", process.execPath, ["tools/wager-deploy.ts", "--net", "local", "--rpc", rpcUrl]);
   const code = await new Promise<number>(r => dep.on("exit", c => r(c ?? 1)));
   if (code !== 0) throw new Error(`the deploy tool failed (see ${path.join(TMP, "deploy.log")})`);
   let relay: ChildProcess | null = null;
   return {
     async startRelay(o) {
-      relay = run("relay", process.execPath, ["relay/wager/dev.ts", "--port", String(PORTS.relay)], {
-        ...keyEnv, WAGER_NET: "local", DEV: "1", ALLOWED_ORIGINS: siteUrl, RPC_URLS: rpcUrl, ETH_RPC_URLS: "http://127.0.0.1:1", ROUND_SECONDS: "20,60,90,120",
-        DISTRICTS: "downtown", NEW_ACCOUNT_MAX_STAKE: (1000n * E18).toString(), NEW_ACCOUNT_SERIES: "0", JOIN_GRACE_MS: "25000", HOLD_ON_FLAGS: o.hold ? "1" : "0",
-        FAUCET: "1", FAUCET_TOKENS: (10_000n * E18).toString(), FAUCET_ETH: (E18 / 100n).toString(),
+      const db = path.join(TMP, `relay-db-${Date.now()}`);
+      fs.mkdirSync(db, { recursive: true });
+      relay = run("relay", process.execPath, ["relay/wager/dev.ts", "--port", String(PORTS.relay), "--net", "local", "--anvil", "--db", db], {
+        RPC_URLS: rpcUrl, ALLOWED_ORIGINS: siteUrl, ROUND_SECONDS: "20,60,90,120", NEW_ACCOUNT_MAX_STAKE: (1000n * E18).toString(), NEW_ACCOUNT_SERIES: "0",
+        JOIN_GRACE_MS: "25000", HOLD_ON_FLAGS: o.hold ? "1" : "0", FAUCET: "1", FAUCET_TOKENS: (10_000n * E18).toString(), FAUCET_ETH: (E18 / 100n).toString(),
+        // A mock Radbro collection (no Ethereum reads); neither player holds one, so the fee is the full 3%.
+        DEV_RADBRO_HOLDERS: "0x000000000000000000000000000000000000dEaD=652",
       });
       await waitHttp(`${relayUrl}/health`, "the relay");
     },
-    async stopRelay() { stop(relay); relay = null; await sleep(500); },
-    async close() { stop(relay); stop(anvil); },
+    async stopRelay() { stop(relay); relay = null; await sleep(800); },
+    async close() { stop(relay); stop(anvil); fs.writeFileSync(deployments, original); },
   };
 }
 
