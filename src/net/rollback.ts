@@ -109,6 +109,30 @@ export class Rollback {
 
   private confirm(slot: number, s: number, w: number): void {
     if (s <= this.confirmedTo[slot] && this.have[slot][s % RING] === s) return; // a repeat
+    this.put(slot, s, w);
+  }
+
+  /**
+   * The relay's final word for a step (wager rooms, docs/WAGER.md §5.3): a FILL for a late or dropped slot, the own
+   * slot included, or a sealed word sent again after a reconnect. It replaces whatever this client had and rolls back
+   * when a simulated step used something else. Steps 1..inputDelay stay empty. The live relay never sends these.
+   */
+  force(slot: number, s: number, w: number): void {
+    if (s <= this.inputDelay) return;
+    this.put(slot, s, w);
+  }
+
+  /** The word for step `s` of `slot` is in (for the local slot before addLocal: the relay filled it already). */
+  has(slot: number, s: number): boolean {
+    return this.have[slot][s % RING] === s;
+  }
+
+  /** Words for steps at or past this cannot be taken yet (the rings' reach); a session keeps them back until then. */
+  get horizon(): number {
+    return this.match.step + RING - 32;
+  }
+
+  private put(slot: number, s: number, w: number): void {
     if (s <= this.match.step - RING + 32) throw new Error(`input for step ${s} (slot ${slot}) is older than the rollback window`);
     if (s >= this.match.step + RING - 32) throw new Error(`input for step ${s} (slot ${slot}) is too far ahead`);
     const k = s % RING;
@@ -117,7 +141,9 @@ export class Rollback {
     if (s <= this.match.step && (this.usedStep[slot][k] !== s || this.used[slot][k] !== w) && s < this.rewindTo) this.rewindTo = s;
     let c = this.confirmedTo[slot];
     while (this.have[slot][(c + 1) % RING] === c + 1) c++;
-    if (c !== this.confirmedTo[slot]) { this.confirmedTo[slot] = c; this.lastWord[slot] = this.words[slot][c % RING]; }
+    if (c !== this.confirmedTo[slot]) this.confirmedTo[slot] = c;
+    // The prediction base is the newest confirmed word (a forced word can replace it without moving confirmedTo).
+    if (s <= c) this.lastWord[slot] = this.words[slot][c % RING];
   }
 
   /**

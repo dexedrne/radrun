@@ -780,9 +780,10 @@ dev relay is not.
   imports.
 - **Reused code.** The series view reuses the existing SPIDER-TAG scene, HUD and online session through the TagPage
   pieces. No renderer changes except the holder cosmetics hook.
-- **Sub-routes.** `?wager` is the lobby. `?wager&join=<matchId>` is an invite link. `?wager&verify=<matchId>` is the
-  public replay and verify page, which needs no wallet. `?wager&review=<matchId>` is for the owner. Add `&net=<id>` to
-  pick another enabled deployment.
+- **Sub-routes.** `?wager` is the lobby. `?wager&join=<matchId>` is an invite link. `?wager&match=<matchId>` is a
+  locked series (the page opens it when a match of yours locks). `?wager&verify=<matchId>` is the public replay and
+  verify page, which needs no wallet (`?verify=<matchId>` alone opens it too). `?wager&review=<matchId>` is for the
+  owner. Add `&net=<id>` to pick another enabled deployment.
 
 ### 7.2 Wallet
 
@@ -821,8 +822,10 @@ dev relay is not.
 - **History.** Built from events (§3.9): date, opponent, stake, result, payout, transaction links and verify links.
 - **Verify.**
   1. It fetches `/log/<matchId>` and the chain's `MatchSettled`/`MatchVoided` for that match.
-  2. It checks the log hash against the on-chain `logHash` and runs `verifySeries` against the district's model and
-     tuning.
+  2. It checks that the log names this match, vault and chain, checks the log hash against the on-chain `logHash`
+     and runs `verifySeries` against the district's model and tuning. A refund after the settle window (void reason
+     3) stores no log hash, so that one reads as refunded instead. A held series voided on review keeps its rounds
+     and outcome reason `review`, which verifies.
   3. It shows every round (the logged result against the replayed one, the seeds with commit and reveal), the flags and
      a clear verdict.
   4. **Watch:** replays a round in the 3D view through a `ReplayLink` that implements `NetLink`.
@@ -836,7 +839,12 @@ dev relay is not.
 - **Additions to `src/net/rollback.ts` / `session.ts`** (additive; the live mode never receives a FILL):
   - apply `FILL` for any slot, including its own (overwrite the word, rewind);
   - echo `PROBE`;
-  - catch up from step 0 after a reconnect.
+  - catch up from step 0 after a reconnect;
+  - predict up to 72 steps (600 ms) ahead of the other player's newest word instead of the online 24. The sealed
+    release delivers it a whole round trip later, and a stall would also hold back this player's own words past
+    their deadlines (at a 280 ms round trip almost every step was filled);
+  - send the words a frame sampled at that frame's last step (still at most one INPUT per 25 ms), so a low frame
+    rate doesn't leave half of them waiting a frame past their deadlines.
 - **Checks.** netsim gates 1-2 and the self-test must stay green.
 
 ### 7.5 Dev-only test wallet
@@ -996,7 +1004,8 @@ Ports: anvil 5401 (`--chain-id 31337`), wager relay stand-in 5402, site 5403 (a 
    - a lock where player B never connects: void, and balances restored;
    - a lock with the relay stopped, anvil `evm_increaseTime` past `settleBy`, then `refundExpired`: balances restored;
    - a mid-series tab close: forfeit after the grace;
-   - `HOLD_ON_FLAGS=1` with `&bot=sharp`: held, then an owner-signed review settles it.
+   - `HOLD_ON_FLAGS=1` with `&bot=sharp` on both sides and 60 s rounds (three 20 s rounds between bots often give the
+     referee too few Yoinks and chases to flag): held, then an owner-signed review settles it.
 6. **Cleanup.** Every process is stopped by its own PID.
 
 ---
