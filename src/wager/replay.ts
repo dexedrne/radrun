@@ -129,6 +129,10 @@ export function verifySeries(log: SeriesLog, assets: SimAssets): SeriesVerdict {
     else if (sc.void ? o.kind !== "void" : o.kind !== "win" || o.winner !== sc.winner) say("the outcome differs from the replayed rounds");
   } else if (o.reason === "draws") {
     if (!sc.void) say("the series is void for draws, but the replay has too few drawn rounds");
+  } else if (o.reason === "review") {
+    // The owner's review voided a held series: it was held once decided (by the rounds or a forfeit), so the rounds
+    // may well have decided it. A review can only void.
+    if (o.kind !== "void") say("a review can only void a series");
   } else if (sc.done) {
     say(`the rounds already decided the series before the logged ${o.reason}`);
   }

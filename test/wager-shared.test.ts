@@ -164,6 +164,15 @@ test("replay: a bot series verifies from its published log; tampering is caught"
   assert.equal(v.ok, true);
   assert.equal(v.winner, log.outcome.winner);
 
+  // A held series the owner's review voided (the relay rewrites the outcome; it isn't hashed): still verifies.
+  const reviewed: SeriesLog = JSON.parse(JSON.stringify(log));
+  reviewed.outcome = { kind: "void", winner: null, reason: "review", score: log.outcome.score };
+  assert.deepEqual(verifySeries(reviewed, assets).problems, []);
+  // A "review" that hands out a win is not one.
+  const badReview: SeriesLog = JSON.parse(JSON.stringify(log));
+  badReview.outcome = { ...log.outcome, reason: "review" };
+  assert.ok(verifySeries(badReview, assets).problems.some(p => p.includes("review")));
+
   // A changed word: the log hash breaks (and the round most likely replays differently).
   const bad: SeriesLog = JSON.parse(JSON.stringify(log));
   const w = wordsFromBase64(bad.rounds[0].words[1]);
