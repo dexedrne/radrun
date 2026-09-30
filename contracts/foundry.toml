@@ -12,6 +12,16 @@ solc_version = "0.8.37"
 evm_version = "prague"
 optimizer = true
 optimizer_runs = 200
+# Foundry's defaults plus 6335: OpenZeppelin 5.6.1's ECDSA names a variable `error`, which solc 0.8.37 flags.
+ignored_error_codes = [
+  "license",
+  "code-size",
+  "init-code-size",
+  "transient-storage",
+  "transfer-deprecated",
+  "natspec-memory-safe-assembly-deprecated",
+  6335,
+]
 remappings = [
   "@openzeppelin/contracts/=../node_modules/@openzeppelin/contracts/",
   "forge-std/=lib/forge-std/src/",
