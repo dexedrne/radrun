@@ -105,7 +105,10 @@ export function parseArgs(argv: string[]): Args {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith("--")) fail(`unexpected argument ${a}`);
-    const [k, inline] = a.slice(2).split("=", 2);
+    // Split at the first "=" only: a value such as a keyed RPC URL may contain more of them.
+    const eq = a.indexOf("=");
+    const k = eq < 0 ? a.slice(2) : a.slice(2, eq);
+    const inline = eq < 0 ? undefined : a.slice(eq + 1);
     if (inline !== undefined) out[k] = inline;
     else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) out[k] = argv[++i];
     else out[k] = true;
@@ -641,7 +644,17 @@ function reportGas(g: SmokeGas): void {
 
 // ---- commands -----------------------------------------------------------------------------------------------------
 
-const toUnits = (s: Settings, decimals: number) => ({ maxStake: parseUnits(s.maxStake, decimals), maxBalance: parseUnits(s.maxBalance, decimals) });
+const UINT128_MAX = 2n ** 128n - 1n;
+
+/** The caps in the token's base units; each must be nonzero and fit the vault's uint128 (checked before any deploy). */
+export function toUnits(s: Settings, decimals: number): { maxStake: bigint; maxBalance: bigint } {
+  const units = { maxStake: parseUnits(s.maxStake, decimals), maxBalance: parseUnits(s.maxBalance, decimals) };
+  for (const [k, v] of [["max-stake", units.maxStake], ["max-balance", units.maxBalance]] as const) {
+    if (v <= 0n) fail(`${k} is 0 in base units at ${decimals} decimals`);
+    if (v > UINT128_MAX) fail(`${k} is too large: the vault's caps are uint128 in base units`);
+  }
+  return units;
+}
 
 async function deployLocal(args: Args): Promise<void> {
   const d = DEPLOYMENTS.local;

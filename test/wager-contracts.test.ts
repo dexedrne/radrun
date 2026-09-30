@@ -10,7 +10,7 @@ import { gameVaultAbi } from "../src/wager/vaultAbi.ts";
 import { entryDigest, entryTypedData, resultDigest, resultTypedData, sessionAuthDigest, sessionAuthTypedData, type Entry, type Result, type SessionAuth } from "../src/wager/eip712.ts";
 import { DEPLOYMENTS } from "../src/wager/config.ts";
 import {
-  ABI_MODULE, CONTRACTS, DEPLOYMENTS_FILE, DeployError, checkSettings, formatDeployments, parseArgs, renderAbiModule, withDeployment, type Settings,
+  ABI_MODULE, CONTRACTS, DEPLOYMENTS_FILE, DeployError, checkSettings, formatDeployments, parseArgs, renderAbiModule, toUnits, withDeployment, type Settings,
 } from "../tools/wager-deploy.ts";
 
 const read = (p: string) => fs.readFileSync(new URL(p, import.meta.url), "utf8");
@@ -81,6 +81,8 @@ test("deploy tool: argument parsing and settings bounds", () => {
   assert.deepEqual(parseArgs(["--net", "rh-mainnet", "--token=0xabc", "--send-it", "--max-stake", "100"]), {
     net: "rh-mainnet", token: "0xabc", "send-it": true, "max-stake": "100",
   });
+  // An inline value keeps every "=" after the first (a keyed RPC URL has them in its query).
+  assert.deepEqual(parseArgs(["--rpc=https://rpc.example/v1?key=a=b", "--net=local"]), { rpc: "https://rpc.example/v1?key=a=b", net: "local" });
   const ok: Settings = {
     token: null, house: getAddress("0x00000000000000000000000000000000000000aa"), owner: getAddress("0x00000000000000000000000000000000000000aa"),
     referee: getAddress("0x00000000000000000000000000000000000000aa"), faucet: null, feeBps: 300, holderFeeBps: 150, maxStake: "100", maxBalance: "1000",
@@ -90,4 +92,9 @@ test("deploy tool: argument parsing and settings bounds", () => {
   for (const bad of [{ feeBps: 501 }, { holderFeeBps: -1 }, { settleWindow: 60 }, { settleWindow: 8 * 86_400 }, { maxStake: "0" }, { maxBalance: "lots" }]) {
     assert.throws(() => checkSettings({ ...ok, ...bad }), DeployError, JSON.stringify(bad));
   }
+  // The caps in base units: nonzero at the token's decimals and within the vault's uint128, before anything deploys.
+  assert.deepEqual(toUnits(ok, 6), { maxStake: 100_000_000n, maxBalance: 1_000_000_000n });
+  assert.throws(() => toUnits({ ...ok, maxStake: "0.0000001" }, 6), DeployError, "rounds to 0 base units");
+  assert.throws(() => toUnits({ ...ok, maxBalance: `1${"0".repeat(30)}` }, 18), DeployError, "past uint128");
+  assert.equal(toUnits({ ...ok, maxBalance: (2n ** 128n - 1n).toString() }, 0).maxBalance, 2n ** 128n - 1n);
 });

@@ -59,6 +59,22 @@ contract DeployScriptTest is Test {
         assertEq(c.maxBalance, 1_000_000e18);
         assertEq(c.settleWindow, 7200);
         assertFalse(c.allowMainnet);
+
+        // A value that doesn't fit its field is refused instead of truncated (2^128 would wrap to a zero cap).
+        Deploy d = new Deploy();
+        vm.setEnv("VAULT_MAX_STAKE", "340282366920938463463374607431768211456");
+        vm.expectRevert(bytes("VAULT_MAX_STAKE is out of range"));
+        d.configFromEnv();
+        vm.setEnv("VAULT_MAX_STAKE", "10000000000000000000000");
+        vm.setEnv("VAULT_FEE_BPS", "65836"); // 65,836 would wrap to 300
+        vm.expectRevert(bytes("VAULT_FEE_BPS is out of range"));
+        d.configFromEnv();
+        vm.setEnv("VAULT_FEE_BPS", "250");
+        vm.setEnv("VAULT_SETTLE_WINDOW", "4294967297");
+        vm.expectRevert(bytes("VAULT_SETTLE_WINDOW is out of range"));
+        d.configFromEnv();
+        vm.setEnv("VAULT_SETTLE_WINDOW", "7200");
+        assertEq(d.configFromEnv().maxStake, 10_000e18);
     }
 
     function test_testnet_deploysTokenAndVault() public {

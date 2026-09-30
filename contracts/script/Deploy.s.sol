@@ -51,12 +51,20 @@ contract Deploy is Script {
         c.house = vm.envAddress("VAULT_HOUSE");
         c.referee = vm.envAddress("VAULT_REFEREE");
         c.owner = vm.envAddress("VAULT_OWNER");
-        c.feeBps = uint16(vm.envOr("VAULT_FEE_BPS", uint256(300)));
-        c.holderFeeBps = uint16(vm.envOr("VAULT_HOLDER_FEE_BPS", uint256(150)));
-        c.maxStake = uint128(vm.envUint("VAULT_MAX_STAKE"));
-        c.maxBalance = uint128(vm.envUint("VAULT_MAX_BALANCE"));
-        c.settleWindow = uint32(vm.envOr("VAULT_SETTLE_WINDOW", uint256(1 days)));
+        // Every narrowing is checked: a value that doesn't fit is refused, never silently truncated.
+        c.feeBps = uint16(_fits(vm.envOr("VAULT_FEE_BPS", uint256(300)), type(uint16).max, "VAULT_FEE_BPS"));
+        c.holderFeeBps =
+            uint16(_fits(vm.envOr("VAULT_HOLDER_FEE_BPS", uint256(150)), type(uint16).max, "VAULT_HOLDER_FEE_BPS"));
+        c.maxStake = uint128(_fits(vm.envUint("VAULT_MAX_STAKE"), type(uint128).max, "VAULT_MAX_STAKE"));
+        c.maxBalance = uint128(_fits(vm.envUint("VAULT_MAX_BALANCE"), type(uint128).max, "VAULT_MAX_BALANCE"));
+        c.settleWindow =
+            uint32(_fits(vm.envOr("VAULT_SETTLE_WINDOW", uint256(1 days)), type(uint32).max, "VAULT_SETTLE_WINDOW"));
         c.allowMainnet = vm.envOr("ALLOW_MAINNET", false);
+    }
+
+    function _fits(uint256 value, uint256 max, string memory name) internal pure returns (uint256) {
+        require(value <= max, string.concat(name, " is out of range"));
+        return value;
     }
 
     function deploy(Config memory c) public returns (address token, address vault) {
