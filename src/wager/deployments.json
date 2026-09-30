@@ -1,0 +1,38 @@
+{
+  "local": {
+    "label": "LOCAL · ANVIL",
+    "chainId": 31337,
+    "chainName": "Local anvil",
+    "testnet": true,
+    "rpc": ["http://127.0.0.1:5401"],
+    "explorer": null,
+    "relay": "http://127.0.0.1:5402",
+    "vault": null,
+    "token": null,
+    "deployBlock": null
+  },
+  "rh-testnet": {
+    "label": "BETA · TESTNET",
+    "chainId": 46630,
+    "chainName": "Robinhood Chain Testnet",
+    "testnet": true,
+    "rpc": ["https://rpc.testnet.chain.robinhood.com", "https://robinhood-sepolia-rpc.publicnode.com", "https://robinhood-testnet.drpc.org"],
+    "explorer": "https://explorer.testnet.chain.robinhood.com",
+    "relay": "https://radrun-wager-relay.dexedrne.workers.dev",
+    "vault": null,
+    "token": null,
+    "deployBlock": null
+  },
+  "rh-mainnet": {
+    "label": "BETA",
+    "chainId": 4663,
+    "chainName": "Robinhood Chain",
+    "testnet": false,
+    "rpc": ["https://rpc.mainnet.chain.robinhood.com", "https://robinhood-rpc.publicnode.com", "https://robinhood.drpc.org"],
+    "explorer": "https://robinhoodchain.blockscout.com",
+    "relay": "https://radrun-wager-relay-main.dexedrne.workers.dev",
+    "vault": null,
+    "token": null,
+    "deployBlock": null
+  }
+}

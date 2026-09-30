@@ -17,6 +17,12 @@
     "test": "node --test test/*.test.ts",
     "relay": "node relay/dev.ts",
     "relay:worker": "cd relay && npx --yes wrangler@4.141.0 dev --env dev --port 8787",
+    "wager:contracts": "cd contracts && forge build && forge test",
+    "wager:relay": "node relay/wager/dev.ts",
+    "wager:relay:worker": "cd relay/wager && npx --yes wrangler@4.141.0 dev --env dev --port 8788",
+    "wager:verify": "node tools/wager-verify.ts",
+    "wager:deploy": "node tools/wager-deploy.ts",
+    "wager:e2e": "node tools/wager-e2e.ts",
     "gen-city": "node tools/gen-city.ts",
     "level": "node tools/level.ts",
     "bake": "node tools/level.ts",
@@ -42,6 +48,7 @@
     "react-three-game": "0.0.113",
     "three": "0.186.0",
     "three-text": "0.6.5",
+    "viem": "2.57.1",
     "zustand": "5.0.15"
   },
   "devDependencies": {
@@ -49,6 +56,7 @@
     "@gltf-transform/core": "4.5.0",
     "@gltf-transform/extensions": "4.5.0",
     "@gltf-transform/functions": "4.5.0",
+    "@openzeppelin/contracts": "5.6.1",
     "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
