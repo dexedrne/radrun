@@ -18,24 +18,25 @@ export type VaultInfo = {
   paused: boolean; referee: Address;
 };
 export type Balances = { wallet: bigint; allowance: bigint; free: bigint; locked: bigint; eth: bigint };
-export type MatchState = "none" | "locked" | "settled" | "voided";
+export type MatchState = "none" | "locked" | "settled" | "voided" | "cancelled";
 export type MatchView = {
   playerA: Address; playerB: Address; stake: bigint; feeBps: number; holderFeeBps: number; roundSeconds: number; state: MatchState; lockedAt: number; settleBy: number; rules: Hex;
 };
 export type HistoryRow = {
   matchId: Hex; opponent: Address; stake: bigint; feeBps: number; lockedAt: number; settleBy: number;
-  state: "locked" | "won" | "lost" | "void"; payout: bigint; fee: bigint; logHash: Hex | null; lockTx: Hex; endTx: Hex | null; voidReason: number | null;
+  state: "locked" | "won" | "lost" | "void" | "reclaimed"; payout: bigint; fee: bigint; logHash: Hex | null; lockTx: Hex; endTx: Hex | null; voidReason: number | null;
 };
 export type MatchEnd =
   | { kind: "settled"; winner: Address; loser: Address; payout: bigint; fee: bigint; feeBps: number; logHash: Hex; mutual: boolean; tx: Hex }
   | { kind: "voided"; reason: number; logHash: Hex; tx: Hex };
 
-const STATES: MatchState[] = ["none", "locked", "settled", "voided"];
+const STATES: MatchState[] = ["none", "locked", "settled", "voided", "cancelled"];
 
 const SEL = {
   locked: toEventSelector(getAbiItem({ abi: GAME_VAULT_ABI, name: "MatchLocked" })),
   settled: toEventSelector(getAbiItem({ abi: GAME_VAULT_ABI, name: "MatchSettled" })),
   voided: toEventSelector(getAbiItem({ abi: GAME_VAULT_ABI, name: "MatchVoided" })),
+  reclaimed: toEventSelector(getAbiItem({ abi: GAME_VAULT_ABI, name: "StakeReclaimed" })),
 };
 type Topics = (Hex | Hex[] | null)[];
 
@@ -102,6 +103,11 @@ export class VaultChain {
     return this.read<Address>("owner");
   }
 
+  /** The referee a match locked under (the only one whose Result it takes). */
+  refereeOf(matchId: Hex): Promise<Address> {
+    return this.read<Address>("refereeOf", [matchId]);
+  }
+
   async matchOf(matchId: Hex): Promise<MatchView> {
     const m = await this.read<{
       playerA: Address; feeBps: number; holderFeeBps: number; roundSeconds: number; state: number; playerB: Address; lockedAt: bigint; stake: bigint; settleBy: bigint; rules: Hex;
@@ -164,6 +170,18 @@ export class VaultChain {
   refundExpired(w: WalletClient, matchId: Hex): Promise<Hex> {
     return this.send(w, "vault", "refundExpired", [matchId]);
   }
+  /** After settleBy: take back only your own stake (a transaction that names nobody else). */
+  reclaim(w: WalletClient, matchId: Hex): Promise<Hex> {
+    return this.send(w, "vault", "reclaim", [matchId]);
+  }
+  /** Kill one of your own match ids that hasn't locked: no Entry for it can ever lock. */
+  cancel(w: WalletClient, matchId: Hex): Promise<Hex> {
+    return this.send(w, "vault", "cancel", [matchId]);
+  }
+  /** Both players' wallets signed the same Result (the referee is gone). */
+  settleMutual(w: WalletClient, r: Result, sigA: Hex, sigB: Hex): Promise<Hex> {
+    return this.send(w, "vault", "settleMutual", [r, sigA, sigB]);
+  }
 
   // ---- events ---------------------------------------------------------------------------------------------------
 
@@ -209,11 +227,17 @@ export class VaultChain {
     const mine = locks.slice(0, maxMatches);
     const ids = mine.map(l => l.args.matchId);
     const ends = new Map<string, MatchEnd>();
+    /** Matches this player took their own stake back from (after settleBy, a StakeReclaimed naming only them). */
+    const reclaims = new Map<string, Hex>();
     if (ids.length) {
-      const r = await this.scan([[SEL.settled, SEL.voided], ids]);
+      const r = await this.scan([[SEL.settled, SEL.voided, SEL.reclaimed], ids]);
       partial ||= r.partial;
       for (const l of r.logs) {
         const id = String(l.topics[1]).toLowerCase() as Hex;
+        if (l.topics[0] === SEL.reclaimed) {
+          if (String(l.topics[2]).toLowerCase() === me) reclaims.set(id, l.transactionHash as Hex);
+          continue;
+        }
         const e = this.endFromLogs(id, [l], l.transactionHash as Hex);
         if (e) ends.set(id, e);
       }
@@ -224,6 +248,8 @@ export class VaultChain {
       const opponent = a.playerA.toLowerCase() === player.toLowerCase() ? a.playerB : a.playerA;
       const settleBy = Number(a.settleBy);
       const base = { matchId: a.matchId, opponent, stake: a.stake, feeBps: Number(a.feeBps), settleBy, lockedAt: 0, lockTx: l.transactionHash as Hex };
+      const back = reclaims.get(a.matchId.toLowerCase());
+      if (!end && back) return { ...base, state: "reclaimed", payout: 0n, fee: 0n, logHash: null, endTx: back, voidReason: null };
       if (!end) return { ...base, state: "locked", payout: 0n, fee: 0n, logHash: null, endTx: null, voidReason: null };
       if (end.kind === "voided") return { ...base, state: "void", payout: 0n, fee: 0n, logHash: end.logHash, endTx: end.tx, voidReason: end.reason };
       const won = end.winner.toLowerCase() === player.toLowerCase();
@@ -241,7 +267,8 @@ export class VaultChain {
   // scan stops after `budget` calls (the page then says older history wasn't loaded) ---------------------------------
 
   private async scan(topics: Topics, budget = 48): Promise<{ logs: Log[]; partial: boolean }> {
-    const latest = await this.pub.getBlockNumber();
+    // Never viem's cached block number: a match that ended a moment ago must be in the scan.
+    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
     const out: Log[] = [];
     let calls = 0, partial = false;
     const stack: { from: bigint; to: bigint }[] = [{ from: this.fromBlock, to: latest }];

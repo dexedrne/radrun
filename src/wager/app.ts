@@ -7,8 +7,8 @@ import { getAddress, type Address, type Hex, type PublicClient, type WalletClien
 import type { PrivateKeyAccount } from "viem/accounts";
 import type { Deployment } from "./config.ts";
 import {
-  entryFromJson, entryToJson, entryTypedData, makeRules, newMatchId, rulesHash, sessionAuthToJson, sessionAuthTypedData, ZERO_ADDRESS, type Entry, type Result,
-  type SimCompat,
+  entryFromJson, entryToJson, entryTypedData, makeRules, newMatchId, resultTypedData, rulesHash, sessionAuthToJson, sessionAuthTypedData, ZERO_ADDRESS,
+  type Entry, type Result, type SimCompat,
 } from "./eip712.ts";
 import { WAGER_TIMING, type Cosmetic, type LobbyServerMsg, type Offer, type PlayerCard, type RelayConfig, type SignedEntry } from "./protocol.ts";
 import { VaultChain, publicClientFor, walletClientFor, type Balances, type VaultInfo } from "./chain.ts";
@@ -93,6 +93,11 @@ export class WagerApp {
   private listening: { p: Eip1193; onAcc: (accs: string[]) => void; onChain: (id: string) => void } | null = null;
   /** Called when a match of ours locks (the page opens the series). */
   onLocked: ((matchId: Hex, district: string) => void) | null = null;
+  /**
+   * The Entries this page created (its open offers), by match id: when someone joins one, the lobby asks for a named
+   * Entry, and the page signs only these exact terms (never what the relay says they are).
+   */
+  private readonly created = new Map<string, { e: Entry; district: string }>();
 
   constructor(d: AppDeps) {
     this.d = d;
@@ -299,6 +304,7 @@ export class WagerApp {
         if (mine && m.reason !== "matched") this.note("info", m.reason === "expired" ? "your offer expired" : m.reason === "creator-left" ? "your offer was withdrawn when you left the lobby" : "offer cancelled");
         return;
       }
+      case "sign": void this.signNamed(m); return;
       case "matched": {
         const district = s.offers.find(o => o.matchId === m.matchId)?.district ?? s.pairing?.district ?? this.d.district;
         this.set({ pairing: { matchId: m.matchId, district, a: m.a, b: m.b, lockTx: null, since: Date.now(), failed: null } });
@@ -331,6 +337,35 @@ export class WagerApp {
         else this.note("error", m.message);
         return;
       default: return;
+    }
+  }
+
+  /**
+   * Someone joined one of this page's open offers: the lobby asks for a named Entry for them (docs/WAGER.md §4.3). The
+   * page signs its own offer's exact terms naming that player, with a deadline a few minutes away, and nothing else.
+   * The lobby never hands out the open Entry's signature, so this named one is what locks.
+   */
+  private async signNamed(m: Extract<LobbyServerMsg, { t: "sign" }>): Promise<void> {
+    const mine = this.created.get(m.matchId.toLowerCase());
+    const refuse = (why: string) => { this.lobby?.signed(m.matchId, null, why); };
+    let e: Entry;
+    try { e = entryFromJson(m.entry); } catch { refuse("bad entry"); return; }
+    if (!mine) { refuse("this page has no such offer"); return; }
+    const o = mine.e, a = o.player, nowS = this.now();
+    const same = e.matchId.toLowerCase() === o.matchId.toLowerCase() && sameAddress(e.player, a) && sameAddress(o.player, a) && sameAddress(o.opponent, ZERO_ADDRESS)
+      && e.stake === o.stake && e.feeCapBps === o.feeCapBps && e.roundSeconds === o.roundSeconds && e.rules === o.rules;
+    const who = sameAddress(e.opponent, m.joiner.address) && !sameAddress(e.opponent, ZERO_ADDRESS) && !sameAddress(e.opponent, a);
+    const soon = Number(e.deadline) <= Math.min(Number(o.deadline), nowS + WAGER_TIMING.namedTtlS + 120) && Number(e.deadline) > nowS + 20;
+    if (!same || !who || !soon) { refuse("those aren't this offer's terms"); return; }
+    try {
+      const sig = await this.signEntry(e);
+      if (!this.lobby?.signed(m.matchId, sig)) throw wagerError("relay", "the lobby connection dropped: the offer is withdrawn");
+      this.created.delete(m.matchId.toLowerCase());
+      this.set({ pairing: { matchId: m.matchId, district: mine.district, a: null, b: null, lockTx: null, since: Date.now(), failed: null } });
+      this.note("info", `${m.joiner.name} joined: locking both stakes…`);
+    } catch (err) {
+      refuse("the page couldn't sign");
+      this.fail(err);
     }
   }
 
@@ -486,15 +521,15 @@ export class WagerApp {
 
   // ---- offers ---------------------------------------------------------------------------------------------------------
 
-  /** Sign an Entry: the session key (no popup) when it covers the stake, else the wallet. */
+  /** Sign an Entry: the session key (no popup) when it covers the stake (read fresh from the vault), else the wallet. */
   private async signEntry(e: Entry): Promise<Hex> {
     const c = this.chain!;
     const td = entryTypedData(this.d.dep.chainId, c.vault, e);
-    await this.refresh();
-    const chk = checkSession(this.s.session, this.keyAcct?.address ?? null, e.stake, this.now());
+    const on = await c.session(e.player).catch(() => this.s.session);
+    const chk = checkSession(on, this.keyAcct?.address ?? null, e.stake, this.now());
     if (chk.ok && this.keyAcct) return this.keyAcct.signTypedData(td);
     const w = await this.needWallet();
-    return w.signTypedData({ ...td, account: this.s.address! } as never);
+    return w.signTypedData({ ...td, account: e.player } as never);
   }
 
   /** The checks the relay and the vault make, said before anything is signed. */
@@ -529,6 +564,7 @@ export class WagerApp {
       };
       const sig = await this.signEntry(e);
       if (!this.lobby?.create(entryToJson(e), sig, { listed, holdersOnly: o.holdersOnly, minSeries: o.minSeries })) throw wagerError("relay", "the lobby isn't connected: try again in a moment");
+      this.created.set(e.matchId.toLowerCase(), { e, district: o.district });
       this.set({ pairing: null });
       this.note("ok", listed ? "offer listed" : "invite ready: send the link");
       return e.matchId;
@@ -541,7 +577,31 @@ export class WagerApp {
   }
 
   cancel(matchId: Hex): void {
+    this.created.delete(matchId.toLowerCase());
     if (!this.lobby?.cancel(matchId)) this.note("error", "the lobby isn't connected");
+  }
+
+  /**
+   * Cancel one of your match ids on chain as well (your wallet pays the gas): no Entry for it can ever lock afterwards,
+   * whoever holds a signature for it. The lobby never hands out an open offer's signature, so this is for peace of mind
+   * (a wallet-signed Entry, a leaked key).
+   */
+  async cancelOnChain(matchId: Hex): Promise<Hex | null> {
+    const c = this.chain;
+    if (!c) return null;
+    this.set({ busy: "cancel" });
+    try {
+      const w = await this.needWallet();
+      this.cancel(matchId);
+      const h = await this.tx("cancel the match id", () => c.cancel(w, matchId));
+      this.note("ok", "cancelled on chain: that match can never lock");
+      return h;
+    } catch (e) {
+      this.fail(e);
+      return null;
+    } finally {
+      this.set({ busy: null });
+    }
   }
 
   /** Why this player can't join the offer (null = can). */
@@ -571,7 +631,7 @@ export class WagerApp {
       if (theirs.rules !== rulesHash(makeRules(o.district, sim))) throw wagerError("version", "this match was made on another version of the game");
       if (!sameAddress(theirs.player, o.creator.address) || theirs.matchId !== o.matchId || BigInt(o.stake) !== theirs.stake) throw wagerError("relay", "the offer's terms don't add up");
       const e: Entry = {
-        matchId: o.matchId, player: a, opponent: theirs.player, stake: theirs.stake, feeCapBps: Math.min(o.feeBps, config.houseFeeBps), roundSeconds: theirs.roundSeconds,
+        matchId: o.matchId, player: a, opponent: theirs.player, stake: theirs.stake, feeCapBps: config.houseFeeBps, roundSeconds: theirs.roundSeconds,
         rules: theirs.rules, deadline: BigInt(Math.floor(this.now()) + 600),
       };
       const sig = await this.signEntry(e);
@@ -612,6 +672,50 @@ export class WagerApp {
     try {
       const w = await this.needWallet();
       return await this.tx("settle", () => c.settle(w, r, sig));
+    } catch (e) {
+      this.fail(e);
+      return null;
+    }
+  }
+
+  /** After settleBy, a player takes back their own stake alone (the transaction names nobody else). */
+  async reclaim(matchId: Hex): Promise<Hex | null> {
+    const c = this.chain;
+    if (!c) return null;
+    try {
+      const w = await this.needWallet();
+      const h = await this.tx("take your stake back", () => c.reclaim(w, matchId));
+      await this.refresh();
+      return h;
+    } catch (e) {
+      this.fail(e);
+      return null;
+    }
+  }
+
+  /**
+   * Settle between yourselves (the referee is gone): this wallet signs a Result for the match. The vault takes it only
+   * with the other player's wallet signature over the same Result (settleMutual).
+   */
+  async signResult(r: Result): Promise<Hex | null> {
+    try {
+      const w = await this.needWallet();
+      return await w.signTypedData({ ...resultTypedData(this.d.dep.chainId, this.chain!.vault, r), account: this.s.address! } as never);
+    } catch (e) {
+      this.fail(e);
+      return null;
+    }
+  }
+
+  /** Submit a Result both players' wallets signed (sigA is player A's). */
+  async settleMutual(r: Result, sigA: Hex, sigB: Hex): Promise<Hex | null> {
+    const c = this.chain;
+    if (!c) return null;
+    try {
+      const w = await this.needWallet();
+      const h = await this.tx("settle between you", () => c.settleMutual(w, r, sigA, sigB));
+      await this.refresh();
+      return h;
     } catch (e) {
       this.fail(e);
       return null;

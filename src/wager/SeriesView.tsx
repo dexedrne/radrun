@@ -24,6 +24,7 @@ import { Amount, C, Card, Holder, Notice, Portrait, Section, TxLink, WEB_COLORS,
 import { bpsText, clockText, dateText, relTime, roundText, shortAddress } from "./units.ts";
 import { keepParams } from "./site.ts";
 import { ConnectWallet } from "./WalletPanel.tsx";
+import { MutualPanel } from "./MutualPanel.tsx";
 
 const VOID_TEXT: Record<string, string> = {
   noshow: "a player didn't arrive before round 1, so the series is void: nobody pays, both stakes are back",
@@ -42,6 +43,7 @@ const FLAG_TEXT: Record<string, string> = {
   desync: "a game state that didn't match the referee's",
   "result-mismatch": "both players' results differ from the referee's",
   rtt: "odd connection timing",
+  "session-key": "a session-key sign-in from a new place (or both players on one connection) before a forfeit or idle play",
 };
 
 function lastPick(): RadbroId {
@@ -95,6 +97,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     const c = new SeriesClient({
       base: app.d.base, matchId, chainId: dep.chainId, vault: app.chain.vault, signer, compat: roomCompat(game.model, game.tuning),
       sim: { model: game.model, index: game.index, tuning: game.tuning },
+      tamperEndHash: import.meta.env.MODE !== "production" && new URLSearchParams(location.search).has("badhash"),
       ev: {
         conn: (x, why) => { setConn(x); setConnWhy(why ?? ""); },
         series: s => setSt(s),
@@ -283,7 +286,11 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
         {expired && !settleTx && (
           <div style={{ marginTop: 8, fontSize: 12 }}>
             the settle window closed: <button style={small(true)} onClick={() => void app.refund(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-refund">REFUND BOTH STAKES</button>
+            {" "}or <button style={small(false)} onClick={() => void app.reclaim(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-reclaim">TAKE BACK YOUR STAKE</button>
           </div>
+        )}
+        {!expired && onChain?.state === "locked" && !settleTx && voidedTx === undefined && (held || (!sett && Date.now() - settledAt > 60_000)) && (
+          <MutualPanel app={app} matchId={matchId} m={onChain} logHash={outcome?.logHash ?? null} onDone={tx => setSettledTx(tx)} />
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
           <a href={verify} style={{ ...btn(false), textDecoration: "none" }} data-testid="wager-verify-link">VERIFY THIS MATCH</a>
@@ -300,7 +307,13 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
         {header}
         <Notice kind="error" text={err ?? (!config ? "can't reach the wager relay" : `the match connection closed${connWhy ? ` (${connWhy})` : ""}`)} />
         {onChain && <div style={{ fontSize: 12, marginTop: 8 }} data-testid="wager-chain-state">on chain: {onChain.state === "locked" ? "both stakes locked" : onChain.state === "settled" ? "settled" : onChain.state === "voided" ? "refunded" : "not locked"}</div>}
-        {expired && <div style={{ marginTop: 8 }}><button style={small(true)} onClick={() => void app.refund(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-refund">REFUND BOTH STAKES</button></div>}
+        {expired && (
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button style={small(true)} onClick={() => void app.refund(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-refund">REFUND BOTH STAKES</button>
+            <button style={small(false)} onClick={() => void app.reclaim(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-reclaim" title="a transaction that names only you">TAKE BACK YOUR STAKE</button>
+          </div>
+        )}
+        {!expired && onChain?.state === "locked" && <MutualPanel app={app} matchId={matchId} m={onChain} logHash={null} onDone={tx => setSettledTx(tx)} />}
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
           <button style={btn(true)} onClick={() => location.reload()} data-pad-default="">RECONNECT</button>
           <a href={verify} style={{ ...btn(false), textDecoration: "none" }}>MATCH PAGE</a>

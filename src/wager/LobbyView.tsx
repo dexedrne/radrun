@@ -1,7 +1,7 @@
 // SPIDER-TAG wager client: the lobby (docs/WAGER.md §7.3). Open offers with the creator's card (rating, record,
 // forfeits, NEW, holder badge), the terms (stake, round length, district, fee and the holder rate), JOIN; creating an
-// offer (listed, invite link or a named opponent; holders only; minimum series); your own offers (cancel, copy the
-// link); the pairing status and the "lock it yourself" fallback. An invite link (?wager&join=<id>) opens JoinView.
+// offer (listed, invite link or a named opponent; holders only; minimum series); your own offers (cancel, also on chain,
+// copy the link); the pairing status and the "lock it yourself" fallback. An invite link (?wager&join=<id>) opens JoinView.
 import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { gotoDistrict, PAGE_DISTRICT } from "../app/district.ts";
@@ -47,6 +47,7 @@ function OfferRow({ app, o, mine }: { app: WagerApp; o: Offer; mine: boolean }) 
         <div style={{ display: "flex", gap: 6 }}>
           <button style={small(false)} onClick={() => { void navigator.clipboard?.writeText(inviteLink(o.matchId, o.district)).then(() => setCopied(true), () => undefined); }} data-testid="wager-offer-copy">{copied ? "COPIED" : "COPY LINK"}</button>
           <button style={small(false)} onClick={() => app.cancel(o.matchId)} data-testid="wager-offer-cancel">CANCEL</button>
+          <button style={small(false)} disabled={!!busy} onClick={() => void app.cancelOnChain(o.matchId)} title="also kill the match id on chain (your wallet pays the gas): no signature for it can ever lock" data-testid="wager-offer-cancel-chain">ON CHAIN</button>
         </div>
       ) : here ? (
         <button style={{ ...btn(!why), opacity: why ? 0.55 : 1 }} disabled={!!why || !!busy} title={why ?? "join this match"} onClick={() => void app.join(o)} data-testid="wager-offer-join">
@@ -148,7 +149,7 @@ export function PairingStatus({ app }: { app: WagerApp }) {
   const slow = p.a && p.b && (p.failed || now - p.since > 20_000);
   return (
     <div style={{ marginBottom: 10 }} data-testid="wager-pairing">
-      <Notice kind="info" text={p.a ? "matched: locking both stakes…" : "waiting for the relay to pair you…"} />
+      <Notice kind="info" text={p.a ? "matched: locking both stakes…" : "pairing: waiting for both signed entries…"} />
       {slow && (
         <div style={{ marginTop: 6, fontSize: 12 }}>
           the relayer is slow: <button style={small(true)} disabled={!!busy} onClick={() => void app.lockYourself()} data-testid="wager-lock-yourself">LOCK IT YOURSELF</button> (your wallet pays the gas)

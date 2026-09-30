@@ -24,7 +24,11 @@ import { VaultChain } from "../src/wager/chain.ts";
 import { LobbyClient, type WsFactory } from "../src/wager/relay.ts";
 import { SeriesClient, type RoomTransport } from "../src/wager/series.ts";
 import { WagerApp, useWager } from "../src/wager/app.ts";
-import { MAX_SESSION_TTL_S, entryFromJson, loginTypedData, makeRules, rulesHash, resultTypedData, type Result } from "../src/wager/eip712.ts";
+import {
+  MAX_SESSION_TTL_S, ZERO_ADDRESS, ZERO_HASH, entryFromJson, entryToJson, entryTypedData, loginTypedData, makeRules, newMatchId, rulesHash, resultTypedData,
+  type Entry, type Result,
+} from "../src/wager/eip712.ts";
+import { decodeSettleCode, encodeSettleCode } from "../src/wager/mutual.ts";
 import { MSG_PROBE, MSG_PROBE_ECHO, WAGER_PROTOCOL, decodeProbe, encodeProbe, type LobbyServerMsg } from "../src/wager/protocol.ts";
 import { simCompat, type SeriesVerdict, type SimAssets } from "../src/wager/replay.ts";
 import { matchChecks } from "../src/wager/verifyChecks.ts";
@@ -106,12 +110,13 @@ test("amounts: parsed and shown in the token's own decimals (18, 6, 0), cut neve
   assert.equal(relTime(1000 - 90, 1000), "2 min ago");
 });
 
-test("session keys: defaults (cap 10x, 3 days, clamped to the vault), the limits the vault checks, saved only after signing", () => {
+test("session keys: defaults (cap 3x, 12 hours, clamped to the vault), the limits the vault checks, saved only after signing", () => {
   const now = 1_900_000_000;
   const t = sessionTerms(100n * E18, 1000n * E18, now);
   assert.equal(t.maxStake, 100n * E18);
-  assert.equal(t.cap, 100n * E18 * SESSION_DEFAULTS.capTimes);
-  assert.equal(t.expiry, BigInt(now + 3 * 86_400));
+  assert.equal(t.cap, 300n * E18, "a copied key can lose at most its cap: small by default");
+  assert.equal(SESSION_DEFAULTS.capTimes, 3n);
+  assert.equal(t.expiry, BigInt(now + 12 * 3600));
   assert.equal(sessionTerms(5000n * E18, 1000n * E18, now).maxStake, 1000n * E18, "clamped to the vault's maxStake");
   assert.ok(sessionTerms(1n, 10n, now, { ttlS: 90 * 86_400 }).expiry < BigInt(now + MAX_SESSION_TTL_S), "never past 30 days");
   assert.throws(() => sessionTerms(0n, 10n, now));
@@ -299,7 +304,8 @@ test("chain: vault and token reads, exact approve + deposit, lock, settle, histo
   assert.deepEqual({ free: b.free, wallet: b.wallet, allowance: b.allowance }, { free: 500n * E18, wallet: 500n * E18, allowance: 0n });
   // A lock with wallet-signed entries, then a referee settle.
   const rules = rulesHash(makeRules("downtown", simCompat(assets)));
-  const mk = (p: PrivateKeyAccount, opp: Address) => ({ matchId: `0x${"77".repeat(32)}` as Hex, player: p.address, opponent: opp, stake: 100n * E18, feeCapBps: 300, roundSeconds: 90, rules, deadline: BigInt(fake.time + 600) });
+  const id77 = `${alice.address.toLowerCase()}${"77".repeat(12)}` as Hex;
+  const mk = (p: PrivateKeyAccount, opp: Address) => ({ matchId: id77, player: p.address, opponent: opp, stake: 100n * E18, feeCapBps: 300, roundSeconds: 90, rules, deadline: BigInt(fake.time + 600) });
   const ea = mk(alice, "0x0000000000000000000000000000000000000000"), eb = mk(bob, alice.address);
   const { entryTypedData } = await import("../src/wager/eip712.ts");
   const sa = await alice.signTypedData(entryTypedData(31337, fake.vault, ea)), sb = await bob.signTypedData(entryTypedData(31337, fake.vault, eb));
@@ -325,6 +331,114 @@ test("chain: vault and token reads, exact approve + deposit, lock, settle, histo
   assert.equal(lt.lockedAt, lt.settleBy - 86_400);
   // A settle is refused twice (NotLocked) with a plain message.
   await assert.rejects(vc.settle(wb, r, sig), (e: unknown) => /isn't locked/.test(classifyError(e).message));
+});
+
+test("chain: match ids are their creator's, fee caps must cover the fee; cancel; reclaim after settleBy; both wallets settle", async () => {
+  const fake = new FakeChain();
+  const chain = viemChain({ chainId: 31337, chainName: "Local anvil", rpc: ["http://x"], explorer: null });
+  const pub = createPublicClient({ chain, transport: custom(fake.eip1193) }) as PublicClient;
+  const vc = new VaultChain(pub, fake.vault, 0);
+  await vc.info();
+  const [alice, bob] = [acct(1), acct(2)];
+  const wc = (a: PrivateKeyAccount) => createWalletClient({ account: a, chain, transport: custom(fake.eip1193) });
+  const [wa, wb] = [wc(alice), wc(bob)];
+  for (const [p, w] of [[alice, wa], [bob, wb]] as const) {
+    fake.transfer(acct(0).address, p.address, 1000n * E18);
+    await vc.wait(await vc.approve(w, 500n * E18));
+    await vc.wait(await vc.deposit(w, 500n * E18));
+  }
+  const rules = rulesHash(makeRules("downtown", simCompat(assets)));
+  const pair = async (id: Hex, o: Partial<Entry> = {}) => {
+    const ea: Entry = { matchId: id, player: alice.address, opponent: ZERO_ADDRESS, stake: 100n * E18, feeCapBps: 300, roundSeconds: 90, rules, deadline: BigInt(fake.time + 600), ...o };
+    const eb: Entry = { ...ea, player: bob.address, opponent: alice.address, feeCapBps: 300 };
+    return [ea, await alice.signTypedData(entryTypedData(31337, fake.vault, ea)), eb, await bob.signTypedData(entryTypedData(31337, fake.vault, eb))] as const;
+  };
+  // An id that starts with bob's address can't have alice as player A; a cap under the house fee can't lock.
+  const [xa, xsa, xb, xsb] = await pair(newMatchId(bob.address));
+  await assert.rejects(vc.lock(wa, xa, xsa, xb, xsb), (e: unknown) => /another player/.test(classifyError(e).message));
+  const [ya, ysa, yb, ysb] = await pair(newMatchId(alice.address), { feeCapBps: 150 });
+  await assert.rejects(vc.lock(wa, ya, ysa, yb, ysb), (e: unknown) => classifyError(e).kind === "version");
+  // A cancelled id never locks, whoever holds its signatures; only its creator can cancel it.
+  const cid = newMatchId(alice.address);
+  await assert.rejects(vc.cancel(wb, cid), (e: unknown) => /another player/.test(classifyError(e).message));
+  await vc.wait(await vc.cancel(wa, cid));
+  assert.equal((await vc.matchOf(cid)).state, "cancelled");
+  const [ca, csa, cb, csb] = await pair(cid);
+  await assert.rejects(vc.lock(wa, ca, csa, cb, csb), (e: unknown) => /already locked/.test(classifyError(e).message));
+  // Reclaim: after settleBy each player takes back their own stake alone; the history says so.
+  const rid = newMatchId(alice.address);
+  const [ra, rsa, rb, rsb] = await pair(rid);
+  await vc.wait(await vc.lock(wb, ra, rsa, rb, rsb));
+  await assert.rejects(vc.reclaim(wa, rid), (e: unknown) => /still open/.test(classifyError(e).message));
+  fake.time += 86_400 + 10;
+  await vc.wait(await vc.reclaim(wa, rid));
+  assert.equal((await vc.balances(alice.address)).free, 500n * E18);
+  assert.equal((await vc.balances(bob.address)).locked, 100n * E18, "bob's stake waits for bob (or a refund)");
+  assert.equal((await vc.history(alice.address)).rows[0].state, "reclaimed");
+  await vc.wait(await vc.reclaim(wb, rid));
+  assert.equal((await vc.matchOf(rid)).state, "voided");
+  // Both wallets sign one Result: settleMutual pays it (the full fee: no holder rate without the referee).
+  const mid = newMatchId(alice.address);
+  const [ma, msa, mb, msb] = await pair(mid);
+  await vc.wait(await vc.lock(wb, ma, msa, mb, msb));
+  const r: Result = { matchId: mid, outcome: 1, winner: bob.address, feeBps: 300, logHash: ZERO_HASH };
+  const td = resultTypedData(31337, fake.vault, r);
+  const [sa, sb] = [await alice.signTypedData(td), await bob.signTypedData(td)];
+  await assert.rejects(vc.settleMutual(wa, r, sb, sa), (e: unknown) => /signature/.test(classifyError(e).message), "signatures in the wrong seats");
+  await vc.wait(await vc.settleMutual(wa, r, sa, sb));
+  assert.equal((await vc.balances(bob.address)).free, 500n * E18 + 94n * E18);
+  const end = await vc.matchEnd(mid, null);
+  assert.ok(end?.kind === "settled" && end.mutual, JSON.stringify(end, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+  // The code two pages pass each other for it.
+  const code = encodeSettleCode({ r, sig: sa, by: alice.address });
+  assert.deepEqual(decodeSettleCode(code), { r, sig: sa, by: alice.address });
+  assert.equal(decodeSettleCode("hello"), null);
+  assert.equal(decodeSettleCode("radrun-settle:bm9wZQ=="), null);
+});
+
+test("named entries: a creator's page signs only its own offer's terms, naming the joiner, with a short deadline", async () => {
+  const fake = new FakeChain();
+  const relay = new FakeRelay({ chain: fake, net: "local", assets: { downtown: assets } });
+  const base = "http://relay.test";
+  relay.base = base;
+  const restore = relayFetch(relay, base);
+  const app = mkApp(fake, relay, base);
+  try {
+    await app.start();
+    await until(() => !!app.lobby, "the lobby");
+    const alice = acct(1);
+    const said: { id: Hex; sig: Hex | null; why?: string }[] = [];
+    const e: Entry = {
+      matchId: newMatchId(alice.address), player: alice.address, opponent: ZERO_ADDRESS, stake: 10n * E18, feeCapBps: 300, roundSeconds: 90,
+      rules: rulesHash(makeRules("downtown", simCompat(assets))), deadline: BigInt(fake.time + 1800),
+    };
+    const a = app as unknown as { created: Map<string, { e: Entry; district: string }>; onLobby(m: LobbyServerMsg): void; keyAcct: PrivateKeyAccount | null };
+    a.created.set(e.matchId.toLowerCase(), { e, district: "downtown" });
+    a.keyAcct = acct(5);
+    fake.sessions.set(alice.address.toLowerCase(), { key: acct(5).address, expiry: BigInt(fake.time + 3600), maxStake: 100n * E18, cap: 300n * E18, used: 0n });
+    app.lobby!.signed = (id: Hex, sig: Hex | null, why?: string) => { said.push({ id, sig, why }); return true; };
+    const bob = relay.card(acct(2).address);
+    const ask = async (entry: Entry, joiner = bob) => {
+      said.length = 0;
+      a.onLobby({ t: "sign", matchId: e.matchId, entry: entryToJson(entry), joiner });
+      await until(() => said.length > 0, "an answer");
+      return said[0];
+    };
+    const now = fake.time;
+    const good = { ...e, opponent: bob.address, deadline: BigInt(now + 300) };
+    assert.equal((await ask({ ...good, stake: 20n * E18 })).sig, null, "another stake");
+    assert.equal((await ask({ ...good, feeCapBps: 500 })).sig, null, "another fee cap");
+    assert.equal((await ask({ ...good, opponent: acct(3).address })).sig, null, "a name that isn't the joiner's");
+    assert.equal((await ask({ ...good, opponent: ZERO_ADDRESS }, { ...bob, address: ZERO_ADDRESS })).sig, null, "an open entry again");
+    assert.equal((await ask({ ...good, deadline: BigInt(now + 86_400) })).sig, null, "a long-lived one");
+    const ok = await ask(good);
+    assert.ok(ok.sig, ok.why ?? "no signature");
+    assert.equal(await recoverTypedDataAddress({ ...entryTypedData(31337, fake.vault, good), signature: ok.sig! }), acct(5).address, "signed by the session key: no popup");
+    assert.equal((await ask(good)).sig, null, "once: the offer is taken");
+  } finally {
+    app.stop();
+    restore();
+  }
 });
 
 // ---- the relay sockets ------------------------------------------------------------------------------------------------
@@ -484,7 +598,7 @@ test("page flow: faucet, exact approve + deposit, session key (no popups after),
     assert.equal(await A.authorise(200n * E18), true, s().notice?.text ?? "");
     await until(() => !!s().session && s().session!.key === s().sessionKey, "session registered");
     assert.equal(s().session!.maxStake, 200n * E18);
-    assert.equal(s().session!.cap, 2000n * E18);
+    assert.equal(s().session!.cap, 600n * E18);
     await until(() => A.lobby?.state === "online", "A in the lobby");
     assert.equal(A.signer()!.by(), "session");
     pa.request = (orig => async (q: { method: string; params?: unknown }) => { if (q.method === "eth_signTypedData_v4") throw new Error("no popup expected"); return orig(q); })(pa.request);
@@ -622,7 +736,7 @@ test("clock: entries and session expiries follow the chain's clock, not a device
     assert.equal(await app.deposit(200n * E18), true);
     assert.equal(await app.authorise(100n * E18), true, useWager.getState().notice?.text ?? "");
     await until(() => !!useWager.getState().session && useWager.getState().session!.key === useWager.getState().sessionKey, "session registered");
-    assert.ok(Number(useWager.getState().session!.expiry) > fake.time + 2 * 86_400, "the session expiry is 3 days of chain time");
+    assert.ok(Number(useWager.getState().session!.expiry) > fake.time + 11 * 3600, "the session expiry is 12 hours of chain time");
     await until(() => app.lobby?.state === "online", "lobby");
     const id = await app.create({ stake: 10n * E18, roundSeconds: 90, district: "downtown", listed: true, opponent: null, holdersOnly: false, minSeries: 0 });
     assert.ok(id, useWager.getState().notice?.text ?? "");
@@ -739,4 +853,9 @@ test("verify page checks: the log is this match's; a timeout refund stores no lo
   assert.equal(run(settled(a), { log: { ...log, vault: acct(5).address } as SeriesLog })[0].ok, false);
   assert.equal(run(settled(a), { log: { ...log, chainId: 46630 } as SeriesLog })[0].ok, false);
   assert.equal(run(undefined, { page: { ...page, vault: null as never } })[0].ok, true, "the vault not known yet: the rest still checks");
+  // Both players settled it themselves (the referee was gone): their signatures decide, not the log.
+  const mutual = run({ ...(settled(b, zero) as Extract<MatchEnd, { kind: "settled" }>), mutual: true });
+  assert.deepEqual(oks(mutual), [true, true, true]);
+  assert.match(mutual.at(-1)!.text, /both players' own wallet signatures/);
+  assert.deepEqual(oks(run({ kind: "voided", reason: 2, logHash: zero, tx })), [true, true, true]);
 });

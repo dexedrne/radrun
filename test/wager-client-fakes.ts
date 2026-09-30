@@ -16,8 +16,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { WebSocketServer, type WebSocket } from "ws";
 import { ERC20_ABI, GAME_VAULT_ABI } from "../src/wager/abi.ts";
 import {
-  OUTCOME_VOID, OUTCOME_WIN, VOID_REFEREE, VOID_TIMEOUT, ZERO_ADDRESS, capturedFees, entryDigest, entryFromJson, entryTypedData, loginTypedData,
-  makeRules, payout, random32, resultDigest, resultTypedData, reviewTypedData, rulesHash, sessionAuthDigest, sessionAuthFromJson, sessionAuthTypedData, type Entry, type Result,
+  OUTCOME_VOID, OUTCOME_WIN, VOID_MUTUAL, VOID_REFEREE, VOID_TIMEOUT, ZERO_ADDRESS, capturedFees, entryDigest, entryFromJson, entryToJson, entryTypedData,
+  loginTypedData, makeRules, matchIdCreator, payout, random32, resultDigest, resultTypedData, reviewTypedData, rulesHash, sessionAuthDigest, sessionAuthFromJson, sessionAuthTypedData, type Entry, type Result,
   type SessionAuth, type SimCompat,
 } from "../src/wager/eip712.ts";
 import {
@@ -65,7 +65,9 @@ type Log = { address: Address; topics: Hex[]; data: Hex; blockNumber: bigint; tr
 type Receipt = { hash: Hex; from: Address; to: Address; block: bigint; status: 1 | 0; logs: Log[] };
 
 export type VaultMatch = {
-  playerA: Address; playerB: Address; stake: bigint; feeBps: number; holderFeeBps: number; roundSeconds: number; state: 0 | 1 | 2 | 3; lockedAt: bigint; settleBy: bigint; rules: Hex;
+  playerA: Address; playerB: Address; stake: bigint; feeBps: number; holderFeeBps: number; roundSeconds: number; state: 0 | 1 | 2 | 3 | 4; lockedAt: bigint; settleBy: bigint; rules: Hex;
+  /** The referee it locked under, and the players who took their stake back after settleBy. */
+  referee?: Address; reclaimed?: string[];
 };
 
 /** One chain: a token, a vault, blocks, receipts and logs. */
@@ -182,6 +184,7 @@ export class FakeChain {
       case "totalLiabilities": return ret(this.totalLiabilities);
       case "sessionNonce": return ret(this.sessionNonce.get(String(a[0]).toLowerCase()) ?? 0n);
       case "sessionOf": return ret(this.sessions.get(String(a[0]).toLowerCase()) ?? { key: ZERO_ADDRESS, expiry: 0n, maxStake: 0n, cap: 0n, used: 0n });
+      case "refereeOf": return ret(this.matches.get(String(a[0]).toLowerCase())?.referee ?? ZERO_ADDRESS);
       case "matchOf": return ret(this.matches.get(String(a[0]).toLowerCase()) ?? { playerA: ZERO_ADDRESS, feeBps: 0, holderFeeBps: 0, roundSeconds: 0, state: 0, playerB: ZERO_ADDRESS, lockedAt: 0n, stake: 0n, settleBy: 0n, rules: `0x${"00".repeat(32)}` });
       case "hashEntry": return ret(entryDigest(this.chainId, this.vault, a[0] as Entry));
       case "hashResult": return ret(resultDigest(this.chainId, this.vault, a[0] as Result));
@@ -239,11 +242,13 @@ export class FakeChain {
         const [ea, sa, eb, sb] = a as [Entry, Hex, Entry, Hex];
         need(!this.paused, "EnforcedPause");
         need(ea.matchId === eb.matchId, "EntryMismatch");
+        need(matchIdCreator(ea.matchId).toLowerCase() === ea.player.toLowerCase(), "BadMatchId", [ea.matchId]);
         need(!this.matches.has(ea.matchId.toLowerCase()), "MatchExists", [ea.matchId]);
         need(ea.player !== eb.player && ea.player !== ZERO_ADDRESS && eb.player !== ZERO_ADDRESS, "EntryMismatch");
         need((ea.opponent === ZERO_ADDRESS || ea.opponent === eb.player) && (eb.opponent === ZERO_ADDRESS || eb.opponent === ea.player), "EntryMismatch");
         need(ea.stake === eb.stake, "EntryMismatch");
         need(ea.stake > 0n && ea.stake <= this.maxStake, "StakeOutOfRange", [ea.stake, this.maxStake]);
+        for (const e of [ea, eb]) need(e.feeCapBps >= this.houseFeeBps, "FeeAboveCap", [e.player, this.houseFeeBps, e.feeCapBps]);
         need(ea.roundSeconds === eb.roundSeconds && ea.rules === eb.rules, "EntryMismatch");
         need(now <= ea.deadline, "EntryExpired", [ea.player, ea.deadline]);
         need(now <= eb.deadline, "EntryExpired", [eb.player, eb.deadline]);
@@ -254,9 +259,12 @@ export class FakeChain {
           for (const p of [ea.player, eb.player]) need(this.g(this.free, p) >= ea.stake, "InsufficientFree", [p, this.g(this.free, p), ea.stake]);
         } catch (e) { for (const [k, v] of snap) this.sessions.set(k, v); throw e; }
         if (!write) { for (const [k, v] of snap) this.sessions.set(k, v); return "0x"; }
-        const fees = capturedFees(this.houseFeeBps, this.holderFeeBps, ea.feeCapBps, eb.feeCapBps);
+        const fees = capturedFees(this.houseFeeBps, this.holderFeeBps, this.houseFeeBps, this.houseFeeBps);
         for (const p of [ea.player, eb.player]) { this.s(this.free, p, this.g(this.free, p) - ea.stake); this.s(this.locked, p, this.g(this.locked, p) + ea.stake); }
-        const m: VaultMatch = { playerA: ea.player, playerB: eb.player, stake: ea.stake, ...fees, roundSeconds: ea.roundSeconds, state: 1, lockedAt: now, settleBy: now + BigInt(this.settleWindow), rules: ea.rules };
+        const m: VaultMatch = {
+          playerA: ea.player, playerB: eb.player, stake: ea.stake, ...fees, roundSeconds: ea.roundSeconds, state: 1, lockedAt: now, settleBy: now + BigInt(this.settleWindow), rules: ea.rules,
+          referee: this.referee, reclaimed: [],
+        };
         this.matches.set(ea.matchId.toLowerCase(), m);
         this.emit("MatchLocked", { matchId: ea.matchId, playerA: ea.player, playerB: eb.player, stake: ea.stake, feeBps: m.feeBps, holderFeeBps: m.holderFeeBps, roundSeconds: m.roundSeconds, rules: m.rules, settleBy: m.settleBy }, out);
         return "0x";
@@ -267,7 +275,8 @@ export class FakeChain {
         need(!!m && m.state === 1, "NotLocked", [r.matchId]);
         need(now <= m!.settleBy, "SettleWindowClosed", [r.matchId, m!.settleBy]);
         const signer = await recoverTypedDataAddress({ ...resultTypedData(this.chainId, this.vault, r), signature: sig }).catch(() => ZERO_ADDRESS);
-        need(signer.toLowerCase() === this.referee.toLowerCase(), "BadSignature", [this.referee]);
+        const ref = m!.referee ?? this.referee;
+        need(signer.toLowerCase() === ref.toLowerCase(), "BadSignature", [ref]);
         if (r.outcome === OUTCOME_WIN) need((r.winner === m!.playerA || r.winner === m!.playerB) && (r.feeBps === m!.feeBps || r.feeBps === m!.holderFeeBps), "BadResult");
         else need(r.outcome === OUTCOME_VOID && r.winner === ZERO_ADDRESS && r.feeBps === 0, "BadResult");
         if (!write) return "0x";
@@ -286,12 +295,66 @@ export class FakeChain {
         }
         return "0x";
       }
+      case "cancel": {
+        const id = a[0] as Hex;
+        need(matchIdCreator(id).toLowerCase() === from.toLowerCase(), "BadMatchId", [id]);
+        need(!this.matches.has(id.toLowerCase()), "MatchExists", [id]);
+        if (!write) return "0x";
+        this.matches.set(id.toLowerCase(), { playerA: ZERO_ADDRESS, playerB: ZERO_ADDRESS, stake: 0n, feeBps: 0, holderFeeBps: 0, roundSeconds: 0, state: 4, lockedAt: 0n, settleBy: 0n, rules: `0x${"00".repeat(32)}` });
+        this.emit("MatchCancelled", { matchId: id, player: from }, out);
+        return "0x";
+      }
+      case "reclaim": {
+        const id = a[0] as Hex, m = this.matches.get(id.toLowerCase());
+        need(!!m && m.state === 1, "NotLocked", [id]);
+        need(now > m!.settleBy, "SettleWindowOpen", [id, m!.settleBy]);
+        const me = from.toLowerCase();
+        need((me === m!.playerA.toLowerCase() || me === m!.playerB.toLowerCase()) && !m!.reclaimed?.includes(me), "NothingToReclaim", [id, from]);
+        if (!write) return "0x";
+        this.s(this.locked, from, this.g(this.locked, from) - m!.stake);
+        this.s(this.free, from, this.g(this.free, from) + m!.stake);
+        (m!.reclaimed ??= []).push(me);
+        if (m!.reclaimed.length === 2) m!.state = 3;
+        this.emit("StakeReclaimed", { matchId: id, player: from, stake: m!.stake }, out);
+        return "0x";
+      }
+      case "settleMutual": {
+        const [r, sigA, sigB] = a as [Result, Hex, Hex];
+        const m = this.matches.get(r.matchId.toLowerCase());
+        need(!!m && m.state === 1, "NotLocked", [r.matchId]);
+        need(now <= m!.settleBy, "SettleWindowClosed", [r.matchId, m!.settleBy]);
+        for (const [p, sig] of [[m!.playerA, sigA], [m!.playerB, sigB]] as const) {
+          const signer = await recoverTypedDataAddress({ ...resultTypedData(this.chainId, this.vault, r), signature: sig }).catch(() => ZERO_ADDRESS);
+          need(signer.toLowerCase() === p.toLowerCase(), "BadSignature", [p]);
+        }
+        if (r.outcome === OUTCOME_WIN) need((r.winner === m!.playerA || r.winner === m!.playerB) && r.feeBps === m!.feeBps, "BadResult");
+        else need(r.outcome === OUTCOME_VOID && r.winner === ZERO_ADDRESS && r.feeBps === 0, "BadResult");
+        if (!write) return "0x";
+        for (const p of [m!.playerA, m!.playerB]) this.s(this.locked, p, this.g(this.locked, p) - m!.stake);
+        if (r.outcome === OUTCOME_WIN) {
+          const pay = payout(m!.stake, r.feeBps);
+          this.s(this.free, r.winner, this.g(this.free, r.winner) + pay.winner);
+          this.houseAccrued += pay.fee;
+          m!.state = 2;
+          const loser = r.winner === m!.playerA ? m!.playerB : m!.playerA;
+          this.emit("MatchSettled", { matchId: r.matchId, winner: r.winner, loser, payout: pay.winner, fee: pay.fee, feeBps: r.feeBps, logHash: r.logHash, mutual: true }, out);
+        } else {
+          for (const p of [m!.playerA, m!.playerB]) this.s(this.free, p, this.g(this.free, p) + m!.stake);
+          m!.state = 3;
+          this.emit("MatchVoided", { matchId: r.matchId, playerA: m!.playerA, playerB: m!.playerB, reason: VOID_MUTUAL, logHash: r.logHash }, out);
+        }
+        return "0x";
+      }
       case "refundExpired": {
         const id = a[0] as Hex, m = this.matches.get(id.toLowerCase());
         need(!!m && m.state === 1, "NotLocked", [id]);
         need(now > m!.settleBy, "SettleWindowOpen", [id, m!.settleBy]);
         if (!write) return "0x";
-        for (const p of [m!.playerA, m!.playerB]) { this.s(this.locked, p, this.g(this.locked, p) - m!.stake); this.s(this.free, p, this.g(this.free, p) + m!.stake); }
+        for (const p of [m!.playerA, m!.playerB]) {
+          if (m!.reclaimed?.includes(p.toLowerCase())) continue;
+          this.s(this.locked, p, this.g(this.locked, p) - m!.stake);
+          this.s(this.free, p, this.g(this.free, p) + m!.stake);
+        }
         m!.state = 3;
         this.emit("MatchVoided", { matchId: id, playerA: m!.playerA, playerB: m!.playerB, reason: VOID_TIMEOUT, logHash: `0x${"00".repeat(32)}` }, out);
         return "0x";
@@ -835,6 +898,8 @@ export class FakeRelay {
   readonly o: RelayOpts;
   readonly clock: Clock;
   readonly offers = new Map<string, { offer: Offer; sig: Hex; conn: LobbyConn }>();
+  /** Joins waiting for the creator's named Entry (`sign` sent). */
+  private readonly signing = new Map<string, (sig: Hex | null) => void>();
   readonly rooms = new Map<string, FakeRoom>();
   readonly cards = new Map<string, PlayerCard>();
   readonly status = new Map<string, MatchStatus>();
@@ -962,6 +1027,11 @@ export class FakeRelay {
         if (offer.listed) this.broadcast({ t: "offer", offer }); else this.send(sock, { t: "offer", offer });
         return;
       }
+      case "signed": {
+        const done = this.signing.get(m.matchId.toLowerCase());
+        if (done) done(m.sig);
+        return;
+      }
       case "cancel": {
         const x = this.offers.get(m.matchId.toLowerCase());
         if (x && x.conn === conn) { this.offers.delete(m.matchId.toLowerCase()); this.broadcast({ t: "unoffer", matchId: m.matchId, reason: "cancelled" }); }
@@ -975,9 +1045,23 @@ export class FakeRelay {
         if (x.offer.opponent && x.offer.opponent.toLowerCase() !== me.toLowerCase()) { err("forbidden", "invite for someone else"); return; }
         this.offers.delete(a.matchId.toLowerCase());
         this.broadcast({ t: "unoffer", matchId: a.matchId, reason: "matched" });
-        const sa = { entry: x.offer.entry, sig: x.sig }, sb = { entry: m.entry, sig: m.sig };
+        // An open offer's signature never leaves the relay: the creator's page signs a named Entry for this joiner.
+        let sa = { entry: x.offer.entry, sig: x.sig };
+        if (a.opponent === ZERO_ADDRESS) {
+          const named: Entry = { ...a, opponent: me, deadline: BigInt(Math.min(Number(a.deadline), c.time + WAGER_TIMING.namedTtlS)) };
+          const sig = await new Promise<Hex | null>(res => {
+            const id = a.matchId.toLowerCase();
+            const t = setTimeout(() => { this.signing.delete(id); res(null); }, 10_000);
+            t.unref?.();
+            this.signing.set(id, v => { clearTimeout(t); this.signing.delete(id); res(v); });
+            this.send(x.conn.sock, { t: "sign", matchId: a.matchId, entry: entryToJson(named), joiner: this.card(me) });
+          });
+          if (!sig) { err("gone", "the creator's page didn't confirm the match: the offer is withdrawn"); return; }
+          sa = { entry: entryToJson(named), sig };
+        }
+        const sb = { entry: m.entry, sig: m.sig };
         for (const s of [x.conn.sock, sock]) this.send(s, { t: "matched", matchId: a.matchId, a: sa, b: sb });
-        const data = encodeFunctionData({ abi: GAME_VAULT_ABI, functionName: "lock", args: [a, x.sig, b, m.sig] });
+        const data = encodeFunctionData({ abi: GAME_VAULT_ABI, functionName: "lock", args: [entryFromJson(sa.entry), sa.sig, b, m.sig] });
         const r = await this.relay(data);
         if (!r.ok) { for (const s of [x.conn.sock, sock]) this.send(s, { t: "tx", kind: "lock", matchId: a.matchId, hash: r.hash, status: "failed", error: "lock reverted" }); return; }
         this.initRoom(a, b, x.offer.district);

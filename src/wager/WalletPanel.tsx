@@ -132,7 +132,7 @@ export function WalletPanel({ app }: { app: WagerApp }) {
               <AmountInput value={sessPick} set={setSessPick} testid="wager-session-max" placeholder="max stake" onMax={() => setSessPick(formatAmount(BigInt(config.maxStake), d, d).replace(/,/g, ""))} />
               <button style={btn(true)} disabled={!!busy || !sessAmt} onClick={() => sessAmt && void app.authorise(sessAmt)} data-testid="wager-authorise">{busy === "session" ? "SIGNING…" : "AUTHORISE"}</button>
             </div>
-            <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>largest stake per match (up to {formatAmount(BigInt(config.maxStake), d)}); the total is 10× that; it expires in 3 days</div>
+            <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>largest stake per match (up to {formatAmount(BigInt(config.maxStake), d)}); the total is 3× that; it expires in 12 hours (small, because anything that copies the key can spend what is left of it)</div>
           </div>
         )}
       </div>

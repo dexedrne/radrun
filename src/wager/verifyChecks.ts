@@ -1,9 +1,10 @@
 // SPIDER-TAG wager client: the verify page's verdict lines (docs/WAGER.md §7.3 "Verify"), apart from the page so tests
 // can check them. The replay's verdict, plus what ties the log to the chain: the log is this page's match on this
 // vault, the log hash equals the one the vault stored, and the vault paid the replayed winner (or voided a series the
-// log says is void). A refund after the settle window stores no log hash, so that check is skipped for it. Pure TS.
+// log says is void). A refund after the settle window stores no log hash, so that check is skipped for it, and a settle
+// both players signed themselves is theirs to decide. Pure TS.
 import type { Address, Hex } from "viem";
-import { VOID_TIMEOUT } from "./eip712.ts";
+import { VOID_MUTUAL, VOID_TIMEOUT } from "./eip712.ts";
 import type { SeriesLog } from "./log.ts";
 import type { SeriesVerdict } from "./replay.ts";
 import type { MatchEnd } from "./chain.ts";
@@ -37,6 +38,11 @@ export function matchChecks(o: {
   if (end.kind === "voided" && end.reason === VOID_TIMEOUT) {
     // refundExpired stores no log hash (nobody signed a result): both stakes went back, whatever the log says.
     checks.push({ ok: true, text: "refunded after the settle window: nobody settled it, so both stakes went back" });
+    return checks;
+  }
+  if ((end.kind === "settled" && end.mutual) || (end.kind === "voided" && end.reason === VOID_MUTUAL)) {
+    // settleMutual: both players' wallets signed the result themselves (the referee was gone): their agreement decides it.
+    checks.push({ ok: true, text: "settled by both players' own wallet signatures, not the referee: the log doesn't decide it" });
     return checks;
   }
   const sameHash = end.logHash.toLowerCase() === log.logHash.toLowerCase();

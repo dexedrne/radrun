@@ -59,6 +59,11 @@ function shareFor(matchId: Hex): { share: Hex; sent: boolean; mark(): void } {
 export type SeriesOptions = {
   base: string; matchId: Hex; chainId: number; vault: Address; signer: LoginSigner; compat: Compat; sim: SeriesSim; ev: SeriesEvents;
   transport?: () => RoomTransport;
+  /**
+   * Dev / test builds only (`&badhash`): report a wrong final state hash at every round's end, to exercise the
+   * referee's dispute path end to end (both players doing it is a result-mismatch: the series is held).
+   */
+  tamperEndHash?: boolean;
 };
 
 export class SeriesClient {
@@ -99,6 +104,10 @@ export class SeriesClient {
     t.onJson = ((m: RoomServerMsg) => { if (this.t === t) void this.onJson(m); }) as never;
     t.onBinary = b => { if (this.t === t) this.onBinary(b); };
     t.onClose = why => { if (this.t === t) this.lost(why); };
+    if (this.o.tamperEndHash) {
+      const send = t.sendJson.bind(t);
+      t.sendJson = ((m: { t?: string; hash?: number }) => send((m.t === "end" && typeof m.hash === "number" ? { ...m, hash: (m.hash ^ 0x5a5a5a5a) >>> 0 } : m) as never)) as never;
+    }
     this.setConn(this.tries ? "reconnecting" : "connecting");
     try {
       await t.connect(this.o.base, this.o.matchId);

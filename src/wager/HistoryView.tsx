@@ -1,5 +1,5 @@
 // SPIDER-TAG wager client: your matches, from the vault's events (docs/WAGER.md §3.9): MatchLocked as player A or B,
-// then how each ended (MatchSettled / MatchVoided). Date, opponent, stake, result, payout, transactions and the
+// then how each ended (MatchSettled / MatchVoided, or your own StakeReclaimed). Date, opponent, stake, result, payout, transactions and the
 // verify link. Nothing here comes from the relay.
 import { useEffect, useState } from "react";
 import { useWager, type WagerApp } from "./app.ts";
@@ -48,11 +48,11 @@ export function HistoryView({ app }: { app: WagerApp }) {
                 <span style={{ width: 118, color: C.dim, fontSize: 12 }}>{r.lockedAt > 0 ? dateText(r.lockedAt) : ""}</span>
                 <span style={{ flex: "1 1 120px" }}>vs {shortAddress(r.opponent)}</span>
                 <span><Amount v={r.stake} decimals={d} symbol={sym} /></span>
-                <span style={{ color: col, fontWeight: 900, minWidth: 70 }}>{r.state === "won" ? "WON" : r.state === "lost" ? "LOST" : r.state === "void" ? VOIDS[r.voidReason ?? 1] ?? "void" : "LIVE"}</span>
+                <span style={{ color: col, fontWeight: 900, minWidth: 70 }}>{r.state === "won" ? "WON" : r.state === "lost" ? "LOST" : r.state === "void" ? VOIDS[r.voidReason ?? 1] ?? "void" : r.state === "reclaimed" ? "stake taken back" : "LIVE"}</span>
                 {r.state === "won" && <span>+<Amount v={r.payout} decimals={d} symbol={sym} /></span>}
                 <span style={{ display: "flex", gap: 8, fontSize: 12 }}>
                   <TxLink dep={dep} hash={r.lockTx} text="lock" />
-                  <TxLink dep={dep} hash={r.endTx} text={r.state === "void" ? "refund" : "settle"} />
+                  <TxLink dep={dep} hash={r.endTx} text={r.state === "void" || r.state === "reclaimed" ? "refund" : "settle"} />
                   <a href={`?wager&verify=${r.matchId}${keepParams()}`} style={{ color: C.ice }}>verify</a>
                   {r.state === "locked" && <a href={`?wager&match=${r.matchId}${keepParams()}`} style={{ color: C.gold }}>open</a>}
                 </span>

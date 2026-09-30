@@ -2,13 +2,17 @@
 // wallet signs one SessionAuth for it (the largest stake per match, a total cap, an expiry), and from then on the key
 // signs match Entries and relay logins with no wallet popup. It can never withdraw or send funds anywhere. The key
 // lives in this browser's local storage, one per (chain, vault, player); losing it just means authorising a new one.
+// Its limits are kept small and short (a copied key can lose up to what its cap has left).
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { maxUint128, type Address, type Hex } from "viem";
 import { MAX_SESSION_TTL_S, ZERO_ADDRESS, type SessionAuth } from "./eip712.ts";
 import { sameAddress } from "./units.ts";
 
-/** Client defaults: cap = 10 x the largest stake, 3 days. */
-export const SESSION_DEFAULTS = { capTimes: 10n, ttlS: 3 * 86_400 } as const;
+/**
+ * Client defaults: cap = 3 x the largest stake, 12 hours. Small on purpose: anything that runs script on the page can
+ * copy the key, and a copied key can lose up to what its cap has left (docs/WAGER.md §2, §3.4).
+ */
+export const SESSION_DEFAULTS = { capTimes: 3n, ttlS: 12 * 3600 } as const;
 
 /** vault.sessionOf(player). */
 export type OnchainSession = { key: Address; expiry: bigint; maxStake: bigint; cap: bigint; used: bigint };
@@ -57,8 +61,8 @@ export function dropSessionKey(store: KeyStore, chainId: number, vault: Address,
 export type SessionTerms = { maxStake: bigint; cap: bigint; expiry: bigint };
 
 /**
- * The limits the page proposes: the stake the player picked (at most the vault's maxStake), 10 x that in total, three
- * days (never past the vault's 30-day limit).
+ * The limits the page proposes: the stake the player picked (at most the vault's maxStake), 3 x that in total, 12 hours
+ * (never past the vault's 30-day limit).
  */
 export function sessionTerms(pick: bigint, vaultMaxStake: bigint, nowS: number, o: { capTimes?: bigint; ttlS?: number } = {}): SessionTerms {
   const maxStake = pick < vaultMaxStake ? pick : vaultMaxStake;

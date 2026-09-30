@@ -46,7 +46,7 @@ export function siteChoice(): SiteChoice {
 /** Keep `&net=` (and the dev overrides) on links the page makes (invites, verify links, navigation). */
 export function keepParams(search = location.search, dev = import.meta.env.MODE !== "production"): string {
   const q = new URLSearchParams(search), out = new URLSearchParams();
-  const keys = dev ? ["net", "relay", "rpc", "devwallet", "bot"] : ["net"];
+  const keys = dev ? ["net", "relay", "rpc", "devwallet", "bot", "badhash"] : ["net"];
   for (const k of keys) if (q.has(k)) out.set(k, q.get(k) ?? "");
   const s = out.toString().replace(/=(?=&|$)/g, "");
   return s ? `&${s}` : "";

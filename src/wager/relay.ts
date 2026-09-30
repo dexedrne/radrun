@@ -203,6 +203,8 @@ export class LobbyClient {
   create(entry: EntryJson, sig: Hex, o: { listed: boolean; holdersOnly?: boolean; minSeries?: number }) { return this.send({ t: "create", entry, sig, ...o }); }
   cancel(matchId: Hex) { return this.send({ t: "cancel", matchId }); }
   join(entry: EntryJson, sig: Hex) { return this.send({ t: "join", entry, sig }); }
+  /** The answer to the lobby's `sign`: the named Entry's signature, or null and why not. */
+  signed(matchId: Hex, sig: Hex | null, why?: string) { return this.send({ t: "signed", matchId, sig, ...(why ? { why } : {}) }); }
   profile(p: { name?: string; cosmetic?: Cosmetic | null }) { return this.send({ t: "profile", ...p }); }
 
   close(): void {
