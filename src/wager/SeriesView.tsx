@@ -220,6 +220,9 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const voided = voidedTx !== undefined ? voidedTx : closedVoid ? status?.settleTx ?? null : undefined;
   const stake = st ? BigInt(st.stake) : onChain ? onChain.stake : status?.offer ? BigInt(status.offer.stake) : 0n;
   const settleBy = st?.settleBy ?? onChain?.settleBy ?? 0;
+  // The terms from the relay's series, or from the chain's match when the relay is out of reach.
+  const secs = st?.roundSeconds ?? onChain?.roundSeconds ?? 0;
+  const fees = st ?? (onChain && onChain.state !== "none" ? onChain : null);
   const relayLeft = (at: number | null | undefined) => (at && clientRef.current ? Math.max(0, (at - clientRef.current.relayNow()) / 1000) : null);
   const verify = `?wager&verify=${matchId}${keepParams()}`;
   const expired = onChain?.state === "locked" && settleBy > 0 && chainTime > settleBy;
@@ -228,7 +231,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 8 }}>
       <div style={{ font: "900 22px ui-monospace, monospace", letterSpacing: 2 }}>SERIES</div>
       <div style={{ fontSize: 13, color: C.dim }}>
-        <Amount v={stake} decimals={d} symbol={sym} /> each · {st ? roundText(st.roundSeconds) : ""} · best of 3{st ? ` · fee ${bpsText(st.feeBps)}${st.holderFeeBps < st.feeBps ? ` (${bpsText(st.holderFeeBps)} for a Radbro-holder winner)` : ""}` : ""}
+        <Amount v={stake} decimals={d} symbol={sym} /> each{secs ? ` · ${roundText(secs)}` : ""} · best of 3{fees ? ` · fee ${bpsText(fees.feeBps)}${fees.holderFeeBps < fees.feeBps ? ` (${bpsText(fees.holderFeeBps)} for a Radbro-holder winner)` : ""}` : ""}
       </div>
     </div>
   );
