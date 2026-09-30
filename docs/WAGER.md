@@ -320,8 +320,10 @@ districts (40-95 KB each). At startup it checks `selfTestHash() === SELFTEST_HAS
    - `by: "session"`: the signer must equal `vault.sessionOf(player).key` and the session must be unexpired.
    - `by: "wallet"`: viem `verifyTypedData` (EOA, ERC-1271, ERC-6492).
 4. The relay accepts each challenge once; one that is expired or already used is refused (`auth`).
-   - On the lobby socket a refused login is followed by a fresh `challenge`, so the client can try again. On a room
-     socket it closes the socket.
+   - On the lobby socket a refused login leaves the socket open, and a new `hello` gets a fresh challenge (the relay
+     never re-challenges by itself: a client that signs every challenge would loop). On a room socket it closes the
+     socket.
+   - A client that reconnects before round 1 may send its seed share again: the same share is accepted silently.
    - The lobby sends the open list (`offers`) right after `challenge`, before any login: listed offers are public.
 
 ### 4.3 Lobby, offers and pairing
@@ -650,7 +652,7 @@ dev relay is not.
 | Kind | Signal | Starting threshold |
 |---|---|---|
 | `reaction` | Steps from the moment the holder's ring turns red on the runner (`ringId === RING_RUNNER`) to the web press that Yoinks (a Yoink within 30 steps of another web press is spam, not a reaction, and is not counted) | median < 18 steps (150 ms) over ≥ 5 events, or ≥ 3 events < 10 steps |
-| `aim` | Yaw error against the target's bearing **in the player's own view**: the relay rebuilds the state that client showed when it sampled the word (the opponent steps it had released to it by then, then `predictWord`), because over a network an aimbot aims at its prediction, not at the canonical state. Sampled at Yoink/yank presses, and every 4 steps while the holder chases his target within 15 m | median ≤ 1 yaw unit (0.35°) over ≥ 5 presses, or ≤ 2 units over ≥ 24 chase samples |
+| `aim` | Yaw error against the target's bearing **in the player's own view**: the relay rebuilds the state that client showed when it sampled the word (the opponent steps it had released to it by then, then `predictWord`), because over a network an aimbot aims at its prediction, not at the canonical state. Sampled at Yoink/yank presses, and every 2 steps while the holder chases his target within 15 m | median ≤ 1 yaw unit (0.35°) over ≥ 5 presses, or over ≥ 16 chase samples |
 | `periodic` | Coefficient of variation of the intervals between presses | < 0.03 over ≥ 12 presses |
 | `late-inputs` | Median arrival slack against the deadline, and the fraction filled | median slack < 10 ms, or > 5% of steps filled, with a relay-measured round trip < 150 ms |
 | `desync` | The client's `end` hash differs from the referee's | any |
