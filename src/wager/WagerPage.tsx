@@ -48,7 +48,13 @@ export default function WagerPage() {
 }
 
 function WagerOverlay({ game }: { game: TagGame }) {
-  const choice = useMemo(siteChoice, []);
+  const choice = useMemo(() => {
+    const c = siteChoice();
+    // A production build learns the vault only from deployments.json: until the deploy tool fills it in, say so
+    // plainly instead of opening a lobby that can't reach anything.
+    if (c.dep && !c.off && !c.dep.vault && !DEV && c.dep.net !== "local") return { ...c, off: `wager matches on ${c.dep.chainName} open soon: the vault isn't deployed yet` };
+    return c;
+  }, []);
   const [app, setApp] = useState<WagerApp | null>(null);
   const [route, setRoute] = useState<Route>(readRoute);
   const [tab, setTab] = useState<"lobby" | "wallet" | "history">("lobby");
