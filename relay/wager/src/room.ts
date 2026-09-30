@@ -169,6 +169,11 @@ export class WagerRoomCore {
   private probeT: unknown = null;
   private settleRetryAt: number | null = null;
   private concluding = false;
+  /**
+   * This instance took over a series between rounds (a relay restart dropped both sockets): until both players are
+   * back, one who stays away voids the series instead of forfeiting it (a relay fault never picks a winner).
+   */
+  private restarted = false;
   /** Stats for the measurements (docs/WAGER.md §4.10). */
   readonly stats = { inputs: 0, inputMs: 0, maxInputMs: 0, sealedSteps: 0, simMs: 0 };
 
@@ -176,15 +181,22 @@ export class WagerRoomCore {
     this.d = d;
     this.matchId = d.matchId;
     this.T = d.settings.timing;
+    // The tables are made when a series is initialised, not here: a room for any other id (GET /log/<id>, a socket to
+    // a match that never locked) writes nothing, so it leaves no storage behind.
     const sql = d.sql;
-    sql.exec("CREATE TABLE IF NOT EXISTS series (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)");
-    sql.exec("CREATE TABLE IF NOT EXISTS rounds (round INTEGER PRIMARY KEY, json TEXT NOT NULL)");
-    sql.exec("CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY CHECK (id = 1), gz BLOB NOT NULL, hash TEXT NOT NULL)");
-    const row = sql.exec("SELECT json FROM series WHERE id = 1")[0];
+    let row: Record<string, unknown> | undefined;
+    try { row = sql.exec("SELECT json FROM series WHERE id = 1")[0]; } catch { /* no series table: nothing here yet */ }
     if (row) {
       this.p = JSON.parse(String(row.json)) as Persist;
       this.rounds = sql.exec("SELECT json FROM rounds ORDER BY round").map(r => JSON.parse(String(r.json)) as RoundLog);
     }
+  }
+
+  private tables(): void {
+    const sql = this.d.sql;
+    sql.exec("CREATE TABLE IF NOT EXISTS series (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS rounds (round INTEGER PRIMARY KEY, json TEXT NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY CHECK (id = 1), gz BLOB NOT NULL, hash TEXT NOT NULL)");
   }
 
   private log(m: string): void {
@@ -249,6 +261,12 @@ export class WagerRoomCore {
     } else if (p.phase === "signed") {
       this.settleRetryAt = this.d.clock.now();
       this.schedule();
+    } else if (p.phase === "between" && p.started) {
+      // Both sockets went with the old instance: both players get the reconnect grace from now.
+      this.goneAt[0] = this.goneAt[1] = this.d.clock.now();
+      this.restarted = true;
+      this.schedule();
+      this.probeLoop();
     } else {
       this.schedule();
       this.probeLoop();
@@ -268,6 +286,7 @@ export class WagerRoomCore {
     cards ??= (await Promise.all(players.map(a => this.d.lobby.card(a)))) as [PlayerCard, PlayerCard];
     const now = this.d.clock.now();
     const secret = (this.d.random32 ?? random32)();
+    this.tables();
     this.p = {
       v: 1, matchId: this.matchId, chainId: this.d.chain.chainId, vault: this.d.chain.vault, players, stake: m.stake.toString(), feeBps: m.feeBps,
       holderFeeBps: m.holderFeeBps, roundSeconds: m.roundSeconds, district: sim.district, rules: sim.rules, rulesHash: sim.rulesHash, settleBy: m.settleBy,
@@ -400,6 +419,7 @@ export class WagerRoomCore {
     this.seats[side] = c;
     const back = this.goneAt[side] !== null;
     this.goneAt[side] = null;
+    if (this.seats[0] && this.seats[1]) this.restarted = false;
     if (back) this.both({ t: "back", side });
     this.broadcast();
     if (p.outcome) {
@@ -794,7 +814,7 @@ export class WagerRoomCore {
       const g = this.T.reconnectGraceMs;
       const out = ([0, 1] as const).filter(s => this.goneAt[s] !== null && now - this.goneAt[s]! >= g);
       if (out.length === 2) { void this.voidSeries("error"); return; }
-      if (out.length === 1 && this.goneAt[1 - out[0]] === null) { void this.forfeit(out[0]); return; }
+      if (out.length === 1 && this.goneAt[1 - out[0]] === null) { void (this.restarted ? this.voidSeries("error") : this.forfeit(out[0])); return; }
     }
     if (p.phase === "between") this.maybeStart();
     if (p.phase === "deciding" && !p.outcome && p.deadlineAt !== null && now >= p.deadlineAt) this.decide();
@@ -853,6 +873,7 @@ export class WagerRoomCore {
 
   /** The stored log (gzipped JSON), once the series is over. */
   logGz(): Uint8Array | null {
+    if (!this.p) return null;
     const row = this.d.sql.exec("SELECT gz FROM log WHERE id = 1")[0];
     return row ? (row.gz as Uint8Array) : null;
   }

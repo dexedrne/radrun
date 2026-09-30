@@ -137,7 +137,7 @@ export class WagerLobby {
     const sv = services(env);
     const sql = doSql(ctx);
     this.core = new WagerLobbyCore({
-      clock: realClock, sql, settings: sv.settings, chain: sv.chain, sims: sv.sims, radbro: new RadbroReader({ src: sv.radbroSrc, now: Date.now, cacheMs: sv.settings.radbro.cacheMs, sql }),
+      clock: realClock, sql, settings: sv.settings, chain: sv.chain, sims: sv.sims, referee: sv.referee?.address ?? null, radbro: new RadbroReader({ src: sv.radbroSrc, now: Date.now, cacheMs: sv.settings.radbro.cacheMs, sql }),
       relayer: sv.relayer, faucet: sv.faucet, rooms: roomLink(env), connections: () => ctx.getWebSockets().map(ws => this.wrap(ws)), log: m => console.log(m),
     });
     // Keepalive pings are answered without waking the hibernating object.

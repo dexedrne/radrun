@@ -338,6 +338,8 @@ districts (40-95 KB each). At startup it checks `selfTestHash() === SELFTEST_HAS
 - `rules == rulesHash(makeRules(district, referee sim))`.
 - `deadline ≥ now + 60 s`.
 - The creator has at most 3 open offers.
+- `feeCapBps` ≥ the vault's `houseFeeBps`. The lock captures the lowest cap, so a lower one would dodge the fee.
+- The vault is not paused, and `REFEREE_KEY` is the vault's `referee` (nobody else can settle the match).
 
 The offer is listed, or kept unlisted (reachable by its invite link or id). `entry.opponent != 0` makes a named invite.
 
@@ -350,7 +352,8 @@ IP).
 - A named invite is joined only by that address.
 - `holdersOnly` and `minSeries` hold.
 - The creator's lobby socket is still connected; an offer is withdrawn when its creator leaves.
-- Neither player is in another unsettled series.
+- Neither player is in another unsettled series (checked again, with no wait, just before the offer is taken).
+- The joiner's `feeCapBps` ≥ the offer's fee, `min(houseFeeBps, creator's cap)`.
 
 **Lock.**
 1. The lobby sends `matched {a, b}` to both players.
@@ -407,6 +410,8 @@ The phases are `waiting → between → playing → (between → playing)* → d
 8. **Relay failure.**
    - The room persists the series header at init and every finished round.
    - A room that restarts mid-round cannot recover that round's inputs, so the series is **void (`error`)**.
+   - A room that restarts between rounds gives both players the reconnect grace from the restart. If either one stays
+     away past it, the series is void (`error`), not a forfeit.
    - A relay fault never picks a winner.
    - Never deploy the wager Worker while series are live: the deploy tool checks `GET /health` first. It answers
      `ok` with an `x-wager-live` header, the number of series locked or being played; deploy only at 0.
@@ -432,6 +437,7 @@ Records live in the lobby DO's SQLite and are updated when a settle or void is c
   - **Owned ids:** `tokensOfOwner(address)` on V2.
   - **Owner, not renter:** `ownerOf` is used, never ERC-4907 `userOf`, so a rental earns no perk.
   - Results are cached for 10 minutes. If every RPC fails, the answer is "not a holder": no perk and no error.
+  - Only addresses that have logged in are read. A card for any other address shows no holdings.
 - **Fee discount.** At signing time the referee re-reads the winner (a cache no older than 60 s). A holder winner
   gets `holderFeeBps`, within the captured bound (§3.5).
 - **Own Radbro.**

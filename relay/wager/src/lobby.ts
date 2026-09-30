@@ -63,6 +63,8 @@ export type LobbyDeps = {
   chain: VaultChain;
   sims: Sims;
   radbro: RadbroReader;
+  /** REFEREE_KEY's address (null: no key). Offers are refused unless it is the vault's referee: nobody else can settle. */
+  referee: Address | null;
   /** RELAYER_KEY's queue (null: no relayer; players submit their own transactions). */
   relayer: Relayer | null;
   /** FAUCET_KEY's queue (test networks only). */
@@ -290,10 +292,14 @@ export class WagerLobbyCore {
     return r ? r.wins + r.losses : 0;
   }
 
-  /** A player's public card: record, rating, account age, Radbro holdings (the relay's own Ethereum reads). */
+  /**
+   * A player's public card: record, rating, account age, Radbro holdings (the relay's own Ethereum reads). Only an
+   * address that has logged in gets the Ethereum reads: GET /player/<any address> must not turn the relay into a free
+   * proxy for public RPCs (or fill its cache).
+   */
   async card(a: Address): Promise<PlayerCard> {
     const r = this.row(a);
-    const h = await this.d.radbro.holder(a);
+    const h = r ? await this.d.radbro.holder(a) : { holder: false, ids: [] };
     let cosmetic: Cosmetic | null = null;
     try { cosmetic = r?.cosmetic ? (JSON.parse(r.cosmetic) as Cosmetic) : null; } catch { /* ignore */ }
     return {
@@ -451,6 +457,20 @@ export class WagerLobbyCore {
     if ((await this.d.chain.freeOf(p)) < stake) fail("balance", "not enough free balance in the vault: deposit first");
   }
 
+  /**
+   * The relay refuses what it could not settle or what would dodge the house fee. The vault captures
+   * min(houseFeeBps, capA, capB), so an Entry capped below the fee on show (0, say) would make the match fee-free:
+   * a creator's cap must cover the vault's house fee, and a joiner's the offer's fee. And only the vault's referee can
+   * sign a Result: with another key (or none) every stake would sit locked until the settle window refunds it.
+   */
+  private async termsOk(e: Entry, creator: Entry | null): Promise<void> {
+    const i = await this.d.chain.info();
+    if (i.paused) fail("busy", "the vault is paused: no new matches right now");
+    if (!this.d.referee || !sameAddr(this.d.referee, i.referee)) fail("busy", "the relay can't referee matches right now: try later");
+    const need = creator ? Math.min(i.houseFeeBps, creator.feeCapBps) : i.houseFeeBps;
+    if (e.feeCapBps < need) fail("terms", `the entry's fee cap (${e.feeCapBps} bps) is below the fee (${need} bps): reload to update`);
+  }
+
   private async create(c: LobbyConn, m: Extract<LobbyClientMsg, { t: "create" }>): Promise<void> {
     const me = c.state.player ?? fail("auth", "log in first");
     const s = this.d.settings;
@@ -469,6 +489,7 @@ export class WagerLobbyCore {
     const mine = [...this.offers.values()].filter(r => sameAddr(r.offer.creator.address, me)).length;
     if (mine >= WAGER_LIMITS.offersPerPlayer) fail("rate", `at most ${WAGER_LIMITS.offersPerPlayer} open offers each`);
     if (this.offers.size >= WAGER_LIMITS.offersTotal) fail("busy", "the lobby is full: try again soon");
+    await this.termsOk(e, null);
     await this.stakeOk(me, e.stake);
     await this.entrySig(e, m.sig);
     if ((await this.d.chain.matchOf(id)).state !== MS_NONE) fail("terms", "that match id is taken");
@@ -513,11 +534,14 @@ export class WagerLobbyCore {
     if (this.settledCount(me) < o.minSeries) fail("forbidden", `this offer wants players with ${o.minSeries}+ settled series`);
     if (!this.conns(a.player).length) { this.removeOffer(o.matchId, "creator-left"); fail("gone", "the creator left"); }
     if (this.busy(me) || this.busy(a.player)) fail("busy", "one of you is still in an unsettled series");
+    await this.termsOk(b, a);
     await this.stakeOk(me, b.stake);
     await this.entrySig(b, sig);
     if ((await this.d.chain.freeOf(a.player)) < a.stake) { this.removeOffer(o.matchId, "cancelled"); fail("balance", "the creator no longer has the stake free"); }
-    // Taken: from here the offer is this pair's (a second joiner finds it gone).
+    // Taken: from here the offer is this pair's (a second joiner finds it gone). The checks above waited on the chain,
+    // so another join may have paired either player meanwhile: check again with no await before taking it.
     if (!this.offers.has(o.matchId)) fail("gone", "that offer is gone");
+    if (this.busy(me) || this.busy(a.player)) fail("busy", "one of you is still in an unsettled series");
     this.removeOffer(o.matchId, "matched");
     const sa: SignedEntry = { entry: o.entry, sig: rec.sig }, sb: SignedEntry = { entry: toJson(b), sig };
     this.d.sql.exec("INSERT OR REPLACE INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, 'locking', ?, ?, ?, NULL, NULL, NULL, ?)",
@@ -663,7 +687,9 @@ export class WagerLobbyCore {
     const off = this.offers.get(id);
     if (off) return { matchId: id, state: "open", offer: off.offer, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
     const r = this.match(id);
-    const rs = await this.d.rooms.status(id).catch(() => null);
+    // Only a match the lobby knows has a room (a room that initialised itself from the chain has told the lobby): an
+    // unknown id never wakes a room.
+    const rs = r ? await this.d.rooms.status(id).catch(() => null) : null;
     if (!r && !rs) return { matchId: id, state: "unknown", offer: null, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
     const ph = rs?.series?.phase;
     const state: MatchStatus["state"] = r?.state === "settled" || r?.state === "voided" ? r.state

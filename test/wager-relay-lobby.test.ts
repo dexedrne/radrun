@@ -48,7 +48,7 @@ async function lobbyHarness(vars: Vars = {}) {
   const holders = new Map<string, number[]>();
   const sql = nodeSql();
   const lobby = new WagerLobbyCore({
-    clock, sql, settings, chain: fv, sims: SIMS, radbro: new RadbroReader({ src: new MockRadbroSource(holders), now: () => clock.now(), cacheMs: 1, sql }),
+    clock, sql, settings, chain: fv, sims: SIMS, referee: referee.address, radbro: new RadbroReader({ src: new MockRadbroSource(holders), now: () => clock.now(), cacheMs: 1, sql }),
     relayer, faucet, rooms, connections: () => [...conns],
   });
   let n = 1;
@@ -247,6 +247,97 @@ test("join: named invites, holders-only and min-series; the pair locks through t
   const more = await mk(A);
   assert.equal((await join(C, more)).find(m => m.t === "error")?.code, "busy");
   assert.deepEqual(h.fv.sent, ["lock"]);
+});
+
+test("fees: an entry capped below the fee on show is refused (no fee-free matches); no offers while the relay can't referee or the vault is paused", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player();
+  const create = async (e: EntryJson) => {
+    const before = A.c.msgs.length;
+    await h.send(A.c, { t: "create", entry: e, sig: await h.sign(A.key, e), listed: true });
+    return A.c.msgs.slice(before).find(m => m.t === "error" || m.t === "offer") as LobbyServerMsg;
+  };
+  // The creator's cap must cover the vault's house fee (300).
+  const free = await create(h.entry({ player: A.acct.address, feeCapBps: 0 }));
+  assert.equal(free.t === "error" && free.code, "terms");
+  assert.equal((await create(h.entry({ player: A.acct.address, feeCapBps: 299 }))).t, "error");
+  // A joiner's cap must cover the offer's fee: 0 would make the lock capture min(300, 300, 0) = 0.
+  const a = h.entry({ player: A.acct.address, feeCapBps: 500 });
+  assert.equal((await create(a)).t, "offer");
+  const join = async (feeCapBps: number) => {
+    const b = h.entry({ player: B.acct.address, matchId: a.matchId, opponent: A.acct.address, feeCapBps });
+    const before = B.c.msgs.length;
+    await h.send(B.c, { t: "join", entry: b, sig: await h.sign(B.key, b) });
+    return B.c.msgs.slice(before);
+  };
+  assert.equal((await join(0)).find(m => m.t === "error")?.code, "terms");
+  assert.equal((await join(150)).find(m => m.t === "error")?.code, "terms", "not even the holder fee");
+  assert.equal(h.fv.sent.length, 0, "nothing was sent for any of it");
+  await join(300);
+  await eventually(() => h.last(B.c, "locked"));
+  assert.equal((await h.fv.matchOf(a.matchId)).feeBps, 300, "the lock captured the house fee");
+  // A relay whose REFEREE_KEY is not the vault's referee can't settle anything: it takes no offers.
+  h.fv.referee = newAccount().address;
+  const C = await h.player();
+  const ec = h.entry({ player: C.acct.address });
+  await h.send(C.c, { t: "create", entry: ec, sig: await h.sign(C.key, ec), listed: true });
+  assert.equal(errOf(C.c)?.code, "busy");
+  h.fv.referee = h.referee.address;
+  h.fv.paused = true;
+  const ed = h.entry({ player: C.acct.address });
+  await h.send(C.c, { t: "create", entry: ed, sig: await h.sign(C.key, ed), listed: true });
+  assert.match(errOf(C.c)?.message ?? "", /paused/);
+});
+
+test("join races: two joins that wait on the chain at the same time never put a player in two series", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player(), C = await h.player();
+  // A has two open offers; B and C join one each at the same moment.
+  const offer = async () => {
+    const e = h.entry({ player: A.acct.address });
+    await h.send(A.c, { t: "create", entry: e, sig: await h.sign(A.key, e), listed: true });
+    return e;
+  };
+  const o1 = await offer(), o2 = await offer();
+  const joinMsg = async (by: typeof B, a: EntryJson) => {
+    const b = h.entry({ player: by.acct.address, matchId: a.matchId, opponent: a.player });
+    return { t: "join" as const, entry: b, sig: await h.sign(by.key, b) };
+  };
+  const [m1, m2] = [await joinMsg(B, o1), await joinMsg(C, o2)];
+  await Promise.all([h.send(B.c, m1), h.send(C.c, m2)]);
+  await eventually(() => h.last(B.c, "locked") || h.last(C.c, "locked"));
+  await flush();
+  const errs = [errOf(B.c), errOf(C.c)].filter(Boolean);
+  assert.equal(errs.length, 1, "one join is refused");
+  assert.equal(errs[0]!.code, "busy");
+  assert.deepEqual(h.fv.sent, ["lock"], "one lock");
+  // The same joiner on two sockets, joining two creators' offers at once.
+  const D = await h.player(), E = await h.player();
+  const e1 = h.entry({ player: D.acct.address }), e2 = h.entry({ player: E.acct.address });
+  await h.send(D.c, { t: "create", entry: e1, sig: await h.sign(D.key, e1), listed: true });
+  await h.send(E.c, { t: "create", entry: e2, sig: await h.sign(E.key, e2), listed: true });
+  const F = await h.player();
+  const F2 = h.conn();
+  await h.hello(F2);
+  await h.send(F2, await h.loginMsg(F2, F.acct.address, F.key, "session"));
+  await Promise.all([h.send(F.c, await joinMsg(F, e1)), h.send(F2, await joinMsg(F, e2))]);
+  await eventually(() => h.fv.sent.length === 2);
+  await flush();
+  assert.equal([errOf(F.c), errOf(F2)].filter(x => x?.code === "busy").length, 1);
+  assert.deepEqual(h.fv.sent, ["lock", "lock"]);
+});
+
+test("cards: an address that never logged in gets no Ethereum reads", async () => {
+  const h = await lobbyHarness();
+  const stranger = newAccount().address;
+  h.holders.set(stranger.toLowerCase(), [652]);
+  const c = await h.lobby.card(stranger);
+  assert.equal(c.holder, false);
+  assert.equal(h.sql.exec("SELECT COUNT(*) AS n FROM radbro_cache")[0].n, 0);
+  const p = await h.player();
+  h.holders.set(p.acct.address.toLowerCase(), [652]);
+  h.clock.tick(10);
+  assert.equal((await h.lobby.card(p.acct.address)).holder, true);
 });
 
 test("offers leave with their creator; expired offers are swept", async () => {

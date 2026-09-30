@@ -291,6 +291,67 @@ test("a relay restart mid-round voids the series (a relay fault never picks a wi
   assert.equal(h.calls.settles[0].outcome.reason, "error");
 });
 
+test("a relay restart between rounds: both players get the grace; one who stays away voids the series, never forfeits it", async () => {
+  const h = await roomHarness({ judge: win(0), vars: { HOLD_ON_FLAGS: "0" } });
+  const ca = h.client(), cb = h.client();
+  await readyUp(h, ca, cb);
+  await idleUntil(ca, () => ca.last("round"));
+  assert.equal(h.room.phase, "between");
+  const [fa, fb] = [h.fv.freeOfSync(h.a.address), h.fv.freeOfSync(h.b.address)];
+  const fresh = h.restart();
+  assert.equal(await fresh.ensure(), true);
+  assert.ok(fresh.nextDeadline() !== null, "the new instance keeps a deadline (it never waits for ever)");
+  // A comes back, B never does: a void (a relay fault never picks a winner), and both stakes go back.
+  const back = h.client();
+  await back.login(h.a);
+  await eventually(() => fresh.phase === "voided", h.clock, 20_000, 500);
+  assert.deepEqual([h.calls.settles[0].outcome.kind, h.calls.settles[0].outcome.reason], ["void", "error"]);
+  assert.deepEqual([h.fv.freeOfSync(h.a.address), h.fv.freeOfSync(h.b.address)], [fa + h.stake, fb + h.stake]);
+});
+
+test("a relay restart between rounds: both back within the grace, the series goes on", async () => {
+  const h = await roomHarness({ judge: win(0), vars: { HOLD_ON_FLAGS: "0" } });
+  const ca = h.client(), cb = h.client();
+  await readyUp(h, ca, cb);
+  await idleUntil(ca, () => ca.last("round"));
+  const fresh = h.restart();
+  assert.equal(await fresh.ensure(), true);
+  const a2 = h.client(), b2 = h.client();
+  await a2.login(h.a);
+  h.clock.tick(5_000);
+  await b2.login(h.b);
+  a2.sendJson({ t: "ready" });
+  b2.sendJson({ t: "ready" });
+  await a2.until(() => a2.last("start"));
+  assert.equal(a2.last("start")?.round, 2);
+  await idleUntil(a2, () => a2.last("settled"), 120_000);
+  assert.deepEqual(a2.last("outcome")?.outcome, { kind: "win", winner: 0, reason: "played", score: [2, 0] });
+});
+
+test("a room for an id that never locked writes nothing (no storage for strangers' ids)", async () => {
+  const { WagerRoomCore } = await import("../relay/wager/src/room.ts");
+  const { RadbroReader } = await import("../relay/wager/src/radbro.ts");
+  const { nodeSql } = await import("../relay/wager/src/node.ts");
+  const { SIMS, card } = await import("./wager-relay-fakes.ts");
+  const h = await roomHarness();
+  const sql = nodeSql();
+  const room = new WagerRoomCore({
+    matchId: random32(), clock: h.clock, sql, settings: h.settings, chain: h.fv, sims: SIMS, build: "test", referee: null,
+    radbro: new RadbroReader({ src: new MockRadbroSource(new Map()), now: () => h.clock.now(), cacheMs: 1 }),
+    lobby: { card: async a => card(a), update: async () => {}, settle: async () => {} },
+  });
+  assert.equal(room.logGz(), null);
+  assert.equal(room.status(), null);
+  assert.equal(await room.ensure(), false);
+  await room.syncChain();
+  const s = room.open({ send: () => {}, close: () => {} }, "http://relay.test");
+  s.message(JSON.stringify({ t: "hello", v: WAGER_PROTOCOL, matchId: room.matchId, compat: {} }));
+  await eventually(() => true, h.clock);
+  assert.deepEqual(sql.exec("SELECT name FROM sqlite_master"), []);
+  // The harness's room (a locked match) has its tables.
+  assert.ok(h.room.status());
+});
+
 test("picks: an own Radbro must be owned on Ethereum; a rigged one plays as its model, any other shows its number", async () => {
   const h = await roomHarness({ radbro: a => new MockRadbroSource(new Map([[a.toLowerCase(), [3171, 42]]])) });
   const ca = h.client(), cb = h.client();

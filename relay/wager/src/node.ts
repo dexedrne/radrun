@@ -69,7 +69,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
 
   const lobbySql = sqlFor("lobby");
   const lobby: WagerLobbyCore = new WagerLobbyCore({
-    clock, sql: lobbySql, settings: s, chain: sv.chain, sims: sv.sims,
+    clock, sql: lobbySql, settings: s, chain: sv.chain, sims: sv.sims, referee: sv.referee?.address ?? null,
     radbro: new RadbroReader({ src: sv.radbroSrc, now: () => clock.now(), cacheMs: s.radbro.cacheMs, sql: lobbySql }),
     relayer: sv.relayer, faucet: sv.faucet, connections: () => [...conns], log,
     rooms: {
