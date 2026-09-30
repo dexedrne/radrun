@@ -1,0 +1,122 @@
+# RadRun SPIDER-TAG wager relay (docs/WAGER.md §4): a Worker of its own, "radrun-wager-relay", separate from the live
+# "radrun-relay" (relay/wrangler.toml), with its own Durable Object classes, so deploying one never rebuilds or
+# redeploys the other. Free plan: SQLite-backed Durable Objects.
+#
+# Local:   npm run wager:relay:worker   (wrangler 4.141.0 dev --env dev; or npm run wager:relay: Node, no Cloudflare tooling)
+# Deploy:  only after the vault is deployed (src/wager/deployments.json has its address), and never while series are
+#          live (GET /health answers "ok" with an x-wager-live header: deploy only when it is 0). From relay/wager:
+#            npx wrangler@4.141.0 secret put REFEREE_KEY --env ""      (and RELAYER_KEY, FAUCET_KEY; optionally RPC_URL_PRIVATE; REFEREE_KEY_PREV after a referee rotation)
+#            npx wrangler@4.141.0 deploy --env "" --define __BUILD_ID__:'"<git short sha of the site build>"'
+#          (--env "" is the top level: the test network.) Mainnet ("send it" only): the same with --env main (Worker
+#          radrun-wager-relay-main, no faucet).
+name = "radrun-wager-relay"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+# Smaller and faster to start (the sim, five city models and viem are most of it).
+minify = true
+
+# The site build this relay's sim came from (logged with every series; set it at deploy, see above).
+[define]
+__BUILD_ID__ = "\"dev\""
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "WagerLobby"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "WagerRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WagerLobby", "WagerRoom"]
+
+# Every name is listed in src/wager/config.ts WAGER_ENV. Amounts are token base units (the test token has 18 decimals).
+[vars]
+WAGER_NET = "rh-testnet"
+ALLOWED_ORIGINS = "https://radrun.vyvanse.beer"
+# "1" only under wrangler dev: localhost origins, the x-dev-country header, /dev/bench, DEV_RADBRO_* mocks.
+DEV = "0"
+# Empty: the deployment's public RPCs (RPC_URL_PRIVATE, a secret, goes first when set) and RADBRO.rpc for Ethereum.
+RPC_URLS = ""
+ETH_RPC_URLS = ""
+# ISO 3166-1 alpha-2 codes, comma-separated; empty = off.
+REGION_BLOCK = ""
+ROUND_SECONDS = "60,90,120"
+DISTRICTS = "downtown,market,docks,towers,vertigo"
+NEW_ACCOUNT_MAX_STAKE = "100000000000000000000"
+NEW_ACCOUNT_SERIES = "3"
+LATE_MS = "100"
+RECONNECT_GRACE_MS = "20000"
+JOIN_GRACE_MS = "60000"
+HOLD_ON_FLAGS = "1"
+FAUCET = "1"
+FAUCET_TOKENS = "1000000000000000000000"
+FAUCET_ETH = "500000000000000"
+
+# `wrangler dev --env dev`: the local anvil deployment (bindings and vars don't inherit into an environment).
+[env.dev]
+[env.dev.define]
+__BUILD_ID__ = "\"dev\""
+
+[[env.dev.durable_objects.bindings]]
+name = "LOBBY"
+class_name = "WagerLobby"
+
+[[env.dev.durable_objects.bindings]]
+name = "ROOMS"
+class_name = "WagerRoom"
+
+[env.dev.vars]
+WAGER_NET = "local"
+ALLOWED_ORIGINS = ""
+DEV = "1"
+RPC_URLS = ""
+ETH_RPC_URLS = ""
+REGION_BLOCK = ""
+ROUND_SECONDS = "20,60,90,120"
+DISTRICTS = "downtown,market,docks,towers,vertigo"
+NEW_ACCOUNT_MAX_STAKE = "100000000000000000000"
+NEW_ACCOUNT_SERIES = "3"
+LATE_MS = "100"
+RECONNECT_GRACE_MS = "20000"
+JOIN_GRACE_MS = "60000"
+HOLD_ON_FLAGS = "1"
+FAUCET = "1"
+FAUCET_TOKENS = "1000000000000000000000"
+FAUCET_ETH = "500000000000000"
+
+# `wrangler deploy --env main`: Worker "radrun-wager-relay-main" for Robinhood Chain mainnet, only on the owner's
+# explicit go-ahead, after the mainnet vault for his token is in deployments.json. Never a faucet (the relay also
+# refuses one on MAINNET_CHAIN_IDS). Set the stake caps for his token's decimals and price before deploying.
+[env.main]
+[env.main.define]
+__BUILD_ID__ = "\"dev\""
+
+[[env.main.durable_objects.bindings]]
+name = "LOBBY"
+class_name = "WagerLobby"
+
+[[env.main.durable_objects.bindings]]
+name = "ROOMS"
+class_name = "WagerRoom"
+
+[env.main.vars]
+WAGER_NET = "rh-mainnet"
+ALLOWED_ORIGINS = "https://radrun.vyvanse.beer"
+DEV = "0"
+RPC_URLS = ""
+ETH_RPC_URLS = ""
+REGION_BLOCK = ""
+ROUND_SECONDS = "60,90,120"
+DISTRICTS = "downtown,market,docks,towers,vertigo"
+NEW_ACCOUNT_MAX_STAKE = "100000000000000000000"
+NEW_ACCOUNT_SERIES = "3"
+LATE_MS = "100"
+RECONNECT_GRACE_MS = "20000"
+JOIN_GRACE_MS = "60000"
+HOLD_ON_FLAGS = "1"
+FAUCET = "0"
+FAUCET_TOKENS = "0"
+FAUCET_ETH = "0"

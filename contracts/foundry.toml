@@ -1,0 +1,39 @@
+# RadRun wager contracts (docs/WAGER.md §3). Foundry 1.8.x; OpenZeppelin comes from the repo's npm install
+# (node_modules/@openzeppelin/contracts, pinned in package.json), forge-std from lib/ (forge install).
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+cache_path = "cache"
+libs = ["lib", "../node_modules"]
+solc_version = "0.8.37"
+# Robinhood Chain (Arbitrum Nitro, ArbOS 61) runs Osaka opcodes today; prague keeps the bytecode portable.
+evm_version = "prague"
+optimizer = true
+optimizer_runs = 200
+# Foundry's defaults plus 6335: OpenZeppelin 5.6.1's ECDSA names a variable `error`, which solc 0.8.37 flags.
+ignored_error_codes = [
+  "license",
+  "code-size",
+  "init-code-size",
+  "transient-storage",
+  "transfer-deprecated",
+  "natspec-memory-safe-assembly-deprecated",
+  6335,
+]
+remappings = [
+  "@openzeppelin/contracts/=../node_modules/@openzeppelin/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+
+[fuzz]
+runs = 1000
+
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
+
+[fmt]
+line_length = 120

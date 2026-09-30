@@ -6,7 +6,8 @@ import { useEffect, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useAssetRuntime } from "react-three-game";
 import {
-  ConeGeometry, DoubleSide, IcosahedronGeometry, Matrix4, Mesh, MeshBasicMaterial, Quaternion, RingGeometry, Vector3, CylinderGeometry, Euler,
+  BufferAttribute, BufferGeometry, Color, ConeGeometry, DoubleSide, IcosahedronGeometry, Line, LineBasicMaterial, Matrix4, Mesh, MeshBasicMaterial, Points,
+  PointsMaterial, Quaternion, RingGeometry, Vector3, CylinderGeometry, Euler,
 } from "three";
 import type { TagGame } from "../game/tagGame.ts";
 import {
@@ -38,6 +39,31 @@ const wrap = (a: number) => {
 
 /** The rigs of the current match by slot (FxView's rope hand for your Radbro reads slot `local`). */
 export const tagRigs: (ActorRig | null)[] = [];
+
+/**
+ * Radbro-holder cosmetics (the wager beta, docs/WAGER.md §4.6): a slot's web colour and swing trail. Render only: the
+ * sim never sees them. Missing = the classic white web and no trail.
+ */
+export type TrailStyle = "none" | "spark" | "ribbon" | "comet";
+export type SlotLook = { web: string | null; trail: TrailStyle };
+export const WEB_WHITE = "#f4f7ff";
+const TRAIL_N = 28;
+const trailColor = new Color();
+
+type Trail = { obj: Line | Points; pos: Float32Array; col: Float32Array; color: string; style: TrailStyle; live: boolean };
+
+function makeTrail(style: TrailStyle, color: string): Trail {
+  const pos = new Float32Array(TRAIL_N * 3), col = new Float32Array(TRAIL_N * 4);
+  const geo = new BufferGeometry();
+  geo.setAttribute("position", new BufferAttribute(pos, 3));
+  geo.setAttribute("color", new BufferAttribute(col, 4));
+  const obj = style === "ribbon"
+    ? new Line(geo, new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }))
+    : new Points(geo, new PointsMaterial({ size: style === "comet" ? 0.34 : 0.16, vertexColors: true, transparent: true, depthWrite: false }));
+  obj.frustumCulled = false;
+  obj.visible = false;
+  return { obj, pos, col, color, style, live: false };
+}
 
 function evBits(fe: number): number {
   let ev = 0;
@@ -74,7 +100,7 @@ function webEnd(b: Body, game: TagGame, slot: number, out: Vector3): Vector3 | n
   return null;
 }
 
-export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] }) {
+export function TagActors({ game, slots, looks = [] }: { game: TagGame; slots: RadbroId[]; looks?: (SlotLook | null)[] }) {
   const assets = useAssetRuntime();
   const key = slots.join(",");
   const rigList = useMemo(() => slots.map(id => {
@@ -91,7 +117,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
   }, [rigList]);
 
   const fx = useMemo(() => {
-    const webMat = new MeshBasicMaterial({ color: "#f4f7ff" });
+    const webMat = new MeshBasicMaterial({ color: WEB_WHITE });
     const webs = slots.map(() => { const m = new Mesh(new CylinderGeometry(0.0175, 0.0175, 1, 6), webMat); m.visible = false; m.frustumCulled = false; return m; });
     const bag = makeBag();
     bag.visible = false;
@@ -107,9 +133,22 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
     return { webs, bag, marker, tangle, ring, webMat };
   }, [key]);
   useEffect(() => () => {
-    for (const w of fx.webs) w.geometry.dispose();
+    for (const w of fx.webs) { w.geometry.dispose(); if (w.material !== fx.webMat) (w.material as MeshBasicMaterial).dispose(); }
     fx.webMat.dispose();
   }, [fx]);
+
+  // Holder cosmetics: a web colour per slot (its own material) and a trail (points or a line behind the Radbro).
+  const lookKey = looks.map(l => (l ? `${l.web ?? ""}/${l.trail}` : "")).join(",");
+  const trails = useMemo(() => slots.map((_, i) => {
+    const l = looks[i];
+    const web = fx.webs[i];
+    if (web) {
+      if (web.material !== fx.webMat) (web.material as MeshBasicMaterial).dispose();
+      web.material = l?.web ? new MeshBasicMaterial({ color: l.web }) : fx.webMat;
+    }
+    return l && l.trail !== "none" ? makeTrail(l.trail, l.web ?? WEB_WHITE) : null;
+  }), [fx, lookKey]);
+  useEffect(() => () => { for (const t of trails) if (t) { t.obj.geometry.dispose(); (t.obj.material as LineBasicMaterial).dispose(); } }, [trails]);
 
   const tmp = useMemo(() => ({
     q: new Quaternion(), qYaw: new Quaternion(), qPose: new Quaternion(), m: new Matrix4(), eu: new Euler(),
@@ -262,6 +301,25 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
       web.scale.set(1, len, 1);
       web.visible = true;
     }
+    for (let i = 0; i < trails.length; i++) {
+      const t = trails[i];
+      if (!t) continue;
+      const moving = on && !!m && i < m.n && m.phase !== PH_OVER && Math.hypot(m.bodies[i].v.x, m.bodies[i].v.y, m.bodies[i].v.z) > 5;
+      t.obj.visible = on && !!m && i < m.n;
+      if (!t.obj.visible) { t.live = false; continue; }
+      const q = game.renderPs[i];
+      if (!t.live) { for (let k = 0; k < TRAIL_N; k++) { t.pos[3 * k] = q.x; t.pos[3 * k + 1] = q.y; t.pos[3 * k + 2] = q.z; } t.live = true; }
+      t.pos.copyWithin(3, 0, 3 * (TRAIL_N - 1));
+      const jit = t.style === "spark" ? 0.25 : 0;
+      t.pos[0] = q.x + (Math.random() - 0.5) * jit; t.pos[1] = q.y + 0.1 + (Math.random() - 0.5) * jit; t.pos[2] = q.z + (Math.random() - 0.5) * jit;
+      const c = trailColor.set(t.color);
+      for (let k = 0; k < TRAIL_N; k++) {
+        const a = moving ? (1 - k / TRAIL_N) * (t.style === "comet" ? 0.9 : 0.75) : 0;
+        t.col[4 * k] = c.r; t.col[4 * k + 1] = c.g; t.col[4 * k + 2] = c.b; t.col[4 * k + 3] = a;
+      }
+      t.obj.geometry.attributes.position.needsUpdate = true;
+      t.obj.geometry.attributes.color.needsUpdate = true;
+    }
     const hr = on && m ? rigList[m.holder] : null;
     fx.bag.visible = !!hr;
     fx.marker.visible = !!hr && m!.holder !== game.local;
@@ -333,6 +391,7 @@ export function TagActors({ game, slots }: { game: TagGame; slots: RadbroId[] })
     <>
       {rigList.map((r, i) => (r ? <primitive key={`rig-${i}`} object={r.root} /> : null))}
       {fx.webs.map((wm, i) => <primitive key={`web-${i}`} object={wm} />)}
+      {trails.map((t, i) => (t ? <primitive key={`trail-${i}-${lookKey}`} object={t.obj} /> : null))}
       <primitive object={fx.bag} />
       <primitive object={fx.marker} />
       <primitive object={fx.tangle} />

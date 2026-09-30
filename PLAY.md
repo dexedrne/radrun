@@ -460,6 +460,87 @@ Later: `npx wrangler@4.141.0 tail` streams the relay's logs (counters only; it n
 `npx wrangler@4.141.0 delete` takes it down. If a match ever reports "results differ", the console of both players has the
 per-Radbro hashes of the first step that differed.
 
+## WAGER (BETA)
+
+SPIDER-TAG for tokens: two players put up the same stake, play a 1v1 best of 3, and the winner takes the pot minus a
+3% house fee (1.5% for a winner holding a Radbro; 0 to 5%, set by the vault's owner). The page is the unlisted link
+`?wager` (nothing on the site links to it) and always shows its network label, **BETA · TESTNET** on the Robinhood
+Chain testnet with test tokens. The full design, the trust model and every number are in
+[`docs/WAGER.md`](docs/WAGER.md); the contracts' own notes are in [`contracts/README.md`](contracts/README.md).
+
+**How a player uses it**
+
+1. Connect a browser wallet (it adds or switches to the network). On the testnet, GET TEST TOKENS sends test tokens and
+   a little test ETH.
+2. DEPOSIT: the wallet approves the vault for exactly the amount, then deposits it. The balance sits in the vault
+   contract under your address; WITHDRAW sends free balance straight back to your wallet at any time. No server, owner
+   or referee is involved, and pausing never blocks it.
+3. PLAY WITHOUT POPUPS: one wallet signature authorises a key in this browser for matches up to the stake you pick
+   (3 times that in total, for 12 hours). It can only enter matches; it can never withdraw. REVOKE turns it off.
+4. NEW MATCH: stake, round length, city, and who can join (the open lobby, an invite link, or one address; holders
+   only; a minimum number of series). The other player joins from the lobby or the link. Your page confirms the
+   joiner by itself (no popup), both stakes lock, and the series starts.
+5. Best of 3 on the normal SPIDER-TAG scene. The referee replays both players' inputs with the game's own sim and that
+   replay decides every round; the page shows the round result between rounds. Leaving mid-series forfeits it after
+   20 s; not turning up before round 1 voids it (nobody pays).
+6. The winner's vault balance is credited when the referee's result is settled on chain. VERIFY THIS MATCH opens the
+   public match page (`?wager&verify=<match id>`): it replays the whole series in your browser and checks the result
+   and its log hash against the chain. HISTORY lists your matches from the vault's events.
+
+If something goes wrong: after the settle window (24 h) anyone can REFUND BOTH STAKES of a match nobody settled, and
+each player can TAKE BACK YOUR STAKE alone. If the referee is gone, SETTLE IT BETWEEN YOU lets both wallets sign the
+same result. A series the anti-cheat flags waits for the owner's review (`?wager&review=<match id>`, signed by the
+vault owner's wallet: SETTLE AS REPLAYED or VOID).
+
+**Running it locally** (a local chain, no testnet, no keys of your own: anvil's public dev accounts)
+
+```sh
+anvil --port 8547 --chain-id 31337                                       # a local chain (Foundry 1.8)
+npm run wager:deploy -- --net local --rpc http://127.0.0.1:8547          # test token + vault; writes the local deployment
+RPC_URLS=http://127.0.0.1:8547 node relay/wager/dev.ts --port 8820 --net local --anvil   # the wager relay stand-in
+npm run dev
+```
+
+Open `http://localhost:4870/?wager&net=local&rpc=http://127.0.0.1:8547&relay=http://127.0.0.1:8820&devwallet=1` and,
+in a second window, the same with `&devwallet=2` (two dev wallets on anvil accounts #1 and #2). Dev and test builds
+also take `&bot=normal` (your Radbro plays itself) and `&badhash` (report a wrong end hash, for the dispute path). The
+local deploy rewrites the `local` entry of `src/wager/deployments.json`: put it back before committing.
+
+**Checks**
+
+```sh
+npm test                          # includes test/wager-*.test.ts: the relay, the client and the shared rules
+npm run wager:contracts           # forge build + forge test (unit, fuzz, invariants, token quirks, gas)
+npm run wager:e2e -- --shots /tmp/wager-shots   # the whole thing in two headless Chromiums (about 13 minutes)
+npm run wager:verify -- <match id> --net rh-testnet --chain   # re-verify a settled series from its public log
+```
+
+The end-to-end deploys to a fresh anvil (port 8547), runs the relay stand-in (8820) and a `build:test` of the site
+(5430), and plays: an open offer from the lobby, an invite between Radbro holders (the 1.5% rate), a 0% fee,
+cancelled offers, a no-show, a forfeit, a forced result dispute voided on review, a flagged bot held and settled on
+review, a settle both wallets sign with the relay gone, a reclaim and refund after the settle window, and both players
+withdrawing (`--only` picks scenarios; `docs/WAGER.md` §9.4).
+
+**Deploying the testnet beta** (docs/WAGER.md §11; nothing below has been run)
+
+1. `npm run wager:deploy -- --net rh-testnet --init-keys` makes the deployer, referee, relayer and faucet keys into a
+   0600 file outside the repo (never printed). Claim testnet ETH into the deployer once, by hand, from a Robinhood
+   Chain testnet faucet (they have bot checks; the chain's docs list none of their own).
+2. `npm run wager:deploy -- --net rh-testnet --fork-only` rehearses on a fork; without `--fork-only` it deploys the
+   test token and the vault, verifies both on the explorer and writes `deployments.json`. Commit that.
+3. The wager relay is its own Worker (`relay/wager/wrangler.toml`, `radrun-wager-relay`; the live `radrun-relay` is
+   never touched): put `REFEREE_KEY`, `RELAYER_KEY` and `FAUCET_KEY` with `npx wrangler@4.141.0 secret put`, then
+   deploy it. Never redeploy it while series are live (`GET /health` answers with an `x-wager-live` count). The same
+   answer's `x-wager-relayer-wei` and `x-wager-faucet-wei` are the gas the relayer and the faucet have left: top them
+   up from the deployer before they run dry (every gasless match costs the relayer a lock and a settle).
+4. Build the site with `VITE_WAGER_NETS=rh-testnet` (a build without it shows the page as off) and deploy as usual.
+
+**Mainnet** comes later, only on the owner's explicit go-ahead, with the owner's own coin (this repo never writes,
+mints or launches it): `npm run wager:deploy -- --net rh-mainnet --token <coin> --house <address> --owner <address>
+--max-stake <n> --max-balance <n>` is a dry run on a mainnet fork (the token probe and a whole match); the same with
+`--send-it` deploys. Then the `radrun-wager-relay-main` Worker and a site build with
+`VITE_WAGER_NETS=rh-mainnet,rh-testnet`.
+
 ## Sound
 
 Recorded music, stings, voice lines and sound effects (113 mp3s under `public/audio/`), with the older

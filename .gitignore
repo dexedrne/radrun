@@ -4,3 +4,7 @@ dist/
 *.log
 .vercel
 .wrangler/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+.dev.vars
