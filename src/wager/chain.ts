@@ -4,8 +4,8 @@
 // revert shows as a plain sentence before any wallet popup, then sent by the wallet. History comes from the vault's
 // events (§3.9). Pure TS over viem; no DOM.
 import {
-  createPublicClient, createWalletClient, custom, fallback, getAbiItem, http, numberToHex, pad, parseEventLogs, toEventSelector, type Address, type Chain,
-  type Hex, type Log, type PublicClient, type TransactionReceipt, type WalletClient,
+  BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, fallback, getAbiItem, http, numberToHex, pad, parseEventLogs,
+  toEventSelector, type Address, type Chain, type Hex, type Log, type PublicClient, type TransactionReceipt, type WalletClient,
 } from "viem";
 import { ERC20_ABI, GAME_VAULT_ABI, VAULT_CALL_ABI } from "./abi.ts";
 import type { Entry, Result, SessionAuth } from "./eip712.ts";
@@ -151,6 +151,33 @@ export class VaultChain {
   }
   withdraw(w: WalletClient, amount: bigint): Promise<Hex> {
     return this.send(w, "vault", "withdraw", [amount]);
+  }
+
+  /**
+   * The most of `amount` (a whole free balance, say) that `from` can take out in one withdraw. A token that taxes the
+   * vault as the sender has the tax billed to the withdrawer's own free balance (docs/WAGER.md §3.6), so "everything"
+   * can't go out whole: a simulated withdraw that reverts TransferMismatch(asked, moved) gives the rate, and the amount
+   * shrinks to fit (a few tries). Anything else returns what the last try asked (the real send reports its own error).
+   */
+  async withdrawable(from: Address, amount: bigint, to?: Address): Promise<bigint> {
+    let a = amount;
+    for (let i = 0; i < 5 && a > 0n; i++) {
+      try {
+        await this.pub.simulateContract({
+          address: this.vault, abi: VAULT_CALL_ABI, account: from, functionName: to ? "withdrawTo" : "withdraw", args: to ? [a, to] : [a],
+        } as never);
+        return a;
+      } catch (e) {
+        const rev = e instanceof BaseError ? (e.walk(x => x instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null) : null;
+        if (rev?.data?.errorName !== "TransferMismatch") return a;
+        const [asked, moved] = rev.data.args as readonly [bigint, bigint];
+        if (!(moved > asked && asked > 0n)) return a;
+        // Taking out `a` costs a * moved / asked of the free balance: scale to fit `amount`, and always step down.
+        const fit = (amount * asked) / moved;
+        a = fit < a ? fit : a - 1n;
+      }
+    }
+    return a > 0n ? a : 0n;
   }
   withdrawTo(w: WalletClient, amount: bigint, to: Address): Promise<Hex> {
     return this.send(w, "vault", "withdrawTo", [amount, to]);

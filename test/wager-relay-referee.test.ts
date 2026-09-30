@@ -133,8 +133,10 @@ test("flags: thresholds and one flag per player and kind", () => {
   const late = { ...emptyMetrics(), slackMs: new Array(200).fill(3), rtt: 60 };
   assert.equal(evaluate(0, late, 1)[0]?.kind, "late-inputs");
   assert.deepEqual(evaluate(0, { ...late, rtt: 220 }, 1), []);
-  const filled = { ...emptyMetrics(), steps: 1000, fills: 80, rtt: 60 };
+  const filled = { ...emptyMetrics(), steps: 1000, fills: 250, rtt: 60 };
   assert.equal(evaluate(0, filled, 1)[0]?.kind, "late-inputs");
+  // Frame stalls on an honest page fill a few percent of its steps: not a flag.
+  assert.deepEqual(evaluate(0, { ...filled, fills: 170 }, 1), []);
   // Three fast Yoinks are enough even when the median is human.
   const fast = { ...emptyMetrics(), reactions: [2, 3, 1, 40, 40, 40, 40] };
   assert.equal(evaluate(0, fast, 1)[0]?.kind, "reaction");

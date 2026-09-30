@@ -112,7 +112,15 @@ const reviveMatch = (m: ChainMatch & { stake: bigint | string }): ChainMatch => 
 export async function lobbyHttp(core: WagerLobbyCore, req: HttpReq, meta: Meta): Promise<HttpRes> {
   const p = req.url.pathname;
   try {
-    if (p === WAGER_ROUTES.health) return text(200, "ok", { "x-wager-live": String(core.live()) });
+    if (p === WAGER_ROUTES.health) {
+      // Live series (a redeploy waits for 0) and the gas the relayer and faucet have left (wei), for the owner to watch.
+      const [relayer, faucet] = await core.gasBalances();
+      return text(200, "ok", {
+        "x-wager-live": String(core.live()),
+        ...(relayer !== null ? { "x-wager-relayer-wei": relayer.toString() } : {}),
+        ...(faucet !== null ? { "x-wager-faucet-wei": faucet.toString() } : {}),
+      });
+    }
     if (p === WAGER_ROUTES.config) return jsonRes(200, await core.config(meta.country));
     if (p.startsWith(WAGER_ROUTES.player)) {
       const a = addr(p.slice(WAGER_ROUTES.player.length));

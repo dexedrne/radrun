@@ -7,7 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
-  createPublicClient, createWalletClient, custom, getAddress, recoverTypedDataAddress, type Address, type Hex, type PublicClient,
+  ContractFunctionExecutionError, ContractFunctionRevertedError, createPublicClient, createWalletClient, custom, encodeErrorResult, getAddress,
+  recoverTypedDataAddress, type Address, type Hex, type PublicClient,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { applyTuningJson } from "../src/sim/tuning.ts";
@@ -32,7 +33,7 @@ import { decodeSettleCode, encodeSettleCode } from "../src/wager/mutual.ts";
 import { MSG_PROBE, MSG_PROBE_ECHO, WAGER_PROTOCOL, decodeProbe, encodeProbe, type LobbyServerMsg } from "../src/wager/protocol.ts";
 import { simCompat, type SeriesVerdict, type SimAssets } from "../src/wager/replay.ts";
 import { matchChecks } from "../src/wager/verifyChecks.ts";
-import type { SeriesLog } from "../src/wager/log.ts";
+import { seriesLogHash, type SeriesLog } from "../src/wager/log.ts";
 import type { MatchEnd } from "../src/wager/chain.ts";
 import { sameSim } from "../src/wager/assets.ts";
 import { FakeChain, FakeRelay, acct, type Sock } from "./wager-client-fakes.ts";
@@ -441,6 +442,75 @@ test("named entries: a creator's page signs only its own offer's terms, naming t
   }
 });
 
+test("a lock whose receipt is late: 'no receipt yet' is not a failure, and 'locked' after it clears the fallback", async () => {
+  const fake = new FakeChain();
+  const relay = new FakeRelay({ chain: fake, net: "local", assets: { downtown: assets } });
+  const base = "http://relay.test";
+  relay.base = base;
+  const restore = relayFetch(relay, base);
+  const app = mkApp(fake, relay, base);
+  try {
+    await app.start();
+    await until(() => !!app.lobby, "the lobby");
+    const a = app as unknown as { onLobby(m: LobbyServerMsg): void };
+    const id = newMatchId(acct(1).address), tx = `0x${"ab".repeat(32)}` as Hex;
+    const se = { entry: entryToJson({ matchId: id, player: acct(1).address, opponent: acct(2).address, stake: E18, feeCapBps: 300, roundSeconds: 90, rules: ZERO_HASH, deadline: 9n }), sig: "0x" as Hex };
+    let locked: Hex | null = null;
+    app.onLocked = m => { locked = m; };
+    a.onLobby({ t: "matched", matchId: id, a: se, b: se });
+    a.onLobby({ t: "tx", kind: "lock", matchId: id, hash: tx, status: "failed", error: "timeout" });
+    const st = useWager.getState();
+    assert.equal(st.pairing?.failed, "timeout", "the page offers 'lock it yourself' while it waits");
+    assert.equal(st.notice?.kind, "info", "a late receipt is not shown as a failed transaction");
+    assert.match(st.notice?.text ?? "", /no receipt yet: it may still land/);
+    a.onLobby({ t: "locked", matchId: id, tx });
+    const after = useWager.getState().pairing;
+    assert.equal(after?.lockTx, tx);
+    assert.equal(after?.failed, null, "the fallback goes once the lock is known to have landed");
+    assert.equal(locked, id, "and the series opens");
+    // A real failure after the lock landed changes nothing.
+    a.onLobby({ t: "tx", kind: "lock", matchId: id, hash: tx, status: "failed", error: "reverted" });
+    assert.equal(useWager.getState().pairing?.failed, null);
+  } finally {
+    app.stop();
+    restore();
+  }
+});
+
+test("withdraw all with a token that taxes the vault as sender: the most that fits, from the vault's own revert", async () => {
+  const vault = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address, me = acct(1).address;
+  const free = 1000n * E18;
+  let bps = 200n, other: string | null = null;
+  const asked: bigint[] = [];
+  const revert = (args: readonly unknown[], name: string, eargs: readonly unknown[]) => {
+    const data = encodeErrorResult({ abi: VAULT_CALL_ABI, errorName: name, args: eargs } as never);
+    const rev = new ContractFunctionRevertedError({ abi: VAULT_CALL_ABI as never, data, functionName: "withdraw" });
+    return new ContractFunctionExecutionError(rev, { abi: VAULT_CALL_ABI as never, functionName: "withdraw", args, contractAddress: vault });
+  };
+  const pub = {
+    // The vault's _withdraw: a sender tax beyond the free balance left reverts TransferMismatch(amount, amount + tax).
+    simulateContract: async (o: { args: readonly unknown[] }) => {
+      const amt = o.args[0] as bigint;
+      asked.push(amt);
+      if (other) throw revert(o.args, other, [me, 0n, amt]);
+      const tax = (amt * bps) / 10_000n;
+      if (amt > free) throw revert(o.args, "InsufficientFree", [me, free, amt]);
+      if (tax > free - amt) throw revert(o.args, "TransferMismatch", [amt, amt + tax]);
+      return { request: {} };
+    },
+  } as unknown as PublicClient;
+  const vc = new VaultChain(pub, vault, 0);
+  const got = await vc.withdrawable(me, free);
+  assert.ok(got < free && got + (got * bps) / 10_000n <= free, "it fits with its tax");
+  assert.ok(free - (got + (got * bps) / 10_000n) < 10n ** 6n, `and leaves only dust (${free - got - (got * bps) / 10_000n})`);
+  assert.ok(asked.length <= 3, `in a few tries (${asked.length})`);
+  bps = 0n;
+  assert.equal(await vc.withdrawable(me, free), free, "an untaxed token: everything");
+  bps = 200n;
+  other = "InsufficientFree";
+  assert.equal(await vc.withdrawable(me, free), free, "another revert: the amount as asked (the real send says why)");
+});
+
 // ---- the relay sockets ------------------------------------------------------------------------------------------------
 
 type WsLike = { readyState: number; send(d: string): void; close(): void; onopen: (() => void) | null; onclose: ((e: { code?: number; reason?: string }) => void) | null; onmessage: ((e: { data: unknown }) => void) | null; onerror: (() => void) | null };
@@ -826,9 +896,14 @@ test("wallet: one accountsChanged / chainChanged listener at a time, whatever th
 
 test("verify page checks: the log is this match's; a timeout refund stores no log hash; a settle pays the replayed winner", () => {
   const vault = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
-  const matchId = `0x${"11".repeat(32)}` as Hex, logHash = `0x${"22".repeat(32)}` as Hex, zero = `0x${"00".repeat(32)}` as Hex, tx = `0x${"33".repeat(32)}` as Hex;
+  const matchId = `0x${"11".repeat(32)}` as Hex, zero = `0x${"00".repeat(32)}` as Hex, tx = `0x${"33".repeat(32)}` as Hex;
   const [a, b] = [acct(1).address, acct(2).address];
-  const log = { chainId: 31337, vault, matchId, players: [a, b], logHash, outcome: { kind: "win", winner: 0, reason: "played", score: [2, 1] } } as unknown as SeriesLog;
+  const head = {
+    chainId: 31337, vault, matchId, players: [a, b] as [Address, Address], rulesHash: `0x${"55".repeat(32)}` as Hex, roundSeconds: 90,
+    seed: { commit: zero, relaySecret: `0x${"66".repeat(32)}` as Hex, shares: [`0x${"77".repeat(32)}`, `0x${"88".repeat(32)}`] as [Hex, Hex] }, rounds: [],
+  };
+  const logHash = seriesLogHash(head);
+  const log = { ...head, logHash, outcome: { kind: "win", winner: 0, reason: "played", score: [2, 1] } } as unknown as SeriesLog;
   const verdict: SeriesVerdict = { ok: true, problems: [], rounds: [], score: [2, 1], winner: 0 };
   const page = { chainId: 31337, vault, matchId };
   const run = (end: MatchEnd | null | undefined, o: { log?: SeriesLog; page?: typeof page; held?: boolean } = {}) =>
@@ -838,6 +913,10 @@ test("verify page checks: the log is this match's; a timeout refund stores no lo
   assert.deepEqual(oks(run(settled(a))), [true, true, true, true], "settled to the replayed winner with the log's hash");
   assert.deepEqual(oks(run(settled(b))), [true, true, true, false], "the vault paid the other player");
   assert.deepEqual(oks(run(settled(a, zero))), [true, true, false, true], "another log hash on chain");
+  // A log edited after the settle that keeps the old logHash field: the page hashes the contents, so it fails.
+  const edited = { ...log, seed: { ...log.seed, relaySecret: `0x${"99".repeat(32)}` } } as SeriesLog;
+  assert.deepEqual(oks(run(settled(a), { log: edited })), [true, true, false, true], "the log's contents don't hash to the chain's");
+  assert.match(run(settled(a), { log: edited })[2].text, /the log hashes to 0x/);
   assert.deepEqual(oks(run(undefined)), [true, true, null]);
   assert.match(run(null, { held: true }).at(-1)!.text, /held for review/);
   // A held series nobody reviewed, refunded after the settle window: the vault stores no log hash for that.

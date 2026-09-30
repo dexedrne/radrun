@@ -44,6 +44,9 @@ test("the Node stand-in: routes, sockets, logins, gates, faucet and the public l
     const health = await fetch(`${base}/health`);
     assert.equal(await health.text(), "ok");
     assert.equal(health.headers.get("x-wager-live"), "0");
+    // The relayer's and the faucet's gas, for the owner to watch (read at most once a minute).
+    assert.match(health.headers.get("x-wager-relayer-wei") ?? "", /^\d+$/);
+    assert.match(health.headers.get("x-wager-faucet-wei") ?? "", /^\d+$/);
     const cfg = (await (await fetch(`${base}/config`)).json()) as RelayConfig;
     assert.equal(cfg.chainId, 31337);
     assert.equal(cfg.vault, fv.vault);

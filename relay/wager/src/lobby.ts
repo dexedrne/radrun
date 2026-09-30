@@ -829,6 +829,24 @@ export class WagerLobbyCore {
     return Number(this.d.sql.exec("SELECT COUNT(*) AS n FROM matches WHERE state IN ('locking', 'locked', 'playing')")[0]?.n ?? 0);
   }
 
+  private gasRead: { at: number; wei: [bigint | null, bigint | null] } | null = null;
+
+  /**
+   * The relayer's and the faucet's gas balances (wei; null where there is none), for /health: the owner watches them
+   * (every gasless call and faucet claim spends them). Read from the chain at most once a minute, so /health (which
+   * the rate limiter lets through) never turns into an RPC call per request.
+   */
+  async gasBalances(): Promise<[bigint | null, bigint | null]> {
+    const now = this.now;
+    if (this.gasRead && now - this.gasRead.at < 60_000) return this.gasRead.wei;
+    const prev = this.gasRead?.wei ?? [null, null];
+    this.gasRead = { at: now, wei: prev };
+    const read = (q: Relayer | null, i: 0 | 1) => (q ? this.d.chain.ethBalance(q.address).catch(() => prev[i]) : Promise.resolve(null));
+    const wei = await Promise.all([read(this.d.relayer, 0), read(this.d.faucet, 1)]) as [bigint | null, bigint | null];
+    this.gasRead = { at: now, wei };
+    return wei;
+  }
+
   /** Anything the sweep still has to watch: open offers, and matches not yet settled or voided on-chain. */
   pending(): number {
     return this.offers.size + Number(this.d.sql.exec("SELECT COUNT(*) AS n FROM matches WHERE state NOT IN ('settled', 'voided')")[0]?.n ?? 0);

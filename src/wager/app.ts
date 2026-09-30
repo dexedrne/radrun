@@ -312,16 +312,22 @@ export class WagerApp {
         return;
       }
       case "locked": {
+        // Also after a "timeout" for this lock: the relayer's receipt came late, and the lock did land.
         const p = s.pairing?.matchId === m.matchId ? s.pairing : { matchId: m.matchId, district: this.d.district, a: null, b: null, lockTx: null, since: Date.now(), failed: null };
-        this.set({ pairing: { ...p, lockTx: m.tx } });
+        this.set({ pairing: { ...p, lockTx: m.tx, failed: null } });
         void this.refresh();
         this.onLocked?.(m.matchId, p.district);
         return;
       }
       case "tx": {
-        if (m.status === "failed") {
+        if (m.status === "failed" && m.error === "timeout") {
+          // No receipt within the relayer's wait is not a failure: the transaction may still land (the lobby says
+          // "locked" if it does). Meanwhile "lock it yourself" is offered; a second lock of the same id just reverts.
+          this.note("info", `the relayer's ${m.kind} transaction has no receipt yet: it may still land${m.kind === "lock" || m.kind === "settle" ? " (or submit it yourself)" : ""}`);
+          if (m.kind === "lock" && s.pairing?.matchId === m.matchId && !s.pairing.lockTx) this.set({ pairing: { ...s.pairing, failed: "timeout" } });
+        } else if (m.status === "failed") {
           this.note("error", `the relayer's ${m.kind} transaction failed${m.error ? `: ${m.error}` : ""}${m.kind === "lock" || m.kind === "settle" ? " (you can submit it yourself)" : ""}`);
-          if (m.kind === "lock" && s.pairing?.matchId === m.matchId) this.set({ pairing: { ...s.pairing, failed: m.error ?? "failed" } });
+          if (m.kind === "lock" && s.pairing?.matchId === m.matchId && !s.pairing.lockTx) this.set({ pairing: { ...s.pairing, failed: m.error ?? "failed" } });
         }
         if (m.status === "confirmed") {
           if (m.kind === "session") { this.note("ok", "session key on: no more wallet popups for matches"); this.lobby?.relogin(this.signer()); }
@@ -428,8 +434,17 @@ export class WagerApp {
       await this.refresh();
       if (amount <= 0n) throw wagerError("funds", "enter an amount above zero");
       if (amount > this.s.bal!.free) throw wagerError("funds", "that's more than your free balance");
-      await this.tx("withdraw", () => (to && !sameAddress(to, this.s.address) ? c.withdrawTo(w, amount, to) : c.withdraw(w, amount)));
-      this.note("ok", "withdrawn to your wallet");
+      const other = to && !sameAddress(to, this.s.address) ? to : undefined;
+      // "Everything" with a token that taxes the vault as sender: the tax comes out of the same free balance, so take
+      // out as much as fits (docs/WAGER.md §3.6) instead of a withdraw that would revert.
+      let amt = amount;
+      if (amount === this.s.bal!.free) {
+        amt = await c.withdrawable(getAddress(this.s.address!), amount, other).catch(() => amount);
+        if (amt <= 0n) throw wagerError("contract", "the token's transfer tax is more than your free balance: nothing can go out");
+        if (amt < amount) this.note("info", "the token charges a transfer tax, and it comes out of your vault balance: withdrawing the most that fits");
+      }
+      await this.tx("withdraw", () => (other ? c.withdrawTo(w, amt, other) : c.withdraw(w, amt)));
+      this.note("ok", other ? "withdrawn" : "withdrawn to your wallet");
       return true;
     } catch (e) {
       this.fail(e);
@@ -663,7 +678,14 @@ export class WagerApp {
       this.set({ pairing: { ...p, lockTx: tx } });
       this.onLocked?.(p.matchId, p.district);
     } catch (e) {
-      this.fail(e);
+      // The relayer's lock may have landed first (its receipt was only late): then this one reverts, and the match is on.
+      const m = await c.matchOf(p.matchId).catch(() => null);
+      const a = entryFromJson(p.a.entry).player, b = entryFromJson(p.b.entry).player;
+      if (m && m.state === "locked" && sameAddress(m.playerA, a) && sameAddress(m.playerB, b)) {
+        this.note("info", "the relayer's lock landed first: the match is on");
+        this.set({ pairing: null });
+        this.onLocked?.(p.matchId, p.district);
+      } else this.fail(e);
     } finally {
       this.set({ busy: null });
     }

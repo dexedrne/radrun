@@ -1,11 +1,11 @@
 // SPIDER-TAG wager client: the verify page's verdict lines (docs/WAGER.md §7.3 "Verify"), apart from the page so tests
 // can check them. The replay's verdict, plus what ties the log to the chain: the log is this page's match on this
-// vault, the log hash equals the one the vault stored, and the vault paid the replayed winner (or voided a series the
-// log says is void). A refund after the settle window stores no log hash, so that check is skipped for it, and a settle
-// both players signed themselves is theirs to decide. Pure TS.
+// vault, the hash of the log's contents equals the one the vault stored, and the vault paid the replayed winner (or
+// voided a series the log says is void). A refund after the settle window stores no log hash, so that check is skipped
+// for it, and a settle both players signed themselves is theirs to decide. Pure TS.
 import type { Address, Hex } from "viem";
 import { VOID_MUTUAL, VOID_TIMEOUT } from "./eip712.ts";
-import type { SeriesLog } from "./log.ts";
+import { seriesLogHash, type SeriesLog } from "./log.ts";
 import type { SeriesVerdict } from "./replay.ts";
 import type { MatchEnd } from "./chain.ts";
 import { sameAddress, shortAddress } from "./units.ts";
@@ -45,8 +45,11 @@ export function matchChecks(o: {
     checks.push({ ok: true, text: "settled by both players' own wallet signatures, not the referee: the log doesn't decide it" });
     return checks;
   }
-  const sameHash = end.logHash.toLowerCase() === log.logHash.toLowerCase();
-  checks.push({ ok: sameHash, text: sameHash ? "the log's hash equals the one the vault stored at settle" : `the vault stored ${end.logHash}, the log hashes to ${log.logHash}` });
+  // The hash of the log's own contents (not the hash the log claims for itself): a log edited after the settle can't
+  // pass by keeping the old logHash field.
+  const h = seriesLogHash(log);
+  const sameHash = end.logHash.toLowerCase() === h.toLowerCase();
+  checks.push({ ok: sameHash, text: sameHash ? "the log hashes to the one the vault stored at settle" : `the vault stored ${end.logHash}, the log hashes to ${h}` });
   if (end.kind === "settled") {
     const w = log.outcome.kind === "win" && log.outcome.winner !== null ? log.players[log.outcome.winner] : null;
     const paid = !!w && sameAddress(w, end.winner);

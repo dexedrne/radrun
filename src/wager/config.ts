@@ -81,6 +81,11 @@ export const WAGER_ENV = {
       faucet: "FAUCET", // "1" on test networks only (refused on MAINNET_CHAIN_IDS)
       faucetTokens: "FAUCET_TOKENS", // base units per claim
       faucetEth: "FAUCET_ETH", // wei per claim (sent only when the address has less)
+      // DEV only (ignored unless DEV=1): a mock Radbro collection for local tests, no Ethereum reads ("0xaddr=652,4764;0xother="),
+      // or other Radbro contract addresses to read instead of RADBRO.v2 / v1.
+      devRadbroHolders: "DEV_RADBRO_HOLDERS",
+      devRadbroV2: "DEV_RADBRO_V2",
+      devRadbroV1: "DEV_RADBRO_V1",
     },
     secrets: {
       refereeKey: "REFEREE_KEY", // signs Results only; never holds funds

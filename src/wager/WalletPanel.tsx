@@ -91,6 +91,9 @@ export function WalletPanel({ app }: { app: WagerApp }) {
             </button>
           </div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>approves the vault for exactly this amount, then deposits it</div>
+          <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }} data-testid="wager-deposit-warning">
+            only ever deposit here: tokens sent straight to the vault's address are not credited to you
+          </div>
         </div>
         <div>
           <div style={label}>withdraw</div>

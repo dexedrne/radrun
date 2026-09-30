@@ -28,9 +28,14 @@ export const FLAG_LIMITS = {
   /** periodic: coefficient of variation of the intervals between web presses. */
   periodicCv: 0.03,
   periodicMinPresses: 12,
-  /** late-inputs: median arrival slack (ms) or filled fraction, on a fast connection only. */
+  /**
+   * late-inputs: median arrival slack (ms) or filled fraction, on a fast connection only. A filled step only costs the
+   * late player (the relay's prediction replaces their word), and an honest page whose frame rate drops (a busy
+   * machine, a round's first seconds) had 5-17% filled per round in the end-to-end runs: the fraction has to be well
+   * above that to mean anything.
+   */
   lateSlackMs: 10,
-  lateFillFrac: 0.05,
+  lateFillFrac: 0.2,
   lateMaxRttMs: 150,
 } as const;
 
