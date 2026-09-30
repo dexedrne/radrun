@@ -31,9 +31,10 @@ this.
    so it costs the player no gas. From then on, entering a match needs no wallet popup. The session key can do one
    thing: sign match Entries within those limits. It can never withdraw or send funds anywhere.
 3. **Create or join a match.** The creator's session key signs an `Entry` (match id, stake, fee cap, round length,
-   rules, opponent or "anyone", deadline). It appears in the open lobby, or only behind its invite link. A joiner signs
-   the matching Entry. The relayer submits `lock(entryA, sigA, entryB, sigB)`, and the vault moves both stakes from
-   free to locked.
+   rules, opponent or "anyone", deadline). The match id is the creator's address followed by 12 random bytes, so only
+   the creator can ever be player A of it. The offer appears in the open lobby, or only behind its invite link. A joiner
+   signs the matching Entry naming the creator; the creator's page then signs an Entry naming the joiner (no popup).
+   The relayer submits `lock(entryA, sigA, entryB, sigB)`, and the vault moves both stakes from free to locked.
 4. **Play the series.** Best of 3 SPIDER-TAG rounds (90 s by default) through the wager relay, on the existing online
    netcode. The referee re-simulates every round from the relay-recorded inputs with the canonical sim, and that
    replay decides the winner, not the clients.
@@ -44,9 +45,11 @@ this.
    referee is involved, and pausing never blocks it.
 
 Safety valves:
-- A series nobody settles refunds itself: after `settleBy` (lock + 24 h), anyone can call `refundExpired`.
+- A series nobody settles refunds itself: after `settleBy` (lock + 24 h), anyone can call `refundExpired`, and each
+  player can take back their own stake alone with `reclaim` (a transaction that names nobody else).
 - Two players can settle between themselves with both wallets' signatures (`settleMutual`) if the referee is gone.
 - Every transaction the relayer sends can also be sent by the player.
+- A creator can kill any Entry of theirs that hasn't locked yet by cancelling its match id on-chain (`cancel`).
 
 ---
 
@@ -67,20 +70,25 @@ Safety valves:
 | Key | Where it lives | Can | Cannot |
 |---|---|---|---|
 | Player wallet | the player's wallet | deposit, withdraw, authorise/revoke session keys, sign Entries directly, sign mutual settles | - |
-| Session key | the player's browser (local storage) | sign Entries up to `maxStake` each and `cap` in total until `expiry`; log in to the relay | withdraw, move free balance anywhere except into a match with an opponent's matching Entry, sign Results |
-| Referee | Worker secret `REFEREE_KEY` | sign a Result for a **Locked** match: which of its two players won (fee = the match's captured fee or holder fee), or void | touch free balances, lock anyone, pay anyone but the two players, raise a fee, act after `settleBy` |
+| Session key | the player's browser (local storage) | sign Entries up to `maxStake` each and `cap` in total until `expiry` (a voided match gives its stake back to the cap); log in to the relay | withdraw, move free balance anywhere except into a match with an opponent's matching Entry, sign Results |
+| Referee | Worker secret `REFEREE_KEY` | sign a Result for a **Locked** match that locked under it (`refereeOf`): which of its two players won (fee = the match's captured fee or holder fee), or void | touch free balances, lock anyone, pay anyone but the two players, raise a fee, act after `settleBy`, decide a match that locked under another referee |
 | Relayer | Worker secret `RELAYER_KEY` | pay gas for `openSession`, `lock`, `settle` | anything a random address cannot: it has no role in the contract |
-| Vault owner | the house's own wallet (Ownable2Step) | set house/holder fees (≤ 5%), beta caps, rotate the referee, pause new deposits/sessions/locks | move or freeze player balances, block withdrawals, change a locked match, upgrade the contract |
-| House | an address fixed at deploy | receive accrued fees (`withdrawHouse`, callable by anyone) | anything else |
+| Vault owner | the house's own wallet (Ownable2Step) | set house/holder fees (≤ 5%), beta caps, rotate the referee for later matches, pause new deposits/sessions/locks, credit **surplus** (tokens beyond everything the vault owes, such as a wallet's plain send to the vault) to a player | move or freeze player balances, block withdrawals, change or decide a locked match (a new referee only applies to later locks), renounce ownership, upgrade the contract |
+| House | an address fixed at deploy | receive accrued fees (`withdrawHouse`, callable by anyone), or send them elsewhere itself (`withdrawHouseTo`, when the token blocks the house or limits transfer sizes) | anything else |
 | Faucet (test networks only) | Worker secret `FAUCET_KEY` | send test tokens and a little test ETH | exist on a mainnet deployment |
 
 There is **no server-held treasury key**: the relay never holds player funds, and the vault has no admin withdrawal
 path. The worst a stolen hot key can do:
-- **Referee:** mis-declare the winner of matches that are live at that moment. This is bounded by the per-match stake
-  cap, and it is publicly provable afterwards, because every Result commits to the published input log.
+- **Referee:** mis-declare the winner of the open matches that locked under it. Rotating the referee stops new matches
+  from using the key; matches already locked keep the referee they locked under (so the owner's key can never decide a
+  live match either). This is bounded by the per-match stake cap, and it is publicly provable afterwards, because every
+  Result commits to the published input log.
 - **Relayer:** burn its own gas ETH.
-- **Session key:** enter its player into matches up to `cap`. A player who never connects is refunded (no-show is a
-  void, §4.4), so a stolen key cannot farm forfeits.
+- **Session key:** the relay logs a player in with it, so a thief who copies it (an XSS on the site, a malicious
+  extension, a shared computer) can pair the player against an account of his own and lose on purpose or forfeit as
+  them. The vault can't tell a thrown match from a real one, so its bound is the key's own limits: at most
+  `min(free, cap - used)` until the key expires or is revoked (a void gives the stake back to the cap, a played match
+  doesn't). The relay holds such series for review (§6.3) and the page keeps caps small and keys short-lived (§3.4).
 
 ---
 
@@ -92,10 +100,11 @@ path. The worst a stolen hot key can do:
 |---|---|
 | `contracts/foundry.toml` | solc 0.8.37, `evm_version = "prague"`, optimizer 200. Remaps OpenZeppelin to `../node_modules` (pinned in package.json) and forge-std to `lib/` |
 | `contracts/src/interfaces/IGameVault.sol` | **Frozen:** structs, events, errors, function signatures, EIP-712 typehash constants |
-| `contracts/src/GameVault.sol` | `contract GameVault is IGameVault, EIP712("RadRun GameVault", "1"), Ownable2Step, Pausable, ReentrancyGuard` |
+| `contracts/src/GameVault.sol` | `contract GameVault is IGameVault, EIP712("RadRun GameVault", "1"), Ownable2Step, Pausable, ReentrancyGuardTransient` |
 | `contracts/src/TestSpiderTag.sol` | The test token (§3.8) |
 | `contracts/test/**` | Unit, fuzz and invariant tests, plus quirk-token mocks (§9.1) |
 | `contracts/script/**` | Deploy scripts driven by `tools/wager-deploy.ts` |
+| `src/wager/vaultAbi.ts` | The vault ABI for viem, **generated** from the build (`npm run wager:deploy -- --abi`; `test/wager-contracts.test.ts` checks it) |
 
 Constructor:
 ```solidity
@@ -114,7 +123,10 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 
 - **Accounting.** `free[player]`, `locked[player]`, `houseAccrued`, `totalLiabilities`.
   - Invariant: `totalLiabilities == Σfree + Σlocked + houseAccrued ≤ token.balanceOf(vault)`.
-  - Lock, settle and void move value between buckets; only deposits and withdrawals change `totalLiabilities`.
+  - Lock, settle, void and reclaim move value between buckets; only deposits, withdrawals and surplus credits change
+    `totalLiabilities`.
+  - **Surplus** is `token.balanceOf(vault) - totalLiabilities`: tokens nobody is owed (a wallet's plain send to the
+    vault, a rebase, a reflection share). Only `creditSurplus` touches it.
 - **`deposit` / `depositFor`.** Records the vault's balance, runs `safeTransferFrom(msg.sender, vault, amount)`, then
   requires the balance to have grown by **exactly** `amount`, or reverts `TransferMismatch`.
   - A deposit may not take `free + locked` above `maxBalance` (winnings may).
@@ -122,6 +134,12 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 - **`withdraw(amount)` / `withdrawTo(amount, to)`.** Only the caller's own free balance: `free -= amount`, then
   `safeTransfer`. Never paused, no other party involved.
   - `withdrawTo` lets a player whose own address the token blocks send to another address.
+  - The vault measures how much its balance fell. **More than `amount`** (a sender-side tax, for example one the
+    token's owner switched on after launch): the difference also comes out of the withdrawer's own free balance, or the
+    call reverts `TransferMismatch(amount, amount + tax)` when that isn't enough, so nobody else's balance ever pays
+    it and the vault stays solvent. Under a tax a player can take out about `free / (1 + tax)`. **Less** (part of a
+    reflection fee comes back to the vault): the difference stays as surplus. **Nothing** (paying the vault itself, a
+    token that moved nothing): `TransferMismatch(amount, 0)`. The house's withdrawals work the same way.
 - **`openSession(auth, walletSig)`.**
   - Checks:
     - `walletSig` is valid for `auth.player` (OpenZeppelin `SignatureChecker`: ECDSA or ERC-1271).
@@ -131,18 +149,29 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
     - `sessionKey != 0`.
   - Stores `Session{key, expiry, maxStake, cap, used: 0}`, replacing any previous session, and increments the nonce.
   - Paused: reverts.
-- **`revokeSession()`.** Deletes the caller's session and increments the nonce.
+- **`revokeSession()`.** Deletes the caller's session and increments the nonce. Never paused.
+- A session is live while `now < expiry`. `SessionOpened` carries the nonce its SessionAuth used; `SessionRevoked`
+  carries the new nonce.
+- **Match ids.** A match id is the creator's address (its first 20 bytes) followed by 12 random bytes the creator's
+  page picks (`eip712.ts` `newMatchId(creator)`, `matchIdCreator(id)`). The vault only locks an id with its creator as
+  player A. So nobody can burn a published id by locking it first with accounts of their own, and the joiner can't
+  submit the pair the other way round to take seat A.
 - **`lock(a, sigA, b, sigB)`.** The checks, in order:
   1. The vault is not paused.
-  2. `a.matchId == b.matchId` and the match is `None`.
-  3. The players are distinct and nonzero.
-  4. `a.opponent ∈ {0, b.player}` and `b.opponent ∈ {0, a.player}`.
-  5. `a.stake == b.stake` and `0 < stake ≤ maxStake`.
-  6. `roundSeconds` and `rules` are equal.
-  7. `now ≤` both deadlines.
-  8. Each signature is valid (below).
-  9. Both free balances are ≥ stake.
-  10. `token.balanceOf(vault) ≥ totalLiabilities` (otherwise `Insolvent`).
+  2. `a.matchId == b.matchId`.
+  3. The id starts with `a.player` (otherwise `BadMatchId`).
+  4. The match is `None`: never locked or cancelled (otherwise `MatchExists`).
+  5. The players are distinct and nonzero.
+  6. `a.opponent ∈ {0, b.player}` and `b.opponent ∈ {0, a.player}`.
+  7. `a.stake == b.stake` and `0 < stake ≤ maxStake`.
+  8. Both `feeCapBps ≥ houseFeeBps` (otherwise `FeeAboveCap(player, houseFeeBps, cap)`): a cap bounds what a player
+     pays, it can't sign the house's fee away. After the owner raises the fee, Entries signed under the old one refuse
+     to lock rather than lock at the old fee.
+  9. `roundSeconds` and `rules` are equal.
+  10. `now ≤` both deadlines.
+  11. Each signature is valid (below).
+  12. Both free balances are ≥ stake.
+  13. `token.balanceOf(vault) ≥ totalLiabilities` (otherwise `Insolvent`).
 
   Checking an Entry signature:
   - First try ECDSA recovery.
@@ -153,11 +182,16 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 
   Effects:
   - Both stakes move from free to locked.
-  - The match stores `playerA = a.player`, `playerB = b.player`, `feeBps = min(houseFeeBps, a.feeCapBps, b.feeCapBps)`,
-    `holderFeeBps = min(holderFeeBps, feeBps)`, `lockedAt = now` and `settleBy = now + settleWindow`.
+  - The match stores `playerA = a.player`, `playerB = b.player`, `feeBps = houseFeeBps`,
+    `holderFeeBps = min(holderFeeBps, feeBps)`, the current referee (`refereeOf(matchId)`), which session (if any)
+    entered each stake, `lockedAt = now` and `settleBy = now + settleWindow`.
   - Emits `MatchLocked`.
+- **`cancel(matchId)`.** The id's creator (and only they) marks an id that never locked as `Cancelled`: no Entry for it
+  can lock afterwards, whoever holds the signatures. Emits `MatchCancelled`. Never paused. Session-signed Entries also
+  die when the session is revoked or replaced; wallet-signed ones only die this way (or at their deadline).
 - **`settle(r, refereeSig)`.**
-  - Checks: the match is `Locked`, `now ≤ settleBy`, and the signer of `hashResult(r)` is `referee`.
+  - Checks: the match is `Locked`, `now ≤ settleBy`, and the signer of `hashResult(r)` is the referee the match locked
+    under (`refereeOf`), not whoever is the referee now.
   - Win (`outcome == 1`): `winner ∈ {playerA, playerB}` and `feeBps ∈ {m.feeBps, m.holderFeeBps}`.
   - Void (`outcome == 2`): `winner == 0` and `feeBps == 0`.
   - Anything else reverts `BadResult`.
@@ -165,15 +199,32 @@ The frozen signatures and NatSpec are in `IGameVault.sol`. The essentials:
 - **`settleMutual(r, sigA, sigB)`.** As `settle`, but checked against both players' wallets (`SignatureChecker`;
   session keys are not accepted). A win must use `m.feeBps`: the players can't award themselves the holder discount.
   Void reason 2.
-- **`refundExpired(matchId)`.** A `Locked` match with `now > settleBy`: both stakes go back to free. Void reason 3.
-  Anyone may call it; it is never paused.
-- **`withdrawHouse()`.** Sends `houseAccrued` to `house`, zeroes it and lowers `totalLiabilities`. Anyone may call it.
+- **Voids and the session cap.** Every void (referee, mutual, timeout) and every reclaim gives each stake back to the
+  cap of the session that entered it, while that session is still the player's (not revoked or replaced since). A
+  played match (settled) keeps counting. A griefer who joins and never shows can't use up a session.
+- **`refundExpired(matchId)`.** A `Locked` match with `now > settleBy`: both stakes (those not reclaimed yet) go back to
+  free. Void reason 3. Anyone may call it; it is never paused.
+- **`reclaim(matchId)`.** After `settleBy`, a player of a still-`Locked` match takes their own stake back to free. The
+  transaction and its event (`StakeReclaimed`) name only the caller, so a player never needs a transaction that also
+  involves the other player (whom the chain's screening or the token may refuse: §3.6). The match stays `Locked` until
+  the other stake is out too (`refundExpired` releases just that one), and turns `Voided` when both players reclaim.
+  Never paused.
+- **`withdrawHouse()`.** Sends all of `houseAccrued` to `house`, lowers it and `totalLiabilities`. Anyone may call it.
+  With nothing accrued it reverts `ZeroAmount`.
+- **`withdrawHouseTo(amount, to)`.** The house only (`NotHouse` otherwise): part of the fees, or to another address.
+  For a token that blocks the house address, limits transfer sizes, or taxes the sender (the tax comes out of the
+  remaining fees). Never paused.
 - **Owner only:** `setHouseFees(fee, holderFee)` (each ≤ 500), `setCaps(maxStake, maxBalance)` (nonzero),
-  `setReferee(addr)` (nonzero), `pause()` / `unpause()`.
+  `setReferee(addr)` (nonzero; applies to matches locked from then on), `pause()` / `unpause()`,
+  `creditSurplus(player, amount)` (`amount ≤ balanceOf(vault) - totalLiabilities`, otherwise `SurplusExceeded`; it
+  credits the player's free balance and can never reach a token the vault owes). `renounceOwnership` always reverts
+  (`RenounceDisabled`): without an owner a pause could never end, a leaked referee key could never be rotated out and
+  held series could never be reviewed.
 - **Time.** Every deadline uses `block.timestamp`. Never use `block.number`: on Robinhood Chain (Arbitrum Nitro) it is
   the parent chain's block number.
 - **Randomness.** None on-chain (`prevrandao` is constant there). Match seeds are a commit-reveal (§5.5).
-- **Reentrancy.** `nonReentrant` on everything that calls the token. Checks, then effects, then the transfer.
+- **Reentrancy.** `nonReentrant` on everything that transfers the token. Checks, then effects, then the transfer
+  (a deposit credits only after checking the received amount). `lock` only reads `balanceOf` (a staticcall).
 
 ### 3.3 EIP-712
 
@@ -193,7 +244,8 @@ Full hashes are in `eip712.ts` `TYPEHASHES`, and the test checks them against th
 
 **Why nothing can be replayed:**
 - The domain binds the chain id and the vault address.
-- An Entry is consumed with its `matchId` (a match locks once, ever).
+- An Entry is consumed with its `matchId` (a match locks once, ever), and its creator can cancel an id before that.
+- Only the creator (the id's first 20 bytes) can be player A of an id.
 - A Result applies only to a `Locked` match and moves it out of `Locked`.
 - A SessionAuth carries the player's nonce.
 - A Login carries a single-use relay challenge, its expiry and the relay's URL.
@@ -205,19 +257,22 @@ Full hashes are in `eip712.ts` `TYPEHASHES`, and the test checks them against th
 
 ### 3.4 Session keys
 
-- **Defaults set by the client:**
+- **Defaults set by the client** (small, because a copied key can lose up to what its cap has left: §2):
   - `maxStake` = what the player picks, at most the vault's `maxStake`.
-  - `cap` = 10 × maxStake.
-  - `expiry` = 3 days.
+  - `cap` = 3 × maxStake. Voided matches give their stake back to the cap, so no-shows don't use it up.
+  - `expiry` = 12 hours, renewed with a new SessionAuth when the player comes back.
 - **Revoking:**
   - `revokeSession` costs one transaction.
   - Withdrawing the free balance also takes it out of any session key's reach.
 - **Losing the key:** when the browser key is lost, the player authorises a new one, which replaces the old one.
+- **Storing the key:** it sits in the page's storage, so anything that runs script on the page can copy it. A key the
+  browser can't export (a WebCrypto P-256 key) would need the vault to verify P-256 signatures (§12).
 
 ### 3.5 Fees and payout
 
 - **Captured at lock:**
-  - `feeBps = min(houseFeeBps, capA, capB)`.
+  - `feeBps = houseFeeBps`. Each Entry's `feeCapBps` must be at least that (the page signs the vault's current fee),
+    so the fee is never above what either player signed, and a player can't sign it away.
   - `holderFeeBps = min(holderFeeBps, feeBps)`.
   - Defaults: 300 (3%) and 150 (1.5%). The hard cap is 500. 0 is allowed.
 - **On a win:**
@@ -238,26 +293,37 @@ Full hashes are in `eip712.ts` `TYPEHASHES`, and the test checks them against th
 | Token behaviour | Handling |
 |---|---|
 | Plain ERC-20 (launchpad tokens such as pons tokens on Robinhood Chain: fixed supply, 18 decimals, no owner, tax, blacklist or pause; they move freely before and after graduation) | Works as is |
-| Fee-on-transfer / taxed transfers | **Rejected.** A deposit that doesn't add exactly `amount` reverts `TransferMismatch`. Stakes must be equal, and delta accounting would tax payouts twice. Swap-only taxes (charged in the pool, not on transfers) are fine. |
-| Rebasing (either direction) | Rejected by the deploy tool's probe (§11): exact deposit and withdraw of 1 unit, and a balance that stays put over several blocks. Guarded in the contract: exact deposits, and `lock` refuses to run when `balanceOf(vault) < totalLiabilities` |
-| Transfers locked until graduation, or max-wallet / max-tx windows | Deposits or withdrawals revert while the lock or limit applies. Nothing is trapped: balances stay, withdraw later or in smaller amounts |
-| Blacklist or pause | Settles, refunds and voids are internal credits, so they never call the token and can never be blocked. A blocked player uses `withdrawTo`. The house fee is its own pull line |
+| Fee-on-transfer / taxed transfers | **Rejected.** A deposit that doesn't add exactly `amount` reverts `TransferMismatch`, and the deploy tool's probe refuses a token that taxes a transfer (§11). Stakes must be equal, and delta accounting would tax payouts twice. Swap-only taxes (charged in the pool, not on transfers) are fine. |
+| A tax switched on **after** deploy | Nobody is trapped. A sender-side tax on the vault's payouts comes out of the withdrawer's own free balance (the house's fees for the house): a player takes out about `free / (1 + tax)`. A recipient-side tax only shrinks what arrives. Deposits are refused while it is on |
+| Reflection fees (switched on later) | A payout lowers the vault's balance by less than it pays: withdrawals keep working and the difference stays as surplus (the owner may credit it to players). Deposits are refused while the fee is on |
+| Rebasing (either direction) | Rejected by the deploy tool's probe (§11): exact deposit and withdraw of 1 unit, and a balance that stays put over several blocks. Guarded in the contract: exact deposits, and `lock` refuses to run when `balanceOf(vault) < totalLiabilities`. A positive rebase is surplus |
+| Transfers locked until graduation, or max-wallet / max-tx windows | Deposits or withdrawals revert while the lock or limit applies. Nothing is trapped: balances stay, withdraw later or in smaller amounts. The house withdraws in parts with `withdrawHouseTo` |
+| Blacklist or pause | Settles, refunds, reclaims and voids are internal credits, so they never call the token and can never be blocked. A blocked player uses `withdrawTo`; a blocked house uses `withdrawHouseTo` |
+| Tokens sent straight to the vault (a wallet's plain send instead of approve + deposit) | Owed to nobody: surplus. The owner can credit it to the sender with `creditSurplus`; the page warns never to send tokens to the vault address directly |
 | Decimals and symbol | Read from the token by the client and the relay, never hard-coded |
 
-Robinhood Chain's sequencer drops any transaction that involves a sanctioned address. The relay therefore never pairs
-an Entry it could not lock, and the timeout refund needs no one's cooperation.
+Robinhood Chain's sequencer drops "any transaction associated with a sanctioned address". The relay therefore never
+pairs an Entry it could not lock, and the timeout refund needs no one's cooperation. What counts as "associated" is
+not documented (the transaction's sender and recipient, or also calldata and event logs). `refundExpired` and a settle
+log both players' addresses, so each player also has `reclaim`: after `settleBy` it returns only the caller's stake in
+a transaction whose calldata and log name only the caller. (Asking Robinhood Chain how screening decides is an open
+item, §12.)
 
 ### 3.7 Security bounds (what the tests must prove)
 
 1. Only the player (by wallet transaction) can decrease their free balance, except through `lock` with the player's
-   own valid Entry signature.
+   own valid Entry signature. (`creditSurplus` only ever increases one, and only out of surplus.)
 2. No call by the owner, referee, relayer or anyone else can make a player's withdrawal of free balance fail (with a
-   well-behaved token), paused or not.
-3. The referee can only settle `Locked` matches, only pay one of that match's two players `2 × stake − fee` with fee
-   ∈ {captured fee, captured holder fee}, or void. It can do nothing after `settleBy`.
-4. Every `Locked` match can always be closed: by settle before `settleBy`, by `refundExpired` after it.
-5. House fees only ever reach `house`.
-6. No signature (SessionAuth, Entry, Result) works twice, or on another vault or chain.
+   well-behaved token), paused or not. A tax switched on later is paid by the withdrawer, never by other players.
+3. The referee can only settle `Locked` matches that locked under it, only pay one of that match's two players
+   `2 × stake − fee` with fee ∈ {captured fee, captured holder fee}, or void. It can do nothing after `settleBy`.
+   Rotating the referee changes neither who decides a live match nor whether its signed Results apply.
+4. Every `Locked` match can always be closed: by settle before `settleBy`, by `refundExpired` or each player's own
+   `reclaim` after it.
+5. House fees only ever reach `house`, or where the house itself sends them.
+6. No signature (SessionAuth, Entry, Result) works twice, or on another vault or chain. Only an id's creator can be
+   player A of it, and a cancelled id never locks.
+7. The session cap bounds what a session key can lose: played matches spend it, voids give it back.
 
 ### 3.8 Test token (`TestSpiderTag.sol`, test networks only)
 
@@ -272,12 +338,15 @@ written or deployed by this repo. Token names and artwork must not use Robinhood
 
 `Deposited`, `Withdrawn`, `SessionOpened`, `SessionRevoked`, `MatchLocked(matchId, playerA, playerB, …)`,
 `MatchSettled(matchId, winner, loser, payout, fee, feeBps, logHash, mutual)`,
-`MatchVoided(matchId, playerA, playerB, reason, logHash)`, `HouseWithdrawn`, `HouseFeesSet`, `CapsSet`, `RefereeSet`,
-and OpenZeppelin's `Paused` / `Unpaused` / `OwnershipTransferred`.
+`MatchVoided(matchId, playerA, playerB, reason, logHash)`, `MatchCancelled(matchId, player)`,
+`StakeReclaimed(matchId, player, stake)`, `TransferTaxPaid(account, amount)`, `SurplusCredited(player, amount)`,
+`HouseWithdrawn(house, amount)` (`house` is where the fees went), `HouseFeesSet`, `CapsSet`, `RefereeSet`, and
+OpenZeppelin's `Paused` / `Unpaused` / `OwnershipTransferred`.
 
 A player's history:
 1. `MatchLocked` logs with `playerA = me`, plus those with `playerB = me`.
-2. Then the settled/voided logs by `matchId` (topics OR-list), from the deployment's `deployBlock`.
+2. Then the settled/voided/reclaimed logs by `matchId` (topics OR-list), from the deployment's `deployBlock`. A match
+   both players reclaimed ends with two `StakeReclaimed` logs and no `MatchVoided`.
 
 ### 3.10 Gas
 
@@ -285,7 +354,7 @@ The targets, which the forge gas report checks:
 
 | Call | Gas |
 |---|---|
-| `lock` | ≤ 220k |
+| `lock` | ≤ 220k (219k for the first lock of two fresh sessions, 184k after) |
 | `settle` | ≤ 90k |
 | `openSession` | ≤ 90k |
 | `deposit` | ≤ 90k |
@@ -324,7 +393,8 @@ districts (40-95 KB each). At startup it checks `selfTestHash() === SELFTEST_HAS
 ### 4.3 Lobby, offers and pairing
 
 **`create {entry, sig, listed, holdersOnly?, minSeries?}`.** Accepted when:
-- `entry.player` is the logged-in address.
+- `entry.player` is the logged-in address, and `entry.matchId` starts with it (`matchIdCreator`).
+- `entry.feeCapBps ≥` the vault's `houseFeeBps`.
 - The signature is valid (session or wallet) and the session limits allow the stake.
 - The stake is ≤ the vault's `maxStake`, and ≤ `NEW_ACCOUNT_MAX_STAKE` while the creator has fewer than
   `NEW_ACCOUNT_SERIES` settled series.
@@ -344,14 +414,24 @@ The offer is listed, or kept unlisted (reachable by its invite link or id). `ent
 - Neither player is in another unsettled series.
 
 **Lock.**
-1. The lobby sends `matched {a, b}` to both players.
-2. It simulates `lock` with `eth_call`, then the relayer sends it.
-3. On receipt (soft confirmation, under a second) it sends `locked {tx}` and initialises the room (`POST` internal:
+1. The lobby never sends the creator's open Entry signature (opponent 0) to anyone: whoever holds it can pair it with
+   any account (`lock` can't know who the lobby vetted). On a join it asks the creator's page to sign a **named** Entry
+   for the joiner (`opponent` = the joiner, the same terms, a deadline of a few minutes), with the session key, so
+   there is no popup (a wallet-only creator gets one). That named Entry and the joiner's are what lock.
+2. The lobby checks `vault.referee()` equals its `REFEREE_KEY` address, so it never locks a match it can't settle.
+3. The lobby sends `matched {a, b}` (both named Entries) to both players.
+4. It simulates `lock` with `eth_call`, then the relayer sends it.
+5. On receipt (soft confirmation, under a second) it sends `locked {tx}` and initialises the room (`POST` internal:
    the offer terms, both Entries, the chain's `matchOf`).
-4. If the relayer fails, either player can send `lock` with the two signed Entries it already has.
+6. If the relayer fails, either player can send `lock` with the two signed Entries it already has.
+7. A lock that reverts `MatchExists` while the chain's `matchOf` names other players than the lobby's row is a failed
+   lock, never "it locked after all".
 
 **Relayer queue.**
 - One DO, a local nonce, EIP-1559 fees of 2 × the base fee.
+- A gas limit per call (for example 400k for `lock` and `openSession`): a player whose account is a contract (or an
+  EIP-7702 delegate) can make its ERC-1271 check cost any amount of gas, and the relayer only pays for bounded calls.
+  Above the limit the player submits the call themselves.
 - Receipts are polled every 250 ms with a 30 s timeout.
 - On an error it resyncs the nonce from `pending`.
 
@@ -363,8 +443,10 @@ The phases are `waiting → between → playing → (between → playing)* → d
 1. **Join.**
    - `hello {compat}`: the client's `simCompat` for the district must equal the referee's, otherwise `version` and
      "reload to update".
-   - Then login. Only `playerA` and `playerB` (from `matchOf`) get a seat; anyone else gets `full`.
-   - A player who reconnects takes their seat back.
+   - Then login. Only `playerA` and `playerB` (from `matchOf`) get a seat; anyone else gets `full`. A room only
+     initialises for a match the lobby paired (its `matches` row names the same two players).
+   - A player who reconnects takes their seat back. A session-key login never replaces a live seat from another IP
+     or browser; that takes a wallet login.
 2. **Before round 1** (`joinGraceMs` = 60 s from the lock):
    - Both players must connect and `pick` a Radbro (§4.6).
    - Each sends its `seed` share once, after the `series` message has shown the relay's `seedCommit`.
@@ -398,7 +480,9 @@ The phases are `waiting → between → playing → (between → playing)* → d
    - A room that restarts mid-round cannot recover that round's inputs, so the series is **void (`error`)**.
    - A relay fault never picks a winner.
    - Never deploy the wager Worker while series are live: the deploy tool checks `GET /health` first.
-9. **Decision.** Covered in §5.7 (signing) and §6.3 (holds).
+9. **Decision.** Covered in §5.7 (signing) and §6.3 (holds). The room signs with the key of the referee the match
+   locked under (`refereeOf(matchId)`); after a rotation the Worker keeps the old key (`REFEREE_KEY_PREV`) until every
+   match locked under it has closed.
 
 ### 4.5 Records and ratings (the lobby's smurf protection)
 
@@ -622,8 +706,11 @@ Clients can submit the same `settlement` themselves.
 | **Scripted bots / aimbot / triggerbot** | Referee-side metrics from the canonical replay (reaction time, aim error, periodicity, press cadence). A flagged winner holds the series for review instead of auto-signing (§6.2-6.3) |
 | **Smurfs** | Public records, ratings and account age on every card. Stake caps for new accounts. Per-offer `minSeries` and `holdersOnly` |
 | **Perk spoofing** (fake holder, somebody else's Radbro) | Holder status and ownership come from the relay's own Ethereum reads for the address proven at login, never from the client. Rentals don't count. The fee discount is bounded on-chain by the captured holder fee. Cosmetics are render-only |
-| **Stranger taking a seat** (room codes, invites) | Room seats go only to the two addresses in `matchOf(matchId)`, proven by a Login signature. A named invite (`opponent` set) can't be joined by anyone else: the relay refuses it, and `lock` would revert |
-| **Replayed signatures** | Covered in §3.3: domain binding, single-use match ids, Results only on `Locked`, SessionAuth nonces, single-use Login challenges |
+| **Stranger taking a seat** (room codes, invites) | Room seats go only to the two addresses in `matchOf(matchId)`, proven by a Login signature, for a match the lobby paired. A named invite (`opponent` set) can't be joined by anyone else: the relay refuses it, and `lock` would revert |
+| **A copied session key** (XSS, an extension, a shared computer) | The thief could log in as the player and throw or forfeit a series against his own account. The vault bounds it to what the key's cap has left (§2, small by default, §3.4); the relay holds such series for review (§6.3) and never lets a session login take a live seat from another IP |
+| **Sock-puppet joins** (pairing a creator's signature with an account the lobby didn't vet) | The lobby never hands out an open Entry signature; the creator signs a named Entry for the vetted joiner (§4.3), which pairs with nobody else. A creator can cancel any unlocked id on-chain |
+| **Burning or hijacking match ids** (locking a published id first, or swapping the seats) | A match id starts with its creator's address and only the creator can be player A of it (§3.2) |
+| **Replayed signatures** | Covered in §3.3: domain binding, single-use match ids, Results only on `Locked` for the referee they locked under, SessionAuth nonces, single-use Login challenges |
 | **House-picked seeds / first holder** | Commit-reveal seeds (§5.5) and first-holder alternation in round 2 (§5.6) |
 | **Host-set match length, self-declared assists** | Terms are fixed in both signed Entries. Assists are off for both slots. The relay ignores `config` and `hello.touch/easy` |
 | **Relay or referee misbehaviour** | Every Result commits to a public log that anyone can replay. A lying referee is provable. Stakes are capped per match. Nothing the relay holds can move free balances |
@@ -648,7 +735,9 @@ dev relay is not.
 ### 6.3 Holds
 
 - **Held:** flags against the **winner**, or any `result-mismatch`, put the series in `held` when `HOLD_ON_FLAGS=1`
-  (the default).
+  (the default). So does a series won by a forfeit, or against a loser who idled, when the loser's seat logged in by
+  session key from an IP or browser the player hadn't used before, or both seats share an IP: that is what a copied
+  session key looks like (§2).
 - **Not held:** flags against the loser alone are recorded, but the series settles: a cheater who lost anyway just
   loses.
 - **Resolving a held series:** it waits for the owner's review (§4.9). If nobody reviews it before `settleBy`, anyone
@@ -760,8 +849,9 @@ dev relay is not.
   - `WAGER_NET`, `ALLOWED_ORIGINS`, `DEV`, `RPC_URLS`, `ETH_RPC_URLS`, `REGION_BLOCK`, `ROUND_SECONDS`, `DISTRICTS`
   - `NEW_ACCOUNT_MAX_STAKE`, `NEW_ACCOUNT_SERIES`, `LATE_MS`, `RECONNECT_GRACE_MS`, `JOIN_GRACE_MS`, `HOLD_ON_FLAGS`
   - `FAUCET`, `FAUCET_TOKENS`, `FAUCET_ETH`
-- **Relay secrets** (`wrangler secret put`): `REFEREE_KEY`, `RELAYER_KEY`, `FAUCET_KEY` (test networks only), and an
-  optional `RPC_URL_PRIVATE`.
+- **Relay secrets** (`wrangler secret put`): `REFEREE_KEY`, `RELAYER_KEY`, `FAUCET_KEY` (test networks only), an
+  optional `RPC_URL_PRIVATE`, and after a referee rotation `REFEREE_KEY_PREV` (the old referee's key, until every match
+  that locked under it has closed: §4.4).
 - **Tools.** A 0600 env file outside the repo per deployment. It holds `DEPLOYER_KEY`, `REFEREE_KEY`, `RELAYER_KEY`,
   `FAUCET_KEY`, `WAGER_OWNER`, `WAGER_HOUSE`, `WAGER_TOKEN`, `WAGER_FEE_BPS`, `WAGER_HOLDER_FEE_BPS`,
   `WAGER_MAX_STAKE`, `WAGER_MAX_BALANCE`, `WAGER_SETTLE_WINDOW` and `RPC_URL_PRIVATE`.
@@ -776,17 +866,25 @@ dev relay is not.
 - **Unit tests:** every function, every revert (each error in `IGameVault`), and every event with its arguments.
 - **Fuzz tests:**
   - Payout maths against §3.5 for any stake and fee.
-  - Captured fees against `min` for any settings and caps.
+  - Captured fees for any settings and caps: the house fee when both caps cover it, `FeeAboveCap` otherwise.
   - Session limits (maxStake, cap, expiry, nonce) for any values.
-- **Invariants** (handler-based: players, owner, referee, relayer and a random actor calling everything; warp time):
-  - I1: `token.balanceOf(vault) ≥ totalLiabilities`.
+- **Invariants** (handler-based: players, their session keys, the owner, rotating referees, the house, the token's
+  owner switching on a pause, a blacklist and a sender tax, and a stranger calling everything; warps and landings on
+  exact boundaries; about one lock in three carries one defect that must make it fail):
+  - I1: `token.balanceOf(vault) == totalLiabilities + surplus` (solvent whatever the token did).
   - I2: `totalLiabilities == Σfree + Σlocked + houseAccrued`.
-  - I3: `Σlocked == Σ over Locked matches of 2 × stake`.
+  - I3: each player's `locked` is their stake in every Locked match they haven't reclaimed.
   - I4: a ghost check that a player's free balance only drops through their own withdraw or a lock carrying their
-    signature.
-  - I5: after `warp(settleBy + 1)`, `refundExpired` succeeds for every Locked match.
-  - I6: withdrawing the full free balance succeeds (a well-behaved token), paused or not.
-  - I7: `houseAccrued` only ever leaves to `house`.
+    signature, and that every call the spec refuses (stranger, replay, wrong seat, cap under the fee, borrowed key)
+    is refused.
+  - I5: fees are the captured ones, payouts follow §3.5, and every fee is accrued, at the house (or where the house
+    sent it) or paid as the token's tax.
+  - I6: nothing that must work was refused: settles by the match's referee, refunds and reclaims after `settleBy`,
+    cancels of unused ids, withdrawals the token allows (paused vault or not).
+  - I7: session keys, nonces and `used` (spent at lock, given back by voids) match what the players did.
+  - I8: match states only move forward, and a Locked match keeps its referee through every rotation.
+  - I9: with the token paused, every player blacklisted and a tax on, every Locked match still refunds after its
+    window; then every player leaves in full and the house takes its fees.
 - **Signatures:**
   - Replay on a second vault, and under another `chainId`.
   - A Result applied to a different match.
@@ -801,9 +899,14 @@ dev relay is not.
   - blacklist: the blocked player uses `withdrawTo`, and the opponent's settle and withdraw are unaffected;
   - pausable token: settles still work, and withdrawals succeed after the token unpauses;
   - locked-until-graduation: the deposit reverts, then works after the unlock;
-  - max-wallet: a large withdraw reverts, and smaller ones work.
-- **Owner:** can't touch balances; fee bounds; what pause does and does not stop; referee rotation takes effect on
-  live matches.
+  - max-wallet: a large withdraw reverts, and smaller ones work; the house takes fees above a max-tx in parts;
+  - a sender tax or a reflection fee switched on after deposits: everyone still leaves, the withdrawer pays the tax;
+  - tokens sent straight to the vault: surplus, credited back by the owner, never more.
+- **Owner:** can't touch balances; fee bounds; what pause does and does not stop; a referee rotation applies to later
+  locks only (a Result signed before it still settles, and the new referee can't decide a live match); ownership
+  can't be renounced.
+- **Review findings** (`Hardening.t.sol`): a copied session key loses at most its cap; voids give the cap back; match
+  ids bound to their creator; open vs named Entries and `cancel`; fee caps can't remove the house fee; `reclaim`.
 - **Gas report** against §3.10.
 
 ### 9.2 Relay (`node --test test/wager-relay*.test.ts`, fake clock, sockets and chain like `test/relay.test.ts`)
@@ -880,7 +983,7 @@ are **frozen**. If one must change, the change lands as a new commit on `feat/wa
 | Lane (branch) | Owns |
 |---|---|
 | `feat/wager` (this design) | `docs/WAGER.md`, `contracts/foundry.toml`, `contracts/src/interfaces/IGameVault.sol`, `src/wager/{eip712,log,replay,protocol,config}.ts`, `src/wager/deployments.json` (after this, only the deploy tool writes it), `test/wager-shared.test.ts`, `package.json` / `package-lock.json` (the viem and OpenZeppelin deps and every `wager:*` script are already in), `.gitignore` |
-| `feat/wager-contracts` | `contracts/src/GameVault.sol`, `contracts/src/TestSpiderTag.sol`, `contracts/test/**`, `contracts/script/**`, `contracts/lib/**` + `.gitmodules` (forge-std), `tools/wager-deploy.ts` (local / testnet deploy, the token probe, source verification, writing the deployment; the mainnet mode only runs with an explicit go-ahead flag) |
+| `feat/wager-contracts` | `contracts/src/GameVault.sol`, `contracts/src/TestSpiderTag.sol`, `contracts/test/**`, `contracts/script/**`, `contracts/snapshots/**`, `contracts/README.md`, `contracts/lib/**` + `contracts/foundry.lock` + `.gitmodules` (forge-std), `tools/wager-deploy.ts` (local / testnet deploy, the token probe, source verification, writing the deployment; the mainnet mode only runs with an explicit go-ahead flag), `src/wager/vaultAbi.ts` (generated), `test/wager-contracts.test.ts` |
 | `feat/wager-relay` | `relay/wager/**` (wrangler.toml, `src/*`, `dev.ts`, types), `test/wager-relay*.test.ts`, `tools/wager-verify.ts` |
 | `feat/wager-client` | `src/wager/**` except the shared files above, the one route in `src/main.tsx`, additive FILL/PROBE/reconnect support in `src/net/rollback.ts` and `src/net/session.ts`, series HUD and cosmetics hooks in `src/app/TagPage.tsx` and the tag render files, `test/wager-client*.test.ts`, `tools/wager-e2e.ts` |
 | Nobody | `relay/src/**`, `relay/wrangler.toml`, `relay/dev.ts` (the live relay), `src/net/wire.ts`, `src/game/tagMatch.ts` and the sim, `public/levels/**`, README/PLAY (no link to `?wager`) |
@@ -921,3 +1024,10 @@ Every commit keeps `npm test`, `npm run typecheck` and `npm run build` green.
 - **Flag thresholds:** they need calibration on real human sessions (§6.2).
 - **Per-token Radbro models:** only the five rigged ids have models. Other holders play on a roster body with their
   badge and id.
+- **Sanctions screening scope:** ask Robinhood Chain whether "associated with a sanctioned address" covers calldata
+  and event logs, or only a transaction's sender and recipient. `reclaim` (§3.2) already lets a player out without a
+  transaction that names the other player; a settle still logs the loser.
+- **Session keys the browser can't export:** a WebCrypto P-256 key (`extractable: false`) would stop a script on the
+  page from copying the key (it could still use it while the tab is open). The vault would verify it through the
+  P256VERIFY precompile (RIP-7212); check that it exists on chains 46630 and 4663 first. Until then keys stay small and
+  short-lived (§3.4).
