@@ -595,3 +595,33 @@ test("sims: the page's sim and the referee's must match (rules hash), or the pag
   assert.notEqual(rulesHash(makeRules("downtown", a)), rulesHash(makeRules("downtown", { ...a, tuning: "zz" })));
   assert.equal(getAddress(acct(9).address), acct(9).address);
 });
+
+test("clock: entries and session expiries follow the chain's clock, not a device clock that is off by a day", async () => {
+  const fake = new FakeChain();
+  fake.time += 86_400; // the chain (or this device) is a day off
+  const relay = new FakeRelay({ chain: fake, net: "local", assets: { downtown: assets } });
+  const base = "http://relay.test";
+  relay.base = base;
+  const restore = relayFetch(relay, base);
+  const dep = { ...DEPLOYMENTS.local, relay: base };
+  const pub = createPublicClient({ chain: viemChain(dep), transport: custom(fake.eip1193) }) as PublicClient;
+  const app = new WagerApp({ dep, base, rpc: ["http://127.0.0.1:5401"], district: "downtown", simFor: async () => simCompat(assets), keys: memoryStore(), pub, ws: lobbyWs(relay), trustRelayVault: true });
+  try {
+    await app.start();
+    await app.connect(wallet(testWallet(acct(1), fake), "alice"));
+    await app.faucet();
+    assert.equal(await app.deposit(200n * E18), true);
+    assert.equal(await app.authorise(100n * E18), true, useWager.getState().notice?.text ?? "");
+    await until(() => !!useWager.getState().session && useWager.getState().session!.key === useWager.getState().sessionKey, "session registered");
+    assert.ok(Number(useWager.getState().session!.expiry) > fake.time + 2 * 86_400, "the session expiry is 3 days of chain time");
+    await until(() => app.lobby?.state === "online", "lobby");
+    const id = await app.create({ stake: 10n * E18, roundSeconds: 90, district: "downtown", listed: true, opponent: null, holdersOnly: false, minSeries: 0 });
+    assert.ok(id, useWager.getState().notice?.text ?? "");
+    await until(() => relay.offers.size === 1, "offer");
+    const dl = Number(entryFromJson([...relay.offers.values()][0].offer.entry).deadline);
+    assert.ok(Math.abs(dl - (fake.time + 1800)) < 30, `the deadline (${dl}) is chain time + 30 min (${fake.time + 1800})`);
+  } finally {
+    app.stop();
+    restore();
+  }
+});

@@ -36,7 +36,7 @@ function App() {
   if (HatsPage && params.has("hats")) return <Suspense fallback={fallback}><HatsPage /></Suspense>;
   if (BenchPage && params.has("bench")) return <Suspense fallback={fallback}><BenchPage /></Suspense>;
   if (SandboxPage && (params.has("sandbox") || params.has("autoplay"))) return <Suspense fallback={fallback}><SandboxPage /></Suspense>;
-  if (params.has("wager")) return <Suspense fallback={fallback}><WagerPage /></Suspense>;
+  if (params.has("wager") || params.has("verify")) return <Suspense fallback={fallback}><WagerPage /></Suspense>;
   if (params.has("tag") || params.has("room")) return <Suspense fallback={fallback}><TagPage /></Suspense>;
   return <PlayPage />;
 }

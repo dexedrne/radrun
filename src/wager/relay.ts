@@ -94,6 +94,8 @@ export class LobbyClient {
   private retryT: ReturnType<typeof setTimeout> | null = null;
   state: LobbyState = "off";
   signer: LoginSigner | null;
+  /** Refused logins on this socket: the relay never re-challenges by itself, so the client asks again (bounded). */
+  private refused = 0;
   private readonly base: string;
   private readonly net: WagerNetId;
   private readonly chainId: number;
@@ -124,6 +126,7 @@ export class LobbyClient {
     this.ws = ws;
     ws.onopen = () => {
       if (this.ws !== ws) { try { ws.close(1000, "bye"); } catch { /* closed */ } return; }
+      this.refused = 0;
       this.send({ t: "hello", v: WAGER_PROTOCOL, net: this.net });
       this.pingT = setInterval(() => this.send({ t: "ping" }), 20_000);
     };
@@ -160,7 +163,13 @@ export class LobbyClient {
       }
       return;
     }
-    if (m.t === "welcome") { this.tries = 0; this.set("online"); }
+    if (m.t === "welcome") { this.tries = 0; this.refused = 0; this.set("online"); }
+    if (m.t === "error" && m.code === "auth" && this.state === "login") {
+      // A refused login keeps the socket open (a session key the relay can't see yet, a stale challenge): ask for a
+      // fresh challenge a couple of times, then browse without logging in.
+      if (this.refused++ < 2) setTimeout(() => this.send({ t: "hello", v: WAGER_PROTOCOL, net: this.net }), 1500 * this.refused);
+      else this.set("online", "not signed in");
+    }
     if (m.t === "error" && (m.code === "region" || m.code === "version")) this.stopped = true;
     this.on.msg(m);
   }

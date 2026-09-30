@@ -85,6 +85,8 @@ export class WagerApp {
   private keyAcct: PrivateKeyAccount | null = null;
   private readonly keys: KeyStore;
   private readonly now: () => number;
+  /** Chain time - this device's time (s): deadlines and expiries are checked against block time, not this clock. */
+  private skew = 0;
   private refreshT: ReturnType<typeof setInterval> | null = null;
   private readonly timers = new Set<ReturnType<typeof setInterval>>();
   /** Called when a match of ours locks (the page opens the series). */
@@ -94,7 +96,7 @@ export class WagerApp {
     this.d = d;
     this.api = relayApi(d.base);
     this.keys = d.keys ?? browserStore;
-    this.now = d.now ?? (() => Date.now() / 1000);
+    this.now = d.now ?? (() => Date.now() / 1000 + this.skew);
     useWager.setState({ ...initial(), dep: d.dep, base: d.base });
   }
 
@@ -109,35 +111,45 @@ export class WagerApp {
 
   // ---- start: the relay's config, the vault on chain, the lobby (browsing works without a wallet) --------------------
 
+  /**
+   * The relay's config, the vault on chain, the lobby (browsing works without a wallet). With the relay down the
+   * page still reads the vault it knows (the deployment's, or on dev / local deployments the one the relay named
+   * last time), so a player can always withdraw and refund an expired match: neither needs the relay.
+   */
   async start(): Promise<void> {
-    let config: RelayConfig;
+    let config: RelayConfig | null = null;
     try {
       config = await this.api.config();
     } catch (e) {
       this.set({ fatal: classifyError(e) });
-      return;
     }
     const d = this.d.dep;
-    if (config.chainId !== d.chainId) { this.set({ fatal: wagerError("relay", "the relay serves another network than this page: reload") }); return; }
-    const vault = d.vault ?? (this.d.trustRelayVault ? config.vault : null);
-    if (!vault) { this.set({ fatal: wagerError("relay", "this network's vault isn't deployed yet") }); return; }
-    if (!sameAddress(vault, config.vault)) { this.set({ fatal: wagerError("relay", "the relay and this page disagree about the vault: reload") }); return; }
-    if (config.regionBlocked) this.set({ fatal: wagerError("region", "wager matches aren't available in your region. Your vault balance can always be withdrawn straight from the contract.") });
+    if (config && config.chainId !== d.chainId) { this.set({ fatal: wagerError("relay", "the relay serves another network than this page: reload") }); return; }
+    const cacheKey = `radrun.wager.vault.${d.net}.${d.chainId}`;
+    const vault = d.vault ?? (this.d.trustRelayVault ? (config?.vault ?? this.keys.get(cacheKey)) : null);
+    if (!vault) { if (config) this.set({ fatal: wagerError("relay", "this network's vault isn't deployed yet") }); return; }
+    if (config && !sameAddress(vault, config.vault)) { this.set({ fatal: wagerError("relay", "the relay and this page disagree about the vault: reload") }); return; }
+    if (config && this.d.trustRelayVault) this.keys.set(cacheKey, config.vault);
+    if (config?.regionBlocked) this.set({ fatal: wagerError("region", "wager matches aren't available in your region. Your vault balance can always be withdrawn straight from the contract.") });
     const pub = this.d.pub ?? publicClientFor(viemChain(d, this.d.rpc), this.d.rpc);
     this.chain = new VaultChain(pub, getAddress(vault), d.deployBlock);
     this.set({ config });
     try {
-      const info = await this.chain.info();
+      const [info] = await Promise.all([this.chain.info(), this.syncClock()]);
       if (d.token && !sameAddress(d.token, info.token)) { this.set({ fatal: wagerError("relay", "the vault's token isn't this page's token: reload") }); return; }
       this.set({ info });
     } catch (e) {
       this.set({ fatal: wagerError("network", `can't read the vault on ${d.chainName}: ${classifyError(e).message}`) });
       return;
     }
+    this.refreshT = setInterval(() => void this.refresh(), 12_000);
+    if (!config) {
+      this.set({ fatal: wagerError("relay", "can't reach the wager relay right now: matches are off, but you can still withdraw, and refund a match whose settle window has closed") });
+      return;
+    }
     const mine = config.sims[this.d.district];
     if (mine) this.d.simFor(this.d.district).then(sim => this.set({ simOk: sameSim(sim, mine) }), () => this.set({ simOk: false }));
     if (!config.regionBlocked) this.openLobby();
-    this.refreshT = setInterval(() => void this.refresh(), 12_000);
   }
 
   stop(): void {
@@ -217,8 +229,15 @@ export class WagerApp {
     return this.walletClient;
   }
 
+  /** Track the chain's clock (a device clock that is off must never make Entries that expire before the lock). */
+  private async syncClock(): Promise<void> {
+    if (!this.chain || this.d.now) return;
+    try { this.skew = (await this.chain.chainNow()) - Date.now() / 1000; } catch { /* keep the last */ }
+  }
+
   /** Balances and the session key, re-read from the chain. */
   async refresh(): Promise<void> {
+    void this.syncClock();
     const a = this.s.address, c = this.chain;
     if (!a || !c) return;
     try {
@@ -393,6 +412,7 @@ export class WagerApp {
     if (!c || !a || !config) return false;
     this.set({ busy: "session" });
     try {
+      await this.syncClock();
       const w = await this.needWallet();
       const terms = sessionTerms(maxStake, BigInt(config.maxStake), this.now());
       const nonce = await c.nonce(a);
@@ -484,6 +504,7 @@ export class WagerApp {
     if (o.opponent && sameAddress(o.opponent, a)) { this.note("error", "you can't invite yourself"); return null; }
     this.set({ busy: "create" });
     try {
+      await this.syncClock();
       const sim = await this.d.simFor(o.district);
       if (!sameSim(sim, config.sims[o.district])) throw wagerError("version", "this page's game differs from the referee's: reload to update");
       const listed = o.listed && !o.opponent;
@@ -527,6 +548,7 @@ export class WagerApp {
     if (p) { this.note("error", p); return false; }
     this.set({ busy: "join" });
     try {
+      await this.syncClock();
       const sim = await this.d.simFor(o.district);
       if (!sameSim(sim, config.sims[o.district])) throw wagerError("version", "this page's game differs from the referee's: reload to update");
       const theirs = entryFromJson(o.entry);

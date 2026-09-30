@@ -25,7 +25,8 @@ import { Amount, C, Notice, Section, TxLink, btn, label, small } from "./ui.tsx"
 import { classifyError } from "./errors.ts";
 import { bpsText, sameAddress, shortAddress } from "./units.ts";
 
-type Check = { ok: boolean; text: string };
+/** ok: passed; false: failed; null: not there yet (a live or held series has nothing on chain). */
+type Check = { ok: boolean | null; text: string };
 
 const hex8 = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
 const sec = (steps: number) => `${(steps / 120).toFixed(1)} s`;
@@ -54,8 +55,6 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
         if (!live) return;
         setStatus(st);
         setLog(lg);
-        if (app.chain) app.chain.matchEnd(matchId, st?.settleTx ?? null).then(e => live && setEnd(e), () => live && setEnd(null));
-        else setEnd(null);
         // Let the page paint "replaying…" before the replay (about a second for a whole series).
         await new Promise(r => setTimeout(r, 60));
         const assets = await simAssets(lg.rules.district, game.tuning, { district: PAGE_DISTRICT, model: game.model });
@@ -68,9 +67,17 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
     return () => { live = false; };
   }, [app, matchId, game]);
 
+  // How the match ended on chain, and the vault's owner (review): once the page's chain client is up.
+  const settleTx = status?.settleTx ?? null;
   useEffect(() => {
-    if (review && app.chain) app.chain.owner().then(setOwner, () => setOwner(null));
-  }, [review, app]);
+    if (!info || !app.chain) return;
+    let live = true;
+    app.chain.matchEnd(matchId, settleTx).then(e => live && setEnd(e), () => live && setEnd(null));
+    return () => { live = false; };
+  }, [app, matchId, info, settleTx]);
+  useEffect(() => {
+    if (review && info && app.chain) app.chain.owner().then(setOwner, () => setOwner(null));
+  }, [review, app, info]);
 
   // Watching: the overlay steps aside for the 3D view; back here at the end.
   useEffect(() => {
@@ -109,8 +116,8 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
   const checks: Check[] = [];
   if (log && verdict) {
     checks.push({ ok: verdict.ok, text: verdict.ok ? "the replay of every round gives the logged results and outcome" : "the replay found problems (below)" });
-    if (end === undefined) checks.push({ ok: true, text: "reading the chain…" });
-    else if (end === null) checks.push({ ok: false, text: "no settle or refund on chain for this match yet" });
+    if (end === undefined) checks.push({ ok: null, text: "reading the chain…" });
+    else if (end === null) checks.push({ ok: null, text: status?.state === "held" ? "held for review: nothing on chain until the review (or a refund after the settle window)" : "not settled on chain yet" });
     else {
       checks.push({ ok: end.logHash.toLowerCase() === log.logHash.toLowerCase(), text: end.logHash.toLowerCase() === log.logHash.toLowerCase() ? "the log's hash equals the one the vault stored at settle" : `the vault stored ${end.logHash}, the log hashes to ${log.logHash}` });
       if (end.kind === "settled") {
@@ -121,7 +128,9 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
       }
     }
   }
-  const allOk = checks.length > 0 && checks.every(c => c.ok) && end !== undefined;
+  const failed = checks.some(c => c.ok === false);
+  const pending = !failed && checks.some(c => c.ok === null);
+  const allOk = checks.length > 0 && !failed && !pending;
   const d = info?.decimals ?? 18, sym = info?.symbol ?? "";
   const district = log?.rules.district ?? "";
   const here = district === PAGE_DISTRICT;
@@ -135,6 +144,7 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
       const st = await app.api.review({ matchId, decision, logHash: log.logHash, sig });
       setStatus(st);
       setReviewMsg(decision === REVIEW_SETTLE ? "sent: the referee signs the replayed result" : "sent: the series is voided");
+      setTimeout(() => void app.api.match(matchId).then(setStatus, () => undefined), 3000);
     } catch (e) {
       setReviewMsg(classifyError(e).message);
     }
@@ -149,9 +159,9 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
         {!err && !verdict && <div style={{ marginTop: 10 }}>{log ? "replaying every round in your browser…" : "fetching the match log…"}</div>}
         {log && verdict && (
           <>
-            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, border: `2px solid ${allOk ? C.green : end === undefined ? C.ice : C.red}`, background: "rgba(0,0,0,0.3)" }} data-testid="wager-verdict" data-ok={allOk ? "1" : "0"}>
-              <div style={{ font: "900 20px ui-monospace, monospace", color: allOk ? C.green : end === undefined ? C.ice : C.red }}>{allOk ? "VERIFIED" : end === undefined ? "CHECKING…" : "DOESN'T CHECK OUT"}</div>
-              {checks.map((c, i) => <div key={i} style={{ fontSize: 13, marginTop: 3 }}><span style={{ color: c.ok ? C.green : C.red }}>{c.ok ? "✓" : "✗"}</span> {c.text}</div>)}
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, border: `2px solid ${allOk ? C.green : pending ? C.ice : C.red}`, background: "rgba(0,0,0,0.3)" }} data-testid="wager-verdict" data-ok={allOk ? "1" : pending ? "" : "0"}>
+              <div style={{ font: "900 20px ui-monospace, monospace", color: allOk ? C.green : pending ? C.ice : C.red }}>{allOk ? "VERIFIED" : failed ? "DOESN'T CHECK OUT" : end === undefined ? "CHECKING…" : "REPLAY CHECKS OUT · NOT SETTLED YET"}</div>
+              {checks.map((c, i) => <div key={i} style={{ fontSize: 13, marginTop: 3 }}><span style={{ color: c.ok ? C.green : c.ok === null ? C.ice : C.red }}>{c.ok ? "✓" : c.ok === null ? "…" : "✗"}</span> {c.text}</div>)}
               {verdict.problems.map((p, i) => <div key={`p${i}`} style={{ fontSize: 12, color: C.red, marginTop: 2 }}>• {p}</div>)}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 12px", fontSize: 13, marginTop: 10 }}>

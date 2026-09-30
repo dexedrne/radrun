@@ -2,7 +2,8 @@
 // live only here). It is the SPIDER-TAG page (app/TagPage.tsx: one canvas, the scene, the HUD, the online session)
 // with this overlay in place of the menu, the ONLINE lobby and the results. Sub-routes: ?wager (the lobby, the wallet,
 // history), &join=<matchId> (an invite link), &match=<matchId> (a series), &verify=<matchId> (the public match page, no
-// wallet needed), &review=<matchId> (the vault owner). &net=<id> picks another deployment this build offers.
+// wallet needed; ?verify=<matchId> alone opens it too), &review=<matchId> (the vault owner). &net=<id> picks another
+// deployment this build offers.
 import { useEffect, useMemo, useState } from "react";
 import type { Hex } from "viem";
 import TagPage, { useTag, type TagHost } from "../app/TagPage.tsx";

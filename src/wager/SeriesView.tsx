@@ -66,6 +66,8 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const [err, setErr] = useState<string | null>(null);
   const [status, setStatus] = useState<MatchStatus | null>(null);
   const [onChain, setOnChain] = useState<MatchView | null>(null);
+  /** The chain's clock (settleBy is compared with it, never with this device's). */
+  const [chainTime, setChainTime] = useState(0);
   const [pick, setPick] = useState<RadbroPick>(() => ({ radbro: lastPick(), own: null }));
   const [readyRound, setReadyRound] = useState(0);
   const [settledAt, setSettledAt] = useState(0);
@@ -77,10 +79,14 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   useEffect(() => {
     let live = true;
     app.api.match(matchId).then(m => live && setStatus(m), () => undefined);
-    app.chain?.matchOf(matchId).then(m => live && setOnChain(m), () => undefined);
-    const iv = setInterval(() => { app.chain?.matchOf(matchId).then(m => live && setOnChain(m), () => undefined); }, 15_000);
+    const read = () => {
+      app.chain?.matchOf(matchId).then(m => live && setOnChain(m), () => undefined);
+      app.chain?.chainNow().then(t => live && setChainTime(t), () => undefined);
+    };
+    read();
+    const iv = setInterval(read, 10_000);
     return () => { live = false; clearInterval(iv); };
-  }, [app, matchId, settledTx, voidedTx]);
+  }, [app, matchId, settledTx, voidedTx, !!app.chain]);
 
   const signer = app.roomSigner();
   useEffect(() => {
@@ -199,7 +205,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   }, [pick, conn, st?.phase, st?.round, me]);
 
   if (screen === "match" || screen === "loading") return null;
-  if (!info || !config) return <Section testid="wager-series"><div>connecting…</div></Section>;
+  if (!info) return <Section testid="wager-series"><div>connecting…</div></Section>;
 
   const d = info.decimals, sym = info.symbol;
   const oc = outcome?.outcome ?? status?.outcome ?? null;
@@ -209,7 +215,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const settleBy = st?.settleBy ?? onChain?.settleBy ?? 0;
   const relayLeft = (at: number | null | undefined) => (at && clientRef.current ? Math.max(0, (at - clientRef.current.relayNow()) / 1000) : null);
   const verify = `?wager&verify=${matchId}${keepParams()}`;
-  const expired = onChain?.state === "locked" && settleBy > 0 && Date.now() / 1000 > settleBy;
+  const expired = onChain?.state === "locked" && settleBy > 0 && chainTime > settleBy;
 
   const header = (
     <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 8 }}>
@@ -286,13 +292,14 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     );
   }
 
-  // ---- connection problems --------------------------------------------------------------------------------------------
-  if (err || conn === "closed") {
+  // ---- connection problems (the relay down included: a refund never needs it) -----------------------------------------
+  if (err || conn === "closed" || !config) {
     return (
       <Section testid="wager-series" style={{ maxWidth: 620, margin: "0 auto" }}>
         {header}
-        <Notice kind="error" text={err ?? `the match connection closed${connWhy ? ` (${connWhy})` : ""}`} />
-        {expired && <div style={{ marginTop: 8 }}><button style={small(true)} onClick={() => void app.refund(matchId)} data-testid="wager-refund">REFUND BOTH STAKES</button></div>}
+        <Notice kind="error" text={err ?? (!config ? "can't reach the wager relay" : `the match connection closed${connWhy ? ` (${connWhy})` : ""}`)} />
+        {onChain && <div style={{ fontSize: 12, marginTop: 8 }} data-testid="wager-chain-state">on chain: {onChain.state === "locked" ? "both stakes locked" : onChain.state === "settled" ? "settled" : onChain.state === "voided" ? "refunded" : "not locked"}</div>}
+        {expired && <div style={{ marginTop: 8 }}><button style={small(true)} onClick={() => void app.refund(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-refund">REFUND BOTH STAKES</button></div>}
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
           <button style={btn(true)} onClick={() => location.reload()} data-pad-default="">RECONNECT</button>
           <a href={verify} style={{ ...btn(false), textDecoration: "none" }}>MATCH PAGE</a>

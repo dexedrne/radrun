@@ -31,7 +31,7 @@ function OfferRow({ app, o, mine }: { app: WagerApp; o: Offer; mine: boolean }) 
   const here = o.district === PAGE_DISTRICT;
   const why = mine ? null : app.joinProblem(o);
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, background: C.card, border: `1px solid ${mine ? C.gold : C.line}` }} data-testid="wager-offer">
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, background: C.card, border: `1px solid ${mine ? C.gold : C.line}` }} data-testid="wager-offer" data-match={o.matchId}>
       <div style={{ flex: "1 1 190px", minWidth: 0 }}><Card p={o.creator} newSeries={config.newAccountSeries} you={mine} compact /></div>
       <div style={{ flex: "1 1 200px", fontSize: 13, lineHeight: 1.5 }}>
         <div><Amount v={o.stake} decimals={info.decimals} symbol={info.symbol} strong /> each · {roundText(o.roundSeconds)} · {districtName(o.district)}</div>
