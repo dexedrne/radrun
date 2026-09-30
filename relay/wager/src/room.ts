@@ -26,7 +26,7 @@ import {
   type RoomClientMsg, type RoomServerMsg, type SeriesPhase, type SeriesState, type Settlement, type WagerErrorCode, type WagerStartMsg,
 } from "../../../src/wager/protocol.ts";
 import { checkLogin, newChallenge, type Challenge } from "./auth.ts";
-import { ZERO, gzip, isHex32, isSig, sameAddr, spend, type Bucket, type Clock, type Logger, type Sock, type Sql } from "./base.ts";
+import { ZERO, gzip, idTag, isHex32, isSig, sameAddr, spend, type Bucket, type Clock, type Logger, type Sock, type Sql } from "./base.ts";
 import { MS_LOCKED, MS_SETTLED, MS_VOIDED } from "./abi.ts";
 import type { ChainMatch, VaultChain } from "./chain.ts";
 import { emptyMetrics, evaluate, mergeFlags, NO_RTT, type SideMetrics } from "./flags.ts";
@@ -182,6 +182,8 @@ export class WagerRoomCore {
   private probeT: unknown = null;
   private settleRetryAt: number | null = null;
   private concluding = false;
+  /** The Node stand-in closed: no timer starts again. */
+  private disposed = false;
   /**
    * This instance took over a series between rounds (a relay restart dropped both sockets): until both players are
    * back, one who stays away voids the series instead of forfeiting it (a relay fault never picks a winner).
@@ -199,8 +201,10 @@ export class WagerRoomCore {
     const sql = d.sql;
     let row: Record<string, unknown> | undefined;
     try { row = sql.exec("SELECT json FROM series WHERE id = 1")[0]; } catch { /* no series table: nothing here yet */ }
-    if (row) {
-      this.p = JSON.parse(String(row.json)) as Persist;
+    const saved = row ? (JSON.parse(String(row.json)) as Persist) : null;
+    // Storage holds one series, and only this match's (never another id's that shared a store).
+    if (saved && saved.matchId.toLowerCase() === this.matchId.toLowerCase()) {
+      this.p = saved;
       this.p.ips ??= [[], []];
       this.p.seen ??= [[], []];
       this.p.sessionNewIp ??= [false, false];
@@ -216,7 +220,7 @@ export class WagerRoomCore {
   }
 
   private log(m: string): void {
-    this.d.log?.(`[room ${this.matchId.slice(0, 10)}] ${m}`);
+    this.d.log?.(`[room ${idTag(this.matchId)}] ${m}`);
   }
 
   // ---- lifecycle ----------------------------------------------------------------------------------------------------
@@ -585,7 +589,7 @@ export class WagerRoomCore {
   }
 
   private probeLoop(): void {
-    if (this.probeT !== null) return;
+    if (this.probeT !== null || this.disposed) return;
     const loop = () => {
       this.probeT = null;
       const ph = this.p?.phase;
@@ -667,7 +671,7 @@ export class WagerRoomCore {
   }
 
   private playLoop(): void {
-    if (this.playT !== null) return;
+    if (this.playT !== null || this.disposed) return;
     const loop = () => {
       this.playT = null;
       if (this.p?.phase !== "playing" || !this.live) return;
@@ -832,8 +836,16 @@ export class WagerRoomCore {
     return c.length ? Math.min(...c) : null;
   }
 
+  /** Stop every timer for good (the Node stand-in shutting down; a Durable Object is simply evicted). */
+  dispose(): void {
+    this.disposed = true;
+    for (const t of [this.tickT, this.playT, this.probeT]) if (t !== null) this.d.clock.clearTimeout(t);
+    this.tickT = this.playT = this.probeT = null;
+  }
+
   private schedule(): void {
     if (this.tickT !== null) { this.d.clock.clearTimeout(this.tickT); this.tickT = null; }
+    if (this.disposed) return;
     const at = this.nextDeadline();
     if (at === null) return;
     this.tickT = this.d.clock.setTimeout(() => { this.tickT = null; this.tick(); }, Math.max(0, at - this.d.clock.now()));

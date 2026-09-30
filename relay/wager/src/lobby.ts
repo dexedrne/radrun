@@ -21,7 +21,7 @@ import {
 } from "../../../src/wager/protocol.ts";
 import { checkLogin, newChallenge, type Challenge } from "./auth.ts";
 import { MS_CANCELLED, MS_LOCKED, MS_NONE, MS_SETTLED, MS_VOIDED } from "./abi.ts";
-import { ZERO, addr, errMsg, isHex32, isSig, normId, sameAddr, shortAddr, spend, type Clock, type Logger, type Sql } from "./base.ts";
+import { ZERO, addr, errMsg, idTag, isHex32, isSig, normId, sameAddr, shortAddr, spend, type Clock, type Logger, type Sql } from "./base.ts";
 import { erc20Transfer, vaultCall, type Call, type ChainMatch, type VaultChain } from "./chain.ts";
 import type { RadbroReader } from "./radbro.ts";
 import { RELAYER_GAS, type Relayer, type TxHandle } from "./relayer.ts";
@@ -581,6 +581,7 @@ export class WagerLobbyCore {
       sa = a.opponent === ZERO ? await this.named(o, a, me) : { entry: o.entry, sig: rec.sig };
     } catch (e) {
       this.d.sql.exec("DELETE FROM matches WHERE match_id = ? AND state = 'locking'", o.matchId);
+      this.toPlayer(a.player, { t: "error", code: "gone", message: "a player joined your offer but it fell through, so it's withdrawn: make a new one" });
       throw e;
     }
     const sb: SignedEntry = { entry: toJson(b), sig };
@@ -622,7 +623,7 @@ export class WagerLobbyCore {
       this.toPlayer(a.player, { t: "sign", matchId: id, entry: toJson(e), joiner: joinerCard });
     });
     if (!answer.sig) {
-      this.log(`sign ${id.slice(0, 10)}: no named entry (${answer.why ?? "refused"})`);
+      this.log(`sign ${idTag(id)}: no named entry (${answer.why ?? "refused"})`);
       fail("gone", answer.why === "timeout" ? "the creator's page didn't confirm the match in time: the offer is withdrawn"
         : answer.why === "the creator left" ? "the creator left" : "the creator's page didn't confirm the match: the offer is withdrawn");
     }
@@ -645,7 +646,7 @@ export class WagerLobbyCore {
     const id = o.matchId, players: [Address, Address] = [a.player, b.player];
     const notify = (m: LobbyServerMsg) => { for (const p of players) this.toPlayer(p, m); };
     const failed = async (why: string) => {
-      this.log(`lock ${id.slice(0, 10)} failed: ${why}`);
+      this.log(`lock ${idTag(id)} failed: ${why}`);
       const m = await this.d.chain.matchOf(id).catch(() => null);
       // It locked after all, with these two players (one of them submitted it): the room takes over. MatchExists with
       // anyone else (or a cancelled id) is a failed lock.
@@ -743,7 +744,7 @@ export class WagerLobbyCore {
         this.settling.delete(id);
         const m = await this.d.chain.matchOf(id);
         if (m.state === MS_SETTLED || m.state === MS_VOIDED) await this.finish(id, await this.d.chain.settleTxOf(id), m.state === MS_SETTLED ? "settled" : "voided");
-        else if (relayer) this.log(`settle ${id.slice(0, 10)} would fail: ${why}`);
+        else if (relayer) this.log(`settle ${idTag(id)} would fail: ${why}`);
         return;
       }
       await this.track("settle", id, relayer!, call, notify, async (ok, h) => {
@@ -880,7 +881,7 @@ export class WagerLobbyCore {
           if (dl * 1000 < now) this.d.sql.exec("DELETE FROM matches WHERE match_id = ?", r.match_id);
         }
       } catch (e) {
-        this.log(`sweep ${r.match_id.slice(0, 10)}: ${errMsg(e)}`);
+        this.log(`sweep ${idTag(r.match_id)}: ${errMsg(e)}`);
       }
     }
     return this.offers.size || open.length ? now + 60_000 : null;

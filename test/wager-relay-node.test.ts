@@ -2,6 +2,9 @@
 // routes, the lobby and room sockets with their logins, the gates (Origin, REGION_BLOCK through x-dev-country under
 // DEV=1), the faucet, and the stored log served gzipped. The chain is the in-memory fake vault.
 import { test } from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import assert from "node:assert/strict";
 import type { Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -33,7 +36,9 @@ test("the Node stand-in: routes, sockets, logins, gates, faucet and the public l
   const refKey = generatePrivateKey();
   fv.referee = privateKeyToAccount(refKey).address;
   const settings = parseSettings({ DEV: "1", WAGER_NET: "local", DISTRICTS: "downtown", ROUND_SECONDS: "20,60", REGION_BLOCK: "US", FAUCET: "1" }, { vault: fv.vault, token: fv.token });
-  const r = await startNodeRelay({ port: PORT, settings, keys: { referee: refKey, relayer: generatePrivateKey(), faucet: generatePrivateKey() }, chain: fv, clock: { ...clock, now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: h => clearTimeout(h as number) } });
+  // On disk, like the local end-to-end (one SQLite file per room).
+  const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), "radrun-wager-node-"));
+  const r = await startNodeRelay({ port: PORT, settings, dbDir, keys: { referee: refKey, relayer: generatePrivateKey(), faucet: generatePrivateKey() }, chain: fv, clock: { ...clock, now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: h => clearTimeout(h as number) } });
   const base = r.url;
   try {
     const health = await fetch(`${base}/health`);
@@ -116,9 +121,23 @@ test("the Node stand-in: routes, sockets, logins, gates, faucet and the public l
     const log = JSON.parse(Buffer.from(await lr.arrayBuffer()).toString("utf8")) as { matchId: Hex; outcome: { reason: string } };
     assert.equal(log.matchId, id);
     assert.equal(log.outcome.reason, "noshow");
-    for (const s of [l, room]) s.ws.close();
+    // A's next match starts with the same address: it gets a room (and a store) of its own, not the last one's.
+    const id2 = newMatchId(a.address);
+    fv.forceLock({ matchId: id2, a: a.address, b: b.address, stake: 10n ** 20n, rules: sim.rulesHash, roundSeconds: 20 });
+    r.lobby["d"].sql.exec("INSERT INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, 'locked', ?, ?, ?, NULL, NULL, NULL, '{}')",
+      id2, a.address.toLowerCase(), b.address.toLowerCase(), (10n ** 20n).toString());
+    const room2 = await open(`${base.replace("http", "ws")}/ws?room=${id2}`);
+    room2.ws.send(JSON.stringify({ t: "hello", v: WAGER_PROTOCOL, matchId: id2, compat: { v: NET_VERSION, build: "t", link: 0, city: sim.compat.city, tuning: sim.compat.tuning } }));
+    await eventually(() => lastOf(room2, "challenge"));
+    const rc2 = lastOf(room2, "challenge")!;
+    room2.ws.send(JSON.stringify({ t: "login", player: b.address, expiry: rc2.expiry, sig: await b.signTypedData(loginTypedData(fv.chainId, fv.vault, { player: b.address, challenge: rc2.challenge, expiry: BigInt(rc2.expiry), relay: rc2.relay })), by: "wallet" }));
+    await eventually(() => lastOf(room2, "series"));
+    const st2 = (lastOf(room2, "series") as Extract<RoomServerMsg, { t: "series" }>).state;
+    assert.deepEqual([st2.matchId, st2.phase], [id2, "waiting"], "a fresh series, not the voided one");
+    for (const s of [l, room, room2]) s.ws.close();
   } finally {
     await r.close();
+    fs.rmSync(dbDir, { recursive: true, force: true });
   }
 });
 

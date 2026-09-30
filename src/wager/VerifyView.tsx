@@ -201,7 +201,7 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
           <div style={{ fontSize: 11, color: C.dim, marginTop: 10, lineHeight: 1.5 }}>
             Every round above was re-simulated in this browser from the relay's recorded inputs, with the same game code the referee runs.
             The log's hash is what the referee signed and the vault stored, so the log can't be changed after the fact.{" "}
-            {logUrl && <a href={logUrl} download={`radrun-${matchId.slice(0, 10)}.json`} style={{ color: C.ice }}>download the log</a>}
+            {logUrl && <a href={logUrl} download={`radrun-match-${matchId.slice(2)}.json`} style={{ color: C.ice }}>download the log</a>}
           </div>
         </Section>
       )}

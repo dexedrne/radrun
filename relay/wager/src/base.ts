@@ -31,6 +31,11 @@ export type Logger = (msg: string) => void;
 
 export const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 export const isHex32 = (v: unknown): v is Hex => typeof v === "string" && HEX32.test(v);
+/**
+ * A match id for logs: its random tail (a match id starts with its creator's address, so the head is the same for every
+ * match one player creates).
+ */
+export const idTag = (id: string): string => `…${id.slice(-10)}`;
 /** A matchId as the relay keys it (lowercase). */
 export const normId = (v: string): Hex => v.toLowerCase() as Hex;
 

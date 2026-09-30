@@ -334,7 +334,11 @@ export class WagerApp {
       case "error":
         if (m.code === "region") this.set({ fatal: wagerError("region", "wager matches aren't available in your region. Your vault balance can always be withdrawn straight from the contract.") });
         else if (m.code === "version") this.set({ fatal: wagerError("version", "this page is out of date: reload to update") });
-        else this.note("error", m.message);
+        else {
+          // A pairing that fell through before anything was signed on both sides: nothing to wait for any more.
+          if (m.code === "gone" && s.pairing && !s.pairing.a && !s.pairing.lockTx) this.set({ pairing: null });
+          this.note("error", m.message);
+        }
         return;
       default: return;
     }

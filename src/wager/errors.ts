@@ -25,7 +25,7 @@ export type WagerError = { kind: WagerErrorKind; message: string };
 const REVERTS: Record<string, [WagerErrorKind, string]> = {
   ZeroAddress: ["contract", "an address was empty"],
   ZeroAmount: ["contract", "the amount must be above zero"],
-  TransferMismatch: ["contract", "the token delivered a different amount than asked (a taxed or rebasing token), so the vault refused it"],
+  TransferMismatch: ["contract", "the token moved a different amount than asked (a transfer tax or a rebase): deposits are refused while it does; to withdraw, take out a little less than everything (the tax comes out of your own balance)"],
   BalanceCapExceeded: ["contract", "that would take your vault balance past the beta cap"],
   InsufficientFree: ["funds", "not enough free balance in the vault"],
   BadSignature: ["session", "a signature didn't check out (an expired or replaced session key?)"],

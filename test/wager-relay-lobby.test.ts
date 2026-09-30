@@ -385,6 +385,7 @@ test("join: an open offer's signature never leaves the lobby; the creator signs 
   const o2 = await create(C);
   assert.match((await join(D, o2.e)).find(m => m.t === "error")?.message ?? "", /didn't confirm/);
   assert.equal(h.last(D.c, "unoffer")?.matchId, o2.e.matchId);
+  assert.match(errOf(C.c)?.message ?? "", /fell through/, "the creator hears it too");
   C.c.onSign = async () => null;
   const o3 = await create(C);
   const slow = join(D, o3.e);

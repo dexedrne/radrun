@@ -83,7 +83,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
     let r = rooms.get(id);
     if (!r) {
       r = new WagerRoomCore({
-        matchId: id, clock, sql: sqlFor(`room-${id.slice(2, 18)}`), settings: s, chain: sv.chain, sims: sv.sims,
+        matchId: id, clock, sql: sqlFor(`room-${id.slice(2)}`), settings: s, chain: sv.chain, sims: sv.sims,
         radbro: new RadbroReader({ src: sv.radbroSrc, now: () => clock.now(), cacheMs: s.radbro.cacheMs }), referee: sv.referee, refereePrev: sv.refereePrev,
         build: o.build ?? "dev", log,
         lobby: { card: a => lobby.card(a), paired: async x => lobby.paired(x), update: u => lobby.update(u), settle: x => lobby.settle(x) },
@@ -167,6 +167,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
     url: base(), services: sv, lobby, rooms,
     close: () => new Promise<void>(r => {
       clearInterval(sweep);
+      for (const room of rooms.values()) room.dispose();
       for (const c of sockets) { try { c.close(1001, "going away"); } catch { /* closed */ } }
       server.close(() => r());
     }),
