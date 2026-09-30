@@ -1,0 +1,13 @@
+{
+  "deposit (first for the player)": "70252",
+  "deposit (top-up)": "53152",
+  "lock (session keys)": "183108",
+  "lock (session keys, first of the session)": "217308",
+  "lock (wallet signatures)": "162372",
+  "openSession (first)": "85336",
+  "openSession (replace)": "49112",
+  "refundExpired": "45654",
+  "settle (win)": "62902",
+  "settle (win, first house fee)": "80002",
+  "withdraw (all)": "64831"
+}
