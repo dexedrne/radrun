@@ -668,9 +668,10 @@ dev relay is not.
   imports.
 - **Reused code.** The series view reuses the existing SPIDER-TAG scene, HUD and online session through the TagPage
   pieces. No renderer changes except the holder cosmetics hook.
-- **Sub-routes.** `?wager` is the lobby. `?wager&join=<matchId>` is an invite link. `?wager&verify=<matchId>` is the
-  public replay and verify page, which needs no wallet. `?wager&review=<matchId>` is for the owner. Add `&net=<id>` to
-  pick another enabled deployment.
+- **Sub-routes.** `?wager` is the lobby. `?wager&join=<matchId>` is an invite link. `?wager&match=<matchId>` is a
+  locked series (the page opens it when a match of yours locks). `?wager&verify=<matchId>` is the public replay and
+  verify page, which needs no wallet (`?verify=<matchId>` alone opens it too). `?wager&review=<matchId>` is for the
+  owner. Add `&net=<id>` to pick another enabled deployment.
 
 ### 7.2 Wallet
 
@@ -709,8 +710,10 @@ dev relay is not.
 - **History.** Built from events (§3.9): date, opponent, stake, result, payout, transaction links and verify links.
 - **Verify.**
   1. It fetches `/log/<matchId>` and the chain's `MatchSettled`/`MatchVoided` for that match.
-  2. It checks the log hash against the on-chain `logHash` and runs `verifySeries` against the district's model and
-     tuning.
+  2. It checks that the log names this match, vault and chain, checks the log hash against the on-chain `logHash`
+     and runs `verifySeries` against the district's model and tuning. A refund after the settle window (void reason
+     3) stores no log hash, so that one reads as refunded instead. A held series voided on review keeps its rounds
+     and outcome reason `review`, which verifies.
   3. It shows every round (the logged result against the replayed one, the seeds with commit and reveal), the flags and
      a clear verdict.
   4. **Watch:** replays a round in the 3D view through a `ReplayLink` that implements `NetLink`.
