@@ -2,6 +2,9 @@
 // lowest bag time wins. ONLINE lazily loads the net chunk (net/online.tsx: the lobby, the relay transport and the
 // rollback link) only when pressed or when the page is opened from a room link (?tag&room=CODE).
 // One canvas, mounted once; a match is a fresh TagMatch outside React (nothing remounts).
+// The wager beta (src/wager/WagerPage.tsx, docs/WAGER.md §7) mounts this page with a `host`: its overlay replaces the
+// menu, the ONLINE lobby and the results, drives the online rounds itself, and sets the series line of the HUD and
+// the holders' cosmetics through the store (`series`, `looks`).
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import type { Vector3 } from "three";
@@ -24,7 +27,7 @@ import { AssetsBridge, clipsPath, CLIP_META, loadManifest, modelPath } from "./c
 import { StructuresView } from "./StructuresView.tsx";
 import { CameraView } from "./CameraView.tsx";
 import { FxView } from "./FxView.tsx";
-import { MAX_TAGS, SLOT_COLORS, TagActors, tagRigs } from "./TagActors.tsx";
+import { MAX_TAGS, SLOT_COLORS, TagActors, tagRigs, type SlotLook } from "./TagActors.tsx";
 import { useFrame } from "@react-three/fiber";
 import { FRAME } from "./frame.ts";
 import { useUi } from "../ui/store.ts";
@@ -56,7 +59,7 @@ export const TAG_NAME = "SPIDER-TAG";
 /** The online lobby + relay transport + rollback: a separate chunk, fetched only when ONLINE is pressed (or a room link). */
 const Online = lazy(() => import("../net/online.tsx"));
 
-export type TagScreen = "boot" | "menu" | "loading" | "match" | "results" | "online";
+export type TagScreen = "boot" | "menu" | "loading" | "match" | "results" | "online" | "host";
 export type HudRow = { slot: number; radbro: RadbroId; name: string; bag: number; holder: boolean; you: boolean; frozen: boolean; tags: number; falls: number };
 export type TagHud = {
   clock: number; countdown: number; phase: number; rows: HudRow[]; holder: number; local: number; frozen: number; lock: number; online: boolean;
@@ -82,11 +85,19 @@ export type TagUi = {
   netStatus: string;
   /** Online, at the results: the other player left the room (REMATCH goes back to the room to wait). */
   netGone: boolean;
+  /** A host page's series line in the HUD (the wager beta: "ROUND 2 · 1-0" and the opponent's connection), or null. */
+  series: { title: string; sub?: string; warn?: boolean } | null;
+  /** Per slot: the holder cosmetics (web colour, trail), render only. */
+  looks: (SlotLook | null)[];
 };
 
 export const useTag = create<TagUi>(() => ({
   screen: "boot", slots: [], names: [], hud: null, flash: null, load: { progress: 0, error: null }, agreed: null, net: null, netStatus: "", netGone: false,
+  series: null, looks: [],
 }));
+
+/** A page built on this one (the wager beta): its overlay replaces the menu, the ONLINE lobby and the results. */
+export type TagHost = { Overlay: React.ComponentType<{ game: TagGame }> };
 
 declare global {
   interface Window {
@@ -251,6 +262,7 @@ function flash(text: string, sub: string, color: string): void {
 function TagScene({ game }: { game: TagGame }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const slots = useTag(s => s.slots);
+  const looks = useTag(s => s.looks);
   const hidePlayer = useCallback(() => game.mode !== "match" || !!game.match?.over, [game]);
   const ropeFrom = useCallback((out: Vector3) => {
     const r = tagRigs[game.local];
@@ -261,9 +273,9 @@ function TagScene({ game }: { game: TagGame }) {
       <AssetsBridge />
       <StructuresView model={game.model} district={PAGE_DISTRICT} />
       <TagDriver game={game} />
-      <TagActors game={game} slots={slots} />
+      <TagActors game={game} slots={slots} looks={looks} />
       <CameraView game={game} ropeDrop={1} />
-      <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} />
+      <FxView game={game} hidePlayer={hidePlayer} ropeFrom={ropeFrom} webColor={looks[game.local]?.web} />
     </SceneCanvas>
   );
 }
@@ -350,6 +362,7 @@ function Hud({ onLeave }: { onLeave?: () => void }) {
   const [now, setNow] = useState(performance.now());
   useEffect(() => { const iv = setInterval(() => setNow(performance.now()), 100); return () => clearInterval(iv); }, []);
   const slots = useTag(s => s.slots);
+  const series = useTag(s => s.series);
   const pad = useUi(s => s.pad);
   if (!hud) return null;
   const you = hud.rows[hud.local];
@@ -369,6 +382,12 @@ function Hud({ onLeave }: { onLeave?: () => void }) {
           </div>
         )}
       </div>
+      {series && (
+        <div style={{ position: "absolute", ...(innerWidth < 700 ? { top: safe("top", 118), left: "50%", transform: "translateX(-50%)", textAlign: "center" } : { top: safe("top", 10), right: safe("right", 12), textAlign: "right" }), ...panel, padding: "6px 10px", maxWidth: innerWidth < 700 ? "80vw" : "38vw", whiteSpace: "nowrap" }} data-testid="tag-series">
+          <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1, color: "#ffd23f" }}>{series.title}</div>
+          {series.sub && <div style={{ fontSize: 11, marginTop: 2, color: series.warn ? "#ff9d9d" : "#cdf3ff" }}>{series.sub}</div>}
+        </div>
+      )}
       <div style={{ position: "absolute", top: safe("top", 10), left: safe("left", 12), ...panel, padding: "8px 10px", fontSize: 13, minWidth: 170 }} data-testid="tag-board">
         {[...hud.rows].sort((a, b) => a.bag - b.bag).map(r => (
           <div key={r.slot} style={{ display: "flex", gap: 8, alignItems: "center", padding: "2px 0", color: r.holder ? "#ff6b86" : "#fff" }}>
@@ -492,7 +511,7 @@ function botRadbros(you: RadbroId, n: number, seed: number): RadbroId[] {
   return out;
 }
 
-export default function TagPage() {
+export default function TagPage({ host }: { host?: TagHost } = {}) {
   const [game, setGame] = useState<TagGame | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const screen = useTag(s => s.screen);
@@ -520,7 +539,7 @@ export default function TagPage() {
     }, e => setErr(String(e)));
   }, []);
   useEffect(() => { game?.setTouch(touch); }, [game, touch]);
-  useEffect(() => { if (game && ready && screen === "boot") useTag.setState({ screen: online ? "online" : "menu" }); }, [game, ready, screen, online]);
+  useEffect(() => { if (game && ready && screen === "boot") useTag.setState({ screen: host ? "host" : online ? "online" : "menu" }); }, [game, ready, screen, online, host]);
   useEffect(() => { const onTouch = () => { if (!useUi.getState().touch) useUi.setState({ touch: true }); }; addEventListener("touchstart", onTouch, { passive: true }); return () => removeEventListener("touchstart", onTouch); }, []);
   // Sound: any click, tap or key on this page unlocks the audio (browsers start it only inside a gesture). Offline PLAY
   // used to be the only unlock, so ONLINE -> CREATE / JOIN -> READY never made a sound. The round's sounds start
@@ -534,12 +553,12 @@ export default function TagPage() {
     return () => { removeEventListener("pointerdown", unlock, o); removeEventListener("keydown", unlock, o); removeEventListener("touchend", unlock, o); };
   }, []);
   useEffect(() => {
-    if (screen !== "online" && screen !== "loading" && screen !== "match") return;
+    if (screen !== "online" && screen !== "host" && screen !== "loading" && screen !== "match") return;
     preloadSfx();
     preloadTracks(PAGE_DISTRICT);
     // A match that started without a fresh gesture (a room link, the other player's READY): the page's earlier
     // click still lets the audio start in most browsers.
-    if (screen !== "online") unlockAudio();
+    if (screen !== "online" && screen !== "host") unlockAudio();
   }, [screen]);
 
   const lock = useCallback(() => { if (!useUi.getState().touch && !AUTO && !padActive()) requestLock(canvasEl()); }, []);
@@ -569,8 +588,8 @@ export default function TagPage() {
     document.exitPointerLock?.();
     setPaused(false);
     setOnline(false);
-    useTag.setState({ screen: "menu", hud: null, flash: null, agreed: null });
-  }, [game]);
+    useTag.setState({ screen: host ? "host" : "menu", hud: null, flash: null, agreed: null });
+  }, [game, host]);
 
   const rematch = useCallback(() => {
     if (!game) return;
@@ -604,13 +623,13 @@ export default function TagPage() {
     return setPadHooks({
       latch: () => (!AUTO && useTag.getState().screen === "match" && !game.paused && !game.match?.over ? game.input : null),
       pause: () => {
-        if (game.link) { if ((useTag.getState().hud?.wait ?? 0) >= STALL_LEAVE_S) toMenu(); return; }
+        if (game.link) { if (!host && (useTag.getState().hud?.wait ?? 0) >= STALL_LEAVE_S) toMenu(); return; }
         game.paused = true;
         setPaused(true);
         if (document.pointerLockElement) document.exitPointerLock();
       },
     });
-  }, [game, toMenu]);
+  }, [game, toMenu, host]);
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
   if (!game) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
@@ -618,12 +637,13 @@ export default function TagPage() {
   return (
     <>
       <TagScene game={game} />
-      {screen === "menu" && <Menu radbro={radbro} setRadbro={setRadbro} bots={bots} setBots={setBots} level={level} setLevel={setLevel} ready={ready} onPlay={() => void play()} onOnline={() => { setOnline(true); useTag.setState({ screen: "online" }); }} />}
+      {screen === "menu" && !host && <Menu radbro={radbro} setRadbro={setRadbro} bots={bots} setBots={setBots} level={level} setLevel={setLevel} ready={ready} onPlay={() => void play()} onOnline={() => { setOnline(true); useTag.setState({ screen: "online" }); }} />}
       {screen === "loading" && <Loading />}
-      {(inMatch || screen === "results") && <Hud onLeave={toMenu} />}
-      {screen === "results" && <Results onRematch={rematch} onMenu={toMenu} />}
+      {(inMatch || screen === "results") && <Hud onLeave={host ? undefined : toMenu} />}
+      {screen === "results" && !host && <Results onRematch={rematch} onMenu={toMenu} />}
       {touch && !pad && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
-      {online && (
+      {host && <host.Overlay game={game} />}
+      {online && !host && (
         <Suspense fallback={screen === "online" ? <div style={{ ...layer, display: "grid", placeItems: "center" }}><div style={panel}>loading online…</div></div> : null}>
           <Online game={game} radbro={radbro} setRadbro={setRadbro} room={ROOM} district={PAGE_DISTRICT} onExit={toMenu} />
         </Suspense>

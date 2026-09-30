@@ -27,7 +27,7 @@ const WEB_THICK = 0.035;
 const WEB_LENS_CLEAR = 1.2;
 const NO_ANCHOR_FOR = 0.3;
 
-export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean }) {
+export function FxView({ game, hidePlayer, ropeFrom, webColor }: { game: ViewGame; hidePlayer?: () => boolean; ropeFrom?: (out: Vector3) => boolean; webColor?: string | null }) {
   const ring = useRef<Mesh>(null);
   const tick = useRef<Mesh>(null);
   const rope = useRef<Mesh>(null);
@@ -223,11 +223,11 @@ export function FxView({ game, hidePlayer, ropeFrom }: { game: ViewGame; hidePla
       </mesh>
       <mesh ref={rope} visible={false}>
         <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
-        <meshBasicMaterial color="#fafafa" />
+        <meshBasicMaterial color={webColor ?? "#fafafa"} />
       </mesh>
       <mesh ref={rope2} visible={false}>
         <cylinderGeometry args={[WEB_THICK / 2, WEB_THICK / 2, 1, 6]} />
-        <meshBasicMaterial color="#fafafa" />
+        <meshBasicMaterial color={webColor ?? "#fafafa"} />
       </mesh>
       <mesh ref={ledge} material={diamondMat} renderOrder={10} visible={false}>
         <ringGeometry args={[0.22, 0.35, 4]} />

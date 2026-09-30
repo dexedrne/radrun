@@ -24,6 +24,8 @@ const BenchPage = DEV ? lazy(() => import("./app/dev/BenchPage.tsx")) : null;
 const params = new URLSearchParams(location.search);
 // SPIDER-TAG (?tag): its own lazy chunk, so the single-player page load does not grow.
 const TagPage = lazy(() => import("./app/TagPage.tsx"));
+// The unlisted wager beta (?wager, docs/WAGER.md §7): its own lazy chunk (viem and the wallet code live only there).
+const WagerPage = lazy(() => import("./wager/WagerPage.tsx"));
 
 // No StrictMode: the game lives outside React and the canvas is mounted exactly once.
 function App() {
@@ -34,6 +36,7 @@ function App() {
   if (HatsPage && params.has("hats")) return <Suspense fallback={fallback}><HatsPage /></Suspense>;
   if (BenchPage && params.has("bench")) return <Suspense fallback={fallback}><BenchPage /></Suspense>;
   if (SandboxPage && (params.has("sandbox") || params.has("autoplay"))) return <Suspense fallback={fallback}><SandboxPage /></Suspense>;
+  if (params.has("wager")) return <Suspense fallback={fallback}><WagerPage /></Suspense>;
   if (params.has("tag") || params.has("room")) return <Suspense fallback={fallback}><TagPage /></Suspense>;
   return <PlayPage />;
 }
