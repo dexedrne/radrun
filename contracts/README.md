@@ -38,9 +38,10 @@ cd contracts && forge fmt --check && forge lint
 | `Signatures.t.sol` | Replay on another vault or chain, results bound to their match, reused match ids, high-s and malformed signatures, ERC-1271 wallets, EIP-7702 accounts, session keys refused for mutual settles, named seats |
 | `Eip712Vectors.t.sol` | The vault's digests equal viem's (`src/wager/eip712.ts`) and Foundry's EIP-712 encoder; a viem signature opens a session |
 | `Fuzz.t.sol` | Payout maths, captured fees, session limits, deposit/withdraw and void round trips |
-| `TokenQuirks.t.sol` | Fee-on-transfer and sender-taxed tokens, rebasing both ways, blacklist, pausable, locked-until-graduation, max-wallet/max-tx, no-return and false-returning tokens, re-entry through a token hook |
+| `TokenQuirks.t.sol` | Fee-on-transfer and sender-taxed tokens, rebasing both ways, blacklist (a blocked house sends its fees elsewhere), pausable, locked-until-graduation, max-wallet/max-tx, no-return and false-returning tokens, re-entry through a token hook |
+| `Hardening.t.sol` | The security review's findings, each as the property it showed broken: a copied session key loses at most its cap, voids give the cap back, match ids bound to their creator, open vs named Entries and `cancel`, fee caps can't remove the house fee, referee rotation, `reclaim`, a tax or reflection switched on later, fees past a max-tx, tokens sent straight to the vault |
 | `Scenario.t.sol` | Whole flows: the e2e numbers (1,094 / 900 / 6), a Radbro-holder winner at 1.5%, many matches then everyone leaves |
-| `invariant/` | I1-I7 of docs/WAGER.md §9.1 with a handler for players, session keys, owner, referee, relayer and a stranger |
+| `invariant/` | I1-I9 of docs/WAGER.md §9.1 on a token that switches on a pause, a blacklist and a sender tax, with a handler for players, session keys, owner, rotating referees, the house, the token's owner and a stranger (about 5 locks, 2 settles and 1-2 voids per run; one lock in three is defective and must fail) |
 | `Gas.t.sol` | The §3.10 targets as whole transactions |
 | `DeployScript.t.sol` | The deploy script, including its mainnet refusal |
 
@@ -53,8 +54,8 @@ Gas (whole transactions, forge's default isolated mode; `snapshots/GameVault.jso
 |---|---|---|
 | `deposit` (a player's first) | 70k | 90k |
 | `openSession` (a player's first) | 85k | 90k |
-| `lock` (session keys, first lock of each session) | 217k | 220k |
-| `lock` (session keys, later) | 183k | 220k |
+| `lock` (session keys, first lock of each session) | 219k | 220k |
+| `lock` (session keys, later) | 184k | 220k |
 | `settle` (win) | 63k (80k for the vault's first fee) | 90k |
 
 The same numbers come back as receipts from anvil (`wager:deploy --smoke`). On Robinhood Chain the L1 data fee is

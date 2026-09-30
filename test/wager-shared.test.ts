@@ -11,7 +11,7 @@ import type { CityModel } from "../src/world/cityModel.ts";
 import { TagBot } from "../src/game/tagBot.ts";
 import {
   DEFAULT_FEE_BPS, MAX_FEE_BPS, TYPEHASHES, TYPE_STRINGS, VAULT_TYPES, capturedFees, entryDigest, entryFromJson, entryToJson, entryTypedData,
-  makeRules, newMatchId, payout, random32, rulesHash, vaultDomain, type Entry,
+  makeRules, matchIdCreator, newMatchId, payout, random32, rulesHash, vaultDomain, type Entry,
 } from "../src/wager/eip712.ts";
 import {
   SERIES, deriveSeed, firstHolderSlot, scoreRounds, seedCommit, seriesLogHash, slotOfAFor, wordsFromBase64, wordsToBase64,
@@ -63,13 +63,22 @@ test("EIP-712: the TS type strings hash to the typehashes, match the Solidity in
 
 test("EIP-712: a session key's Entry signature recovers to the key, and binds chain + vault", async () => {
   const e: Entry = {
-    matchId: newMatchId(), player: BOB.address, opponent: ALICE.address, stake: 5n * 10n ** 18n, feeCapBps: DEFAULT_FEE_BPS, roundSeconds: 90,
+    matchId: newMatchId(ALICE.address), player: BOB.address, opponent: ALICE.address, stake: 5n * 10n ** 18n, feeCapBps: DEFAULT_FEE_BPS, roundSeconds: 90,
     rules: rulesHash(makeRules("downtown", simCompat(assets))), deadline: 2_000_000_000n,
   };
   const sig = await ALICE.signTypedData(entryTypedData(CHAIN, VAULT, e));
   assert.equal(await recoverTypedDataAddress({ ...entryTypedData(CHAIN, VAULT, e), signature: sig }), ALICE.address);
   const other = await recoverTypedDataAddress({ ...entryTypedData(46630, VAULT, e), signature: sig });
   assert.notEqual(other, ALICE.address, "another chain id recovers someone else");
+});
+
+test("match ids: the creator's address then 12 random bytes, never the same twice", () => {
+  const a = newMatchId(ALICE.address), b = newMatchId(ALICE.address);
+  assert.match(a, /^0x[0-9a-f]{64}$/);
+  assert.notEqual(a, b);
+  assert.equal(matchIdCreator(a), ALICE.address);
+  assert.equal(a.slice(0, 42), ALICE.address.toLowerCase());
+  assert.equal(matchIdCreator(newMatchId(BOB.address)), BOB.address);
 });
 
 test("fees: captured = min(house, both caps), holder <= captured; payout rounds the fee down", () => {
@@ -144,7 +153,7 @@ function botSeries(roundSeconds: number): SeriesLog {
   }
   const sc = scoreRounds(winners);
   const log: SeriesLog = {
-    format: "radrun-wager-log/1", chainId: CHAIN, vault: VAULT, matchId: newMatchId(), players: [ALICE.address, BOB.address],
+    format: "radrun-wager-log/1", chainId: CHAIN, vault: VAULT, matchId: newMatchId(ALICE.address), players: [ALICE.address, BOB.address],
     stake: (10n ** 18n).toString(), feeBps: 300, holderFeeBps: 150, roundSeconds, rules, rulesHash: rulesHash(rules),
     compat: { ...simCompat(assets), build: "test" }, radbros: ["652", "4764"], seed: { commit: seedCommit(secret), relaySecret: secret, shares },
     rounds, outcome: { kind: sc.void ? "void" : "win", winner: sc.winner, reason: sc.void ? "draws" : "played", score: sc.score }, flags: [],

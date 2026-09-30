@@ -25,7 +25,7 @@ import {
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { DEPLOYMENTS, MAINNET_CHAIN_IDS, isWagerNet, type Deployment, type WagerNetId } from "../src/wager/config.ts";
 import {
-  DEFAULT_FEE_BPS, DEFAULT_HOLDER_FEE_BPS, MAX_FEE_BPS, OUTCOME_WIN, entryTypedData, payout, resultTypedData, sessionAuthTypedData,
+  DEFAULT_FEE_BPS, DEFAULT_HOLDER_FEE_BPS, MAX_FEE_BPS, newMatchId, OUTCOME_WIN, entryTypedData, payout, resultTypedData, sessionAuthTypedData,
   type Entry, type Result, type SessionAuth,
 } from "../src/wager/eip712.ts";
 
@@ -606,7 +606,7 @@ async function smokeMatch(
     const sig = await p.signTypedData(sessionAuthTypedData(chainId, vault, auth));
     gas.openSession = (await send(relayer, "openSession", [auth, sig])).gasUsed;
   }
-  const matchId = keccak256(toHex(`smoke:${Date.now()}:${Math.random()}`));
+  const matchId = newMatchId(a.address); // the creator (playerA) owns the id
   const rules = keccak256(toHex("radrun-spidertag smoke"));
   const deadline = now + 600n;
   const ea: Entry = { matchId, player: a.address, opponent: b.address, stake, feeCapBps: MAX_FEE_BPS, roundSeconds: 90, rules, deadline };

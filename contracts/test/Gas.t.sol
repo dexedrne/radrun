@@ -16,11 +16,13 @@ contract GasTest is VaultTestBase {
     uint256 internal constant OPEN_SESSION_TARGET = 90_000;
     uint256 internal constant DEPOSIT_TARGET = 90_000;
 
-    bytes32 internal constant M1 = keccak256("gas-1");
-    bytes32 internal constant M2 = keccak256("gas-2");
+    bytes32 internal M1; // alice's ("gas-1")
+    bytes32 internal M2; // alice's ("gas-2")
 
     function setUp() public override {
         super.setUp();
+        M1 = _mid(alice, keccak256("gas-1"));
+        M2 = _mid(alice, keccak256("gas-2"));
         // The vault already holds someone's tokens (its own balance slot is warm-able but nonzero, as in production).
         _deposit(carol, 1e18);
     }

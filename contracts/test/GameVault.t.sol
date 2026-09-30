@@ -18,8 +18,14 @@ import {MockERC20, NoDecimalsToken} from "./mocks/Tokens.sol";
 
 /// Unit tests: every function, every revert of IGameVault and every event with its arguments (docs/WAGER.md §9.1).
 contract GameVaultTest is VaultTestBase {
-    bytes32 internal constant M1 = keccak256("match-1");
-    bytes32 internal constant M2 = keccak256("match-2");
+    bytes32 internal M1; // alice's ("match-1")
+    bytes32 internal M2; // alice's ("match-2")
+
+    function setUp() public override {
+        super.setUp();
+        M1 = _mid(alice, keccak256("match-1"));
+        M2 = _mid(alice, keccak256("match-2"));
+    }
 
     // =================================================================================================================
     // constructor and views
@@ -473,21 +479,35 @@ contract GameVaultTest is VaultTestBase {
         assertEq(vault.sessionOf(alice).used, 0);
     }
 
-    function test_lock_capturesMinimumFee() public {
+    function test_lock_feeCapsMustCoverTheHouseFee() public {
         _ready(1_000e18);
+        // A cap under the house fee refuses the lock (either side): a player can't sign the house's fee away.
         IGameVault.Entry memory a = _entry(M1, alice, address(0), 10e18);
         IGameVault.Entry memory b = _entry(M1, bob, alice, 10e18);
         a.feeCapBps = 250;
+        bytes memory sigA = _signEntry(aliceKeyPk, a);
+        bytes memory sigB = _signEntry(bobKeyPk, b);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.FeeAboveCap.selector, alice, FEE, 250));
+        vault.lock(a, sigA, b, sigB);
+        a.feeCapBps = FEE;
+        b.feeCapBps = 0;
+        sigA = _signEntry(aliceKeyPk, a);
+        sigB = _signEntry(bobKeyPk, b);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.FeeAboveCap.selector, bob, FEE, 0));
+        vault.lock(a, sigA, b, sigB);
+        // Caps at or above it capture the house fee itself.
         b.feeCapBps = 500;
-        vault.lock(a, _signEntry(aliceKeyPk, a), b, _signEntry(bobKeyPk, b));
+        vault.lock(a, sigA, b, _signEntry(bobKeyPk, b));
         IGameVault.Match memory m = vault.matchOf(M1);
-        assertEq(m.feeBps, 250);
-        assertEq(m.holderFeeBps, 150);
+        assertEq(m.feeBps, FEE);
+        assertEq(m.holderFeeBps, HOLDER_FEE);
 
-        // A cap under the holder fee pulls the holder fee down with it.
+        // A house fee under the holder fee pulls the holder fee down with it; a raised fee needs raised caps.
+        vm.prank(owner);
+        vault.setHouseFees(100, HOLDER_FEE);
         a = _entry(M2, alice, address(0), 10e18);
         b = _entry(M2, bob, alice, 10e18);
-        b.feeCapBps = 100;
+        a.feeCapBps = 100;
         vault.lock(a, _signEntry(aliceKeyPk, a), b, _signEntry(bobKeyPk, b));
         m = vault.matchOf(M2);
         assertEq(m.feeBps, 100);
@@ -579,7 +599,7 @@ contract GameVaultTest is VaultTestBase {
 
         // used + stake > cap: 100 + 100 fit, the third 100 does not (250 cap)
         for (uint256 i = 0; i < 2; i++) {
-            bytes32 id = keccak256(abi.encode("cap", i));
+            bytes32 id = _mid(alice, keccak256(abi.encode("cap", i)));
             a = _entry(id, alice, address(0), 100e18);
             b = _entry(id, bob, alice, 100e18);
             vault.lock(a, _signEntry(aliceKeyPk, a), b, _signEntry(bobKeyPk, b));
@@ -596,7 +616,7 @@ contract GameVaultTest is VaultTestBase {
         vault.lock(a, _signEntry(aliceKeyPk, a), b, _signEntry(bobKeyPk, b));
         assertEq(vault.sessionOf(alice).used, 250e18);
         // the wallet itself is never limited by the session
-        bytes32 id3 = keccak256("wallet");
+        bytes32 id3 = _mid(alice, keccak256("wallet"));
         a = _entry(id3, alice, address(0), 100e18);
         b = _entry(id3, bob, alice, 100e18);
         vault.lock(a, _signEntry(alicePk, a), b, _signEntry(bobKeyPk, b));
@@ -793,18 +813,33 @@ contract GameVaultTest is VaultTestBase {
         assertEq(vault.lockedOf(alice), 0);
     }
 
-    function test_setReferee_rotatesForLiveMatches() public {
+    function test_setReferee_appliesToLaterLocksOnly() public {
         _ready(1_000e18);
         _lock(M1, 100e18);
+        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, alice, FEE);
+        bytes memory signedBefore = _signResult(refereePk, r); // signed, not yet submitted
         (address newRef, uint256 newRefPk) = makeAddrAndKey("new referee");
         vm.expectEmit(true, false, false, true, address(vault));
         emit IGameVault.RefereeSet(newRef);
         vm.prank(owner);
         vault.setReferee(newRef);
-        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, alice, FEE);
-        vm.expectRevert(abi.encodeWithSelector(IGameVault.BadSignature.selector, newRef));
-        vault.settle(r, _signResult(refereePk, r)); // the old key is dead at once
+        assertEq(vault.referee(), newRef);
+        assertEq(vault.refereeOf(M1), referee, "a live match keeps the referee it locked under");
+        // The new key can't decide a match locked before it ...
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.BadSignature.selector, referee));
         vault.settle(r, _signResult(newRefPk, r));
+        // ... and the Result signed before the rotation still pays the winner.
+        vault.settle(r, signedBefore);
+        assertEq(vault.freeOf(alice), 1_094e18);
+
+        // Matches locked after the rotation take the new referee only.
+        _lock(M2, 100e18);
+        assertEq(vault.refereeOf(M2), newRef);
+        IGameVault.Result memory r2 = _result(M2, OUTCOME_WIN, bob, FEE);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.BadSignature.selector, newRef));
+        vault.settle(r2, _signResult(refereePk, r2));
+        vault.settle(r2, _signResult(newRefPk, r2));
+        assertEq(vault.refereeOf(keccak256("never locked")), address(0));
     }
 
     // =================================================================================================================
@@ -1017,16 +1052,25 @@ contract GameVaultTest is VaultTestBase {
         vm.prank(alice);
         vault.withdraw(freeA);
         assertEq(token.balanceOf(alice), freeA);
-        // A live match still closes, and even a referee the owner controls can only pick one of its two players at
-        // the fees captured at lock: never pay the owner, never charge the new 5%.
-        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, owner, FEE);
-        bytes memory sig = _signResult(ownerRefPk, r);
+        // A referee the owner appoints now can't decide the live match at all: it keeps the referee it locked under.
+        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, bob, FEE);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.BadSignature.selector, referee));
+        vault.settle(r, _signResult(ownerRefPk, r));
+        // And that referee can only pick one of its two players at the fees captured at lock: never pay the owner,
+        // never charge the new 5%.
+        r = _result(M1, OUTCOME_WIN, owner, FEE);
+        bytes memory sig = _signResult(refereePk, r);
         vm.expectRevert(IGameVault.BadResult.selector);
         vault.settle(r, sig);
         r = _result(M1, OUTCOME_WIN, alice, 500);
-        sig = _signResult(ownerRefPk, r);
+        sig = _signResult(refereePk, r);
         vm.expectRevert(IGameVault.BadResult.selector);
         vault.settle(r, sig);
+        // The owner can't give ownership up either (pause, rotation and reviews always have someone to run them).
+        vm.prank(owner);
+        vm.expectRevert(IGameVault.RenounceDisabled.selector);
+        vault.renounceOwnership();
+        assertEq(vault.owner(), owner);
         _assertBooks(_players());
     }
 

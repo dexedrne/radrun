@@ -111,6 +111,11 @@ abstract contract VaultTestBase is Test {
         vault.openSession(a, _sign(playerPk, _hashAuth(a)));
     }
 
+    /// A match id as the vault takes it: the creator's address, then 12 bytes of `salt` (docs/WAGER.md §3.2).
+    function _mid(address creator, bytes32 salt) internal pure returns (bytes32) {
+        return bytes32((uint256(uint160(creator)) << 96) | (uint256(salt) & type(uint96).max));
+    }
+
     function _entry(bytes32 id, address player, address opponent, uint128 stake)
         internal
         view
@@ -121,7 +126,7 @@ abstract contract VaultTestBase is Test {
             player: player,
             opponent: opponent,
             stake: stake,
-            feeCapBps: FEE,
+            feeCapBps: 500, // any house fee up to the hard cap
             roundSeconds: ROUND,
             rules: RULES,
             deadline: uint64(vm.getBlockTimestamp() + 10 minutes)

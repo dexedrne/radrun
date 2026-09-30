@@ -25,14 +25,15 @@ import {
 /// @title RadRun GameVault
 /// @notice The SPIDER-TAG wager vault (docs/WAGER.md §3). One vault per token; the token, the house and the settle
 /// window are fixed at deploy. Players deposit once, enter 1v1 matches with EIP-712 Entries signed by a scoped session
-/// key (or their wallet), and withdraw their free balance to any address at any time. A referee-signed Result pays the
-/// winner the pot minus the house fee, or refunds both. The owner changes settings only: it can never move, freeze or
-/// block a player's balance, and there is no proxy, upgrade path, sweep or admin withdrawal.
-/// @dev Accounting: `totalLiabilities == Σfree + Σlocked + houseAccrued <= token.balanceOf(this)`. Only deposits and
-/// withdrawals (players' and the house's) change `totalLiabilities`; lock, settle and void move value between buckets
-/// and never call the token, so a token that blocks an address can never block a settle or a refund.
-/// Every amount fits in 128 bits: a deposit may not take `totalLiabilities` above `type(uint128).max`, and every
-/// bucket is bounded by it, so no settle or refund can overflow.
+/// key (or their wallet), and withdraw their free balance to any address at any time. A Result signed by the referee the
+/// match locked under pays the winner the pot minus the house fee, or refunds both. The owner changes settings only: it
+/// can never move, freeze or block a player's balance or decide a live match, and there is no proxy, upgrade path or
+/// admin withdrawal. The one thing it can hand out is surplus: tokens the vault holds beyond everything it owes.
+/// @dev Accounting: `totalLiabilities == Σfree + Σlocked + houseAccrued <= token.balanceOf(this)`. Only deposits,
+/// withdrawals (players' and the house's) and surplus credits change `totalLiabilities`; lock, settle, void and reclaim
+/// move value between buckets and never call the token, so a token that blocks an address can never block a settle or
+/// a refund. Every amount fits in 128 bits: a deposit or credit may not take `totalLiabilities` above
+/// `type(uint128).max`, and every bucket is bounded by it, so no settle or refund can overflow.
 // Every deadline is block.timestamp by design (docs/WAGER.md §3.2: block.number is an L1 estimate on Robinhood Chain).
 // forge-lint: disable-start(block-timestamp)
 contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuardTransient {
@@ -45,19 +46,22 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     uint32 internal constant MIN_SETTLE_WINDOW = 1 hours;
     uint32 internal constant MAX_SETTLE_WINDOW = 7 days;
     uint256 internal constant BPS = 10_000;
+    uint8 internal constant RECLAIMED_A = 1;
+    uint8 internal constant RECLAIMED_B = 2;
 
     IERC20 internal immutable _token;
-    /// Receives the house fees (through withdrawHouse, which anyone may call). Fixed at deploy.
+    /// Receives the house fees (withdrawHouse, which anyone may call), or sends them elsewhere itself (withdrawHouseTo).
+    /// Fixed at deploy.
     address public immutable house;
     /// Seconds from a lock to its settleBy.
     uint32 public immutable settleWindow;
 
     // ---- settings (owner) ---------------------------------------------------------------------------------------
-    // Packed so a lock reads one settings slot: the stake cap and both fees.
+    // Packed so a lock reads one settings slot: the stake cap, both fees and the current referee's epoch.
     uint128 public maxStake;
     uint16 public houseFeeBps;
     uint16 public holderFeeBps;
-    address public referee;
+    uint32 internal _refereeEpoch;
     uint128 public maxBalance;
 
     // ---- accounting -----------------------------------------------------------------------------------------------
@@ -79,9 +83,34 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         uint128 used;
     }
 
+    /// Storage form of a match (matchOf builds the ABI's Match from it). Four slots, like the ABI struct, with room for
+    /// the referee's epoch, the session each stake was entered under and the sides that reclaimed; settleBy is
+    /// lockedAt + settleWindow.
+    struct MatchSlot {
+        address playerA;
+        uint16 feeBps;
+        uint16 holderFeeBps;
+        uint16 roundSeconds;
+        MatchState state;
+        /// RECLAIMED_A | RECLAIMED_B: the sides that took their stake back after settleBy.
+        uint8 reclaimed;
+        address playerB;
+        uint40 lockedAt;
+        /// The referee this match locked under (_referees[refereeEpoch]): the only one whose Result it takes.
+        uint32 refereeEpoch;
+        uint128 stake;
+        /// The session (the player's session nonce) whose key signed that side's Entry; 0 for a wallet signature. A void
+        /// gives the stake back to that session's cap while it is still the player's session.
+        uint56 sessionA;
+        uint56 sessionB;
+        bytes32 rules;
+    }
+
     mapping(address player => Account) internal _accounts;
     mapping(address player => SessionSlot) internal _sessions;
-    mapping(bytes32 matchId => Match) internal _matches;
+    mapping(bytes32 matchId => MatchSlot) internal _matches;
+    /// Every referee the vault has had, by epoch (the first is 1); setReferee starts a new epoch.
+    mapping(uint32 epoch => address) internal _referees;
 
     constructor(
         IERC20Metadata token_,
@@ -173,17 +202,31 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         acct.free = free_ - amt;
         _totalLiabilities -= amt;
         emit Withdrawn(msg.sender, to, amount);
-        _send(to, amount);
+        uint256 extra = _send(to, amount);
+        if (extra != 0) {
+            // Read again: the free balance is only final after the transfer (a token hook may have re-entered a lock).
+            free_ = acct.free;
+            if (extra > free_) revert TransferMismatch(amount, amount + extra);
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint128 tax = uint128(extra); // safe: extra <= free_, a uint128
+            acct.free = free_ - tax;
+            _totalLiabilities -= tax;
+            // forge-lint: disable-next-line(reentrancy-events)
+            emit TransferTaxPaid(msg.sender, extra);
+        }
     }
 
-    /// Pays out and requires the vault's balance to fall by exactly `amount`: a token that takes more than that from
-    /// the vault would otherwise leave it owing more than it holds.
-    function _send(address to, uint256 amount) private {
+    /// Pays `amount` out and returns how much more than that the vault's balance fell: a tax the token charges the
+    /// vault as the sender, which the caller bills to whoever is being paid out (so the vault never owes more than it
+    /// holds). A smaller fall (part of a reflection fee comes back to the vault) leaves the difference as surplus. A
+    /// transfer that takes nothing from the vault (paying the vault itself, a token that moved nothing) is refused.
+    function _send(address to, uint256 amount) private returns (uint256 extra) {
         uint256 before = _token.balanceOf(address(this));
         _token.safeTransfer(to, amount);
         uint256 afterBal = _token.balanceOf(address(this));
         uint256 sent = before > afterBal ? before - afterBal : 0;
-        if (sent != amount) revert TransferMismatch(amount, sent);
+        if (sent == 0) revert TransferMismatch(amount, 0);
+        if (sent > amount) extra = sent - amount;
     }
 
     // =================================================================================================================
@@ -232,31 +275,34 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     /// @inheritdoc IGameVault
     /// @dev The one external call is a staticcall (balanceOf), so lock needs no reentrancy guard.
     function lock(Entry calldata a, bytes calldata sigA, Entry calldata b, bytes calldata sigB) external whenNotPaused {
-        (address pa, address pb, uint128 stake) = _checkTerms(a, b);
-        _checkEntry(a, sigA);
-        _checkEntry(b, sigB);
-        _lockStake(pa, stake);
-        _lockStake(pb, stake);
+        (uint128 stake, uint16 feeBps, uint16 holderFee, uint32 epoch) = _checkTerms(a, b);
+        uint56 sessionA = _checkEntry(a, sigA);
+        uint56 sessionB = _checkEntry(b, sigB);
+        _lockStake(a.player, stake);
+        _lockStake(b.player, stake);
 
         // A token whose balance fell under what the vault owes (negative rebase, a hook) stops new matches.
         uint256 bal = _token.balanceOf(address(this));
         uint256 liabilities = _totalLiabilities;
         if (bal < liabilities) revert Insolvent(bal, liabilities);
 
-        _record(a, pb, _min(a.feeCapBps, b.feeCapBps));
+        _record(a, b.player, feeBps, holderFee, epoch, sessionA, sessionB);
     }
 
-    /// The pairing checks of lock, in the spec's order (docs/WAGER.md §3.2, steps 2-7).
+    /// The pairing checks of lock, in the spec's order (docs/WAGER.md §3.2, steps 2-8), and the settings it captures:
+    /// the house fee (both caps cover it), the holder fee under it and the current referee's epoch.
     function _checkTerms(Entry calldata a, Entry calldata b)
         private
         view
-        returns (address pa, address pb, uint128 stake)
+        returns (uint128 stake, uint16 feeBps, uint16 holderFee, uint32 epoch)
     {
         bytes32 matchId = a.matchId;
         if (b.matchId != matchId) revert EntryMismatch();
+        address pa = a.player;
+        address pb = b.player;
+        // Only the creator can be playerA of their id: nobody else can burn a published id, or swap the seats.
+        if (_creatorOf(matchId) != pa) revert BadMatchId(matchId);
         if (_matches[matchId].state != MatchState.None) revert MatchExists(matchId);
-        pa = a.player;
-        pb = b.player;
         if (pa == address(0) || pb == address(0)) revert ZeroAddress();
         if (pa == pb) revert EntryMismatch();
         if ((a.opponent != address(0) && a.opponent != pb) || (b.opponent != address(0) && b.opponent != pa)) {
@@ -266,54 +312,79 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         if (b.stake != stake) revert EntryMismatch();
         uint128 maxStake_ = maxStake;
         if (stake == 0 || stake > maxStake_) revert StakeOutOfRange(stake, maxStake_);
+        // A player's cap bounds the fee they pay; it can't lower the house's fee (the match would lock at the cap).
+        feeBps = houseFeeBps;
+        if (a.feeCapBps < feeBps) revert FeeAboveCap(pa, feeBps, a.feeCapBps);
+        if (b.feeCapBps < feeBps) revert FeeAboveCap(pb, feeBps, b.feeCapBps);
+        holderFee = _min(holderFeeBps, feeBps);
+        epoch = _refereeEpoch;
         if (a.roundSeconds != b.roundSeconds || a.rules != b.rules) revert EntryMismatch();
         if (block.timestamp > a.deadline) revert EntryExpired(pa, a.deadline);
         if (block.timestamp > b.deadline) revert EntryExpired(pb, b.deadline);
     }
 
-    /// Stores the match with its captured fees: min(house fee, both players' caps), and the holder fee under that.
-    function _record(Entry calldata a, address pb, uint16 feeCapBps) private {
-        uint16 feeBps = _min(houseFeeBps, feeCapBps);
-        uint16 holderFee = _min(holderFeeBps, feeBps);
+    /// Stores the match with what it captured at lock.
+    function _record(
+        Entry calldata a,
+        address pb,
+        uint16 feeBps,
+        uint16 holderFee,
+        uint32 epoch,
+        uint56 sessionA,
+        uint56 sessionB
+    ) private {
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint64 lockedAt = uint64(block.timestamp); // safe: unix seconds fit 64 bits
-        uint64 settleBy = lockedAt + settleWindow;
-        _matches[a.matchId] = Match({
+        uint40 lockedAt = uint40(block.timestamp); // safe: unix seconds fit 40 bits for 34,000 years
+        _matches[a.matchId] = MatchSlot({
             playerA: a.player,
             feeBps: feeBps,
             holderFeeBps: holderFee,
             roundSeconds: a.roundSeconds,
             state: MatchState.Locked,
+            reclaimed: 0,
             playerB: pb,
             lockedAt: lockedAt,
+            refereeEpoch: epoch,
             stake: a.stake,
-            settleBy: settleBy,
+            sessionA: sessionA,
+            sessionB: sessionB,
             rules: a.rules
         });
         // Only staticcalls (ERC-1271, balanceOf) come before this log.
-        // forge-lint: disable-next-line(reentrancy-events)
-        emit MatchLocked(a.matchId, a.player, pb, a.stake, feeBps, holderFee, a.roundSeconds, a.rules, settleBy);
+        // forge-lint: disable-next-item(reentrancy-events)
+        emit MatchLocked(
+            a.matchId,
+            a.player,
+            pb,
+            a.stake,
+            feeBps,
+            holderFee,
+            a.roundSeconds,
+            a.rules,
+            uint64(lockedAt) + settleWindow
+        );
     }
 
     /// Accepts an Entry signed by the player's wallet (ECDSA, or ERC-1271 for a contract wallet) or by the player's
-    /// live session key within its limits (which it then spends).
-    function _checkEntry(Entry calldata e, bytes calldata sig) private {
+    /// live session key within its limits (which it then spends). Returns the session's nonce when its key signed (a
+    /// live session's nonce is never 0), 0 for the wallet.
+    function _checkEntry(Entry calldata e, bytes calldata sig) private returns (uint56) {
         address player = e.player;
         bytes32 digest = hashEntry(e);
         (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecoverCalldata(digest, sig);
         if (err == ECDSA.RecoverError.NoError) {
-            if (signer == player) return;
+            if (signer == player) return 0;
             SessionSlot storage s = _sessions[player];
             if (signer == s.key) {
                 uint256 used = uint256(s.used) + e.stake;
                 if (block.timestamp >= s.expiry || e.stake > s.maxStake || used > s.cap) revert SessionLimit(player);
                 // forge-lint: disable-next-line(unsafe-typecast)
                 s.used = uint128(used); // safe: used <= cap, a uint128
-                return;
+                return s.nonce;
             }
         }
         if (player.code.length != 0 && SignatureChecker.isValidERC1271SignatureNowCalldata(player, digest, sig)) {
-            return;
+            return 0;
         }
         revert BadSignature(player);
     }
@@ -325,16 +396,28 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     }
 
     /// @inheritdoc IGameVault
+    /// @dev Never paused. Only a Match the id's creator never locked can be cancelled; its Entries then never lock.
+    function cancel(bytes32 matchId) external {
+        if (_creatorOf(matchId) != msg.sender) revert BadMatchId(matchId);
+        MatchSlot storage m = _matches[matchId];
+        if (m.state != MatchState.None) revert MatchExists(matchId);
+        m.state = MatchState.Cancelled;
+        m.playerA = msg.sender;
+        emit MatchCancelled(matchId, msg.sender);
+    }
+
+    /// @inheritdoc IGameVault
     function settle(Result calldata r, bytes calldata refereeSig) external {
-        Match storage m = _settleable(r.matchId);
-        address referee_ = referee;
+        MatchSlot storage m = _settleable(r.matchId);
+        // The referee the match locked under: a later setReferee neither decides it nor voids its signed Results.
+        address referee_ = _referees[m.refereeEpoch];
         if (!_isValidSig(referee_, hashResult(r), refereeSig)) revert BadSignature(referee_);
         _apply(m, r, false);
     }
 
     /// @inheritdoc IGameVault
     function settleMutual(Result calldata r, bytes calldata sigA, bytes calldata sigB) external {
-        Match storage m = _settleable(r.matchId);
+        MatchSlot storage m = _settleable(r.matchId);
         bytes32 digest = hashResult(r);
         address pa = m.playerA;
         address pb = m.playerB;
@@ -346,22 +429,47 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
 
     /// @inheritdoc IGameVault
     function refundExpired(bytes32 matchId) external {
-        Match storage m = _matches[matchId];
-        if (m.state != MatchState.Locked) revert NotLocked(matchId);
-        uint64 settleBy = m.settleBy;
-        if (block.timestamp <= settleBy) revert SettleWindowOpen(matchId, settleBy);
+        MatchSlot storage m = _expired(matchId);
         _void(m, matchId, VOID_TIMEOUT, bytes32(0));
     }
 
-    function _settleable(bytes32 matchId) private view returns (Match storage m) {
+    /// @inheritdoc IGameVault
+    /// @dev Never paused. Releases only msg.sender's stake and logs only msg.sender, so a player never depends on a
+    /// transaction that involves the other player (whom the chain or the token may refuse).
+    function reclaim(bytes32 matchId) external {
+        MatchSlot storage m = _expired(matchId);
+        uint8 side = msg.sender == m.playerA ? RECLAIMED_A : msg.sender == m.playerB ? RECLAIMED_B : 0;
+        uint8 done = m.reclaimed;
+        if (side == 0 || done & side != 0) revert NothingToReclaim(matchId, msg.sender);
+        done |= side;
+        m.reclaimed = done;
+        // Both stakes out: the match is over (MatchVoided would name the other player, so only StakeReclaimed logs it).
+        if (done == RECLAIMED_A | RECLAIMED_B) m.state = MatchState.Voided;
+        uint128 stake = m.stake;
+        _release(msg.sender, stake, side == RECLAIMED_A ? m.sessionA : m.sessionB);
+        emit StakeReclaimed(matchId, msg.sender, stake);
+    }
+
+    function _settleable(bytes32 matchId) private view returns (MatchSlot storage m) {
         m = _matches[matchId];
         if (m.state != MatchState.Locked) revert NotLocked(matchId);
-        uint64 settleBy = m.settleBy;
+        uint64 settleBy = _settleBy(m);
         if (block.timestamp > settleBy) revert SettleWindowClosed(matchId, settleBy);
     }
 
+    function _expired(bytes32 matchId) private view returns (MatchSlot storage m) {
+        m = _matches[matchId];
+        if (m.state != MatchState.Locked) revert NotLocked(matchId);
+        uint64 settleBy = _settleBy(m);
+        if (block.timestamp <= settleBy) revert SettleWindowOpen(matchId, settleBy);
+    }
+
+    function _settleBy(MatchSlot storage m) private view returns (uint64) {
+        return uint64(m.lockedAt) + settleWindow;
+    }
+
     /// Applies a checked Result. Internal credits only: nothing here calls the token.
-    function _apply(Match storage m, Result calldata r, bool mutual) private {
+    function _apply(MatchSlot storage m, Result calldata r, bool mutual) private {
         if (r.outcome == OUTCOME_WIN) {
             _win(m, r, mutual);
         } else if (r.outcome == OUTCOME_VOID) {
@@ -372,7 +480,7 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         }
     }
 
-    function _win(Match storage m, Result calldata r, bool mutual) private {
+    function _win(MatchSlot storage m, Result calldata r, bool mutual) private {
         address winner = r.winner;
         address pa = m.playerA;
         address pb = m.playerB;
@@ -408,21 +516,30 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         _houseAccrued += uint128(fee);
     }
 
-    function _void(Match storage m, bytes32 matchId, uint8 reason, bytes32 logHash) private {
+    /// Both stakes (those not reclaimed yet) go back to free, and back to the cap of the session that entered them.
+    function _void(MatchSlot storage m, bytes32 matchId, uint8 reason, bytes32 logHash) private {
         m.state = MatchState.Voided;
         uint128 stake = m.stake;
         address pa = m.playerA;
         address pb = m.playerB;
-        _release(pa, stake);
-        _release(pb, stake);
+        uint8 done = m.reclaimed;
+        if (done & RECLAIMED_A == 0) _release(pa, stake, m.sessionA);
+        if (done & RECLAIMED_B == 0) _release(pb, stake, m.sessionB);
         // Only staticcalls (ERC-1271, balanceOf) come before this log.
         // forge-lint: disable-next-line(reentrancy-events)
         emit MatchVoided(matchId, pa, pb, reason, logHash);
     }
 
-    function _release(address player, uint128 stake) private {
+    /// A match that didn't happen doesn't count against the session that entered it: while that session is still the
+    /// player's (same nonce: not replaced or revoked since), its used total drops by the stake again.
+    function _release(address player, uint128 stake, uint56 session) private {
         Account memory acct = _accounts[player];
         _accounts[player] = Account({free: acct.free + stake, locked: acct.locked - stake});
+        if (session == 0) return;
+        SessionSlot storage s = _sessions[player];
+        if (s.nonce != session) return;
+        uint128 used = s.used;
+        s.used = used > stake ? used - stake : 0;
     }
 
     // =================================================================================================================
@@ -431,12 +548,36 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
 
     /// @inheritdoc IGameVault
     function withdrawHouse() external nonReentrant {
-        uint128 amount = _houseAccrued;
+        _withdrawHouse(_houseAccrued, house);
+    }
+
+    /// @inheritdoc IGameVault
+    function withdrawHouseTo(uint256 amount, address to) external nonReentrant {
+        if (msg.sender != house) revert NotHouse(msg.sender);
+        if (to == address(0)) revert ZeroAddress();
+        _withdrawHouse(amount, to);
+    }
+
+    function _withdrawHouse(uint256 amount, address to) private {
         if (amount == 0) revert ZeroAmount();
-        _houseAccrued = 0;
-        _totalLiabilities -= amount;
-        emit HouseWithdrawn(house, amount);
-        _send(house, amount);
+        uint128 accrued = _houseAccrued;
+        if (amount > accrued) revert InsufficientFree(house, accrued, amount);
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint128 amt = uint128(amount); // safe: amount <= accrued, a uint128
+        _houseAccrued = accrued - amt;
+        _totalLiabilities -= amt;
+        emit HouseWithdrawn(to, amount);
+        uint256 extra = _send(to, amount);
+        if (extra != 0) {
+            accrued = _houseAccrued;
+            if (extra > accrued) revert TransferMismatch(amount, amount + extra);
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint128 tax = uint128(extra); // safe: extra <= accrued, a uint128
+            _houseAccrued = accrued - tax;
+            _totalLiabilities -= tax;
+            // forge-lint: disable-next-line(reentrancy-events)
+            emit TransferTaxPaid(house, extra);
+        }
     }
 
     // =================================================================================================================
@@ -456,6 +597,29 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     /// @inheritdoc IGameVault
     function setReferee(address referee_) external onlyOwner {
         _setReferee(referee_);
+    }
+
+    /// @inheritdoc IGameVault
+    /// @dev The surplus is balanceOf(vault) - totalLiabilities, measured now: nothing the vault owes can be credited.
+    function creditSurplus(address player, uint256 amount) external nonReentrant onlyOwner {
+        if (player == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        uint256 bal = _token.balanceOf(address(this));
+        uint256 liabilities = _totalLiabilities;
+        uint256 surplus = bal > liabilities ? bal - liabilities : 0;
+        if (amount > surplus) revert SurplusExceeded(surplus, amount);
+        if (liabilities + amount > type(uint128).max) revert BalanceCapExceeded(player, type(uint128).max);
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint128 amt = uint128(amount); // safe: liabilities + amount <= type(uint128).max
+        _accounts[player].free += amt;
+        _totalLiabilities += amt;
+        emit SurplusCredited(player, amount);
+    }
+
+    /// The vault always keeps an owner: without one a pause could never end, a leaked referee key could never be
+    /// rotated out and held series could never be reviewed. Ownership still moves with transferOwnership.
+    function renounceOwnership() public pure override {
+        revert RenounceDisabled();
     }
 
     /// @inheritdoc IGameVault
@@ -483,9 +647,12 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         emit CapsSet(maxStake_, maxBalance_);
     }
 
+    /// Starts a new referee epoch: matches locked from now on capture it, those already locked keep theirs.
     function _setReferee(address referee_) private {
         if (referee_ == address(0)) revert ZeroAddress();
-        referee = referee_;
+        uint32 epoch = _refereeEpoch + 1;
+        _refereeEpoch = epoch;
+        _referees[epoch] = referee_;
         emit RefereeSet(referee_);
     }
 
@@ -496,6 +663,16 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     /// @inheritdoc IGameVault
     function token() external view returns (address) {
         return address(_token);
+    }
+
+    /// @inheritdoc IGameVault
+    function referee() external view returns (address) {
+        return _referees[_refereeEpoch];
+    }
+
+    /// @inheritdoc IGameVault
+    function refereeOf(bytes32 matchId) external view returns (address) {
+        return _referees[_matches[matchId].refereeEpoch];
     }
 
     /// @inheritdoc IGameVault
@@ -532,7 +709,20 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
 
     /// @inheritdoc IGameVault
     function matchOf(bytes32 matchId) external view returns (Match memory) {
-        return _matches[matchId];
+        MatchSlot storage m = _matches[matchId];
+        uint64 lockedAt = m.lockedAt;
+        return Match({
+            playerA: m.playerA,
+            feeBps: m.feeBps,
+            holderFeeBps: m.holderFeeBps,
+            roundSeconds: m.roundSeconds,
+            state: m.state,
+            playerB: m.playerB,
+            lockedAt: lockedAt,
+            stake: m.stake,
+            settleBy: lockedAt == 0 ? 0 : lockedAt + settleWindow,
+            rules: m.rules
+        });
     }
 
     /// @inheritdoc IGameVault
@@ -588,6 +778,12 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecoverCalldata(digest, sig);
         if (err == ECDSA.RecoverError.NoError && recovered == signer) return true;
         return signer.code.length != 0 && SignatureChecker.isValidERC1271SignatureNowCalldata(signer, digest, sig);
+    }
+
+    /// The creator a match id belongs to: its first 20 bytes.
+    function _creatorOf(bytes32 matchId) private pure returns (address) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return address(bytes20(matchId)); // the first 20 bytes, by design
     }
 
     function _min(uint16 x, uint16 y) private pure returns (uint16) {

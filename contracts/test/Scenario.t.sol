@@ -31,7 +31,7 @@ contract ScenarioTest is VaultTestBase {
     function test_e2eNumbers_depositPlaySettleWithdraw() public {
         // Each deposits 1,000 and authorises a session key; one invite at 100 each.
         _ready(1_000e18);
-        bytes32 id = keccak256("e2e");
+        bytes32 id = _mid(alice, keccak256("e2e"));
         IGameVault.Entry memory a = _entry(id, alice, bob, 100e18);
         IGameVault.Entry memory b = _entry(id, bob, alice, 100e18);
         vm.prank(relayer);
@@ -57,8 +57,8 @@ contract ScenarioTest is VaultTestBase {
     function test_radbroHolderWinnerPaysHalfFee() public {
         radbros.mint(bob, 652);
         _ready(1_000e18);
-        bytes32 m1 = keccak256("holder-1");
-        bytes32 m2 = keccak256("holder-2");
+        bytes32 m1 = _mid(alice, keccak256("holder-1"));
+        bytes32 m2 = _mid(alice, keccak256("holder-2"));
         _lock(m1, 100e18);
         _lock(m2, 100e18);
         _refereeSettles(m1, bob); // holder wins: 1.5%
@@ -75,8 +75,8 @@ contract ScenarioTest is VaultTestBase {
         _openSession(carolPk, vm.addr(uint256(keccak256("carol key"))), MAX_STAKE, 100 * MAX_STAKE);
         uint256 carolKeyPk = uint256(keccak256("carol key"));
         for (uint256 i = 0; i < 12; i++) {
-            bytes32 id = keccak256(abi.encode("many", i));
             (address p, uint256 pk) = i % 2 == 0 ? (alice, aliceKeyPk) : (carol, carolKeyPk);
+            bytes32 id = _mid(p, keccak256(abi.encode("many", i)));
             IGameVault.Entry memory a = _entry(id, p, address(0), uint128(10e18 + i * 7e18));
             IGameVault.Entry memory b = _entry(id, bob, p, uint128(10e18 + i * 7e18));
             vm.prank(relayer);
@@ -99,7 +99,7 @@ contract ScenarioTest is VaultTestBase {
 
     function test_noShowVoidRefundsBoth() public {
         _ready(1_000e18);
-        bytes32 id = keccak256("no-show");
+        bytes32 id = _mid(alice, keccak256("no-show"));
         _lock(id, 250e18);
         IGameVault.Result memory r = _result(id, OUTCOME_VOID, address(0), 0);
         vault.settle(r, _signResult(refereePk, r));
@@ -109,7 +109,7 @@ contract ScenarioTest is VaultTestBase {
 
     function test_deadRelay_refundAfterWindow() public {
         _ready(1_000e18);
-        bytes32 id = keccak256("dead relay");
+        bytes32 id = _mid(alice, keccak256("dead relay"));
         _lock(id, 250e18);
         vm.warp(block.timestamp + WINDOW + 1);
         vm.prank(alice); // a player needs nobody

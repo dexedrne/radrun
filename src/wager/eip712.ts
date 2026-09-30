@@ -1,7 +1,7 @@
 // SPIDER-TAG wager: the EIP-712 domains, types and helpers shared by the client, the wager relay and the tests
 // (docs/WAGER.md §3.3, §4.2). The vault types must match contracts/src/interfaces/IGameVault.sol exactly;
 // test/wager-shared.test.ts compares the type strings. Pure TS on viem's encoders: no DOM, no chain access.
-import { encodeAbiParameters, hashTypedData, keccak256, toBytes, toHex, type Address, type Hex } from "viem";
+import { encodeAbiParameters, getAddress, hashTypedData, keccak256, toBytes, toHex, type Address, type Hex } from "viem";
 
 export const VAULT_DOMAIN_NAME = "RadRun GameVault";
 export const RELAY_DOMAIN_NAME = "RadRun Wager Relay";
@@ -171,12 +171,25 @@ export function random32(): Hex {
   crypto.getRandomValues(b);
   return toHex(b);
 }
-/** A fresh match id (the creator's client picks it; the vault refuses a reused one). */
-export const newMatchId = random32;
+/**
+ * A fresh match id for `creator`: the creator's address followed by 12 random bytes. The creator's client picks it.
+ * The vault only locks an id with its creator as playerA and refuses a reused or cancelled one (docs/WAGER.md §3.2),
+ * so nobody else can burn a published id or take the creator's seat.
+ */
+export function newMatchId(creator: Address): Hex {
+  const b = new Uint8Array(12);
+  crypto.getRandomValues(b);
+  return `${creator.toLowerCase()}${toHex(b).slice(2)}` as Hex;
+}
+/** The address a match id belongs to (its first 20 bytes): the only possible playerA. */
+export const matchIdCreator = (matchId: Hex): Address => getAddress(matchId.slice(0, 42));
 
 // ---- fee maths (identical to the vault; docs/WAGER.md §3.5) ---------------------------------------------------------
 
-/** The fees a lock captures from the vault's current settings and both players' caps. */
+/**
+ * The fees a lock captures from the vault's current settings and both players' caps. The vault refuses a lock where
+ * either cap is under the house fee (FeeAboveCap), so for every lock that happens this is the house fee itself.
+ */
 export function capturedFees(houseFeeBps: number, holderFeeBps: number, capA: number, capB: number): { feeBps: number; holderFeeBps: number } {
   const feeBps = Math.min(houseFeeBps, capA, capB);
   return { feeBps, holderFeeBps: Math.min(holderFeeBps, feeBps) };

@@ -25,7 +25,12 @@ import {
 /// and rebasing behaviour, and a token that blocks an address or pauses can never block a settle or trap the other
 /// player's stake.
 contract TokenQuirksTest is VaultTestBase {
-    bytes32 internal constant M1 = keccak256("quirk-1");
+    bytes32 internal M1; // alice's ("quirk-1")
+
+    function setUp() public override {
+        super.setUp();
+        M1 = _mid(alice, keccak256("quirk-1"));
+    }
 
     /// Points the fixture at a vault for `t` and funds alice and bob with `amount` of it (approved).
     function _useToken(address t, uint256 amount) internal {
@@ -58,17 +63,30 @@ contract TokenQuirksTest is VaultTestBase {
         assertEq(vault.totalLiabilities(), 0);
     }
 
-    function test_senderTax_depositLooksExactButPayoutsRefuseToOverdraw() public {
-        // A token that charges the sender on top: the vault would pay more than it owes on every withdrawal.
+    function test_senderTax_withdrawerPaysTheTaxAndTheBooksStayWhole() public {
+        // A token that charges the sender on top: each payout costs the vault more than it pays. The withdrawer pays
+        // the difference from their own free balance, so nobody else's balance ever covers it.
         _useToken(address(new SenderTaxToken(100)), 1_000e18);
         vm.prank(alice);
         vault.deposit(500e18);
+        vm.prank(bob);
+        vault.deposit(500e18);
+        vm.expectEmit(true, false, false, true, address(vault));
+        emit IGameVault.TransferTaxPaid(alice, 1e18);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IGameVault.TransferMismatch.selector, 100e18, 101e18));
         vault.withdraw(100e18);
-        // The books stay whole instead of the first withdrawer draining the others.
-        assertEq(vault.freeOf(alice), 500e18);
-        assertGe(token.balanceOf(address(vault)), vault.totalLiabilities());
+        assertEq(token.balanceOf(alice), 500e18 - 5e18 + 100e18, "alice got the full 100 (she paid 5 to deposit)");
+        assertEq(vault.freeOf(alice), 399e18, "100 plus the 1 of tax");
+        assertEq(token.balanceOf(address(vault)), vault.totalLiabilities());
+        // Everything would need 399 + 3.99: refused, and nothing moves. A little less goes through.
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.TransferMismatch.selector, 399e18, 402.99e18));
+        vault.withdraw(399e18);
+        vm.prank(alice);
+        vault.withdraw(395e18);
+        assertEq(vault.freeOf(alice), 399e18 - 395e18 - 3.95e18);
+        assertEq(vault.freeOf(bob), 500e18, "bob's balance never covered alice's tax");
+        assertEq(token.balanceOf(address(vault)), vault.totalLiabilities());
     }
 
     // ---- rebasing ---------------------------------------------------------------------------------------------------
@@ -98,7 +116,7 @@ contract TokenQuirksTest is VaultTestBase {
         _lock(M1, 100e18);
 
         t.rebase(0.5e18); // the vault now holds half of what it owes
-        bytes32 m2 = keccak256("quirk-2");
+        bytes32 m2 = _mid(alice, keccak256("quirk-2"));
         IGameVault.Entry memory a = _entry(m2, alice, address(0), 100e18);
         IGameVault.Entry memory b = _entry(m2, bob, alice, 100e18);
         bytes memory sigA = _signEntry(aliceKeyPk, a);
@@ -162,7 +180,7 @@ contract TokenQuirksTest is VaultTestBase {
         _useToken(address(t), 1_000e18);
         _depositBoth(1_000e18);
         _lock(M1, 100e18);
-        bytes32 m2 = keccak256("quirk-2");
+        bytes32 m2 = _mid(alice, keccak256("quirk-2"));
         _lock(m2, 100e18);
         t.setBlacklisted(alice, true);
         t.setBlacklisted(bob, true);
@@ -181,7 +199,7 @@ contract TokenQuirksTest is VaultTestBase {
         vault.withdrawTo(1_000e18, carol);
     }
 
-    function test_blacklist_blockedHouseOnlyStrandsItsOwnFees() public {
+    function test_blacklist_blockedHouseSendsItsFeesElsewhere() public {
         BlacklistToken t = new BlacklistToken();
         _useToken(address(t), 1_000e18);
         _depositBoth(1_000e18);
@@ -195,6 +213,15 @@ contract TokenQuirksTest is VaultTestBase {
         vm.prank(bob);
         vault.withdraw(900e18);
         assertEq(vault.totalLiabilities(), 6e18);
+        // Only the house itself can send its fees to another address.
+        address cold = makeAddr("house cold wallet");
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.NotHouse.selector, alice));
+        vault.withdrawHouseTo(6e18, alice);
+        vm.prank(house);
+        vault.withdrawHouseTo(6e18, cold);
+        assertEq(t.balanceOf(cold), 6e18);
+        assertEq(vault.totalLiabilities(), 0);
     }
 
     // ---- pausable ---------------------------------------------------------------------------------------------------

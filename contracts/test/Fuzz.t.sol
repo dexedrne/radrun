@@ -7,10 +7,11 @@ import {VaultTestBase} from "./utils/VaultTestBase.sol";
 
 /// Fuzz tests (docs/WAGER.md §9.1): payout maths, captured fees and session limits for any values.
 contract FuzzTest is VaultTestBase {
-    bytes32 internal constant M1 = keccak256("fuzz-1");
+    bytes32 internal M1; // alice's ("fuzz-1")
 
     function setUp() public override {
         super.setUp();
+        M1 = _mid(alice, keccak256("fuzz-1"));
         vm.prank(owner);
         vault.setCaps(type(uint128).max, type(uint128).max);
     }
@@ -52,14 +53,22 @@ contract FuzzTest is VaultTestBase {
         IGameVault.Entry memory b = _entry(M1, bob, alice, 1e18);
         a.feeCapBps = capA;
         b.feeCapBps = capB;
-        vault.lock(a, _signEntry(aliceKeyPk, a), b, _signEntry(bobKeyPk, b));
+        bytes memory sigA = _signEntry(aliceKeyPk, a);
+        bytes memory sigB = _signEntry(bobKeyPk, b);
+        // Each cap must cover the house fee; the match then pays exactly it (never more than either cap).
+        if (capA < houseFee) {
+            vm.expectRevert(abi.encodeWithSelector(IGameVault.FeeAboveCap.selector, alice, houseFee, capA));
+        } else if (capB < houseFee) {
+            vm.expectRevert(abi.encodeWithSelector(IGameVault.FeeAboveCap.selector, bob, houseFee, capB));
+        }
+        vault.lock(a, sigA, b, sigB);
+        if (capA < houseFee || capB < houseFee) return;
         IGameVault.Match memory m = vault.matchOf(M1);
-        uint16 expected = houseFee;
-        if (capA < expected) expected = capA;
-        if (capB < expected) expected = capB;
-        assertEq(m.feeBps, expected);
-        assertEq(m.holderFeeBps, holderFee < expected ? holderFee : expected);
+        assertEq(m.feeBps, houseFee);
+        assertEq(m.holderFeeBps, holderFee < houseFee ? holderFee : houseFee);
         assertLe(m.feeBps, 500);
+        assertLe(m.feeBps, capA);
+        assertLe(m.feeBps, capB);
         assertLe(m.holderFeeBps, m.feeBps);
     }
 
@@ -75,6 +84,53 @@ contract FuzzTest is VaultTestBase {
             vm.expectRevert(IGameVault.BadResult.selector);
             vault.settle(r, sig);
         }
+    }
+
+    /// Any (outcome, winner, fee) the referee signs is accepted exactly when it is a void or a win for one of the two
+    /// players at one of the two fees the lock captured, whatever the owner set before or after the lock; it never
+    /// charges more than the captured fee, and never applies twice.
+    function testFuzz_refereeResultSpace(
+        uint16 house0,
+        uint16 holder0,
+        uint16 house1,
+        uint16 holder1,
+        uint8 outcome,
+        uint8 who,
+        uint16 fee
+    ) public {
+        vm.prank(owner);
+        vault.setHouseFees(uint16(bound(house0, 0, 500)), uint16(bound(holder0, 0, 500)));
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        IGameVault.Match memory m = vault.matchOf(M1);
+        assertLe(m.holderFeeBps, m.feeBps, "holder fee <= fee");
+        vm.prank(owner);
+        vault.setHouseFees(uint16(bound(house1, 0, 500)), uint16(bound(holder1, 0, 500)));
+
+        outcome = uint8(bound(outcome, 0, 3));
+        address winner = who % 4 == 0 ? alice : who % 4 == 1 ? bob : who % 4 == 2 ? carol : address(0);
+        fee = uint16(bound(fee, 0, 1_000));
+        IGameVault.Result memory r = _result(M1, outcome, winner, fee);
+        bool valid = (outcome == OUTCOME_VOID && winner == address(0) && fee == 0)
+            || (outcome == OUTCOME_WIN
+                && (winner == alice || winner == bob)
+                && (fee == m.feeBps || fee == m.holderFeeBps));
+        bytes memory sig = _signResult(refereePk, r);
+        if (!valid) {
+            vm.expectRevert(IGameVault.BadResult.selector);
+            vault.settle(r, sig);
+            return;
+        }
+        vault.settle(r, sig);
+        uint256 charged = vault.houseAccrued();
+        if (outcome == OUTCOME_WIN) {
+            assertEq(charged, 200e18 * uint256(fee) / 10_000);
+            assertLe(charged, 200e18 * uint256(m.feeBps) / 10_000, "never above the captured fee");
+        } else {
+            assertEq(charged, 0);
+        }
+        vm.expectRevert(abi.encodeWithSelector(IGameVault.NotLocked.selector, M1));
+        vault.settle(r, sig);
     }
 
     /// openSession succeeds exactly when 0 < maxStake <= cap, now < expiry <= now + 30 days and the nonce is current.
@@ -124,7 +180,7 @@ contract FuzzTest is VaultTestBase {
         internal
         returns (uint256)
     {
-        bytes32 id = keccak256(abi.encode("fuzz-session", i));
+        bytes32 id = _mid(alice, keccak256(abi.encode("fuzz-session", i)));
         IGameVault.Entry memory a = _entry(id, alice, address(0), stake);
         IGameVault.Entry memory b = _entry(id, bob, alice, stake);
         bytes memory sigA = _signEntry(aliceKeyPk, a);

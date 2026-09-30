@@ -8,9 +8,15 @@ import {MockERC1271Wallet} from "./mocks/Wallets.sol";
 
 /// Signature binding and replay (docs/WAGER.md §3.3, §3.7 bound 6, §9.1 "Signatures").
 contract SignaturesTest is VaultTestBase {
-    bytes32 internal constant M1 = keccak256("sig-1");
-    bytes32 internal constant M2 = keccak256("sig-2");
     uint256 internal constant SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+    bytes32 internal M1; // alice's ("sig-1")
+    bytes32 internal M2; // alice's ("sig-2")
+
+    function setUp() public override {
+        super.setUp();
+        M1 = _mid(alice, keccak256("sig-1"));
+        M2 = _mid(alice, keccak256("sig-2"));
+    }
 
     // ---- another vault, another chain ----------------------------------------------------------------------------
 
@@ -230,17 +236,19 @@ contract SignaturesTest is VaultTestBase {
 
     function test_erc1271Wallet_entriesBySessionKeyAndByWallet() public {
         (MockERC1271Wallet w, uint256 wKeyPk) = _walletWithSession();
-        IGameVault.Entry memory a = _entry(M1, address(w), address(0), 100e18);
-        IGameVault.Entry memory b = _entry(M1, bob, address(w), 100e18);
+        bytes32 m1 = _mid(address(w), keccak256("sig-1"));
+        bytes32 m2 = _mid(address(w), keccak256("sig-2"));
+        IGameVault.Entry memory a = _entry(m1, address(w), address(0), 100e18);
+        IGameVault.Entry memory b = _entry(m1, bob, address(w), 100e18);
         vault.lock(a, _signEntry(wKeyPk, a), b, _signEntry(bobPk, b));
-        a = _entry(M2, address(w), address(0), 100e18);
-        b = _entry(M2, bob, address(w), 100e18);
+        a = _entry(m2, address(w), address(0), 100e18);
+        b = _entry(m2, bob, address(w), 100e18);
         vault.lock(a, _signEntry(carolPk, a), b, _signEntry(bobPk, b));
         assertEq(vault.sessionOf(address(w)).used, 100e18, "the wallet-signed Entry spends no session");
         // A refusing wallet (contract signatures are revocable) can't enter by ERC-1271.
         vm.prank(carol);
         w.setRefuse(true);
-        bytes32 m3 = keccak256("sig-3");
+        bytes32 m3 = _mid(address(w), keccak256("sig-3"));
         a = _entry(m3, address(w), address(0), 100e18);
         b = _entry(m3, bob, address(w), 100e18);
         bytes memory sigA = _signEntry(carolPk, a);
@@ -251,12 +259,13 @@ contract SignaturesTest is VaultTestBase {
 
     function test_erc1271Wallet_mutualSettleAndWithdraw() public {
         (MockERC1271Wallet w, uint256 wKeyPk) = _walletWithSession();
-        IGameVault.Entry memory a = _entry(M1, address(w), address(0), 100e18);
-        IGameVault.Entry memory b = _entry(M1, bob, address(w), 100e18);
+        bytes32 m1 = _mid(address(w), keccak256("sig-1"));
+        IGameVault.Entry memory a = _entry(m1, address(w), address(0), 100e18);
+        IGameVault.Entry memory b = _entry(m1, bob, address(w), 100e18);
         vault.lock(a, _signEntry(wKeyPk, a), b, _signEntry(bobPk, b));
 
         // Mutual settle: the wallet (ERC-1271) and bob agree; the wallet's session key may not stand in.
-        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, address(w), FEE);
+        IGameVault.Result memory r = _result(m1, OUTCOME_WIN, address(w), FEE);
         bytes memory sigW = _signResult(carolPk, r);
         bytes memory sigB = _signResult(bobPk, r);
         bytes memory sigWKey = _signResult(wKeyPk, r);
