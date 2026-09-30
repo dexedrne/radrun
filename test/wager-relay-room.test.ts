@@ -11,6 +11,7 @@ import { gunzipSync as gunzipBuf } from "node:zlib";
 import { firstHolderSlot, seriesLogHash, type RoundResult, type SeriesLog } from "../src/wager/log.ts";
 import { WAGER_PROTOCOL, type WagerStartMsg } from "../src/wager/protocol.ts";
 import { MockRadbroSource } from "../relay/wager/src/radbro.ts";
+import { roomHttp } from "../relay/wager/src/http.ts";
 import { FailingRadbro, eventually, flush, newAccount, roomHarness, sleep, type RoomClient, type RoomHarness } from "./wager-relay-fakes.ts";
 
 /** Both players in, picked, seeded and READY: round 1 starts. */
@@ -272,12 +273,16 @@ test("holds: a flagged winner waits for the owner's review; only the vault owner
   await readyUp(v, va, vb);
   await idleUntil(va, () => va.last("outcome"), 120_000);
   const lh = va.last("outcome")!.logHash;
+  // While held, the served log may still change (a void rewrites its outcome): never cached.
+  const cacheOf = async () => (await roomHttp(v.room, { url: new URL(`http://relay.test/log/${v.matchId}`), method: "GET", header: () => null, text: async () => "" })).headers["cache-control"];
+  assert.equal(await cacheOf(), "no-store");
   const sig = await owner.signTypedData(reviewTypedData(v.fv.chainId, v.fv.vault, { matchId: v.matchId, decision: REVIEW_VOID, logHash: lh }));
   assert.equal((await v.room.review({ matchId: v.matchId, decision: REVIEW_VOID, logHash: lh, sig })).ok, true);
   await eventually(() => v.room.phase === "voided", v.clock);
   const log = JSON.parse(gunzipSync(v.room.logGz()!)) as SeriesLog;
   assert.equal(log.outcome.reason, "review");
   assert.equal(log.logHash, lh, "the outcome is not hashed: the log hash stays");
+  assert.match(await cacheOf() ?? "", /max-age=31536000/, "closed on chain: final");
 });
 
 test("a relay restart mid-round voids the series (a relay fault never picks a winner)", async () => {

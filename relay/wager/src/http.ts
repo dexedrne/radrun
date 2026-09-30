@@ -182,9 +182,12 @@ export async function roomHttp(core: WagerRoomCore, req: HttpReq): Promise<HttpR
     if (p.startsWith(WAGER_ROUTES.log)) {
       const gz = core.logGz();
       if (!gz) return jsonRes(404, { error: "no log yet: the series is not over", message: "no log yet: the series is not over", code: "gone" });
+      // Final (a year of cache) only once the match closed on chain: until then an owner's review can still void a held
+      // series, which rewrites the log's outcome (never its hash), and a cached copy would show the old one.
+      const final = core.phase === "settled" || core.phase === "voided";
       return {
         status: 200,
-        headers: { ...CORS_PUBLIC, "content-type": "application/json", "content-encoding": "gzip", "cache-control": "public, max-age=31536000, immutable" },
+        headers: { ...CORS_PUBLIC, "content-type": "application/json", "content-encoding": "gzip", "cache-control": final ? "public, max-age=31536000, immutable" : "no-store" },
         body: gz,
       };
     }

@@ -214,7 +214,10 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const d = info.decimals, sym = info.symbol;
   const oc = outcome?.outcome ?? status?.outcome ?? null;
   const sett = settlement ?? status?.settlement ?? null;
-  const settleTx = settledTx ?? status?.settleTx ?? null;
+  // The relay's status keeps one transaction for how a match closed: a settle, or a void (review, no-show, refund).
+  const closedVoid = status?.state === "voided" || onChain?.state === "voided";
+  const settleTx = settledTx ?? (closedVoid ? null : status?.settleTx ?? null);
+  const voided = voidedTx !== undefined ? voidedTx : closedVoid ? status?.settleTx ?? null : undefined;
   const stake = st ? BigInt(st.stake) : onChain ? onChain.stake : status?.offer ? BigInt(status.offer.stake) : 0n;
   const settleBy = st?.settleBy ?? onChain?.settleBy ?? 0;
   const relayLeft = (at: number | null | undefined) => (at && clientRef.current ? Math.max(0, (at - clientRef.current.relayNow()) / 1000) : null);
@@ -255,7 +258,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
             </>
           )}
         </div>
-        {held && (
+        {held && !settleTx && voided === undefined && (
           <div style={{ marginBottom: 10 }} data-testid="wager-held">
             <Notice kind="info" text={`HELD FOR REVIEW: an anti-cheat check flagged this series, so it waits for a review instead of paying out. If nobody reviews it by ${settleBy ? dateText(settleBy) : "the settle deadline"}, anyone can refund both stakes.`} />
           </div>
@@ -272,13 +275,13 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
           <span style={label}>settle</span>
           <span data-testid="wager-settle-state">
             {settleTx ? <span style={{ color: C.green }}>settled · credited to the vault · <TxLink dep={dep} hash={settleTx} /></span>
-              : voidedTx !== undefined ? <span style={{ color: C.green }}>refunded · <TxLink dep={dep} hash={voidedTx} /></span>
+              : voided !== undefined ? <span style={{ color: C.green }}>refunded · <TxLink dep={dep} hash={voided} /></span>
               : held ? "waiting for the review"
               : sett ? "signed by the referee · submitting…"
               : "the referee is signing…"}
           </span>
         </div>
-        {sett && !settleTx && voidedTx === undefined && Date.now() - settledAt > 20_000 && (
+        {sett && !settleTx && voided === undefined && Date.now() - settledAt > 20_000 && (
           <div style={{ marginTop: 8, fontSize: 12 }}>
             not settled yet: <button style={small(true)} onClick={() => void app.settleYourself(sett.result, sett.sig).then(tx => tx && setSettledTx(tx))} data-testid="wager-settle-yourself">SUBMIT IT YOURSELF</button> (the referee's signature; your wallet pays the gas)
           </div>
@@ -289,7 +292,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
             {" "}or <button style={small(false)} onClick={() => void app.reclaim(matchId).then(tx => tx && setVoidedTx(tx))} data-testid="wager-reclaim">TAKE BACK YOUR STAKE</button>
           </div>
         )}
-        {!expired && onChain?.state === "locked" && !settleTx && voidedTx === undefined && (held || (!sett && Date.now() - settledAt > 60_000)) && (
+        {!expired && onChain?.state === "locked" && !settleTx && voided === undefined && (held || (!sett && Date.now() - settledAt > 60_000)) && (
           <MutualPanel app={app} matchId={matchId} m={onChain} logHash={outcome?.logHash ?? null} onDone={tx => setSettledTx(tx)} />
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
