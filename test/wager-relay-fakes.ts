@@ -1,5 +1,6 @@
-// Fakes for the wager relay tests: a fake clock with timers, an in-memory GameVault that follows the frozen interface's
-// rules (sessions, lock, settle, refundExpired, ERC-1271 wallets, nonces per sender) behind the relay's VaultChain /
+// Fakes for the wager relay tests: a fake clock with timers, an in-memory GameVault that follows the vault's rules
+// (sessions, lock with creator-bound match ids and fee caps, cancel, settle by the match's own referee, refundExpired,
+// ERC-1271 wallets, nonces per sender) behind the relay's VaultChain /
 // TxRpc interfaces, and fake sockets. No network, no keys on disk (player keys are generated per test run).
 import {
   decodeFunctionData, keccak256, parseTransaction, recoverAddress, recoverTransactionAddress, type Address, type Hex,
@@ -8,7 +9,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { VAULT_ABI, ERC20_ABI } from "../relay/wager/src/abi.ts";
 import type { Clock } from "../relay/wager/src/base.ts";
 import type { Call, ChainMatch, ChainSession, Receipt, TxRpc, VaultChain, VaultInfo } from "../relay/wager/src/chain.ts";
-import { entryDigest, resultDigest, sessionAuthDigest, type Entry, type Result, type SessionAuth } from "../src/wager/eip712.ts";
+import { entryDigest, matchIdCreator, resultDigest, sessionAuthDigest, type Entry, type Result, type SessionAuth } from "../src/wager/eip712.ts";
 
 export const newAccount = () => privateKeyToAccount(generatePrivateKey());
 
@@ -86,6 +87,8 @@ export class FakeVault implements VaultChain, TxRpc {
   readonly sessions = new Map<string, ChainSession>();
   readonly sessionNonces = new Map<string, number>();
   readonly matches = new Map<string, ChainMatch>();
+  /** The referee each match locked under (refereeOf). */
+  readonly refs = new Map<string, Address>();
   readonly wallets1271 = new Map<string, (digest: Hex, sig: Hex) => boolean>();
   readonly txs = new Map<Hex, { status: "success" | "reverted"; from: Address; fn: string; matchId: Hex | null }>();
   readonly acctNonce = new Map<string, number>();
@@ -96,6 +99,8 @@ export class FakeVault implements VaultChain, TxRpc {
   failSends = 0;
   /** Receipts appear only once released (tests of pending transactions). */
   holdReceipts = false;
+  /** Every settle reverts with this (a Result the vault won't take). */
+  settleFails: string | null = null;
   readonly nowS: () => number;
 
   constructor(nowS: () => number, owner: Address = newAccount().address) {
@@ -121,12 +126,13 @@ export class FakeVault implements VaultChain, TxRpc {
       this.free.set(k(p), this.freeOfSync(p) - o.stake);
       this.locked.set(k(p), this.lockedOfSync(p) + o.stake);
     }
-    const feeBps = Math.min(this.houseFeeBps, o.feeCapBps ?? 500), now = this.nowS();
+    const feeBps = this.houseFeeBps, now = this.nowS();
     const m: ChainMatch = {
       playerA: o.a, playerB: o.b, feeBps, holderFeeBps: Math.min(this.holderFeeBps, feeBps), roundSeconds: o.roundSeconds, state: 1, lockedAt: now,
       stake: o.stake, settleBy: now + this.settleWindow, rules: o.rules,
     };
     this.matches.set(k(o.matchId), m);
+    this.refs.set(k(o.matchId), this.referee);
     return m;
   }
 
@@ -144,6 +150,9 @@ export class FakeVault implements VaultChain, TxRpc {
   }
   async matchOf(id: Hex): Promise<ChainMatch> {
     return this.matches.get(k(id)) ?? { playerA: ZERO, playerB: ZERO, feeBps: 0, holderFeeBps: 0, roundSeconds: 0, state: 0, lockedAt: 0, stake: 0n, settleBy: 0, rules: `0x${"00".repeat(32)}` };
+  }
+  async refereeOf(id: Hex): Promise<Address> {
+    return this.refs.get(k(id)) ?? ZERO;
   }
   async verifyHash(signer: Address, digest: Hex, sig: Hex): Promise<boolean> {
     await this.prep(digest, sig);
@@ -259,11 +268,14 @@ export class FakeVault implements VaultChain, TxRpc {
     if (d.functionName === "lock") {
       if (this.paused) return "EnforcedPause()";
       const ea = a[0] as Entry, sa = a[1] as Hex, eb = a[2] as Entry, sb = a[3] as Hex;
-      if (k(ea.matchId) !== k(eb.matchId) || (this.matches.get(k(ea.matchId))?.state ?? 0) !== 0) return "MatchExists";
+      if (k(ea.matchId) !== k(eb.matchId)) return "EntryMismatch()";
+      if (k(matchIdCreator(ea.matchId)) !== k(ea.player)) return `BadMatchId(${ea.matchId})`;
+      if ((this.matches.get(k(ea.matchId))?.state ?? 0) !== 0) return `MatchExists(${ea.matchId})`;
       if (ea.player === ZERO || eb.player === ZERO || k(ea.player) === k(eb.player)) return "EntryMismatch()";
       if ((ea.opponent !== ZERO && k(ea.opponent) !== k(eb.player)) || (eb.opponent !== ZERO && k(eb.opponent) !== k(ea.player))) return "EntryMismatch()";
       if (ea.stake !== eb.stake || ea.stake === 0n) return "EntryMismatch()";
       if (ea.stake > this.maxStake) return "StakeOutOfRange";
+      for (const e of [ea, eb]) if (e.feeCapBps < this.houseFeeBps) return `FeeAboveCap(${e.player}, ${this.houseFeeBps}, ${e.feeCapBps})`;
       if (ea.roundSeconds !== eb.roundSeconds || k(ea.rules) !== k(eb.rules)) return "EntryMismatch()";
       if (Number(ea.deadline) < now || Number(eb.deadline) < now) return "EntryExpired";
       const uses: [string, bigint][] = [];
@@ -279,15 +291,25 @@ export class FakeVault implements VaultChain, TxRpc {
       for (const e of [ea, eb]) if (this.freeOfSync(e.player) < e.stake) return `InsufficientFree(${e.player})`;
       if (dry) return null;
       for (const [p, st] of uses) this.sessions.get(p)!.used += st;
-      this.forceLock({ matchId: ea.matchId, a: ea.player, b: eb.player, stake: ea.stake, rules: ea.rules, roundSeconds: ea.roundSeconds, feeCapBps: Math.min(ea.feeCapBps, eb.feeCapBps) });
+      this.forceLock({ matchId: ea.matchId, a: ea.player, b: eb.player, stake: ea.stake, rules: ea.rules, roundSeconds: ea.roundSeconds });
+      return null;
+    }
+    if (d.functionName === "cancel") {
+      const id = a[0] as Hex;
+      if (k(matchIdCreator(id)) !== k(from)) return `BadMatchId(${id})`;
+      if ((this.matches.get(k(id))?.state ?? 0) !== 0) return `MatchExists(${id})`;
+      if (dry) return null;
+      this.matches.set(k(id), { playerA: ZERO, playerB: ZERO, feeBps: 0, holderFeeBps: 0, roundSeconds: 0, state: 4, lockedAt: 0, stake: 0n, settleBy: 0, rules: `0x${"00".repeat(32)}` });
       return null;
     }
     if (d.functionName === "settle") {
       const r = a[0] as Result, sig = a[1] as Hex;
+      if (this.settleFails) return this.settleFails;
       const m = this.matches.get(k(r.matchId));
       if (!m || m.state !== 1) return `NotLocked(${r.matchId})`;
       if (now > m.settleBy) return "SettleWindowClosed";
-      if (this.recover(resultDigest(this.chainId, this.vault, r), sig) !== k(this.referee)) return `BadSignature(${this.referee})`;
+      const ref = this.refs.get(k(r.matchId)) ?? ZERO;
+      if (this.recover(resultDigest(this.chainId, this.vault, r), sig) !== k(ref)) return `BadSignature(${ref})`;
       if (r.outcome === 1) {
         const w = k(r.winner);
         if ((w !== k(m.playerA) && w !== k(m.playerB)) || (r.feeBps !== m.feeBps && r.feeBps !== m.holderFeeBps)) return "BadResult()";
@@ -326,7 +348,7 @@ export class FakeVault implements VaultChain, TxRpc {
 import { hashTypedData, type LocalAccount } from "viem";
 import { MSG_PROBE, MSG_PROBE_ECHO, WAGER_PROTOCOL, decodeProbe, encodeProbe, type PlayerCard, type RoomClientMsg, type RoomServerMsg } from "../src/wager/protocol.ts";
 import { NET_VERSION, type Compat } from "../src/net/wire.ts";
-import { loginTypedData, random32 } from "../src/wager/eip712.ts";
+import { loginTypedData, newMatchId } from "../src/wager/eip712.ts";
 import { nodeSql } from "../relay/wager/src/node.ts";
 import { fsLevels } from "../relay/wager/src/fsLevels.ts";
 import { Sims, type DistrictSim } from "../relay/wager/src/sims.ts";
@@ -357,6 +379,10 @@ export async function roomHarness(o: {
   stake?: bigint; district?: string;
   /** A fixed relay secret (a deterministic series; the tests' players pick fixed shares too). */
   secret?: Hex;
+  /** The players' lobby IPs at pairing. */
+  ips?: [string[], string[]];
+  /** The room's REFEREE_KEY and REFEREE_KEY_PREV, given the key the match locked under (default: that key, no previous one). */
+  keys?: (lockedUnder: LocalAccount) => { referee: LocalAccount | null; refereePrev?: LocalAccount | null };
 } = {}) {
   const clock = new FakeClock();
   const fv = new FakeVault(() => Math.floor(clock.now() / 1000));
@@ -368,13 +394,18 @@ export async function roomHarness(o: {
   fv.deposit(a.address, 10n * stake);
   fv.deposit(b.address, 10n * stake);
   const sim = (await SIMS.district(o.district ?? "downtown"))!;
-  const matchId = random32();
+  const matchId = newMatchId(a.address);
   const m = fv.forceLock({ matchId, a: a.address, b: b.address, stake, rules: sim.rulesHash, roundSeconds: o.roundSeconds ?? 20 });
   const calls = { updates: [] as SeriesUpdate[], settles: [] as SettleRequest[], settleErrors: [] as string[] };
+  /** The IPs the lobby saw for A and B when it paired them (tests set them to probe the copied-key hold). */
+  const pairedIps: [string[], string[]] = o.ips ?? [[], []];
+  /** The matches "the lobby" paired (a room only seats those). */
+  const pairs = new Map<string, { players: [Address, Address]; ips: [string[], string[]] }>([[matchId.toLowerCase(), { players: [a.address, b.address], ips: pairedIps }]]);
   const relayerAddr = newAccount().address;
   let room: WagerRoomCore | null = null;
   const lobby: LobbyLink = {
     card: async p => card(p),
+    paired: async id => pairs.get(id.toLowerCase()) ?? null,
     update: async u => { calls.updates.push(u); },
     settle: async s => {
       calls.settles.push(s);
@@ -385,18 +416,22 @@ export async function roomHarness(o: {
   };
   const src = typeof o.radbro === "function" ? o.radbro(a.address, b.address) : (o.radbro ?? new MockRadbroSource(new Map()));
   const radbro = new RadbroReader({ src, now: () => clock.now(), cacheMs: 600_000 });
+  const keys = o.keys ? o.keys(referee) : { referee, refereePrev: null };
   const mk = () => new WagerRoomCore({
-    matchId, clock, sql, settings, chain: fv, sims: SIMS, radbro, referee, lobby, build: "test", judge: o.judge, ...(o.secret ? { random32: () => o.secret! } : {}),
+    matchId, clock, sql, settings, chain: fv, sims: SIMS, radbro, referee: keys.referee, refereePrev: keys.refereePrev ?? null, lobby, build: "test", judge: o.judge,
+    ...(o.secret ? { random32: () => o.secret! } : {}),
   });
   const sql = nodeSql();
   room = mk();
-  await room.init({ match: m, lockTx: null, cards: [card(a.address), card(b.address)] });
+  await room.init({ match: m, lockTx: null, cards: [card(a.address), card(b.address)], ips: pairedIps });
   const h = {
     clock, fv, a, b, matchId, sim, settings, calls, referee, stake,
     get room() { return room!; },
+    /** Mark another match as paired by the lobby (A and B by default). */
+    pair(id: Hex, players: [Address, Address] = [a.address, b.address]) { pairs.set(id.toLowerCase(), { players, ips: [[], []] }); },
     /** A new instance over the same storage (a Durable Object restart). */
     restart() { room = mk(); return room; },
-    client: (leg = 10) => new RoomClient(room!, clock, sim, matchId, fv, leg),
+    client: (leg = 10, ip = "") => new RoomClient(room!, clock, sim, matchId, fv, leg, ip),
   };
   return h;
 }
@@ -418,7 +453,7 @@ export class RoomClient {
   /** Stop delivering (a dead connection that has not closed yet). */
   mute = false;
 
-  constructor(room: WagerRoomCore, clock: FakeClock, sim: DistrictSim, matchId: Hex, fv: FakeVault, leg: number) {
+  constructor(room: WagerRoomCore, clock: FakeClock, sim: DistrictSim, matchId: Hex, fv: FakeVault, leg: number, ip = "") {
     this.clock = clock;
     this.sim = sim;
     this.matchId = matchId;
@@ -428,7 +463,7 @@ export class RoomClient {
       send: d => this.later(() => this.deliver(d)),
       // A close from the relay arrives after what it sent before it.
       close: (_c, r) => this.later(() => { if (!this.closed) { this.closed = r ?? "closed"; this.h.close(); } }),
-    }, "http://relay.test");
+    }, "http://relay.test", ip);
   }
 
   private later(fn: () => void): void {

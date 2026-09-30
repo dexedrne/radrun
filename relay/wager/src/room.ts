@@ -7,8 +7,9 @@
 // a void: nobody pays). Each round the relay measures both round trips itself, starts the round on its clock, releases
 // inputs sealed (referee.ts), fills missed deadlines and steps the canonical match; the referee's replay is the only
 // result. A disconnect after round 1 has started gets a grace, then forfeits the series. At the end the series log is
-// stored (GET /log/<id>), flags against the winner hold it for the owner's review, and otherwise the referee signs the
-// Result and the lobby's relayer submits settle.
+// stored (GET /log/<id>), flags against the winner hold it for the owner's review (so does a win by forfeit or over an
+// idle loser whose seat looked like a copied session key), and otherwise the referee the match locked under signs the
+// Result and the lobby's relayer submits settle. A room only seats a match the lobby paired.
 import { hashTypedData, type Address, type Hex } from "viem";
 import { MSG_INPUT, MSG_PING, NET_VERSION, decodeInput, decodePing, encodeAck, encodeFill, encodeJson, encodePong, encodeRelayInput } from "../../../src/net/wire.ts";
 import { inputDelayFor } from "../../src/room.ts";
@@ -54,12 +55,14 @@ export type SettleRequest = { matchId: Hex; players: [Address, Address]; stake: 
 /** What a room needs from the lobby (the WagerLobby DO over internal requests, or a direct call in Node). */
 export type LobbyLink = {
   card(a: Address): Promise<PlayerCard>;
+  /** The two players the lobby paired for this match and their lobby IPs then (null: the lobby never paired it). */
+  paired(matchId: Hex): Promise<{ players: [Address, Address]; ips: [string[], string[]] } | null>;
   update(u: SeriesUpdate): Promise<void>;
   /** Submit settle(result, sig) through the relayer; the lobby calls settled() back once it is confirmed. */
   settle(req: SettleRequest): Promise<void>;
 };
 
-export type RoomInit = { match: ChainMatch; lockTx: Hex | null; cards?: [PlayerCard, PlayerCard] };
+export type RoomInit = { match: ChainMatch; lockTx: Hex | null; cards?: [PlayerCard, PlayerCard]; ips?: [string[], string[]] };
 
 export type RoomDeps = {
   matchId: Hex;
@@ -70,6 +73,8 @@ export type RoomDeps = {
   sims: Sims;
   radbro: RadbroReader;
   referee: RefereeSigner | null;
+  /** After a referee rotation: the previous key, for the matches that locked under it (REFEREE_KEY_PREV). */
+  refereePrev?: RefereeSigner | null;
   lobby: LobbyLink;
   /** The build this relay bundles (logged with every series). */
   build: string;
@@ -119,10 +124,17 @@ type Persist = {
   settleTx: Hex | null;
   /** Why the relay could not referee (never set on a playable series). */
   error: string | null;
+  /** Per side: the IPs of the player's lobby sockets when the lobby paired them, and the IPs of their room logins. */
+  ips: [string[], string[]];
+  seen: [string[], string[]];
+  /** Per side: a session-key login from an IP the player's lobby sockets hadn't used (what a copied key looks like). */
+  sessionNewIp: [boolean, boolean];
 };
 
 type Conn = {
   sock: Sock;
+  /** The socket's IP as the Worker saw it ("" when unknown). */
+  ip: string;
   hello: boolean;
   ch: Challenge | null;
   player: Address | null;
@@ -189,6 +201,9 @@ export class WagerRoomCore {
     try { row = sql.exec("SELECT json FROM series WHERE id = 1")[0]; } catch { /* no series table: nothing here yet */ }
     if (row) {
       this.p = JSON.parse(String(row.json)) as Persist;
+      this.p.ips ??= [[], []];
+      this.p.seen ??= [[], []];
+      this.p.sessionNewIp ??= [false, false];
       this.rounds = sql.exec("SELECT json FROM rounds ORDER BY round").map(r => JSON.parse(String(r.json)) as RoundLog);
     }
   }
@@ -225,7 +240,7 @@ export class WagerRoomCore {
         if (!this.p.lockTx && o.lockTx) { this.p.lockTx = o.lockTx; this.save(); }
         return this.sim ? !this.p.error : this.resume();
       }
-      return this.initFrom(o.match, o.lockTx, o.cards);
+      return this.initFrom(o.match, o.lockTx, o.cards, o.ips);
     });
   }
 
@@ -241,7 +256,11 @@ export class WagerRoomCore {
       if (this.notLockedAt !== null && now - this.notLockedAt < 3_000) return false;
       const m = await this.d.chain.matchOf(this.matchId);
       if (m.state !== MS_LOCKED) { this.notLockedAt = now; return false; }
-      return this.initFrom(m, null);
+      // Only a match the lobby paired gets a room: a lock submitted straight to the vault with Entries the lobby never
+      // vetted (a copied session key's, say) is refereed by nobody, and the settle window refunds it.
+      const pr = await this.d.lobby.paired(this.matchId).catch(() => null);
+      if (!pr || !sameAddr(pr.players[0], m.playerA) || !sameAddr(pr.players[1], m.playerB)) { this.notLockedAt = now; return false; }
+      return this.initFrom(m, null, undefined, pr.ips);
     });
   }
 
@@ -275,7 +294,7 @@ export class WagerRoomCore {
     return !p.error;
   }
 
-  private async initFrom(m: ChainMatch, lockTx: Hex | null, cards?: [PlayerCard, PlayerCard]): Promise<boolean> {
+  private async initFrom(m: ChainMatch, lockTx: Hex | null, cards?: [PlayerCard, PlayerCard], ips?: [string[], string[]]): Promise<boolean> {
     if (m.state !== MS_LOCKED) return false;
     const sim = await this.d.sims.byRules(m.rules);
     if (!sim) {
@@ -294,7 +313,7 @@ export class WagerRoomCore {
       lockedAt: m.lockedAt, lockTx, relaySecret: secret, seedCommit: seedCommit(secret), shares: [null, null], picks: [null, null], cards,
       joinDeadline: Math.max(m.lockedAt * 1000 + this.T.joinGraceMs, now + 20_000), phase: "waiting", round: 1, winners: [], seed1: null,
       started: false, deadlineAt: null, metrics: [emptyMetrics(), emptyMetrics()], flags: [], outcome: null, held: false, logHash: null,
-      settlement: null, settleTx: null, error: null,
+      settlement: null, settleTx: null, error: null, ips: ips ?? [[], []], seen: [[], []], sessionNewIp: [false, false],
     };
     this.save();
     this.update();
@@ -334,8 +353,8 @@ export class WagerRoomCore {
   }
 
   /** A socket opened on this room (after the Worker's origin and region checks). */
-  open(sock: Sock, relayBase: string): { message: (data: string | ArrayBuffer | Uint8Array) => void; close: () => void } {
-    const c: Conn = { sock, hello: false, ch: null, player: null, side: null, bucket: { credit: WAGER_LIMITS.msgBurst, at: this.d.clock.now() }, busy: false, queue: [], closed: false, lastAck: 0 };
+  open(sock: Sock, relayBase: string, ip = ""): { message: (data: string | ArrayBuffer | Uint8Array) => void; close: () => void } {
+    const c: Conn = { sock, ip, hello: false, ch: null, player: null, side: null, bucket: { credit: WAGER_LIMITS.msgBurst, at: this.d.clock.now() }, busy: false, queue: [], closed: false, lastAck: 0 };
     this.conns.add(c);
     const handle = (data: string | ArrayBuffer | Uint8Array) => {
       if (c.closed) return;
@@ -408,9 +427,23 @@ export class WagerRoomCore {
     const r = await checkLogin(this.d.chain, ch, m, this.d.clock.now());
     if (!r.ok) { this.error(c, "auth", r.why, true); return; }
     const p = this.p!;
-    const side = sameAddr(r.player, p.players[0]) ? 0 : sameAddr(r.player, p.players[1]) ? 1 : -1;
-    if (side < 0) { this.error(c, "full", "you are not a player in this match", true); return; }
-    this.seat(c, side as Side, r.player);
+    const found = sameAddr(r.player, p.players[0]) ? 0 : sameAddr(r.player, p.players[1]) ? 1 : -1;
+    if (found < 0) { this.error(c, "full", "you are not a player in this match", true); return; }
+    const side = found as Side;
+    // A session key alone never takes a live seat from another connection: that is what a copied key would do. The
+    // wallet can (a player moving to another device).
+    const cur = this.seats[side];
+    if (r.by === "session" && cur && cur !== c && !cur.closed && cur.ip !== c.ip) {
+      this.error(c, "forbidden", "your seat is in use from another connection: sign in with your wallet to take it over", true);
+      return;
+    }
+    if (c.ip) {
+      const seen = p.seen[side], known = p.ips[side];
+      if (!seen.includes(c.ip) && seen.length < 8) seen.push(c.ip);
+      if (r.by === "session" && known.length && !known.includes(c.ip)) p.sessionNewIp[side] = true;
+      this.save();
+    }
+    this.seat(c, side, r.player);
   }
 
   private seat(c: Conn, side: Side, player: Address): void {
@@ -893,7 +926,9 @@ export class WagerRoomCore {
       p.outcome = outcome;
       p.deadlineAt = null;
       const w = outcome.kind === "win" ? outcome.winner : null;
-      p.held = this.d.settings.holdOnFlags && w !== null && p.flags.some(f => f.side === w || f.kind === "result-mismatch");
+      const key = w !== null ? this.copiedKey(w, outcome) : null;
+      if (key) p.flags = mergeFlags(p.flags, [key]);
+      p.held = this.d.settings.holdOnFlags && w !== null && (!!key || p.flags.some(f => f.side === w || f.kind === "result-mismatch"));
       p.phase = p.held ? "held" : "deciding";
       p.logHash = await this.storeLog();
       this.save();
@@ -907,10 +942,36 @@ export class WagerRoomCore {
     if (!p.held) await this.sign();
   }
 
+  /**
+   * What a copied session key looks like (docs/WAGER.md §2, §6.3): the winner won by the loser's forfeit or against a
+   * loser who idled, and the loser's seat signed in with the session key from an IP their lobby sockets hadn't used, or
+   * both seats came from one IP. A flag on the loser that holds the series for review (a real loss just waits a little).
+   */
+  private copiedKey(w: Side, o: SeriesOutcome): Flag | null {
+    const p = this.p!, l = (1 - w) as Side;
+    const m = p.metrics[l];
+    const idle = o.reason === "forfeit" || (m.steps > 0 && (m.intervals.length < 2 || m.fills * 2 > m.steps));
+    if (!idle) return null;
+    const shared = p.seen[0].some(ip => p.seen[1].includes(ip)) || p.ips[0].some(ip => p.ips[1].includes(ip));
+    if (!p.sessionNewIp[l] && !shared) return null;
+    const note = p.sessionNewIp[l] ? "a session-key sign-in from a new IP, then a forfeit or idle play" : "both seats on one IP, then a forfeit or idle play";
+    return { side: l, kind: "session-key", round: o.forfeit?.round ?? Math.max(1, p.round - 1), value: 1, limit: 0, note };
+  }
+
+  /** The key of the referee this match locked under (a rotation keeps the old key as REFEREE_KEY_PREV until its matches close). */
+  private async signer(): Promise<RefereeSigner | null> {
+    const cands = [this.d.referee, this.d.refereePrev].filter((x): x is RefereeSigner => !!x);
+    if (!cands.length) return null;
+    let of: Address | null = null;
+    try { of = await this.d.chain.refereeOf(this.matchId); } catch (e) { this.log(`refereeOf failed: ${String(e)}`); }
+    if (of === null) return cands[0];
+    return cands.find(x => sameAddr(x.address, of)) ?? null;
+  }
+
   private async sign(): Promise<void> {
     const p = this.p!, o = p.outcome!;
-    const ref = this.d.referee;
-    if (!ref) { this.log("no referee key: cannot sign (the settle window refunds)"); return; }
+    const ref = await this.signer();
+    if (!ref) { this.log("no key of the referee this match locked under: cannot sign (the settle window refunds)"); return; }
     let result: Result = { matchId: this.matchId, outcome: OUTCOME_VOID, winner: ZERO, feeBps: 0, logHash: p.logHash! };
     if (o.kind === "win" && o.winner !== null) {
       const winner = p.players[o.winner];

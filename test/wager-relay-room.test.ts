@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Hex } from "viem";
 import { MSG_FILL, MSG_INPUT_OUT, decodeFill, decodeRelayInput, encodeInput } from "../src/net/wire.ts";
-import { REVIEW_SETTLE, REVIEW_VOID, random32, reviewTypedData } from "../src/wager/eip712.ts";
+import { REVIEW_SETTLE, REVIEW_VOID, newMatchId, random32, reviewTypedData } from "../src/wager/eip712.ts";
 import { gunzipSync as gunzipBuf } from "node:zlib";
 import { firstHolderSlot, seriesLogHash, type RoundResult, type SeriesLog } from "../src/wager/log.ts";
 import { WAGER_PROTOCOL, type WagerStartMsg } from "../src/wager/protocol.ts";
@@ -328,9 +328,86 @@ test("a relay restart between rounds: both back within the grace, the series goe
   assert.deepEqual(a2.last("outcome")?.outcome, { kind: "win", winner: 0, reason: "played", score: [2, 0] });
 });
 
+test("a copied session key: it never takes a live seat from another connection; a forfeit after it signs in from a new IP is held", async () => {
+  const h = await roomHarness({ ips: [["10.0.0.1"], ["10.0.0.2"]] });
+  const key = newAccount();
+  h.fv.setSession(h.a.address, key.address, 10n ** 20n, 10n ** 21n, Math.floor(h.clock.now() / 1000) + 3600);
+  const ca = h.client(10, "10.0.0.1"), cb = h.client(10, "10.0.0.2");
+  await ca.login(h.a, "session", key);
+  assert.equal(ca.last("series")?.state.you, 0);
+  // The same key from somewhere else while the seat is live: refused, and the seat stays.
+  const thief = h.client(10, "10.9.9.9");
+  await thief.login(h.a, "session", key);
+  assert.equal(thief.last("error")?.code, "forbidden");
+  assert.equal(ca.closed, null);
+  // The wallet can move the seat (a player changing device).
+  const moved = h.client(10, "10.0.0.7");
+  await moved.login(h.a);
+  assert.equal(moved.last("series")?.state.you, 0);
+  assert.ok(ca.closed, "the old socket was replaced");
+  moved.close();
+  // With the seat empty the key gets in, but the room remembers where it signed in from.
+  const t2 = h.client(10, "10.9.9.9");
+  await t2.login(h.a, "session", key);
+  assert.equal(t2.last("series")?.state.you, 0);
+  await cb.login(h.b);
+  for (const c of [t2, cb]) {
+    c.sendJson({ t: "pick", radbro: "652", own: null });
+    c.sendJson({ t: "seed", share: random32() });
+    c.sendJson({ t: "ready" });
+  }
+  await t2.until(() => t2.last("start") && cb.last("start"));
+  const st = t2.last("start")!;
+  h.clock.tick(st.startAtMs - h.clock.now() + 100);
+  // ...and throws the series by leaving.
+  t2.close();
+  await idleUntil(cb, () => cb.last("outcome"), 30_000);
+  const out = cb.last("outcome")!;
+  assert.deepEqual([out.outcome.kind, out.outcome.winner, out.outcome.reason], ["win", 1, "forfeit"]);
+  assert.equal(out.held, true, "held for review instead of paying the thief's partner");
+  assert.ok(out.flags.some(f => f.kind === "session-key" && f.side === 0));
+  await flush();
+  assert.equal(h.calls.settles.length, 0);
+  assert.equal(h.room.phase, "held");
+});
+
+test("both seats on one IP and a loser who never plays: held; from two IPs there is no copied-key signal", async () => {
+  for (const shared of [true, false]) {
+    const h = await roomHarness({ judge: win(1) });
+    const ca = h.client(10, "10.0.0.5"), cb = h.client(10, shared ? "10.0.0.5" : "10.0.0.6");
+    await readyUp(h, ca, cb);
+    await idleUntil(cb, () => cb.last("outcome"), 120_000);
+    const out = cb.last("outcome")!;
+    assert.deepEqual([out.outcome.kind, out.outcome.winner, out.outcome.reason], ["win", 1, "played"]);
+    // (Both idle bots also draw late-input flags; only the copied-key signal is looked at here.)
+    assert.equal(out.flags.some(f => f.kind === "session-key" && f.side === 0), shared, shared ? "one IP, and A idled" : "apart: no copied-key signal");
+    if (shared) assert.equal(out.held, true);
+  }
+});
+
+test("a referee rotation: a live match is signed with the key it locked under (REFEREE_KEY_PREV), never the new one", async () => {
+  for (const prev of [true, false]) {
+    const next = newAccount();
+    const h = await roomHarness({ judge: win(0), vars: { HOLD_ON_FLAGS: "0" }, keys: old => ({ referee: next, refereePrev: prev ? old : null }) });
+    h.fv.referee = next.address; // rotated after the lock
+    const ca = h.client(), cb = h.client();
+    await readyUp(h, ca, cb);
+    if (prev) {
+      await idleUntil(ca, () => ca.last("settled"), 120_000);
+      assert.equal(h.calls.settleErrors.length, 0);
+      assert.equal(h.room.phase, "settled");
+    } else {
+      await idleUntil(ca, () => ca.last("outcome"), 120_000);
+      await eventually(() => true, h.clock);
+      assert.equal(ca.last("settlement"), undefined, "no key of the match's referee: nothing is signed (the settle window refunds)");
+      assert.equal(h.calls.settles.length, 0);
+    }
+  }
+});
+
 test("a Result the vault won't take is retried until settleBy, then left to refundExpired", async () => {
   const h = await roomHarness({ judge: win(0), vars: { HOLD_ON_FLAGS: "0" } });
-  h.fv.referee = newAccount().address; // the vault's referee was rotated: this relay's signature is refused
+  h.fv.settleFails = "BadResult()"; // the vault refuses this Result, whatever the reason
   const ca = h.client(), cb = h.client();
   await readyUp(h, ca, cb);
   await idleUntil(ca, () => ca.last("settlement"), 120_000);
@@ -365,7 +442,7 @@ test("a room for an id that never locked writes nothing (no storage for stranger
   const room = new WagerRoomCore({
     matchId: random32(), clock: h.clock, sql, settings: h.settings, chain: h.fv, sims: SIMS, build: "test", referee: null,
     radbro: new RadbroReader({ src: new MockRadbroSource(new Map()), now: () => h.clock.now(), cacheMs: 1 }),
-    lobby: { card: async a => card(a), update: async () => {}, settle: async () => {} },
+    lobby: { card: async a => card(a), paired: async () => null, update: async () => {}, settle: async () => {} },
   });
   assert.equal(room.logGz(), null);
   assert.equal(room.status(), null);
@@ -411,13 +488,17 @@ test("picks: an own Radbro must be owned on Ethereum; a rigged one plays as its 
 test("a player who arrives before the lock confirms is let in once it has (no stale 'not locked')", async () => {
   const h = await roomHarness();
   // A fresh room for a match that is not locked yet.
-  const id = random32();
+  const id = newMatchId(h.a.address);
   const fresh = new (h.room.constructor as typeof import("../relay/wager/src/room.ts").WagerRoomCore)({
     ...(h.room as unknown as { d: import("../relay/wager/src/room.ts").RoomDeps }).d, matchId: id, sql: (await import("../relay/wager/src/node.ts")).nodeSql(),
   });
   assert.equal(await fresh.ensure(), false);
   h.fv.forceLock({ matchId: id, a: h.a.address, b: h.b.address, stake: h.stake, rules: h.sim.rulesHash, roundSeconds: 20 });
   assert.equal(await fresh.ensure(), false, "remembered for a moment");
+  h.clock.tick(3_001);
+  // Locked on chain, but not a pairing the lobby made (Entries submitted straight to the vault): no room.
+  assert.equal(await fresh.ensure(), false, "a lock the lobby never paired gets no room");
+  h.pair(id);
   h.clock.tick(3_001);
   assert.equal(await fresh.ensure(), true);
   assert.equal(fresh.phase, "waiting");

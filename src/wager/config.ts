@@ -84,6 +84,7 @@ export const WAGER_ENV = {
     },
     secrets: {
       refereeKey: "REFEREE_KEY", // signs Results only; never holds funds
+      refereeKeyPrev: "REFEREE_KEY_PREV", // after a referee rotation: the old key, for the matches locked under it
       relayerKey: "RELAYER_KEY", // pays gas for openSession / lock / settle; holds only gas ETH
       faucetKey: "FAUCET_KEY", // test networks only: holds test ETH + test tokens
       rpcUrlPrivate: "RPC_URL_PRIVATE", // optional keyed RPC (e.g. Alchemy) used before the public list

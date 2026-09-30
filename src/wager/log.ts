@@ -25,7 +25,9 @@ export type OutcomeReason =
   | "review" // the owner's review voided a held series
   | "error"; // the relay could not finish the series (its own fault): void
 
-export type FlagKind = "reaction" | "aim" | "periodic" | "late-inputs" | "desync" | "result-mismatch" | "rtt";
+export type FlagKind = "reaction" | "aim" | "periodic" | "late-inputs" | "desync" | "result-mismatch" | "rtt"
+  /** On the loser: a win by forfeit or over idle play, after a session-key sign-in from a new IP or both seats on one IP. */
+  | "session-key";
 /** An anti-cheat signal (docs/WAGER.md §6.2). Informational; not in the log hash. */
 export type Flag = { side: Side; kind: FlagKind; round: number; value: number; limit: number; note?: string };
 

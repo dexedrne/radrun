@@ -7,7 +7,7 @@
 // origins, the x-dev-country header, DEV_RADBRO_* mocks), and on the local net FAUCET to "1" and ROUND_SECONDS to
 // "20,60,90,120". The deployment comes from src/wager/deployments.json, read at
 // startup, so a local deploy that just wrote it is picked up.
-// Keys (REFEREE_KEY, RELAYER_KEY, FAUCET_KEY): --keys FILE (KEY=VALUE lines; refused unless its mode is 0600), else the
+// Keys (REFEREE_KEY, RELAYER_KEY, FAUCET_KEY, and REFEREE_KEY_PREV after a rotation): --keys FILE (KEY=VALUE lines; refused unless its mode is 0600), else the
 // same names in the environment, else --anvil (anvil's public dev accounts, as the local deploy assigns them: referee #8,
 // relayer #9, faucet #6; the local anvil only). Keys are never printed.
 import fs from "node:fs";
@@ -54,11 +54,11 @@ async function main() {
   }
   const table = JSON.parse(fs.readFileSync(new URL("../../src/wager/deployments.json", import.meta.url), "utf8")) as Record<string, Partial<Deployment>>;
   const settings = parseSettings(vars, table[net]);
-  let keys: Keys = { referee: vars.REFEREE_KEY, relayer: vars.RELAYER_KEY, faucet: vars.FAUCET_KEY };
+  let keys: Keys = { referee: vars.REFEREE_KEY, refereePrev: vars.REFEREE_KEY_PREV, relayer: vars.RELAYER_KEY, faucet: vars.FAUCET_KEY };
   const keyFile = opt("--keys") ?? (fs.existsSync(path.join(os.homedir(), ".config/radrun-wager", `${net}.env`)) && !flag("--anvil") ? path.join(os.homedir(), ".config/radrun-wager", `${net}.env`) : undefined);
   if (keyFile) {
     const f = readKeyFile(keyFile);
-    keys = { referee: f.REFEREE_KEY ?? keys.referee, relayer: f.RELAYER_KEY ?? keys.relayer, faucet: f.FAUCET_KEY ?? keys.faucet };
+    keys = { referee: f.REFEREE_KEY ?? keys.referee, refereePrev: f.REFEREE_KEY_PREV ?? keys.refereePrev, relayer: f.RELAYER_KEY ?? keys.relayer, faucet: f.FAUCET_KEY ?? keys.faucet };
   } else if (flag("--anvil")) {
     if (settings.chainId !== 31337) throw new Error("--anvil keys are for the local anvil only");
     keys = { referee: anvilKey(8), relayer: anvilKey(9), faucet: anvilKey(6) };

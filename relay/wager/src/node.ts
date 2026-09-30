@@ -84,8 +84,9 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
     if (!r) {
       r = new WagerRoomCore({
         matchId: id, clock, sql: sqlFor(`room-${id.slice(2, 18)}`), settings: s, chain: sv.chain, sims: sv.sims,
-        radbro: new RadbroReader({ src: sv.radbroSrc, now: () => clock.now(), cacheMs: s.radbro.cacheMs }), referee: sv.referee, build: o.build ?? "dev", log,
-        lobby: { card: a => lobby.card(a), update: u => lobby.update(u), settle: x => lobby.settle(x) },
+        radbro: new RadbroReader({ src: sv.radbroSrc, now: () => clock.now(), cacheMs: s.radbro.cacheMs }), referee: sv.referee, refereePrev: sv.refereePrev,
+        build: o.build ?? "dev", log,
+        lobby: { card: a => lobby.card(a), paired: async x => lobby.paired(x), update: u => lobby.update(u), settle: x => lobby.settle(x) },
       });
       rooms.set(id, r);
     }
@@ -150,7 +151,7 @@ export async function startNodeRelay(o: NodeRelayOptions): Promise<NodeRelay> {
         ws.on("close", () => { conns.delete(c); lobby.close(c); });
         return;
       }
-      const h = room(route.matchId).open({ send: d => ws.send(d), close: (code, r) => ws.close(code ?? 1000, r ?? "") }, m.relayBase);
+      const h = room(route.matchId).open({ send: d => ws.send(d), close: (code, r) => ws.close(code ?? 1000, r ?? "") }, m.relayBase, m.ip);
       ws.on("message", (data: Buffer, isBinary: boolean) => h.message(isBinary ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : data.toString("utf8")));
       ws.on("close", () => h.close());
     });

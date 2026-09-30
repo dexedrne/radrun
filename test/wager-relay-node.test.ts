@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { loginTypedData, random32 } from "../src/wager/eip712.ts";
+import { loginTypedData, newMatchId, random32 } from "../src/wager/eip712.ts";
 import { WAGER_PROTOCOL, type LobbyServerMsg, type MatchStatus, type PlayerCard, type RelayConfig, type RoomServerMsg } from "../src/wager/protocol.ts";
 import { NET_VERSION } from "../src/net/wire.ts";
 import { startNodeRelay } from "../relay/wager/src/node.ts";
@@ -79,8 +79,17 @@ test("the Node stand-in: routes, sockets, logins, gates, faucet and the public l
     fv.deposit(a.address, 10n ** 21n);
     fv.deposit(b.address, 10n ** 21n);
     const sim = (await SIMS.district("downtown"))!;
-    const id = random32();
+    const id = newMatchId(a.address);
     fv.forceLock({ matchId: id, a: a.address, b: b.address, stake: 10n ** 20n, rules: sim.rulesHash, roundSeconds: 20 });
+    // A lock the lobby never paired gets no room (the vault would take Entries the lobby never vetted).
+    const stray = await open(`${base.replace("http", "ws")}/ws?room=${id}`);
+    stray.ws.send(JSON.stringify({ t: "hello", v: WAGER_PROTOCOL, matchId: id, compat: { v: NET_VERSION, build: "t", link: 0, city: sim.compat.city, tuning: sim.compat.tuning } }));
+    await eventually(() => lastOf(stray, "error") || stray.closed);
+    assert.equal((lastOf(stray, "error") as Extract<RoomServerMsg, { t: "error" }> | undefined)?.code, "gone");
+    // The lobby's pairing row, as its join would have written it.
+    r.lobby["d"].sql.exec("INSERT INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, 'locked', ?, ?, ?, NULL, NULL, NULL, '{}')",
+      id, a.address.toLowerCase(), b.address.toLowerCase(), (10n ** 20n).toString());
+    await new Promise(res => setTimeout(res, 3_100)); // the room remembers "not locked here" for 3 s
     const room = await open(`${base.replace("http", "ws")}/ws?room=${id}`);
     room.ws.send(JSON.stringify({ t: "hello", v: WAGER_PROTOCOL, matchId: id, compat: { v: NET_VERSION, build: "t", link: 0, city: sim.compat.city, tuning: sim.compat.tuning } }));
     await eventually(() => lastOf(room, "challenge"));

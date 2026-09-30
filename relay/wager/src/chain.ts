@@ -29,7 +29,7 @@ export type ChainMatch = {
   feeBps: number;
   holderFeeBps: number;
   roundSeconds: number;
-  /** MatchState: 0 None, 1 Locked, 2 Settled, 3 Voided. */
+  /** MatchState: 0 None, 1 Locked, 2 Settled, 3 Voided, 4 Cancelled. */
   state: number;
   playerB: Address;
   lockedAt: number;
@@ -51,6 +51,8 @@ export interface VaultChain {
   freeOf(player: Address): Promise<bigint>;
   sessionOf(player: Address): Promise<ChainSession>;
   matchOf(matchId: Hex): Promise<ChainMatch>;
+  /** The referee a match locked under: the only one whose Result it takes (ZERO if it never locked). */
+  refereeOf(matchId: Hex): Promise<Address>;
   /** Is `sig` the signature of `signer` over this EIP-712 digest (EOA, ERC-1271 or ERC-6492)? */
   verifyHash(signer: Address, digest: Hex, sig: Hex): Promise<boolean>;
   /** eth_call the transaction from `from`: null when it would succeed, else the revert reason. */
@@ -145,6 +147,10 @@ export class ViemChain implements VaultChain, TxRpc {
       stake: bigint; settleBy: bigint; rules: Hex;
     }>("matchOf", [matchId]);
     return { ...m, feeBps: Number(m.feeBps), holderFeeBps: Number(m.holderFeeBps), roundSeconds: Number(m.roundSeconds), state: Number(m.state), lockedAt: Number(m.lockedAt), settleBy: Number(m.settleBy) };
+  }
+
+  refereeOf(matchId: Hex): Promise<Address> {
+    return this.read<Address>("refereeOf", [matchId]);
   }
 
   async verifyHash(signer: Address, digest: Hex, sig: Hex): Promise<boolean> {

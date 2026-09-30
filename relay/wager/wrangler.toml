@@ -5,7 +5,7 @@
 # Local:   npm run wager:relay:worker   (wrangler 4.141.0 dev --env dev; or npm run wager:relay: Node, no Cloudflare tooling)
 # Deploy:  only after the vault is deployed (src/wager/deployments.json has its address), and never while series are
 #          live (GET /health answers "ok" with an x-wager-live header: deploy only when it is 0). From relay/wager:
-#            npx wrangler@4.141.0 secret put REFEREE_KEY --env ""      (and RELAYER_KEY, FAUCET_KEY; optionally RPC_URL_PRIVATE)
+#            npx wrangler@4.141.0 secret put REFEREE_KEY --env ""      (and RELAYER_KEY, FAUCET_KEY; optionally RPC_URL_PRIVATE; REFEREE_KEY_PREV after a referee rotation)
 #            npx wrangler@4.141.0 deploy --env "" --define __BUILD_ID__:'"<git short sha of the site build>"'
 #          (--env "" is the top level: the test network.) Mainnet ("send it" only): the same with --env main (Worker
 #          radrun-wager-relay-main, no faucet).

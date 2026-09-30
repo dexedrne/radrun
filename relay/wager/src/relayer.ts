@@ -1,6 +1,8 @@
 // The relayer queue (docs/WAGER.md §4.3): the only sender for its key, so nonces never collide. One transaction at a
 // time is estimated (which is also the last simulation: a revert costs nothing), signed locally and sent with the
 // next local nonce; receipts are polled every 250 ms for up to 30 s. Any send error resyncs the nonce from `pending`.
+// Each call has a gas limit: a player whose account is a contract (or an EIP-7702 delegate) decides what its ERC-1271
+// check costs, so the relayer only pays for bounded calls and the player submits anything above it.
 // The lobby runs one for RELAYER_KEY (openSession, lock, settle) and one for FAUCET_KEY on test networks.
 import type { Address, Hex } from "viem";
 import { revertReason, type Call, type Receipt, type TxRpc } from "./chain.ts";
@@ -17,6 +19,12 @@ export type TxOutcome = Receipt | { status: "timeout" };
 export type TxHandle = { hash: Hex; done: Promise<TxOutcome> };
 
 export class TxError extends Error {}
+
+/**
+ * Gas limits per call (docs/WAGER.md §4.3). A lock of two fresh sessions costs about 220k and a settle under 90k;
+ * the rest is room for ERC-1271 wallets. Above these the player sends the transaction from their own wallet.
+ */
+export const RELAYER_GAS = { session: 400_000n, lock: 400_000n, settle: 200_000n, faucet: 150_000n, default: 400_000n } as const;
 
 export class Relayer {
   readonly address: Address;
@@ -41,20 +49,24 @@ export class Relayer {
     this.timeoutMs = o.timeoutMs ?? 30_000;
   }
 
-  /** Queue a transaction. Resolves once it is sent (with its receipt promise); rejects (TxError) if it would revert or the send fails. */
-  submit(call: Call): Promise<TxHandle> {
-    const p = this.tail.then(() => this.sendOne(call));
+  /**
+   * Queue a transaction. Resolves once it is sent (with its receipt promise); rejects (TxError) if it would revert, needs
+   * more than `maxGas`, or the send fails.
+   */
+  submit(call: Call, maxGas: bigint = RELAYER_GAS.default): Promise<TxHandle> {
+    const p = this.tail.then(() => this.sendOne(call, maxGas));
     this.tail = p.catch(() => {});
     return p;
   }
 
-  private async sendOne(call: Call): Promise<TxHandle> {
+  private async sendOne(call: Call, maxGas: bigint): Promise<TxHandle> {
     let gas: bigint;
     try {
       gas = await this.rpc.estimateGas(this.address, call);
     } catch (e) {
       throw new TxError(revertReason(e));
     }
+    if (gas > maxGas) throw new TxError(`it needs ${gas} gas, above the relayer's limit of ${maxGas}: submit it yourself`);
     gas = (gas * 12n) / 10n + 10_000n;
     try {
       if (this.nonce === null) this.nonce = await this.rpc.nonce(this.address);

@@ -6,7 +6,7 @@
 //     Its sockets hibernate, so an idle lobby costs no duration.
 //   WagerRoom (idFromName(matchId)): one series (sockets, sealed inputs, deadlines, the referee, the log, signing).
 // Routes: src/wager/protocol.ts WAGER_ROUTES. Secrets: REFEREE_KEY, RELAYER_KEY, FAUCET_KEY (test networks),
-// RPC_URL_PRIVATE (optional). Vars: relay/wager/wrangler.toml.
+// RPC_URL_PRIVATE (optional), REFEREE_KEY_PREV (after a referee rotation). Vars: relay/wager/wrangler.toml.
 import type { Hex } from "viem";
 import { BUILD_ID } from "../../../src/net/build.ts";
 import { WAGER_LIMITS } from "../../../src/wager/protocol.ts";
@@ -32,7 +32,8 @@ function services(env: Env): Services {
   if (!svc) {
     const v = vars(env);
     svc = makeServices({
-      settings: parseSettings(v), levels: bundledLevels, keys: { referee: v.REFEREE_KEY, relayer: v.RELAYER_KEY, faucet: v.FAUCET_KEY }, log: m => console.log(m),
+      settings: parseSettings(v), levels: bundledLevels, keys: { referee: v.REFEREE_KEY, refereePrev: v.REFEREE_KEY_PREV, relayer: v.RELAYER_KEY, faucet: v.FAUCET_KEY },
+      log: m => console.log(m),
     });
   }
   return svc;
@@ -208,6 +209,11 @@ function lobbyLink(env: Env): LobbyLink {
   };
   return {
     card: async a => (await (await stub().fetch(`https://lobby/internal/card?a=${a}`)).json()) as Awaited<ReturnType<LobbyLink["card"]>>,
+    paired: async id => {
+      const r = await stub().fetch(`https://lobby/internal/paired?id=${id}`);
+      if (!r.ok) throw new Error(`lobby /internal/paired: ${r.status}`);
+      return (await r.json()) as Awaited<ReturnType<LobbyLink["paired"]>>;
+    },
     update: u => post("/internal/update", u),
     settle: s => post("/internal/settle", s),
   };
@@ -233,7 +239,8 @@ export class WagerRoom {
       const sv = services(this.env);
       this.core = new WagerRoomCore({
         matchId: normId(matchId), clock: realClock, sql: doSql(this.ctx), settings: sv.settings, chain: sv.chain, sims: sv.sims,
-        radbro: new RadbroReader({ src: sv.radbroSrc, now: Date.now, cacheMs: sv.settings.radbro.cacheMs }), referee: sv.referee, lobby: lobbyLink(this.env),
+        radbro: new RadbroReader({ src: sv.radbroSrc, now: Date.now, cacheMs: sv.settings.radbro.cacheMs }), referee: sv.referee, refereePrev: sv.refereePrev,
+        lobby: lobbyLink(this.env),
         build: BUILD_ID, log: m => console.log(m),
       });
     }
@@ -261,7 +268,7 @@ export class WagerRoom {
       server.accept();
       server.binaryType = "arraybuffer";
       const sock: Sock = { send: d => server.send(d), close: (c, r) => { try { server.close(c ?? 1000, r ?? ""); } catch { /* closed */ } } };
-      const h = core.open(sock, meta.relayBase);
+      const h = core.open(sock, meta.relayBase, meta.ip);
       server.addEventListener("message", e => {
         h.message(e.data);
         if (typeof e.data === "string") void this.arm();

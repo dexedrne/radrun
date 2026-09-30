@@ -132,6 +132,10 @@ export async function lobbyHttp(core: WagerLobbyCore, req: HttpReq, meta: Meta):
       const a = addr(req.url.searchParams.get("a"));
       return a ? jsonRes(200, await core.card(a)) : jsonRes(400, { error: "bad address" });
     }
+    if (p === "/internal/paired") {
+      const id = matchIdIn(req.url.searchParams.get("id"));
+      return id ? jsonRes(200, core.paired(id)) : jsonRes(400, { error: "bad match id" });
+    }
     if (p === "/internal/update") {
       const u = await body<SeriesUpdate>(req);
       if (!u) return jsonRes(400, { error: "bad update" });

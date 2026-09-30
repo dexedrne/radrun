@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Address, Hex, LocalAccount } from "viem";
 import {
-  entryFromJson, entryTypedData, loginTypedData, random32, resultTypedData, sessionAuthTypedData, type EntryJson,
+  entryFromJson, entryTypedData, loginTypedData, newMatchId, random32, resultTypedData, sessionAuthTypedData, type EntryJson,
 } from "../src/wager/eip712.ts";
 import { WAGER_PROTOCOL, type LobbyClientMsg, type LobbyServerMsg } from "../src/wager/protocol.ts";
 import { WagerLobbyCore, elo, type LobbyConn, type RoomLink } from "../relay/wager/src/lobby.ts";
@@ -20,7 +20,11 @@ import { FakeClock, FakeVault, SIMS, eventually, flush, newAccount } from "./wag
 const E18 = 10n ** 18n;
 const sim = (await SIMS.district("downtown"))!;
 
-type TConn = LobbyConn & { msgs: LobbyServerMsg[]; closed: string | null };
+/**
+ * A lobby socket. A creator's page answers `sign` by itself with `signer` (its session key), as the real page does, unless
+ * `onSign` says otherwise (null: say nothing; a string: refuse with that reason).
+ */
+type TConn = LobbyConn & { msgs: LobbyServerMsg[]; closed: string | null; signer?: LocalAccount; onSign?: (m: Extract<LobbyServerMsg, { t: "sign" }>) => Promise<Hex | string | null> };
 
 async function lobbyHarness(vars: Vars = {}) {
   const clock = new FakeClock();
@@ -55,7 +59,17 @@ async function lobbyHarness(vars: Vars = {}) {
   const conn = (ip = "10.0.0.1"): TConn => {
     const c: TConn = {
       state: { id: String(n++), ip, relay: "http://relay.test", hello: false, ch: null, player: null, credit: 180, creditAt: clock.now() },
-      send: d => c.msgs.push(JSON.parse(d) as LobbyServerMsg),
+      send: d => {
+        const m = JSON.parse(d) as LobbyServerMsg;
+        c.msgs.push(m);
+        if (m.t === "sign") {
+          void (async () => {
+            const r = c.onSign ? await c.onSign(m) : c.signer ? await c.signer.signTypedData(entryTypedData(fv.chainId, fv.vault, entryFromJson(m.entry))) : null;
+            if (r === null) return;
+            await lobby.message(c, JSON.stringify(r.startsWith("0x") ? { t: "signed", matchId: m.matchId, sig: r } : { t: "signed", matchId: m.matchId, sig: null, why: r }));
+          })();
+        }
+      },
       close: (_code, r) => { if (c.closed) return; c.closed = r ?? "closed"; conns.delete(c); lobby.close(c); },
       save: () => {}, msgs: [], closed: null,
     };
@@ -77,13 +91,14 @@ async function lobbyHarness(vars: Vars = {}) {
     fv.deposit(acct.address, o.deposit ?? 1000n * E18);
     fv.setSession(acct.address, key.address, o.keyMax ?? 500n * E18, o.keyCap ?? 5000n * E18, Math.floor(clock.now() / 1000) + 3 * 86_400);
     const c = conn(o.ip);
+    c.signer = key;
     await hello(c);
     await send(c, await loginMsg(c, acct.address, key, "session"));
     assert.equal(last(c, "welcome")?.you.address, acct.address);
     return { acct, key, c };
   };
   const entry = (o: Partial<EntryJson> & { player: Address }): EntryJson => ({
-    matchId: random32(), opponent: "0x0000000000000000000000000000000000000000", stake: (100n * E18).toString(), feeCapBps: 300, roundSeconds: 90,
+    matchId: newMatchId(o.player), opponent: "0x0000000000000000000000000000000000000000", stake: (100n * E18).toString(), feeCapBps: 300, roundSeconds: 90,
     rules: sim.rulesHash, deadline: Math.floor(clock.now() / 1000) + 1800, ...o,
   });
   const sign = (by: LocalAccount, e: EntryJson) => by.signTypedData(entryTypedData(fv.chainId, fv.vault, entryFromJson(e)));
@@ -325,6 +340,86 @@ test("join races: two joins that wait on the chain at the same time never put a 
   await flush();
   assert.equal([errOf(F.c), errOf(F2)].filter(x => x?.code === "busy").length, 1);
   assert.deepEqual(h.fv.sent, ["lock", "lock"]);
+});
+
+test("join: an open offer's signature never leaves the lobby; the creator signs a named Entry for the vetted joiner", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player(), C = await h.player(), D = await h.player();
+  const create = async (by: typeof A, o: Partial<EntryJson> = {}) => {
+    const e = h.entry({ player: by.acct.address, ...o });
+    const sig = await h.sign(by.key, e);
+    await h.send(by.c, { t: "create", entry: e, sig, listed: true });
+    return { e, sig };
+  };
+  const join = async (by: typeof A, a: EntryJson) => {
+    const b = h.entry({ player: by.acct.address, matchId: a.matchId, opponent: a.player });
+    const before = by.c.msgs.length;
+    await h.send(by.c, { t: "join", entry: b, sig: await h.sign(by.key, b) });
+    return by.c.msgs.slice(before);
+  };
+  // A match id is its creator's: an id that starts with someone else's address is refused before anything else.
+  const foreign = h.entry({ player: A.acct.address, matchId: newMatchId(B.acct.address) });
+  await h.send(A.c, { t: "create", entry: foreign, sig: await h.sign(A.key, foreign), listed: true });
+  assert.equal(errOf(A.c)?.code, "terms");
+  // The good path: A's page is asked to sign the offer's terms naming B, with a short deadline, and that pair locks.
+  const o1 = await create(A);
+  const offerSeen = h.last(C.c, "offer")!.offer;
+  assert.ok(!JSON.stringify(offerSeen).includes(o1.sig.slice(2)), "the open list never carries the creator's signature");
+  await join(B, o1.e);
+  const ask = h.last(A.c, "sign")!;
+  assert.equal(ask.matchId, o1.e.matchId);
+  assert.equal(ask.entry.opponent, B.acct.address);
+  assert.equal(ask.joiner.address, B.acct.address);
+  assert.ok(ask.entry.deadline <= Math.floor(h.clock.now() / 1000) + 300, "a named Entry lives a few minutes");
+  assert.deepEqual({ ...ask.entry, opponent: o1.e.opponent, deadline: o1.e.deadline }, o1.e, "otherwise the offer's exact terms");
+  await eventually(() => h.last(B.c, "locked"));
+  const matched = h.last(B.c, "matched")!;
+  assert.equal(matched.a.entry.opponent, B.acct.address, "the joiner gets the named Entry");
+  assert.notEqual(matched.a.sig, o1.sig, "never the open one");
+  for (const x of [A, B, C, D]) assert.ok(!x.c.msgs.some(m => JSON.stringify(m).includes(o1.sig.slice(2))), "nobody ever sees the open signature");
+  h.sql.exec("UPDATE matches SET state = 'settled'");
+  // A creator page that refuses, says nothing, or answers with a bad signature: the join fails, nothing is sent, the
+  // offer is withdrawn and nobody stays busy.
+  const sent = h.fv.sent.length;
+  C.c.onSign = async () => "those aren't my terms";
+  const o2 = await create(C);
+  assert.match((await join(D, o2.e)).find(m => m.t === "error")?.message ?? "", /didn't confirm/);
+  assert.equal(h.last(D.c, "unoffer")?.matchId, o2.e.matchId);
+  C.c.onSign = async () => null;
+  const o3 = await create(C);
+  const slow = join(D, o3.e);
+  await eventually(() => h.last(C.c, "sign")?.matchId === o3.e.matchId);
+  h.clock.tick(45_001);
+  assert.match((await slow).find(m => m.t === "error")?.message ?? "", /in time/);
+  C.c.onSign = async m => newAccount().signTypedData(entryTypedData(h.fv.chainId, h.fv.vault, entryFromJson(m.entry)));
+  const o4 = await create(C);
+  assert.match((await join(D, o4.e)).find(m => m.t === "error")?.message ?? "", /didn't check out/);
+  assert.equal(h.fv.sent.length, sent, "no transaction for any of them");
+  assert.equal(h.lobby.offerCount(), 0);
+  // A named invite already names its joiner: it locks with the Entry signed at create, no `sign` round.
+  C.c.onSign = async () => { throw new Error("a named invite needs no sign round"); };
+  const o5 = await create(C, { opponent: D.acct.address });
+  await join(D, o5.e);
+  await eventually(() => h.last(D.c, "locked")?.matchId === o5.e.matchId);
+  assert.equal(h.last(D.c, "matched")?.a.sig, o5.sig);
+});
+
+test("lock: an id that locked with other players is a failed lock, never 'it locked after all'; the relayer caps gas", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player(), X = await h.player();
+  const a = h.entry({ player: A.acct.address, opponent: B.acct.address });
+  await h.send(A.c, { t: "create", entry: a, sig: await h.sign(A.key, a), listed: false });
+  // Somebody else's pair took the id first (A signed it elsewhere with the wallet, say).
+  h.fv.forceLock({ matchId: a.matchId, a: A.acct.address, b: X.acct.address, stake: 100n * E18, rules: a.rules, roundSeconds: 90 });
+  const b = h.entry({ player: B.acct.address, matchId: a.matchId, opponent: A.acct.address });
+  await h.send(B.c, { t: "join", entry: b, sig: await h.sign(B.key, b) });
+  await eventually(() => errOf(B.c)?.code === "chain");
+  assert.match(errOf(B.c)!.message, /MatchExists/);
+  assert.equal(h.lobby.paired(a.matchId), null, "the pairing is gone");
+  assert.equal(h.lobby.live(), 0);
+  // Gas: a call estimated above the per-call limit is never sent (a contract wallet chooses what its check costs).
+  await assert.rejects(h.relayer.submit({ to: h.fv.token, data: `0xa9059cbb${"00".repeat(64)}` }, 50_000n), /limit/);
+  assert.equal(h.fv.sent.length, 0);
 });
 
 test("join: an offer its creator's session key no longer covers is withdrawn, not locked", async () => {

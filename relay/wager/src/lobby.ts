@@ -4,13 +4,15 @@
 // faucet on test networks.
 //
 // Offers are signed Entries held off-chain: creating one costs nothing, and every check a lock would make (terms,
-// signatures, session limits, balances, caps) is made before any transaction. A join pairs two Entries, the relayer
-// simulates and sends lock(), and the series room is initialised on the receipt. Records change only when a settle or
-// void is confirmed on-chain.
+// signatures, session limits, balances, caps) is made before any transaction. The creator's open Entry (opponent 0) is
+// never handed to anyone: whoever held it could pair it with an account the lobby never vetted. A join asks the
+// creator's page to sign a named Entry for the vetted joiner (`sign` / `signed`), the relayer simulates and sends
+// lock() with the two named Entries, and the series room is initialised on the receipt. Records change only when a
+// settle or void is confirmed on-chain.
 import { hashTypedData, recoverAddress, type Address, type Hex } from "viem";
 import { cleanName } from "../../../src/net/wire.ts";
 import {
-  capturedFees, entryDigest, entryFromJson, sessionAuthFromJson, sessionAuthTypedData, type Entry, type EntryJson, type SessionAuthJson,
+  capturedFees, entryDigest, entryFromJson, matchIdCreator, sessionAuthFromJson, sessionAuthTypedData, type Entry, type EntryJson, type SessionAuthJson,
 } from "../../../src/wager/eip712.ts";
 import type { SeriesOutcome } from "../../../src/wager/log.ts";
 import {
@@ -18,11 +20,11 @@ import {
   type RecentMatch, type RelayConfig, type SignedEntry, type TxKind, type WagerErrorCode,
 } from "../../../src/wager/protocol.ts";
 import { checkLogin, newChallenge, type Challenge } from "./auth.ts";
-import { MS_LOCKED, MS_NONE, MS_SETTLED, MS_VOIDED } from "./abi.ts";
+import { MS_CANCELLED, MS_LOCKED, MS_NONE, MS_SETTLED, MS_VOIDED } from "./abi.ts";
 import { ZERO, addr, errMsg, isHex32, isSig, normId, sameAddr, shortAddr, spend, type Clock, type Logger, type Sql } from "./base.ts";
 import { erc20Transfer, vaultCall, type Call, type ChainMatch, type VaultChain } from "./chain.ts";
 import type { RadbroReader } from "./radbro.ts";
-import type { Relayer, TxHandle } from "./relayer.ts";
+import { RELAYER_GAS, type Relayer, type TxHandle } from "./relayer.ts";
 import type { RoomInit, SeriesUpdate, SettleRequest } from "./room.ts";
 import { regionBlocked, type WagerSettings } from "./settings.ts";
 import type { Sims } from "./sims.ts";
@@ -81,6 +83,8 @@ type MatchRow = {
 };
 type MatchJson = {
   entries?: [SignedEntry, SignedEntry];
+  /** The IPs of both players' lobby sockets when they were paired (the room compares its logins with them). */
+  ips?: [string[], string[]];
   outcome?: SeriesOutcome;
   heldCounted?: boolean;
   recorded?: boolean;
@@ -106,6 +110,9 @@ const SESSION_TX_PER_IP = 20;
 const LOCK_MARGIN_S = 20;
 
 export const ELO = { start: 1200, k: 32 } as const;
+
+/** What the lobby knows of a match it paired (the room only seats a match the lobby paired: docs/WAGER.md §4.4). */
+export type Paired = { players: [Address, Address]; ips: [string[], string[]] };
 
 export function elo(winner: number, loser: number, k: number = ELO.k): [number, number] {
   const ew = 1 / (1 + 10 ** ((loser - winner) / 400));
@@ -143,6 +150,8 @@ export class WagerLobbyCore {
   /** Messages each socket has waiting (bounded: most wait on the chain, and the RPC's limits are everyone's). */
   private readonly depth = new Map<string, number>();
   private readonly settling = new Set<string>();
+  /** Joins waiting for their creator's named Entry (`sign` sent, `signed` not back yet), by match id. */
+  private readonly signing = new Map<string, { creator: Address; done: (sig: Hex | null, why?: string) => void }>();
 
   constructor(d: LobbyDeps) {
     this.d = d;
@@ -254,6 +263,7 @@ export class WagerLobbyCore {
       case "create": return this.create(c, m);
       case "cancel": return this.cancel(c, m.matchId);
       case "join": return this.join(c, m.entry, m.sig);
+      case "signed": return this.signed(c, m);
       case "hello": return;
       default: fail("bad", "unknown message");
     }
@@ -266,6 +276,7 @@ export class WagerLobbyCore {
     if (!p) return;
     if (this.d.connections().some(x => x !== c && x.state.id !== c.state.id && sameAddr(x.state.player, p))) return;
     for (const [id, rec] of this.offers) if (sameAddr(rec.offer.creator.address, p)) this.removeOffer(id, "creator-left");
+    for (const w of [...this.signing.values()]) if (sameAddr(w.creator, p)) w.done(null, "the creator left");
   }
 
   // ---- login and profile --------------------------------------------------------------------------------------------
@@ -376,7 +387,7 @@ export class WagerLobbyCore {
     then?: (ok: boolean, h: TxHandle | null, why: string) => Promise<void> | void): Promise<TxHandle | null> {
     let h: TxHandle;
     try {
-      h = await q.submit(call);
+      h = await q.submit(call, RELAYER_GAS[kind]);
     } catch (e) {
       const why = errMsg(e);
       notify({ t: "tx", kind, matchId, hash: null, status: "failed", error: why });
@@ -469,17 +480,16 @@ export class WagerLobbyCore {
   }
 
   /**
-   * The relay refuses what it could not settle or what would dodge the house fee. The vault captures
-   * min(houseFeeBps, capA, capB), so an Entry capped below the fee on show (0, say) would make the match fee-free:
-   * a creator's cap must cover the vault's house fee, and a joiner's the offer's fee. And only the vault's referee can
-   * sign a Result: with another key (or none) every stake would sit locked until the settle window refunds it.
+   * The relay refuses what the vault would refuse or what it could not settle. The vault reverts a lock while either
+   * Entry's fee cap is under its house fee (FeeAboveCap), so every Entry must cover the vault's fee now. And only the
+   * vault's referee can sign a Result: with another key (or none) every stake would sit locked until the settle window
+   * refunds it.
    */
-  private async termsOk(e: Entry, creator: Entry | null): Promise<void> {
+  private async termsOk(e: Entry): Promise<void> {
     const i = await this.d.chain.info();
     if (i.paused) fail("busy", "the vault is paused: no new matches right now");
     if (!this.d.referee || !sameAddr(this.d.referee, i.referee)) fail("busy", "the relay can't referee matches right now: try later");
-    const need = creator ? Math.min(i.houseFeeBps, creator.feeCapBps) : i.houseFeeBps;
-    if (e.feeCapBps < need) fail("terms", `the entry's fee cap (${e.feeCapBps} bps) is below the fee (${need} bps): reload to update`);
+    if (e.feeCapBps < i.houseFeeBps) fail("terms", `the entry's fee cap (${e.feeCapBps} bps) is below the vault's fee (${i.houseFeeBps} bps): reload to update`);
   }
 
   private async create(c: LobbyConn, m: Extract<LobbyClientMsg, { t: "create" }>): Promise<void> {
@@ -489,6 +499,7 @@ export class WagerLobbyCore {
     if (!this.d.sims.selfTestOk) fail("busy", "the relay's sim failed its self-test, so it does not referee: try later");
     const e = parseEntry(m.entry) ?? fail("bad", "bad entry");
     if (!sameAddr(e.player, me)) fail("terms", "the entry is for another player");
+    if (!sameAddr(matchIdCreator(e.matchId), me)) fail("terms", "a match id starts with its creator's address: reload to update");
     if (sameAddr(e.opponent, me)) fail("terms", "you can't play yourself");
     if (!s.roundSeconds.includes(e.roundSeconds)) fail("terms", `rounds are ${s.roundSeconds.join(" / ")} s here`);
     const sim = (await this.d.sims.byRules(e.rules)) ?? fail("terms", "the rules don't match a district this relay referees on this sim: reload to update");
@@ -500,7 +511,7 @@ export class WagerLobbyCore {
     const mine = [...this.offers.values()].filter(r => sameAddr(r.offer.creator.address, me)).length;
     if (mine >= WAGER_LIMITS.offersPerPlayer) fail("rate", `at most ${WAGER_LIMITS.offersPerPlayer} open offers each`);
     if (this.offers.size >= WAGER_LIMITS.offersTotal) fail("busy", "the lobby is full: try again soon");
-    await this.termsOk(e, null);
+    await this.termsOk(e);
     await this.stakeOk(me, e.stake);
     await this.entrySig(e, m.sig);
     if ((await this.d.chain.matchOf(id)).state !== MS_NONE) fail("terms", "that match id is taken");
@@ -545,7 +556,9 @@ export class WagerLobbyCore {
     if (this.settledCount(me) < o.minSeries) fail("forbidden", `this offer wants players with ${o.minSeries}+ settled series`);
     if (!this.conns(a.player).length) { this.removeOffer(o.matchId, "creator-left"); fail("gone", "the creator left"); }
     if (this.busy(me) || this.busy(a.player)) fail("busy", "one of you is still in an unsettled series");
-    await this.termsOk(b, a);
+    // The vault's fee may have gone up since the offer: then the creator's Entry can't lock any more.
+    if (!(await this.termsOk(a).then(() => true, () => false))) { this.removeOffer(o.matchId, "cancelled"); fail("gone", "that offer was made under an older fee: it's withdrawn"); }
+    await this.termsOk(b);
     await this.stakeOk(me, b.stake);
     await this.entrySig(b, sig);
     if ((await this.d.chain.freeOf(a.player)) < a.stake) { this.removeOffer(o.matchId, "cancelled"); fail("balance", "the creator no longer has the stake free"); }
@@ -558,28 +571,92 @@ export class WagerLobbyCore {
     if (!this.offers.has(o.matchId)) fail("gone", "that offer is gone");
     if (this.busy(me) || this.busy(a.player)) fail("busy", "one of you is still in an unsettled series");
     this.removeOffer(o.matchId, "matched");
-    const sa: SignedEntry = { entry: o.entry, sig: rec.sig }, sb: SignedEntry = { entry: toJson(b), sig };
+    const ips: [string[], string[]] = [this.ipsOf(a.player), this.ipsOf(me)];
+    // The row keeps both players busy while the creator signs and the lock runs.
     this.d.sql.exec("INSERT OR REPLACE INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, 'locking', ?, ?, ?, NULL, NULL, NULL, ?)",
-      o.matchId, a.player.toLowerCase(), me.toLowerCase(), a.stake.toString(), JSON.stringify({ entries: [sa, sb] } satisfies MatchJson));
+      o.matchId, a.player.toLowerCase(), me.toLowerCase(), a.stake.toString(), JSON.stringify({ ips } satisfies MatchJson));
+    let sa: SignedEntry;
+    try {
+      // A named invite already names this joiner; an open offer (a listed one, or an invite link) gets a named Entry.
+      sa = a.opponent === ZERO ? await this.named(o, a, me) : { entry: o.entry, sig: rec.sig };
+    } catch (e) {
+      this.d.sql.exec("DELETE FROM matches WHERE match_id = ? AND state = 'locking'", o.matchId);
+      throw e;
+    }
+    const sb: SignedEntry = { entry: toJson(b), sig };
+    this.d.sql.exec("UPDATE matches SET json = ? WHERE match_id = ?", JSON.stringify({ entries: [sa, sb], ips } satisfies MatchJson), o.matchId);
     const matched: LobbyServerMsg = { t: "matched", matchId: o.matchId, a: sa, b: sb };
     this.toPlayer(a.player, matched);
     this.toPlayer(me, matched);
-    await this.lock(o, a, rec.sig, b, sig);
+    await this.lock(o, rec, entryFromJson(sa.entry), sa.sig, b, sig);
   }
 
-  private async lock(o: Offer, a: Entry, sigA: Hex, b: Entry, sigB: Hex): Promise<void> {
+  /** The IPs of a player's open lobby sockets. */
+  private ipsOf(p: Address): string[] {
+    return [...new Set(this.conns(p).map(c => c.state.ip).filter(Boolean))].slice(0, 8);
+  }
+
+  /**
+   * The creator's page signs the offer's terms naming the vetted joiner, with a deadline a few minutes away (its session
+   * key: no popup). Its answer is checked as lock() would check it; no answer in time, a refusal or a bad signature
+   * withdraw the offer.
+   */
+  private async named(o: Offer, a: Entry, joiner: Address): Promise<SignedEntry> {
+    const id = o.matchId, T = this.d.settings.timing;
+    const deadline = Math.min(Number(a.deadline), Math.floor(this.now / 1000) + T.namedTtlS);
+    const e: Entry = { ...a, opponent: joiner, deadline: BigInt(deadline) };
+    const joinerCard = await this.card(joiner);
+    const answer = await new Promise<{ sig: Hex | null; why?: string }>(resolve => {
+      const t = this.d.clock.setTimeout(() => w.done(null, "timeout"), T.signWaitMs);
+      const w = {
+        creator: a.player,
+        done: (sig: Hex | null, why?: string) => {
+          if (this.signing.get(id) !== w) return;
+          this.signing.delete(id);
+          this.d.clock.clearTimeout(t);
+          resolve({ sig, why });
+        },
+      };
+      this.signing.get(id)?.done(null, "replaced");
+      this.signing.set(id, w);
+      this.toPlayer(a.player, { t: "sign", matchId: id, entry: toJson(e), joiner: joinerCard });
+    });
+    if (!answer.sig) {
+      this.log(`sign ${id.slice(0, 10)}: no named entry (${answer.why ?? "refused"})`);
+      fail("gone", answer.why === "timeout" ? "the creator's page didn't confirm the match in time: the offer is withdrawn"
+        : answer.why === "the creator left" ? "the creator left" : "the creator's page didn't confirm the match: the offer is withdrawn");
+    }
+    const ok = await this.entrySig(e, answer.sig!).then(() => true, () => false);
+    if (!ok) fail("gone", "the creator's confirmation didn't check out: the offer is withdrawn");
+    return { entry: toJson(e), sig: answer.sig! };
+  }
+
+  /** The creator's answer to `sign`. */
+  private signed(c: LobbyConn, m: Extract<LobbyClientMsg, { t: "signed" }>): void {
+    const me = c.state.player ?? fail("auth", "log in first");
+    if (!isHex32(m.matchId)) fail("bad", "bad match id");
+    const w = this.signing.get(normId(m.matchId));
+    if (!w || !sameAddr(w.creator, me)) return; // late, or not theirs: nothing waits for it
+    if (m.sig !== null && !isSig(m.sig)) fail("bad", "bad signature");
+    w.done(m.sig, typeof m.why === "string" ? m.why.slice(0, 120) : undefined);
+  }
+
+  private async lock(o: Offer, rec: OfferRec, a: Entry, sigA: Hex, b: Entry, sigB: Hex): Promise<void> {
     const id = o.matchId, players: [Address, Address] = [a.player, b.player];
     const notify = (m: LobbyServerMsg) => { for (const p of players) this.toPlayer(p, m); };
     const failed = async (why: string) => {
       this.log(`lock ${id.slice(0, 10)} failed: ${why}`);
       const m = await this.d.chain.matchOf(id).catch(() => null);
-      if (m && m.state !== MS_NONE) return; // it locked after all (a player submitted it): the room takes over
+      // It locked after all, with these two players (one of them submitted it): the room takes over. MatchExists with
+      // anyone else (or a cancelled id) is a failed lock.
+      if (m && m.state !== MS_NONE && m.state !== MS_CANCELLED && sameAddr(m.playerA, a.player) && sameAddr(m.playerB, b.player)) return;
       this.d.sql.exec("DELETE FROM matches WHERE match_id = ? AND state = 'locking'", id);
       notify({ t: "error", code: "chain", message: `the lock failed: ${why}` });
-      // The offer goes back up if its creator is still here and it still has time.
-      if (this.conns(a.player).length && Number(a.deadline) > this.now / 1000 + 60 && !this.offers.has(id)) {
-        this.offers.set(id, { offer: o, sig: sigA });
-        this.d.sql.exec("INSERT OR REPLACE INTO offers (match_id, json, deadline) VALUES (?, ?, ?)", id, JSON.stringify({ offer: o, sig: sigA }), o.deadline);
+      // A named invite goes back up if its creator is still here and it still has time (its Entry names only that
+      // player). An open offer doesn't: a named Entry for this joiner is out, so the creator makes a new offer.
+      if (o.opponent && this.conns(a.player).length && Number(o.deadline) > this.now / 1000 + 60 && !this.offers.has(id) && (!m || m.state === MS_NONE)) {
+        this.offers.set(id, rec);
+        this.d.sql.exec("INSERT OR REPLACE INTO offers (match_id, json, deadline) VALUES (?, ?, ?)", id, JSON.stringify(rec), o.deadline);
         this.broadcastOffer(o);
       }
     };
@@ -597,12 +674,19 @@ export class WagerLobbyCore {
       }
       if (!ok || !h) { await failed(err); return; }
       const m = await this.d.chain.matchOf(id);
-      if (m.state !== MS_LOCKED) { await failed("the match is not locked"); return; }
+      if (m.state !== MS_LOCKED || !sameAddr(m.playerA, a.player) || !sameAddr(m.playerB, b.player)) { await failed("the match is not locked"); return; }
       this.d.sql.exec("UPDATE matches SET state = 'locked', lock_tx = ? WHERE match_id = ?", h.hash, id);
       const cards = (await Promise.all(players.map(p => this.card(p)))) as [PlayerCard, PlayerCard];
-      await this.d.rooms.init(id, { match: m, lockTx: h.hash, cards }).catch(e => this.log(`room init failed: ${errMsg(e)}`));
+      await this.d.rooms.init(id, { match: m, lockTx: h.hash, cards, ips: this.match(id)?.j.ips }).catch(e => this.log(`room init failed: ${errMsg(e)}`));
       notify({ t: "locked", matchId: id, tx: h.hash });
     });
+  }
+
+  /** The players the lobby paired for a match (and their lobby IPs then); null if it never paired it. */
+  paired(idIn: string): Paired | null {
+    const r = this.match(normId(idIn));
+    const pa = r ? addr(r.a) : null, pb = r ? addr(r.b) : null;
+    return pa && pb ? { players: [pa, pb], ips: r!.j.ips ?? [[], []] } : null;
   }
 
   // ---- series progress, settles and records -------------------------------------------------------------------------
@@ -765,9 +849,9 @@ export class WagerLobbyCore {
     const i = await this.d.chain.info();
     let tokenTx: Hex | null = null, ethTx: Hex | null = null, eth = 0n;
     try {
-      tokenTx = (await q.submit(erc20Transfer(i.token, a, s.faucetTokens))).hash;
+      tokenTx = (await q.submit(erc20Transfer(i.token, a, s.faucetTokens), RELAYER_GAS.faucet)).hash;
       if ((await this.d.chain.ethBalance(a)) < s.faucetEth) {
-        ethTx = (await q.submit({ to: a, data: "0x", value: s.faucetEth })).hash;
+        ethTx = (await q.submit({ to: a, data: "0x", value: s.faucetEth }, RELAYER_GAS.faucet)).hash;
         eth = s.faucetEth;
       }
     } catch (e) {
@@ -789,7 +873,7 @@ export class WagerLobbyCore {
         const m = await this.d.chain.matchOf(r.match_id);
         if (m.state === MS_SETTLED || m.state === MS_VOIDED) await this.finish(r.match_id, await this.d.chain.settleTxOf(r.match_id), m.state === MS_SETTLED ? "settled" : "voided");
         else if (m.state === MS_LOCKED) await this.d.rooms.sync(r.match_id).catch(() => {});
-        else if (m.state === MS_NONE && r.state === "locking" && !this.settling.has(r.match_id)) {
+        else if ((m.state === MS_NONE || m.state === MS_CANCELLED) && r.state === "locking" && !this.settling.has(r.match_id) && !this.signing.has(r.match_id)) {
           // A lock that never landed (the relay restarted mid-flight).
           const j = this.match(r.match_id)?.j;
           const dl = j?.entries ? Math.min(j.entries[0].entry.deadline, j.entries[1].entry.deadline) : 0;

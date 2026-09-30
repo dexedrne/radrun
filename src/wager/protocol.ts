@@ -9,7 +9,7 @@ import type { Flag, RoundResult, SeriesOutcome, Side } from "./log.ts";
 import type { WagerNetId } from "./config.ts";
 
 /** Bumped on any change below; the relay refuses other versions ("reload to update"). */
-export const WAGER_PROTOCOL = 1;
+export const WAGER_PROTOCOL = 2;
 
 // ---- HTTP routes of the wager relay (relay/wager: Worker "radrun-wager-relay", or node relay/wager/dev.ts) ----------
 
@@ -81,6 +81,10 @@ export const WAGER_TIMING = {
   /** Default Entry deadlines: listed offers and invite links. */
   offerTtlS: 1_800,
   inviteTtlS: 86_400,
+  /** The deadline of the named Entry a creator signs for a vetted joiner (`sign`): the lock must land before it. */
+  namedTtlS: 300,
+  /** How long the lobby waits for the creator's `signed` (a wallet-only creator gets a popup). */
+  signWaitMs: 45_000,
 } as const;
 
 export const WAGER_LIMITS = {
@@ -305,6 +309,11 @@ export type LobbyClientMsg =
   | { t: "create"; entry: EntryJson; sig: Hex; listed: boolean; holdersOnly?: boolean; minSeries?: number }
   | { t: "cancel"; matchId: Hex }
   | { t: "join"; entry: EntryJson; sig: Hex }
+  /**
+   * The creator's answer to `sign`: its signature over exactly that Entry (session key, or the wallet), or null with a
+   * reason when the page won't sign it (the terms aren't its offer's, the offer is gone).
+   */
+  | { t: "signed"; matchId: Hex; sig: Hex | null; why?: string }
   | { t: "ping" };
 
 export type TxKind = "session" | "lock" | "settle" | "faucet";
@@ -316,7 +325,13 @@ export type LobbyServerMsg =
   | { t: "offers"; offers: Offer[] }
   | { t: "offer"; offer: Offer }
   | { t: "unoffer"; matchId: Hex; reason: "cancelled" | "matched" | "expired" | "creator-left" }
-  /** Both signed entries (either player may submit lock itself if the relayer is slow). */
+  /**
+   * To the creator of an open offer (opponent 0) that a vetted player just joined: sign this named Entry (the offer's
+   * terms with `opponent` = the joiner and a deadline `namedTtlS` away) and answer `signed` within `signWaitMs`. The
+   * lobby never hands out an open Entry's signature (anyone holding it could pair it with any account).
+   */
+  | { t: "sign"; matchId: Hex; entry: EntryJson; joiner: PlayerCard }
+  /** Both signed, named entries (either player may submit lock itself if the relayer is slow). */
   | { t: "matched"; matchId: Hex; a: SignedEntry; b: SignedEntry }
   | { t: "locked"; matchId: Hex; tx: Hex }
   | { t: "tx"; kind: TxKind; matchId: Hex | null; hash: Hex | null; status: "sent" | "confirmed" | "failed"; error?: string }
