@@ -19,9 +19,9 @@
     "rpc": ["https://rpc.testnet.chain.robinhood.com", "https://robinhood-sepolia-rpc.publicnode.com", "https://robinhood-testnet.drpc.org"],
     "explorer": "https://explorer.testnet.chain.robinhood.com",
     "relay": "https://radrun-wager-relay.dexedrne.workers.dev",
-    "vault": null,
-    "token": null,
-    "deployBlock": null
+    "vault": "0xd56279c43A2556E2Dd15044ea09880A47067Bb72",
+    "token": "0xfdB046a858A77D5Fa499a66fc1744bDC0753488e",
+    "deployBlock": 126900662
   },
   "rh-mainnet": {
     "label": "BETA",
