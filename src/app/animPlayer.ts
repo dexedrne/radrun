@@ -37,6 +37,8 @@ export type AnimPlayerOptions = {
   reference?: [number, number, number];
   /** Extra names for clips: { alias: source clip }. */
   alias?: Record<string, string>;
+  /** Per-clip playback multiplier on top of every timeScale (a character whose stride differs from the clips' source). */
+  rate?: (clip: string) => number;
   onFinished?: (clip: string, next: string) => void;
 };
 
@@ -122,13 +124,13 @@ export class AnimPlayer {
     const prev = this.cur;
     const once = Boolean(o.once || o.hold);
     if (!once && next === prev && next.isRunning() && !this.pending && !this.held) {
-      if (o.timeScale !== undefined) next.setEffectiveTimeScale(o.timeScale);
+      if (o.timeScale !== undefined) next.setEffectiveTimeScale(o.timeScale * this.rate(name));
       return true;
     }
     next.reset();
     next.setLoop(once ? LoopOnce : LoopRepeat, once ? 1 : Infinity);
     next.clampWhenFinished = once;
-    next.setEffectiveTimeScale(o.timeScale ?? 1).setEffectiveWeight(1);
+    next.setEffectiveTimeScale((o.timeScale ?? 1) * this.rate(name)).setEffectiveWeight(1);
     if (o.startAt) next.time = Math.min(o.startAt, next.getClip().duration - 1e-3);
     if (prev && prev !== next) {
       if (fade > 0) { prev.fadeOut(fade); next.fadeIn(fade); } else prev.stop();
@@ -158,7 +160,11 @@ export class AnimPlayer {
   }
 
   setTimeScale(s: number): void {
-    if (this.cur && !this.pending && !this.held) this.cur.setEffectiveTimeScale(s);
+    if (this.cur && !this.pending && !this.held) this.cur.setEffectiveTimeScale(s * this.rate(this.cur.getClip().name));
+  }
+
+  private rate(name: string): number {
+    return this.opts.rate?.(name) ?? 1;
   }
 
   update(dt: number): void {

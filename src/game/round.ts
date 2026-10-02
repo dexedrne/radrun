@@ -15,7 +15,7 @@ import { Runner } from "../runner/runner.ts";
 import { DISTRICTS, type ChaseTweak, type DistrictId } from "../world/districts.ts";
 
 import type { RadbroId } from "./radbros.ts";
-export { RADBROS, isRadbroId, type RadbroId } from "./radbros.ts";
+export { RADBROS, isRadbroId, isRetardio, charFile, charTag, charName, portraitPath, type RadbroId } from "./radbros.ts";
 
 export type RoundPhase = "countdown" | "chase" | "caught" | "escaped";
 

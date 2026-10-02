@@ -1,11 +1,11 @@
 // Every player-facing string (spec §12: single definition) + medals, heat labels, share text.
 import { MEDALS, type Difficulty } from "../sim/tuning.ts";
-import type { RadbroId } from "../game/round.ts";
+import { charName, charTag, isRetardio, type RadbroId } from "../game/round.ts";
 
 export const S = {
   title: "RADRUN",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
-  youChase: "You chase one of the other three",
+  youChase: "You chase one of the others",
   countdownBubble: "finders keepers",
   panicTag: "PANIC",
   gassedBadge: "GASSED",
@@ -20,7 +20,7 @@ export const S = {
   practice: "PRACTICE",
   ghost: "GHOST",
   autoLow: "switched to Low quality for smoother play — change in Settings",
-  credits: "Radbro #652, #4764, #2564, #723 and #3171 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
+  credits: "Radbro #652, #4764, #2564, #723 and #3171 · Retardio #555 and #85 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
 /** Runner taunt bubbles (voice taunt_1..6): slots 1-4 are reactions (a laugh, a scoff, a hum), 5-6 the only words. */
@@ -30,17 +30,19 @@ export const TAUNTS: Record<RadbroId, string[]> = {
   "2564": ["hehe", "shh", "ha", "\u266A", "over here", "wrong roof"],
   "723": ["heh heh", "oh, man", "ahh", "nah", "nice day for it", "you good back there?"],
   "3171": ["heh", "oop", "ha", "yeah?", "don't mind the halo", "almost had me"],
+  retardio555: ["hehe", "oi", "ha", "mm", "cheers for the bag", "too slow, mate"],
+  retardio85: ["heh", "tch", "ha", "hm", "porsche fund, sorry", "i need it more"],
 };
 
 /**
  * Per-character bubbles for the panic / cornered / catch / escape lines, as he says them (#652 earnest,
- * #4764 deadpan, #2564 quiet, #723 easygoing, #3171 impish).
+ * #4764 deadpan, #2564 quiet, #723 easygoing, #3171 impish; Retardio #555 cheeky, Retardio #85 saving up).
  */
 export const LINES: Record<"panic" | "cornered" | "caught" | "escaped", Record<RadbroId, string>> = {
-  panic: { "652": "!", "4764": "!", "2564": "!", "723": "oh, hey", "3171": "!" },
-  cornered: { "652": "nope, sorry", "4764": "nope", "2564": "nope", "723": "oh, nope", "3171": "wasn't me" },
-  caught: { "652": "okay. you got me.", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough", "3171": "worth a shot" },
-  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "2564": "thank you", "723": "see ya", "3171": "later" },
+  panic: { "652": "!", "4764": "!", "2564": "!", "723": "oh, hey", "3171": "!", retardio555: "oi!", retardio85: "!" },
+  cornered: { "652": "nope, sorry", "4764": "nope", "2564": "nope", "723": "oh, nope", "3171": "wasn't me", retardio555: "oh no", retardio85: "nah" },
+  caught: { "652": "okay. you got me.", "4764": "bro.", "2564": "oh. hello.", "723": "fair enough", "3171": "worth a shot", retardio555: "fair cop", retardio85: "there goes the porsche" },
+  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "2564": "thank you", "723": "see ya", "3171": "later", retardio555: "cheers, mate", retardio85: "porsche fund +1" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -56,6 +58,8 @@ export const PERSONA: Record<RadbroId, string> = {
   "2564": "quiet",
   "723": "easygoing",
   "3171": "impish",
+  retardio555: "cheeky",
+  retardio85: "saving up",
 };
 
 export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {
@@ -64,6 +68,8 @@ export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = 
   "2564": { body: "#eef3fa", accent: "#b9c6d6" },
   "723": { body: "#a8683a", accent: "#1b1b22" },
   "3171": { body: "#ffb020", accent: "#1a1a1a" },
+  retardio555: { body: "#ff7aa8", accent: "#4a3426" },
+  retardio85: { body: "#5aa8ff", accent: "#121218" },
 };
 
 export function heat(d: number): { label: string; color: string; fill: number } {
@@ -92,5 +98,5 @@ export function clockText(s: number): string {
 }
 
 export function shareText(kind: "tag" | "yoink" | "yank" | "", runner: string, t: number): string {
-  return `I ${kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : "tagged"} #${runner} in ${t.toFixed(1)} s in RadRun`;
+  return `I ${kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : "tagged"} ${isRetardio(runner) ? charName(runner) : charTag(runner)} in ${t.toFixed(1)} s in RadRun`;
 }

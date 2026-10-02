@@ -18,7 +18,7 @@ import {
   A_ATTACH, A_BIGLAND, A_BONK, A_CHARGE, A_CLIMB, A_DIVE, A_DJUMP, A_JUMP, A_LAND, A_LEAP, A_LEDGE, A_POP, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP,
   A_WALLRUN, A_ZIP, type Beat,
 } from "../anim/animMachine.ts";
-import { applyCmd, makeRig, rotateBoneWorld, type ActorRig } from "./ActorsView.tsx";
+import { applyCmd, hairClear, makeRig, rotateBoneWorld, type ActorRig } from "./ActorsView.tsx";
 import { makeBag } from "./PlayViews.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { FRAME } from "./frame.ts";
@@ -263,6 +263,7 @@ export function TagActors({ game, slots, looks = [] }: { game: TagGame; slots: R
       }
       airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
       placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
+      hairClear(rig, tmp);
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {
         rig.root.updateMatrixWorld(true);

@@ -14,7 +14,7 @@ import {
 import {
   A_ATTACH, A_BIGLAND, A_BONK, A_CLIMB, A_DIVE, A_DJUMP, A_JUMP, A_LAND, A_LEDGE, A_RELEASE, A_ROLL, A_SLIDE, A_VAULT, A_WALLJUMP, A_WALLRUN, type Beat,
 } from "../anim/animMachine.ts";
-import { applyCmd, makeRig } from "./ActorsView.tsx";
+import { applyCmd, hairClear, makeRig } from "./ActorsView.tsx";
 import { clipsPath, modelPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
@@ -65,7 +65,7 @@ export function GhostView({ game }: { game: PlayGame }) {
   const st = useMemo(() => ({
     alpha: 0, doneT: 0, runId: -1, visible: false,
     q: new Quaternion(), m: new Matrix4(), u: new Vector3(), f: new Vector3(), x: new Vector3(), v: new Vector3(),
-    a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), qYaw: new Quaternion(), hang: new Vector3(), pos: new Vector3(),
+    a: new Vector3(), b: new Vector3(), c: new Vector3(), up: new Vector3(0, 1, 0), qYaw: new Quaternion(), hang: new Vector3(), pos: new Vector3(), pq: new Quaternion(), wq: new Quaternion(), axis: new Vector3(),
     ain: { dt: 0, dive: false, fall: false, hanging: false, arc: 0, perfect: false, near: false, glide: false } as AirPoseIn,
   }), []);
 
@@ -165,6 +165,7 @@ export function GhostView({ game }: { game: PlayGame }) {
     if (!rig || !st.visible) return;
     airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
     placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
+    hairClear(rig, st);
     const rh = rig.bones.rightHand;
     if (rh && rig.ropeW > 0.01) {
       rig.root.updateMatrixWorld(true);

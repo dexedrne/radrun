@@ -6,7 +6,7 @@ import type { Address } from "viem";
 import { btn, panel } from "../ui/screens.tsx";
 import { safe } from "../ui/safe.ts";
 import { RADBRO_COLOR } from "../ui/strings.ts";
-import { isRadbroId } from "../game/radbros.ts";
+import { isRadbroId, portraitPath } from "../game/radbros.ts";
 import type { Deployment } from "./config.ts";
 import type { PlayerCard, WebColor } from "./protocol.ts";
 import type { TxRow } from "./app.ts";
@@ -84,7 +84,7 @@ export function Portrait({ id, size = 44 }: { id: string; size?: number }) {
   const rid = isRadbroId(id) ? id : "652";
   return (
     <div style={{ width: size, height: size, borderRadius: 8, overflow: "hidden", flex: "none", background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[rid].body}66, ${RADBRO_COLOR[rid].accent}22 62%, rgba(0,0,0,0.25))` }}>
-      <img src={`/ui/radbro${rid}.webp`} alt="" width={size} height={size} draggable={false} style={{ display: "block" }} />
+      <img src={portraitPath(rid)} alt="" width={size} height={size} draggable={false} style={{ display: "block" }} />
     </div>
   );
 }

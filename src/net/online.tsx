@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TagGame } from "../game/tagGame.ts";
 import { TAG } from "../game/tagMatch.ts";
-import { RADBROS, isRadbroId, type RadbroId } from "../game/radbros.ts";
+import { RADBROS, isRadbroId, charFile, charTag, portraitPath, type RadbroId } from "../game/radbros.ts";
 import { Fnv1a } from "../sim/math.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import { DISTRICTS, isDistrictId, type DistrictId } from "../world/districts.ts";
@@ -104,7 +104,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
     if (sRef.current !== session) return; // dropped or replaced while loading
     if (!loaded) { abandon("couldn't load the Radbros"); return; }
     const local = slotRef.current;
-    useTag.setState({ slots: ids, names: s.slots.map(p => (p.slot === local ? "YOU" : `#${p.radbro}`)), agreed: null, flash: null, netStatus: "", netGone: false });
+    useTag.setState({ slots: ids, names: s.slots.map(p => (p.slot === local ? "YOU" : charTag(p.radbro))), agreed: null, flash: null, netStatus: "", netGone: false });
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (sRef.current !== session) return;
     session.rb.onFresh = () => game.fresh();
@@ -203,7 +203,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         useTag.setState({ netStatus: "waiting for the other player…" });
       };
       useTag.setState({ net: { rematch, leave } });
-      t.sendJson({ t: "hello", compat: compat(), name: cleanName(`radbro${props.radbro}`), radbro: props.radbro, touch: game.touch, easy: game.camera.easyGrab, district: props.district });
+      t.sendJson({ t: "hello", compat: compat(), name: cleanName(charFile(props.radbro)), radbro: props.radbro, touch: game.touch, easy: game.camera.easyGrab, district: props.district });
     } catch (e) {
       setErr(String((e as Error).message ?? e));
       setPhase("error");
@@ -300,8 +300,8 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
                   <div key={i} style={{ width: 150, padding: 8, borderRadius: 10, border: `2px solid ${p?.ready ? "#8dff8a" : "rgba(255,255,255,0.25)"}`, background: "rgba(255,255,255,0.05)" }}>
                     {p ? (
                       <>
-                        <img src={`/ui/radbro${p.radbro}.webp`} alt="" width={64} height={64} style={{ borderRadius: 8, background: RADBRO_COLOR[p.radbro as RadbroId]?.body ?? "#333" }} />
-                        <div style={{ fontWeight: 800 }}>{p.slot === slot ? "YOU" : `#${p.radbro}`}</div>
+                        <img src={portraitPath(p.radbro)} alt="" width={64} height={64} style={{ borderRadius: 8, background: RADBRO_COLOR[p.radbro as RadbroId]?.body ?? "#333" }} />
+                        <div style={{ fontWeight: 800 }}>{p.slot === slot ? "YOU" : charTag(p.radbro)}</div>
                         <div style={{ fontSize: 12, color: p.ready ? "#8dff8a" : "#ccc" }}>{p.ready ? "READY" : "picking…"}</div>
                       </>
                     ) : <div style={{ opacity: 0.6, padding: "30px 0" }}>waiting for a friend…</div>}
@@ -311,7 +311,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
             </div>
             <div style={{ marginTop: 12, display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
               {RADBROS.map(id => (
-                <button key={id} onClick={() => props.setRadbro(id)} style={{ ...btn(false), padding: "4px 8px", fontSize: 12, borderColor: id === props.radbro ? "#ff3d7f" : "rgba(255,255,255,0.3)", background: id === props.radbro ? "rgba(255,61,127,0.3)" : "rgba(255,255,255,0.05)" }}>#{id}</button>
+                <button key={id} onClick={() => props.setRadbro(id)} style={{ ...btn(false), padding: "4px 8px", fontSize: 12, borderColor: id === props.radbro ? "#ff3d7f" : "rgba(255,255,255,0.3)", background: id === props.radbro ? "rgba(255,61,127,0.3)" : "rgba(255,255,255,0.05)" }}>{charTag(id)}</button>
               ))}
             </div>
             {err && <div style={{ marginTop: 8, color: "#ffd23f", fontSize: 12 }}>{err}</div>}

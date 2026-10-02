@@ -6,7 +6,7 @@ issues): `PLAY.md`. Live: https://radrun.vyvanse.beer (the old https://rugrun.vy
 https://radbro-rug-run.vercel.app addresses redirect there, query strings included, so old challenge / ghost
 links keep working). Working title: Rug Run (the `rugrun.*` storage keys and `RUGRUN_*` env vars keep that name).
 
-Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564 or #723 (the cowboy), chase
+Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564, #723 (the cowboy) or #3171, or Retardio #555 or #85, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
 balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo, and
 procedural WebAudio music + SFX (no audio files).
@@ -116,5 +116,5 @@ she loads at runtime from his repo, and she is not part of this one. Ask him bef
 own thing.
 
 Credits: Radbros #652, #4764, #2564 and #723 are dexedrne's own, used with permission from the Radbro
-Webring dev · the Pockit Milady is by prnth, used with his permission · built on
+Webring dev · Retardio #555 and #85 are dexedrne's own · the Pockit Milady is by prnth, used with his permission · built on
 [react-three-game](https://prnth.com/react-three-game/) by prnth.

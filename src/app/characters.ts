@@ -1,7 +1,7 @@
 // Character assets: paths, the LOADING manifest (spec §20 item 4: chaser, runner, their clip packs,
 // George) and a bridge to r3g's asset runtime so the page can preload outside the canvas tree.
 import { useAssetRuntime, type AssetRuntime } from "react-three-game";
-import type { RadbroId } from "../game/round.ts";
+import { charFile, type RadbroId } from "../game/round.ts";
 import type { RootPolicy } from "./animPlayer.ts";
 import CLIP_META_JSON from "../generated/clips.meta.json";
 import { GEORGE_GLB } from "./george.config.ts";
@@ -23,8 +23,8 @@ export type CharacterMeta = { clipPack: boolean; clips: Record<string, ClipMeta>
 
 export const CLIP_META = CLIP_META_JSON as unknown as Record<RadbroId, CharacterMeta>;
 
-export const modelPath = (id: RadbroId) => `/models/radbro${id}.glb`;
-export const clipsPath = (id: RadbroId) => `/models/radbro${id}.clips.glb`;
+export const modelPath = (id: RadbroId) => `/models/${charFile(id)}.glb`;
+export const clipsPath = (id: RadbroId) => `/models/${charFile(id)}.clips.glb`;
 
 /** The LOADING manifest for a round pair (the third Radbro is never fetched). */
 export function manifestFor(chaser: RadbroId, runner: RadbroId): string[] {

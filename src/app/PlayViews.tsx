@@ -44,7 +44,7 @@ const DEV = import.meta.env.MODE !== "production";
 const BOT_PAGE = new URLSearchParams(location.search).has("bot");
 
 /** Speech-bubble chatter pitch per runner (Hz). */
-const VOICE: Record<RadbroId, number> = { "652": 640, "4764": 780, "2564": 540, "723": 470, "3171": 710 };
+const VOICE: Record<RadbroId, number> = { "652": 640, "4764": 780, "2564": 540, "723": 470, "3171": 710, retardio555: 690, retardio85: 600 };
 
 /**
  * A runner line with its bubble: the bubble shows when the line plays (lined up with it), or with the chatter

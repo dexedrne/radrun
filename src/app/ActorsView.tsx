@@ -114,9 +114,11 @@ export function makeRig(id: RadbroId, src: Object3D, pack: Object3D | null): Act
   const own = ((src as unknown as { animations?: AnimationClip[] }).animations ?? []) as AnimationClip[];
   const lib = ((pack as unknown as { animations?: AnimationClip[] } | null)?.animations ?? []) as AnimationClip[];
   // CLIP.land = Regular_Jump again with the hips' height kept (the landing crouch plants the feet).
+  const stride = STRIDE[id];
   const player = new AnimPlayer(model, [own, lib], {
     policy: name => (name === CLIP.land ? { xz: "pin", y: "keep" } : meta[name]?.rootPolicy), reference: ref, fade: 0.2,
     alias: { [CLIP.land]: CLIP.jump },
+    ...(stride ? { rate: (name: string) => 1 / (stride[name] ?? 1) } : {}),
   });
   const jump = meta[CLIP.jump];
   const machine = new AnimMachine({
@@ -446,6 +448,7 @@ export function ActorsView({ game }: { game: PlayGame }) {
       // The air poses' limbs (dive, skydive, swing tuck / reach, flip), before the hand correction.
       airBones(rig.air, rig.pose, rig.root, rig.hook > 0);
       placeWings(rig.wing, rig.root, rig.pose, rig.air.glide);
+      hairClear(rig, tmp);
       // Hand correction: shift the root so RightHand sits on its target (weighted while the hang blends in).
       const rh = rig.bones.rightHand;
       if (rh && rig.ropeW > 0.01) {
@@ -488,6 +491,30 @@ export function ActorsView({ game }: { game: PlayGame }) {
   }, FRAME.bones);
 
   return <>{pair && [pair.chaser, pair.runner].map(id => <Radbro key={id} id={id} />)}</>;
+}
+
+/**
+ * Stride against #723's (whose clips the Retardios wear, retargeted): at the same speed their feet cover this much more
+ * ground per cycle, so their locomotion loops play this much slower (no foot sliding). Measured with their clips.
+ */
+const STRIDE: Partial<Record<RadbroId, Record<string, number>>> = {
+  retardio555: { Casual_Walk: 1.03, Run_02: 1.13, Lean_Forward_Sprint: 1.09 },
+  retardio85: { Casual_Walk: 0.96, Run_02: 1.03, Lean_Forward_Sprint: 1.01 },
+};
+
+/**
+ * Hair clearance (the Retardios): their long hair is one solid mass, so the rope arm, straight up in Rope_Hang_Idle,
+ * disappears into it and the web seems to come out of the hair. While he hangs on a web, swing that arm out to his
+ * right by this much (radians about his forward axis). Call it before the hand correction so the hand still lands on
+ * the web.
+ */
+const HAIR_ARM: Partial<Record<RadbroId, number>> = { retardio555: 0.9, retardio85: 0.9 };
+const hairQ = new Quaternion(), hairFwd = new Vector3();
+export function hairClear(rig: ActorRig, tmp: { pq: Quaternion; wq: Quaternion; axis: Vector3 }): void {
+  const a = HAIR_ARM[rig.id];
+  if (!a || rig.ropeW <= 0.01 || rig.hook < 0) return;
+  rig.root.getWorldQuaternion(hairQ);
+  rotateBoneWorld(rig.bones.rightArm, hairFwd.set(0, 0, 1).applyQuaternion(hairQ), a * rig.ropeW, tmp);
 }
 
 /** Rotate a bone about a world-space axis through its pivot (after the mixer wrote its pose). */

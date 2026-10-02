@@ -1,6 +1,6 @@
 // Plain React DOM screens over the canvas (spec §12): title, loading, in-round HUD, pause, results.
 import { useEffect, useState } from "react";
-import { RADBROS, type RadbroId } from "../game/round.ts";
+import { RADBROS, charName, charTag, portraitPath, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
 import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
@@ -101,10 +101,10 @@ function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; activ
   return (
     <div style={{ marginTop: 10, display: "inline-block", background: "rgba(20,40,60,0.88)", border: "2px solid #9fe6ff", borderRadius: 8, padding: "6px 14px", fontWeight: 800 }} data-testid="ghost-banner">
       <span style={{ color: "#9fe6ff", letterSpacing: 2, marginRight: 8 }}>{S.ghost} RACE</span>
-      #{spec.chaser} {caughtVerb(info.kind)} #{spec.runner} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
+      {charTag(spec.chaser)} {caughtVerb(info.kind)} {charTag(spec.runner)} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
       <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}{info.older ? (info.status === "unverified" ? " · made on an older build" : " · from an older version (replayed with its own swing)") : ""}</span>
       <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>
-        {active ? "same city, same start, same runner: PLAY races their ghost" : `pick #${spec.chaser} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
+        {active ? "same city, same start, same runner: PLAY races their ghost" : `pick ${charTag(spec.chaser)} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
       </div>
     </div>
   );
@@ -176,7 +176,7 @@ export function Title(props: {
         {!tiny && <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>}
         {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
-            challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs #${challenge.r}` : ""}
+            challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs ${charTag(challenge.r)}` : ""}
           </div>
         )}
         <div style={{ ...panel, marginTop: tiny ? 6 : small ? 8 : 16, padding: small ? "8px 12px" : panel.padding }}>
@@ -196,7 +196,7 @@ export function Title(props: {
             })}
           </div>
           {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
-          {!tiny && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro · {S.youChase}</div>}
+          {!tiny && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro or Retardio · {S.youChase}</div>}
           <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => (
               <button key={id} onClick={() => props.setChaser(id)} data-testid={`card-${id}`}
@@ -210,10 +210,10 @@ export function Title(props: {
                   background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}66, ${RADBRO_COLOR[id].accent}22 62%, rgba(0,0,0,0.25))`,
                   boxShadow: id === chaser ? "0 0 0 1px rgba(255,255,255,0.25) inset" : "none",
                 }}>
-                  <img src={`/ui/radbro${id}.webp`} alt="" width={img} height={img} draggable={false}
+                  <img src={portraitPath(id)} alt="" width={img} height={img} draggable={false}
                     style={{ display: "block", width: img, height: img, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
                 </div>
-                <div>{narrow || compact ? `#${id}` : `Radbro #${id}`}</div>
+                <div>{narrow || compact ? charTag(id) : charName(id)}</div>
                 {!compact && <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>}
               </button>
             ))}
@@ -598,7 +598,7 @@ export function ResultsScreen(props: { onRetry: () => void; onMenu: () => void; 
         )}
         {ghostLine && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: "#9fe6ff" }} data-testid="ghost-result">{ghostLine}</div>}
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-          longest swing chain {r.maxChain} · top speed {r.topSpeed.toFixed(1)} m/s · falls {r.falls} · #{r.chaser} vs #{r.runner} · {r.difficulty}
+          longest swing chain {r.maxChain} · top speed {r.topSpeed.toFixed(1)} m/s · falls {r.falls} · {charTag(r.chaser)} vs {charTag(r.runner)} · {r.difficulty}
         </div>
         <CampaignResult />
         <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>

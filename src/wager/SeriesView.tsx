@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Hex } from "viem";
 import type { TagGame } from "../game/tagGame.ts";
-import { RADBROS, isRadbroId, type RadbroId } from "../game/radbros.ts";
+import { RADBROS, isRadbroId, charTag, type RadbroId } from "../game/radbros.ts";
 import { loadRadbros, useTag } from "../app/TagPage.tsx";
 import { requestLock } from "../radbro/bridge.ts";
 import { useUi } from "../ui/store.ts";
@@ -356,7 +356,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
             <Card p={p} newSeries={config.newAccountSeries} you={side === me} />
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, fontSize: 12 }}>
               {pk && <Portrait id={pk.radbro} size={28} />}
-              <span>{pk ? `#${pk.own ?? pk.radbro}` : "picking…"}{pk?.own != null && <> <Holder /></>}</span>
+              <span>{pk ? (pk.own != null ? `#${pk.own}` : charTag(pk.radbro)) : "picking…"}{pk?.own != null && <> <Holder /></>}</span>
               <span style={{ flex: 1 }} />
               <span style={{ color: !st.connected[side] ? C.red : st.ready[side] ? C.green : C.dim }}>{!st.connected[side] ? "offline" : st.ready[side] ? "READY" : "not ready"}</span>
             </div>
@@ -387,11 +387,11 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
       {cards}
       {beforeRound1 && (
         <div style={{ marginTop: 12 }} data-testid="wager-pick">
-          <div style={label}>your Radbro</div>
+          <div style={label}>your Radbro or Retardio</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
             {RADBROS.map(id => (
               <button key={id} onClick={() => setPick({ radbro: id, own: owned.includes(Number(id)) ? Number(id) : null })} style={{ ...small(pick.radbro === id), display: "flex", gap: 6, alignItems: "center" }} data-testid={`wager-pick-${id}`}>
-                <Portrait id={id} size={24} />#{id}
+                <Portrait id={id} size={24} />{charTag(id)}
               </button>
             ))}
           </div>
@@ -403,7 +403,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
                   <button key={n} onClick={() => setPick({ radbro: isRadbroId(String(n)) ? String(n) : pick.radbro, own: n })} style={small(pick.own === n)} data-testid={`wager-own-${n}`}>#{n}</button>
                 ))}
               </div>
-              {pick.own != null && !isRadbroId(String(pick.own)) && <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>#{pick.own} plays on the #{pick.radbro} body with its number and your badge</div>}
+              {pick.own != null && !isRadbroId(String(pick.own)) && <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>#{pick.own} plays on the {charTag(pick.radbro)} body with its number and your badge</div>}
             </div>
           )}
         </div>

@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimationMixer, Box3, PerspectiveCamera, Scene, Vector3, WebGLRenderer, type AnimationClip, type Object3D } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import { RADBROS, type RadbroId } from "../../game/round.ts";
+import { RADBROS, charName, type RadbroId } from "../../game/round.ts";
 import { clipsPath, modelPath } from "../characters.ts";
 
 declare global {
@@ -88,7 +88,7 @@ export default function PortraitPage() {
   return (
     <div style={{ padding: 16, display: "flex", gap: 16, background: "#1b1d2e", minHeight: "100vh" }}>
       <canvas ref={ref} style={{ width: SIZE, height: SIZE, display: url ? "none" : "block" }} />
-      {url && <img src={url} width={SIZE} height={SIZE} alt={`Radbro #${ID}`} style={{ background: "rgba(255,255,255,0.06)", borderRadius: 12 }} />}
+      {url && <img src={url} width={SIZE} height={SIZE} alt={charName(ID)} style={{ background: "rgba(255,255,255,0.06)", borderRadius: 12 }} />}
     </div>
   );
 }

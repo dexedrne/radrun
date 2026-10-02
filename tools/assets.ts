@@ -18,6 +18,13 @@
 // game-clips/radbro<id>.clips.glb, e.g. round 7's Free_Fall / Big_Land) and merges their entries into
 // clips.meta.json; the character GLBs are not touched.
 //
+// Retardios (Retardio Cousin #555, Retardio Classic #85; ids retardio555 / retardio85): `--retardios <dir>` is their
+// delivery folder (source/retardio<n>_character.glb + source/retardio<n>.clips.glb, built on the Radbro rig with
+// #723's clips), e.g. `npm run assets -- --radbros <dir> --retardios <dir> --only retardio555,retardio85`. Their
+// clips are #723's retargeted, so their clip times come from #723's manifest entry; the heights that depend on the
+// body (the rope-hang and ledge-hang hand heights) are measured on their own clips. Without --retardios their files
+// and meta entries are left alone.
+//
 // `npm run assets -- --meta-only` re-measures the jump timings (Regular_Jump takeoff / apex / land,
 // forward kinematics of the feet) from the committed public/models GLBs and updates only those fields
 // in clips.meta.json (no source folder needed, no GLB rewritten).
@@ -29,12 +36,13 @@ import { NodeIO, type Document } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, prune, resample } from "@gltf-transform/functions";
 import { Matrix4, Quaternion, Vector3 } from "three";
+import { RADBROS, charFile, isRetardio } from "../src/game/radbros.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "public", "models");
 const GEN = path.join(ROOT, "src", "generated");
 const BIN = path.join(ROOT, "node_modules", ".bin", "gltf-transform");
-const IDS = ["652", "4764", "2564", "723", "3171"] as const;
+const IDS = RADBROS;
 const DROP = ["Stand_to_Sit_Transition_M", "Chair_Sit_Idle_M", "Sit_Lie_Bed"];
 
 function arg(name: string, env: string): string | null {
@@ -46,7 +54,7 @@ function arg(name: string, env: string): string | null {
 const onlyAt = process.argv.indexOf("--only");
 const ONLY = onlyAt >= 0 ? (process.argv[onlyAt + 1] ?? "").split(",").filter(Boolean) : null;
 if (ONLY && (!ONLY.length || ONLY.some(id => !(IDS as readonly string[]).includes(id)))) {
-  console.error(`--only takes Radbro ids from ${IDS.join(", ")}`);
+  console.error(`--only takes ids from ${IDS.join(", ")}`);
   process.exit(2);
 }
 
@@ -144,9 +152,48 @@ const FEET = ["LeftFoot", "LeftToeBase", "RightFoot", "RightToeBase"];
  * highest Hips, landAt = the first frame after the apex with the feet back down.
  */
 function jumpTimes(doc: Document, clip: string): { takeoffAt: number; apexAt: number; landAt: number } | Record<string, never> {
+  const fk = clipFk(doc, clip);
+  if (!fk || !fk.has("Hips") || FEET.some(f => !fk.has(f))) return {};
+  const { dur, worldY } = fk;
+  const steps = Math.round(dur * 60);
+  const feet: number[] = [], hips: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const time = i / 60;
+    feet.push(Math.min(...FEET.map(f => worldY(f, time))));
+    hips.push(worldY("Hips", time));
+  }
+  const ground = feet[0] + 0.02;
+  let apex = 0;
+  for (let i = 1; i <= steps; i++) if (hips[i] > hips[apex]) apex = i;
+  let take = apex, land = apex;
+  while (take > 0 && feet[take] > ground) take--;
+  while (land < steps && feet[land] > ground) land++;
+  return { takeoffAt: r3(take / 60), apexAt: r3(apex / 60), landAt: r3(land / 60) };
+}
+
+/**
+ * The hand heights the clip manifest measures (feet-space, model root at the floor): rope = RightHand's mean height
+ * over Rope_Hang_Idle (60 Hz), ledge = both hands' mean height on Ledge_Grab's last frame.
+ */
+function handHeights(doc: Document): { rope?: number; ledge?: number } {
+  const out: { rope?: number; ledge?: number } = {};
+  const rope = clipFk(doc, "Rope_Hang_Idle");
+  if (rope?.has("RightHand")) {
+    const steps = Math.max(1, Math.round(rope.dur * 60));
+    let sum = 0;
+    for (let i = 0; i <= steps; i++) sum += rope.worldY("RightHand", i / 60);
+    out.rope = r3(sum / (steps + 1));
+  }
+  const ledge = clipFk(doc, "Ledge_Grab");
+  if (ledge?.has("LeftHand") && ledge.has("RightHand")) out.ledge = r3((ledge.worldY("LeftHand", ledge.dur) + ledge.worldY("RightHand", ledge.dur)) / 2);
+  return out;
+}
+
+/** Forward kinematics of one clip: world height of a named node at a time (LINEAR / slerp sampling). */
+function clipFk(doc: Document, clip: string): { dur: number; has: (name: string) => boolean; worldY: (name: string, time: number) => number } | null {
   const anim = doc.getRoot().listAnimations().find(a => a.getName() === clip);
   const nodes = new Map(doc.getRoot().listNodes().map(n => [n.getName(), n]));
-  if (!anim || !nodes.has("Hips") || FEET.some(f => !nodes.has(f))) return {};
+  if (!anim) return null;
   type Track = { t: ArrayLike<number>; v: ArrayLike<number> };
   const tracks = new Map<string, Track>();
   let dur = 0;
@@ -168,7 +215,7 @@ function jumpTimes(doc: Document, clip: string): { takeoffAt: number; apexAt: nu
     return a.map((x, j) => x + (b[j] - x) * f);
   };
   type N = NonNullable<ReturnType<typeof nodes.get>>;
-  const worldY = (node: N, time: number): number => {
+  const worldOf = (node: N, time: number): number => {
     const m = new Matrix4();
     for (let n: N | undefined = node; n; n = n.listParents().find(p => p.propertyType === "Node") as N | undefined) {
       const nm = n.getName();
@@ -182,20 +229,7 @@ function jumpTimes(doc: Document, clip: string): { takeoffAt: number; apexAt: nu
     }
     return new Vector3().setFromMatrixPosition(m).y;
   };
-  const steps = Math.round(dur * 60);
-  const feet: number[] = [], hips: number[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const time = i / 60;
-    feet.push(Math.min(...FEET.map(f => worldY(nodes.get(f)!, time))));
-    hips.push(worldY(nodes.get("Hips")!, time));
-  }
-  const ground = feet[0] + 0.02;
-  let apex = 0;
-  for (let i = 1; i <= steps; i++) if (hips[i] > hips[apex]) apex = i;
-  let take = apex, land = apex;
-  while (take > 0 && feet[take] > ground) take--;
-  while (land < steps && feet[land] > ground) land++;
-  return { takeoffAt: r3(take / 60), apexAt: r3(apex / 60), landAt: r3(land / 60) };
+  return { dur, has: name => nodes.has(name), worldY: (name, time) => worldOf(nodes.get(name)!, time) };
 }
 
 // Loop / root policy per clip (spec §9 table + the clip manifest's measured suggestions).
@@ -238,13 +272,29 @@ const MANIFEST_TIMES = ["apexAt", "hangAt", "slideFrom", "slideTo", "standAt", "
 
 const PACKS_ONLY = process.argv.includes("--packs-only");
 
-async function radbros(dir: string) {
+async function radbros(dir: string, retardioDir: string | null) {
   const clipsDir = path.join(dir, "game-clips");
+  /** Source character + clip pack per id (a Retardio's come from --retardios; null = skip him, keep his files). */
+  const sources = (id: string): { character: string; delivery: string; pack: string } | null => {
+    if (!isRetardio(id)) return { character: path.join(clipsDir, `radbro${id}_character.glb`), delivery: path.join(dir, "delivery", `radbro${id}_animations.glb`), pack: path.join(clipsDir, `radbro${id}.clips.glb`) };
+    if (!retardioDir) return null;
+    const src = path.join(retardioDir, "source");
+    return { character: path.join(src, `${id}_character.glb`), delivery: path.join(src, `${id}_character.glb`), pack: path.join(src, `${id}.clips.glb`) };
+  };
   const manifestPath = path.join(clipsDir, "manifest.json");
   const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, "utf8")) : { characters: {} };
   const metaFile = path.join(GEN, "clips.meta.json");
-  const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> =
-    (ONLY || PACKS_ONLY) && fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
+  const old: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> = fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : {};
+  const meta: Record<string, { clipPack: boolean; clips: Record<string, ClipMeta> }> = ONLY || PACKS_ONLY ? old : {};
+  /** The manifest's clip entries for an id; a Retardio = #723's times with his own hand heights (measured on his pack). */
+  const manClips = (id: string, pack: Document | null): Record<string, ManClip> => {
+    if (!isRetardio(id)) return manifest.characters?.[id]?.clips ?? {};
+    const base = structuredClone(manifest.characters?.["723"]?.clips ?? {}) as Record<string, ManClip>;
+    const h = pack ? handHeights(pack) : {};
+    if (h.rope !== undefined) base.Rope_Hang_Idle = { ...base.Rope_Hang_Idle, rightHandMean: [0, h.rope, 0] };
+    if (h.ledge !== undefined) base.Ledge_Grab = { ...base.Ledge_Grab, handHeight: h.ledge };
+    return base;
+  };
   const notes: string[] = [];
   type ManClip = { takeoffAt?: number; landAt?: number; rightHandMean?: number[]; handHeight?: number } & Partial<Record<(typeof MANIFEST_TIMES)[number], number>>;
   const entry = (name: string, m: Omit<ClipMeta, "loop" | "rootPolicy">, man: Record<string, ManClip>): ClipMeta => {
@@ -259,13 +309,16 @@ async function radbros(dir: string) {
   };
   if (PACKS_ONLY) {
     for (const id of ONLY ?? IDS) {
-      const packSrc = path.join(clipsDir, `radbro${id}.clips.glb`);
-      const packOut = path.join(OUT, `radbro${id}.clips.glb`);
+      const srcs = sources(id);
+      if (!srcs) continue;
+      const packSrc = srcs.pack;
+      const packOut = path.join(OUT, `${charFile(id)}.clips.glb`);
       if (!fs.existsSync(packSrc) || !meta[id]) { notes.push(`#${id}: no clip pack / meta entry, skipped`); continue; }
       const packClips = await clipPack(packSrc, packOut);
-      console.log(`radbro${id}.clips.glb  ${kb(packOut)}  (${packClips.join(", ")})`);
-      const man = manifest.characters?.[id]?.clips ?? {};
-      for (const [name, m] of Object.entries(measure(await io.read(packOut)))) meta[id].clips[name] = entry(name, m, man);
+      console.log(`${charFile(id)}.clips.glb  ${kb(packOut)}  (${packClips.join(", ")})`);
+      const packDoc = await io.read(packOut);
+      const man = manClips(id, packDoc);
+      for (const [name, m] of Object.entries(measure(packDoc))) meta[id].clips[name] = entry(name, m, man);
       meta[id].clipPack = true;
     }
     fs.writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
@@ -274,25 +327,27 @@ async function radbros(dir: string) {
     return;
   }
   for (const id of ONLY ?? IDS) {
-    const replacement = path.join(clipsDir, `radbro${id}_character.glb`);
-    const delivery = path.join(dir, "delivery", `radbro${id}_animations.glb`);
-    const src = fs.existsSync(replacement) ? replacement : delivery;
-    const out = path.join(OUT, `radbro${id}.glb`);
+    const srcs = sources(id);
+    if (!srcs) { if (old[id]) meta[id] = old[id]; notes.push(`#${id}: no --retardios folder, his files and meta entry left as they are`); continue; }
+    const replacement = srcs.character;
+    const src = fs.existsSync(replacement) ? replacement : srcs.delivery;
+    const out = path.join(OUT, `${charFile(id)}.glb`);
     const { kept, measured: own } = await character(src, out);
-    console.log(`radbro${id}.glb  ${kb(out)}  (${src === replacement ? "re-rigged replacement" : "delivery"}; clips: ${kept.join(", ")})`);
-    const packSrc = path.join(clipsDir, `radbro${id}.clips.glb`);
-    const packOut = path.join(OUT, `radbro${id}.clips.glb`);
+    console.log(`${charFile(id)}.glb  ${kb(out)}  (${src === replacement ? "re-rigged replacement" : "delivery"}; clips: ${kept.join(", ")})`);
+    const packSrc = srcs.pack;
+    const packOut = path.join(OUT, `${charFile(id)}.clips.glb`);
     let packClips: string[] = [];
     if (fs.existsSync(packSrc)) {
       packClips = await clipPack(packSrc, packOut);
-      console.log(`radbro${id}.clips.glb  ${kb(packOut)}  (${packClips.join(", ")})`);
+      console.log(`${charFile(id)}.clips.glb  ${kb(packOut)}  (${packClips.join(", ")})`);
     } else {
       if (fs.existsSync(packOut)) fs.rmSync(packOut);
       notes.push(`#${id}: no clip pack found, falling back to its owned clips only`);
     }
     // Measure: owned clips from the processed character, bought clips from the processed pack.
-    const measured = { ...own, ...(packClips.length ? measure(await io.read(packOut)) : {}) };
-    const man = manifest.characters?.[id]?.clips ?? {};
+    const packDoc = packClips.length ? await io.read(packOut) : null;
+    const measured = { ...own, ...(packDoc ? measure(packDoc) : {}) };
+    const man = manClips(id, packDoc);
     const clips: Record<string, ClipMeta> = {};
     for (const [name, m] of Object.entries(measured)) clips[name] = entry(name, m, man);
     meta[id] = { clipPack: packClips.length > 0, clips };
@@ -331,7 +386,7 @@ async function metaOnly() {
   const draco = (await import(spec)) as { default: { createDecoderModule(): Promise<unknown> } };
   io.registerDependencies({ "draco3d.decoder": await draco.default.createDecoderModule() });
   for (const id of IDS) {
-    for (const f of [path.join(OUT, `radbro${id}.glb`), path.join(OUT, `radbro${id}.clips.glb`)]) {
+    for (const f of [path.join(OUT, `${charFile(id)}.glb`), path.join(OUT, `${charFile(id)}.clips.glb`)]) {
       if (!fs.existsSync(f)) continue;
       const doc = await io.read(f);
       for (const name of JUMP_CLIPS) {
@@ -353,13 +408,14 @@ if (process.argv.includes("--meta-only")) {
 }
 const radbroDir = arg("radbros", "RUGRUN_RADBROS");
 const georgeDir = arg("george", "RUGRUN_GEORGE");
+const retardioDir = arg("retardios", "RUGRUN_RETARDIOS");
 if (!radbroDir && !georgeDir) {
-  console.error("usage: npm run assets -- --radbros <dir> [--george <dir>] [--only <id,...>] [--packs-only]   (or RUGRUN_RADBROS / RUGRUN_GEORGE)   |   --meta-only");
+  console.error("usage: npm run assets -- --radbros <dir> [--retardios <dir>] [--george <dir>] [--only <id,...>] [--packs-only]   (or RUGRUN_RADBROS / RUGRUN_RETARDIOS / RUGRUN_GEORGE)   |   --meta-only");
   process.exit(2);
 }
 fs.mkdirSync(OUT, { recursive: true });
 try {
-  if (radbroDir) await radbros(radbroDir);
+  if (radbroDir) await radbros(radbroDir, retardioDir);
   if (georgeDir) await george(georgeDir);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

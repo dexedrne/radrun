@@ -669,8 +669,8 @@ deflate-raw (CompressionStream), base64url.
 
 ## Radbros
 
-Pick your Radbro on the title; you chase one of the other three (the link's `r=` if it names one, else at
-random). All four are playable from the start (none is a campaign unlock), and the pick is cosmetic: the
+Pick your Radbro or Retardio on the title; you chase one of the others (the link's `r=` if it names one, else at
+random). All of them are playable from the start (none is a campaign unlock), and the pick is cosmetic: the
 round is the same with any pair, so ghost links replay the same whoever you pick.
 
 | | persona | taunts (a few) | caught / escaped |
@@ -679,6 +679,18 @@ round is the same with any pair, so ghost links replay the same whoever you pick
 | **#4764** | deadpan (the katana) | "heh", "pff", "ha.", "i'm not even running", "take your time" | "bro." / "mine now." |
 | **#2564** | quiet (whispers, hums) | "hehe", "shh", "♪", "over here", "wrong roof" | "oh. hello." / "thank you" |
 | **#723** | easygoing (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "heh heh", "oh, man", "nah", "nice day for it", "you good back there?" | "fair enough" / "see ya" |
+| **Retardio #555** | cheeky (long brown hair, "BRITISH FOOD" tee) | "hehe", "oi", "cheers for the bag", "too slow, mate" | "fair cop" / "cheers, mate" |
+| **Retardio #85** | saving up (long black hair, "NEED MONEY FOR PORSCHE" tee) | "heh", "tch", "porsche fund, sorry", "i need it more" | "there goes the porsche" / "porsche fund +1" |
+
+**The Retardios** (since 2026-10-02) are dexedrne's Retardio Cousin #555 and Retardio Classic #85, both boys with
+long hair, built on the Radbro rig with #723's clips. Their ids are `retardio555` / `retardio85` (never a bare
+number, which would be a Radbro token): links say `c=retardio555`, files are `public/models/retardio555.glb`,
+`retardio555.clips.glb`, `public/ui/retardio555.webp`; the UI calls them "Retardio #555" / "#555"
+(`charName` / `charTag` in `src/game/radbros.ts`). Their GLBs and meta come from
+`npm run assets -- --radbros <folder> --retardios <their folder> --only retardio555,retardio85` (clip times from #723's
+manifest entry, rope / ledge hand heights measured on their own clips). In the game their locomotion loops play a
+little slower to match their stride (`STRIDE`) and the rope arm swings out of their hair while they hang
+(`HAIR_ARM`, both in `src/app/ActorsView.tsx`). No recorded voice yet (chatter + bubbles, like #3171).
 
 Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
 the chatter pitch per Radbro is `VOICE` in `src/app/PlayViews.tsx` (#723 has the lowest). A speech bubble

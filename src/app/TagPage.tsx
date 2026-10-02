@@ -11,7 +11,7 @@ import type { Vector3 } from "three";
 import { TagGame } from "../game/tagGame.ts";
 import { TAG, type TagSlot } from "../game/tagMatch.ts";
 import { BOT_LEVELS, type BotLevel } from "../game/tagBot.ts";
-import { RADBROS, type RadbroId } from "../game/round.ts";
+import { RADBROS, charTag, portraitPath, type RadbroId } from "../game/round.ts";
 import { randomSeed } from "../game/play.ts";
 import { Rand } from "../sim/math.ts";
 import {
@@ -228,7 +228,7 @@ function TagDriver({ game }: { game: TagGame }) {
       st.acc = 0;
       const rows: HudRow[] = [];
       for (let i = 0; i < m.n; i++) rows.push({
-        slot: i, radbro: ui.slots[i], name: ui.names[i] ?? `#${ui.slots[i]}`, bag: m.bag[i] / 120, holder: i === m.holder, you: i === game.local,
+        slot: i, radbro: ui.slots[i], name: ui.names[i] ?? charTag(ui.slots[i]), bag: m.bag[i] / 120, holder: i === m.holder, you: i === game.local,
         frozen: m.freeze[i] > 0, tags: m.tags[i], falls: m.falls[i],
       });
       useTag.setState({
@@ -289,9 +289,9 @@ function Card({ id, on, onPick, size }: { id: RadbroId; on: boolean; onPick: () 
       background: on ? "rgba(255,61,127,0.35)" : "rgba(255,255,255,0.06)", border: on ? "2px solid #ff3d7f" : "2px solid rgba(255,255,255,0.2)",
     }}>
       <div style={{ margin: "0 auto 6px", width: size, height: size, borderRadius: 10, overflow: "hidden", background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}66, ${RADBRO_COLOR[id].accent}22 62%, rgba(0,0,0,0.25))` }}>
-        <img src={`/ui/radbro${id}.webp`} alt="" width={size} height={size} draggable={false} style={{ display: "block", width: size, height: size }} />
+        <img src={portraitPath(id)} alt="" width={size} height={size} draggable={false} style={{ display: "block", width: size, height: size }} />
       </div>
-      <div>#{id}</div>
+      <div>{charTag(id)}</div>
     </button>
   );
 }
@@ -310,7 +310,7 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
           web-slinger tag in {DISTRICTS[PAGE_DISTRICT].name}: whoever holds the bag chases. Touch, Yoink or yank someone to pass it. Least bag time at the horn wins.
         </div>
         <div style={{ ...panel, marginTop: small ? 8 : 14, padding: small ? "8px 10px" : panel.padding }}>
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>pick your Radbro</div>
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>pick your Radbro or Retardio</div>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             {RADBROS.map(id => <Card key={id} id={id} on={id === props.radbro} onPick={() => props.setRadbro(id)} size={size} />)}
           </div>
@@ -572,8 +572,8 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
     const ids = [radbro, ...others];
     useTag.setState({ screen: "loading", flash: null, agreed: null });
     if (!(await loadRadbros(ids))) return;
-    const slots: TagSlot[] = ids.map((r, i) => ({ radbro: r, touch: i === 0 && game.touch, easy: i === 0 && game.camera.easyGrab, name: i === 0 ? "you" : `#${r}` }));
-    useTag.setState({ slots: ids, names: ids.map((r, i) => (i === 0 ? "YOU" : `#${r}`)) });
+    const slots: TagSlot[] = ids.map((r, i) => ({ radbro: r, touch: i === 0 && game.touch, easy: i === 0 && game.camera.easyGrab, name: i === 0 ? "you" : charTag(r) }));
+    useTag.setState({ slots: ids, names: ids.map((r, i) => (i === 0 ? "YOU" : charTag(r))) });
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     game.startOffline({ slots, seed, seconds: SECS ?? TAG.seconds1v1, bots: level });
     setPaused(false);

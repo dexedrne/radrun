@@ -1,5 +1,5 @@
 // Title-card portraits: renders ?portrait=<id> for each Radbro in headless Chromium and writes
-// public/ui/radbro<id>.webp (transparent 3/4 bust in the Idle pose, from the game's own GLBs).
+// public/ui/radbro<id>.webp / retardio<n>.webp (transparent 3/4 bust in the Idle pose, from the game's own GLBs).
 //   npm run dev   (in another shell)
 //   RUGRUN_CHROME_PROFILE=<throwaway dir> node tools/portraits.ts [baseUrl] [extra query, e.g. "&yaw=35"] [--only 723,...]
 // (--only re-renders just those Radbros; the default is every Radbro in RADBROS).
@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { RADBROS } from "../src/game/round.ts";
+import { RADBROS, charFile } from "../src/game/round.ts";
 
 const profile = process.env.RUGRUN_CHROME_PROFILE;
 if (!profile) {
@@ -20,7 +20,7 @@ const pos = process.argv.slice(2).filter((_, i, all) => i !== onlyAt - 2 && i !=
 const base = pos[0] ?? "http://localhost:4870/";
 const extra = pos[1] ?? "";
 if (!ids.length) {
-  console.error(`--only takes Radbro ids from ${RADBROS.join(", ")}`);
+  console.error(`--only takes ids from ${RADBROS.join(", ")}`);
   process.exit(2);
 }
 const outDir = path.resolve(import.meta.dirname, "..", "public", "ui");
@@ -49,7 +49,7 @@ try {
     }
     if (!r?.dataUrl) throw new Error(`#${id}: ${r?.error ?? "timed out"}`);
     const bytes = Buffer.from(r.dataUrl.split(",")[1], "base64");
-    const out = path.join(outDir, `radbro${id}.webp`);
+    const out = path.join(outDir, `${charFile(id)}.webp`);
     fs.writeFileSync(out, bytes);
     console.log(`portraits: ${path.relative(process.cwd(), out)} (${(bytes.length / 1024).toFixed(1)} KB)`);
   }
