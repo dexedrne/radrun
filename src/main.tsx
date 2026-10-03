@@ -5,12 +5,15 @@ import { startBridge } from "./radbro/bridge.ts";
 import { unlockAudio } from "./audio/engine.ts";
 import { startPads } from "./input/padRuntime.ts";
 import { PadRoot } from "./ui/pad.tsx";
+import { startVyvanseHook } from "./ui/vyvanse.ts";
 
 window.addEventListener("error", e => console.error("[window.error]", e.message));
 window.addEventListener("unhandledrejection", e => console.error("[unhandledrejection]", String(e.reason)));
 
 // Framed on radbro.fun: tell the portal what this is; the first click focuses the frame + unlocks the audio.
 startBridge({ onFirstGesture: unlockAudio });
+// Framed on vyvanse.beer: the pause menu and the title offer the way back to its menu (dev builds: a localhost parent too).
+startVyvanseHook(import.meta.env.MODE !== "production");
 // Gamepads (round 14): polled every frame, hot-plug, the last device used decides the prompts.
 startPads();
 

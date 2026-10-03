@@ -37,6 +37,10 @@ right stick look, R2 / RT swing, L1 / LB wingsuit glide, Cross / A jump, Circle 
 prompts switch to PlayStation or Xbox glyphs when a pad is used and back when a key, a click or the mouse is.
 PLAY.md "Controller".
 
+Played inside vyvanse.beer's launcher (an iframe), the pause menus and the title add BACK TO VYVANSE.BEER, which asks the
+launcher to close the game (the keyboard's way back; a pad can also hold View + Menu there). It shows only when framed by
+vyvanse.beer (or a localhost page in dev / test builds), never on its own or on radbro.fun: `src/ui/vyvanse.ts`.
+
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
 
