@@ -33,7 +33,7 @@ import { FRAME } from "./frame.ts";
 import { useUi } from "../ui/store.ts";
 import { attachDom } from "../input/input.ts";
 import { requestLock } from "../radbro/bridge.ts";
-import { btn, layer, panel, scroller } from "../ui/screens.tsx";
+import { VyvanseBack, btn, layer, panel, scroller } from "../ui/screens.tsx";
 import { RADBRO_COLOR } from "../ui/strings.ts";
 import { TouchControls } from "../ui/TouchControls.tsx";
 import { applySettings, loadSettings, padSettingsOf } from "../ui/prefs.ts";
@@ -487,9 +487,10 @@ function PauseOverlay({ onResume, onQuit }: { onResume: () => void; onQuit: () =
     <div style={{ ...layer, display: "grid", placeItems: "center", background: "rgba(10,12,30,0.5)" }} data-pad-modal="">
       <div style={{ ...panel, textAlign: "center", minWidth: 240 }} data-testid="tag-pause">
         <div style={{ fontWeight: 900, letterSpacing: 3, marginBottom: 12 }}>PAUSED</div>
-        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
           <button style={btn(true)} onClick={onResume} data-pad-default="" data-pad-btn="START EAST">RESUME</button>
           <button style={btn(false)} onClick={onQuit}>QUIT</button>
+          <VyvanseBack />
         </div>
       </div>
     </div>

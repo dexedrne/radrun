@@ -18,6 +18,7 @@ import { PadText } from "./pad.tsx";
 import { radrunPadControls, radrunPadHud } from "./padPrompts.ts";
 import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
 import { MUSIC_STYLES } from "../audio/catalog.ts";
+import { backToVyvanse, vyvanseFramed } from "./vyvanse.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -27,6 +28,12 @@ export const btn = (primary = false): React.CSSProperties => ({
 export const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
 /** A full-screen layer that centres its child and scrolls (from the top) when the child is taller; its content stays inside the safe area. */
 export const scroller: React.CSSProperties = { ...layer, display: "flex", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", padding: safePad, boxSizing: "border-box" } as React.CSSProperties;
+
+/** Framed by vyvanse.beer only (./vyvanse.ts): asks its launcher to close the game and show its menu (the keyboard's way back). */
+export function VyvanseBack({ label = "BACK TO VYVANSE.BEER", style }: { label?: string; style?: React.CSSProperties }) {
+  if (!vyvanseFramed()) return null;
+  return <button style={{ ...btn(false), ...style }} onClick={backToVyvanse} title="close the game and go back to the vyvanse.beer menu" data-testid="vyvanse-back">{label}</button>;
+}
 
 /**
  * Viewport size, re-read on resize / rotation / the visual viewport changing (Safari's toolbars showing
@@ -166,6 +173,7 @@ export function Title(props: {
       SPIDER-TAG
     </button>
   );
+  const vyvBtn = <VyvanseBack style={{ fontSize: small ? 12 : 13, padding: compact ? "8px 10px" : small ? "10px 12px" : "13px 14px" }} />;
   return (
     <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
       <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: safe("top", 10), right: safe("right", 12), zIndex: 21 }} />
@@ -233,6 +241,7 @@ export function Title(props: {
             {compact && practiceBtn}
             {compact && tagBtn}
             {compact && bestBtn}
+            {compact && vyvBtn}
           </div>
           {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
           {availMut !== 0 && (
@@ -249,7 +258,7 @@ export function Title(props: {
               })}
             </div>
           )}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{tagBtn}{bestBtn}</div>}
+          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{tagBtn}{bestBtn}{vyvBtn}</div>}
         </div>
         {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
           {pad ? (
@@ -498,6 +507,7 @@ export function Pause(props: { onResume: () => void; onRestart: () => void; onQu
           <button style={btn()} onClick={props.onRestart}>{props.practice ? "Back to start" : "Restart"}</button>
           <button style={btn()} onClick={() => setOpen(!open)} data-testid="settings">Settings</button>
           <button style={btn()} onClick={props.onQuit} data-testid="quit">{props.practice ? "Back to title" : "Quit"}</button>
+          <VyvanseBack label="Back to vyvanse.beer" />
         </div>
         {open && (
           <div style={{ marginTop: 12, textAlign: "left", display: "grid", gap: 6, fontSize: 12 }}>
