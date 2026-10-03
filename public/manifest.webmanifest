@@ -1,7 +1,7 @@
 {
-  "name": "RadRun",
-  "short_name": "RadRun",
-  "description": "He swiped your bag. 90 seconds. Swing across the rooftops and YOINK him.",
+  "name": "SPIDERTAG",
+  "short_name": "SPIDERTAG",
+  "description": "Web-slinger tag over the rooftops: chase down the Radbro who swiped your bag, or play tag 1v1 with a friend.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

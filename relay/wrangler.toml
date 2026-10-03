@@ -1,4 +1,4 @@
-# RadRun relay: a Cloudflare Worker + one Durable Object per room (free plan; no secrets, no storage).
+# The SPIDERTAG online relay (Worker "radrun-relay", its old name kept): a Cloudflare Worker + one Durable Object per room (free plan; no secrets, no storage).
 # Local:  npm run relay:worker   (wrangler 4.141.0 via npx, pinned; or, with no Cloudflare tooling at all: npm run relay)
 # Deploy: PLAY.md "Deploying the relay" (the owner's own Cloudflare account; the same pinned wrangler version).
 name = "radrun-relay"
@@ -16,8 +16,8 @@ tag = "v1"
 new_sqlite_classes = ["Room"]
 
 [vars]
-# The game's origins (comma-separated). Set to the real site before deploying.
-ALLOWED_ORIGINS = "https://radrun.vyvanse.beer"
+# The game's origins (comma-separated). radrun.vyvanse.beer stays while tabs opened there before the move are around.
+ALLOWED_ORIGINS = "https://spidertag.vyvanse.beer,https://radrun.vyvanse.beer"
 # "1" only under `wrangler dev`: allows localhost origins and the ?lag= latency knob. Keep "0" when deployed.
 DEV = "0"
 

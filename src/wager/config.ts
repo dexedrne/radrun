@@ -65,7 +65,7 @@ export const WAGER_ENV = {
   relay: {
     vars: {
       net: "WAGER_NET", // a WagerNetId: picks the chain id, vault and token from deployments.json
-      allowedOrigins: "ALLOWED_ORIGINS", // e.g. https://radrun.vyvanse.beer
+      allowedOrigins: "ALLOWED_ORIGINS", // e.g. https://spidertag.vyvanse.beer
       dev: "DEV", // "1" only under wrangler dev / the Node stand-in: localhost origins, x-dev-country header
       rpcUrls: "RPC_URLS", // comma list for the wager chain; overrides deployments.json
       ethRpcUrls: "ETH_RPC_URLS", // comma list for Ethereum mainnet (Radbro reads); overrides RADBRO.rpc

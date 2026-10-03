@@ -3,49 +3,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "redirects": [
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "rugrun.vyvanse.beer"
-        }
-      ],
-      "destination": "https://radrun.vyvanse.beer/",
-      "permanent": true
-    },
-    {
-      "source": "/:path+",
-      "has": [
-        {
-          "type": "host",
-          "value": "rugrun.vyvanse.beer"
-        }
-      ],
-      "destination": "https://radrun.vyvanse.beer/:path+",
-      "permanent": true
-    },
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "radbro-rug-run.vercel.app"
-        }
-      ],
-      "destination": "https://radrun.vyvanse.beer/",
-      "permanent": true
-    },
-    {
-      "source": "/:path+",
-      "has": [
-        {
-          "type": "host",
-          "value": "radbro-rug-run.vercel.app"
-        }
-      ],
-      "destination": "https://radrun.vyvanse.beer/:path+",
-      "permanent": true
-    }
+    { "source": "/token", "destination": "https://token.spidertag.vyvanse.beer/", "permanent": false },
+    { "source": "/token/:path*", "destination": "https://token.spidertag.vyvanse.beer/:path*", "permanent": false },
+    { "source": "/", "has": [{ "type": "host", "value": "radrun.vyvanse.beer" }], "destination": "https://spidertag.vyvanse.beer/", "permanent": true },
+    { "source": "/:path+", "has": [{ "type": "host", "value": "radrun.vyvanse.beer" }], "destination": "https://spidertag.vyvanse.beer/:path+", "permanent": true },
+    { "source": "/", "has": [{ "type": "host", "value": "rugrun.vyvanse.beer" }], "destination": "https://spidertag.vyvanse.beer/", "permanent": true },
+    { "source": "/:path+", "has": [{ "type": "host", "value": "rugrun.vyvanse.beer" }], "destination": "https://spidertag.vyvanse.beer/:path+", "permanent": true },
+    { "source": "/", "has": [{ "type": "host", "value": "radbro-rug-run.vercel.app" }], "destination": "https://spidertag.vyvanse.beer/", "permanent": true },
+    { "source": "/:path+", "has": [{ "type": "host", "value": "radbro-rug-run.vercel.app" }], "destination": "https://spidertag.vyvanse.beer/:path+", "permanent": true }
   ]
 }

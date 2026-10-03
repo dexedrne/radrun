@@ -1,4 +1,4 @@
-// The ?tag page (a lazy chunk): SPIDER-TAG. Offline: you against 1-3 bots in the page's district, a 3-minute match,
+// The ?tag page (a lazy chunk): TAG, the web-slinger tag mode of SPIDERTAG. Offline: you against 1-3 bots in the page's district, a 3-minute match,
 // lowest bag time wins. ONLINE lazily loads the net chunk (net/online.tsx: the lobby, the relay transport and the
 // rollback link) only when pressed or when the page is opened from a room link (?tag&room=CODE).
 // One canvas, mounted once; a match is a fresh TagMatch outside React (nothing remounts).
@@ -33,7 +33,7 @@ import { FRAME } from "./frame.ts";
 import { useUi } from "../ui/store.ts";
 import { attachDom } from "../input/input.ts";
 import { requestLock } from "../radbro/bridge.ts";
-import { VyvanseBack, btn, layer, panel, scroller } from "../ui/screens.tsx";
+import { VyvanseBack, Wordmark, btn, layer, panel, scroller } from "../ui/screens.tsx";
 import { RADBRO_COLOR } from "../ui/strings.ts";
 import { TouchControls } from "../ui/TouchControls.tsx";
 import { applySettings, loadSettings, padSettingsOf } from "../ui/prefs.ts";
@@ -54,8 +54,8 @@ const AUTO: BotLevel | null = DEV && params.has("bot") ? ((params.get("bot") || 
 /** ?secs=N: match length override (dev / test builds). */
 const SECS = DEV && params.has("secs") ? Math.max(10, Number(params.get("secs")) || 180) : null;
 const ROOM = params.get("room");
-/** The working name; the public name is still the owner's call (multiplayer design §8 decision 15). */
-export const TAG_NAME = "SPIDER-TAG";
+/** The mode's name inside SPIDERTAG (the game is named after it; the solo chase is the other mode). */
+export const TAG_NAME = "TAG";
 /** The online lobby + relay transport + rollback: a separate chunk, fetched only when ONLINE is pressed (or a room link). */
 const Online = lazy(() => import("../net/online.tsx"));
 
@@ -167,7 +167,7 @@ function localSfx(ev: number): void {
 /**
  * Music: the calm loop in the menus, the round's loop (the music style: the district's chill loop by default) from the
  * countdown through the results and on into a rematch, a gentle lift while the chase is within 20 m of you (the holder
- * near you, or you near your target), dimmed while paused. The same volumes, mute and hidden-tab pause as RadRun.
+ * near you, or you near your target), dimmed while paused. The same volumes, mute and hidden-tab pause as the chase.
  */
 function tagMusic(game: TagGame, st: { layer: boolean; round: boolean }): void {
   const screen = useTag.getState().screen, m = game.match;
@@ -305,9 +305,9 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
   return (
     <div style={{ ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.2), rgba(10,12,30,0.6))" }} data-testid="tag-menu">
       <div style={{ margin: "auto", textAlign: "center", maxWidth: 760, padding: small ? 8 : 16, boxSizing: "border-box" }}>
-        <div style={{ font: `900 ${small ? 34 : 60}px/1 ui-monospace, monospace`, letterSpacing: small ? 3 : 6, color: "#fff", textShadow: "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{TAG_NAME}</div>
+        <Wordmark px={small ? 46 : 84} style={{ display: "inline-block" }} />
         <div style={{ marginTop: 8, fontSize: small ? 12 : 14, textShadow: "0 1px 2px #000" }}>
-          web-slinger tag in {DISTRICTS[PAGE_DISTRICT].name}: whoever holds the bag chases. Touch, Yoink or yank someone to pass it. Least bag time at the horn wins.
+          <b style={{ color: "#fd43ae", letterSpacing: 2 }}>{TAG_NAME}</b> · web-slinger tag in {DISTRICTS[PAGE_DISTRICT].name}: whoever holds the bag chases. Touch, Yoink or yank someone to pass it. Least bag time at the horn wins.
         </div>
         <div style={{ ...panel, marginTop: small ? 8 : 14, padding: small ? "8px 10px" : panel.padding }}>
           <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>pick your Radbro or Retardio</div>
@@ -345,7 +345,7 @@ function Menu(props: { radbro: RadbroId; setRadbro: (r: RadbroId) => void; bots:
           every move from the chase works: swing (steer into a cross street = corner swing), zip, wall run, ledge grab, slide, <b>C</b> hold to charge-jump, <b>C</b> in the air to dive.
         </div>}
         <div style={{ marginTop: 10 }}>
-          <button onClick={() => gotoDistrict(PAGE_DISTRICT)} style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} data-testid="tag-back" data-pad-btn="EAST">← back to RadRun</button>
+          <button onClick={() => gotoDistrict(PAGE_DISTRICT)} style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} data-testid="tag-back" data-pad-btn="EAST">← back to the chase</button>
         </div>
       </div>
     </div>

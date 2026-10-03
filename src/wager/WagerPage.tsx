@@ -1,5 +1,5 @@
-// SPIDER-TAG wager beta: the unlisted ?wager page (docs/WAGER.md §7), its own lazy chunk (viem and everything wager
-// live only here). It is the SPIDER-TAG page (app/TagPage.tsx: one canvas, the scene, the HUD, the online session)
+// SPIDERTAG wagers (beta), 1v1 TAG for tokens on Robinhood Chain: the unlisted ?wager page (docs/WAGER.md §7), its own
+// lazy chunk (viem and everything wager live only here). It is the TAG page (app/TagPage.tsx: one canvas, the scene, the HUD, the online session)
 // with this overlay in place of the menu, the ONLINE lobby and the results. Sub-routes: ?wager (the lobby, the wallet,
 // history), &join=<matchId> (an invite link), &match=<matchId> (a series), &verify=<matchId> (the public match page, no
 // wallet needed; ?verify=<matchId> alone opens it too), &review=<matchId> (the vault owner). &net=<id> picks another
@@ -10,7 +10,7 @@ import TagPage, { useTag, type TagHost } from "../app/TagPage.tsx";
 import type { TagGame } from "../game/tagGame.ts";
 import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
 import { isDistrictId } from "../world/districts.ts";
-import { scroller } from "../ui/screens.tsx";
+import { Wordmark, scroller } from "../ui/screens.tsx";
 import { WagerApp, useWager } from "./app.ts";
 import { mySim } from "./assets.ts";
 import { siteChoice, keepParams } from "./site.ts";
@@ -135,8 +135,8 @@ function WagerOverlay({ game }: { game: TagGame }) {
     body = (
       <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gap: 10 }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ font: `900 ${narrow ? 30 : 46}px/1 ui-monospace, monospace`, letterSpacing: narrow ? 3 : 6, color: "#fff", textShadow: "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>SPIDER-TAG</div>
-          <div style={{ marginTop: 6, fontSize: 13, textShadow: "0 1px 2px #000" }}>1v1 for tokens · best 2 of 3{choice.dep.testnet ? " · test tokens only, no real value" : ""}</div>
+          <Wordmark px={narrow ? 44 : 66} style={{ display: "inline-block" }} />
+          <div style={{ marginTop: 6, fontSize: 13, textShadow: "0 1px 2px #000" }}><b style={{ color: C.gold, letterSpacing: 2 }}>WAGERS</b> · 1v1 TAG for tokens on {choice.dep.chainName} · best 2 of 3{choice.dep.testnet ? " · test tokens only, no real value" : ""}</div>
         </div>
         <div style={{ display: "flex", gap: 6, justifyContent: "center" }} role="tablist">
           {tabs.map(t => (

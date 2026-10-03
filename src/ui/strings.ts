@@ -3,7 +3,9 @@ import { MEDALS, type Difficulty } from "../sim/tuning.ts";
 import { charName, charTag, isRetardio, type RadbroId } from "../game/round.ts";
 
 export const S = {
-  title: "RADRUN",
+  title: "SPIDERTAG",
+  /** The coin wagers are played for, on its own page (spidertag.vyvanse.beer/token redirects there too). */
+  tokenUrl: "https://token.spidertag.vyvanse.beer",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   youChase: "You chase one of the others",
   countdownBubble: "finders keepers",
@@ -98,5 +100,5 @@ export function clockText(s: number): string {
 }
 
 export function shareText(kind: "tag" | "yoink" | "yank" | "", runner: string, t: number): string {
-  return `I ${kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : "tagged"} ${isRetardio(runner) ? charName(runner) : charTag(runner)} in ${t.toFixed(1)} s in RadRun`;
+  return `I ${kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : "tagged"} ${isRetardio(runner) ? charName(runner) : charTag(runner)} in ${t.toFixed(1)} s in SPIDERTAG`;
 }

@@ -75,7 +75,7 @@ export default function BenchPage() {
   }, []);
   return (
     <div style={{ padding: 16, font: "14px ui-monospace, monospace", color: "#eee", background: "#12142a", minHeight: "100%", boxSizing: "border-box" }} data-testid="bench">
-      <h2 style={{ marginTop: 0 }}>RadRun online bench</h2>
+      <h2 style={{ marginTop: 0 }}>SPIDERTAG online bench</h2>
       <table style={{ borderCollapse: "collapse" }}>
         <tbody>
           {rows.map((r, i) => (

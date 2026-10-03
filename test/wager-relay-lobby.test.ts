@@ -624,14 +624,16 @@ test("faucet: test networks only; once per address a day, three per IP a day; re
 });
 
 test("gates: origins for sockets and posts, the region block (off by default), public reads open to all", () => {
-  const s = parseSettings({ ALLOWED_ORIGINS: "https://radrun.vyvanse.beer", DEV: "0", REGION_BLOCK: "" });
+  const s = parseSettings({ ALLOWED_ORIGINS: "https://spidertag.vyvanse.beer, https://radrun.vyvanse.beer", DEV: "0", REGION_BLOCK: "" });
   const req = (method: string, path: string, headers: Record<string, string> = {}): [ReturnType<typeof routeOf>, HttpReq] => {
     const url = new URL(`https://relay.example${path}`);
     return [routeOf(method, url, false), { method, url, header: n => headers[n.toLowerCase()] ?? null, text: async () => "" }];
   };
-  const up = { upgrade: "websocket", origin: "https://radrun.vyvanse.beer" };
+  const up = { upgrade: "websocket", origin: "https://spidertag.vyvanse.beer" };
   let [r, q] = req("GET", "/lobby", up);
   assert.equal(gate(r, q, s, "US"), null, "no region block by default");
+  [r, q] = req("GET", "/lobby", { ...up, origin: "https://radrun.vyvanse.beer" });
+  assert.equal(gate(r, q, s, null), null, "the old address still works during the move");
   [r, q] = req("GET", "/lobby", { ...up, origin: "https://evil.example" });
   assert.equal(gate(r, q, s, null)?.status, 403);
   [r, q] = req("GET", `/ws?room=${random32()}`, up);
@@ -643,7 +645,7 @@ test("gates: origins for sockets and posts, the region block (off by default), p
   assert.equal(gate(r, q, s, null), null, "public reads are open");
   [r, q] = req("POST", "/faucet", { origin: "https://evil.example" });
   assert.equal(gate(r, q, s, null)?.status, 403);
-  const blocked = parseSettings({ ALLOWED_ORIGINS: "https://radrun.vyvanse.beer", REGION_BLOCK: "us,ir" });
+  const blocked = parseSettings({ ALLOWED_ORIGINS: "https://spidertag.vyvanse.beer", REGION_BLOCK: "us,ir" });
   [r, q] = req("GET", "/lobby", up);
   assert.equal(gate(r, q, blocked, "US")?.status, 403);
   assert.equal(gate(r, q, blocked, "DE"), null);

@@ -170,7 +170,7 @@ export function LobbyView({ app }: { app: WagerApp }) {
       <PairingStatus app={app} />
       <Section title="PLAY FOR TOKENS" testid="wager-lobby">
         <div style={{ fontSize: 13, color: C.dim, marginBottom: 8, lineHeight: 1.5 }}>
-          1v1 SPIDER-TAG, best 2 of 3. Both players put up the same stake; the winner takes the pot minus the fee. The referee replays every input, so the result is the game's, not a client's.
+          1v1 TAG, best 2 of 3. Both players put up the same stake; the winner takes the pot minus the fee. The referee replays every input, so the result is the game's, not a client's.
         </div>
         {s.simOk === false && <div style={{ marginBottom: 8 }}><Notice kind="error" text="this page is out of date: reload to update before you play" /></div>}
         {!s.address ? <div style={{ fontSize: 13, color: C.ice }}>connect a wallet to create or join a match</div> : creating ? (
@@ -216,7 +216,7 @@ export function JoinView({ app, matchId, onBack }: { app: WagerApp; matchId: Hex
         {!offer && !err && <div>{st ? (st.state === "open" ? "loading…" : `this match is ${st.state === "unknown" ? "no longer open" : st.state}`) : "loading the invite…"}</div>}
         {offer && config && (
           <>
-            <div style={{ fontSize: 13, marginBottom: 8 }}>you're invited to a best-of-3 SPIDER-TAG match:</div>
+            <div style={{ fontSize: 13, marginBottom: 8 }}>you're invited to a best-of-3 1v1 TAG match:</div>
             <div style={{ display: "grid", gap: 6 }}><OfferRow app={app} o={offer} mine={sameAddress(offer.creator.address, address)} /></div>
             {!address && <div style={{ marginTop: 8, color: C.ice, fontSize: 13 }}>connect a wallet (top right) to join</div>}
           </>
