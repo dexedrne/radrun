@@ -9,7 +9,9 @@ The coin, $SPIDERTAG, has its own page: https://token.spidertag.vyvanse.beer (al
 https://radrun.vyvanse.beer, https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redirect there,
 path and query strings included, so old challenge, ghost, room and wager links keep working). The game was called
 RadRun until October 2026: storage keys, relay Worker names, the radbro.fun slug and the wager contracts keep the old
-names, so saves, scores and signatures carry over.
+names, so saves, scores and signatures carry over. A browser keeps saves per address, so the first time it opens the new
+one, the game fetches them from the old one once (a hidden frame on radrun.vyvanse.beer/carry.html, the one path there
+that doesn't redirect; `src/ui/carry.ts`) and reloads.
 
 ## Run it
 

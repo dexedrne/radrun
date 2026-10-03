@@ -12,7 +12,7 @@ https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redi
 included, so old challenge / ghost / room / wager links keep working). Formerly RadRun, working title Rug Run: the
 `rugrun.*` / `radrun.*` storage keys, the `RUGRUN_*` env vars, the relay Workers (`radrun-relay`,
 `radrun-wager-relay`), the radbro.fun slug `radrun` and the wager contracts' EIP-712 domains keep those names, so saves,
-scores, links and signatures carry over.
+scores, links and signatures carry over; a browser's saves come over from the old address once (`src/ui/carry.ts`).
 
 Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564, #723 (the cowboy) or #3171, or Retardio #555 or #85, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
