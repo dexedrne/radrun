@@ -1,6 +1,6 @@
-// Link-preview assets: public/og.jpg (1200x630 OG / Twitter card: a mid-swing frame from the game with
-// the RADRUN logo, the pitch and the Radbro portraits) and public/apple-touch-icon.png (180 px,
-// from public/favicon.svg).
+// An alternative link-preview card: public/og-frame.jpg (1200x630: a mid-swing frame from the game with the
+// SPIDERTAG wordmark, the pitch and the Radbro portraits). The card index.html uses is public/og.jpg, the key-art
+// card (PLAY.md "Link previews"); this never overwrites it. The icons come from tools/icons.ts.
 //   npm run dev   (in another shell)
 //   RUGRUN_CHROME_PROFILE=<throwaway dir> node tools/og-image.ts [--url <game url>] [--pick N] [--bg <png>] [--bg-out <png>]
 // --url defaults to the dev server's ?bot=swing round (the page freezes 0.25 s into each swing); --pick
@@ -91,7 +91,9 @@ try {
     body { width: ${W}px; height: ${H}px; overflow: hidden; position: relative; font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; color: #fff; background: #141833; }
     .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,12,30,0.86) 0%, rgba(10,12,30,0.62) 38%, rgba(10,12,30,0) 66%), linear-gradient(0deg, rgba(10,12,30,0.55), rgba(10,12,30,0) 34%); }
-    .logo { position: absolute; left: 58px; top: 56px; font-weight: 800; font-size: 118px; line-height: 1; letter-spacing: 8px; text-shadow: 6px 6px 0 #ff3d7f, 12px 12px 0 rgba(0,0,0,0.4); }
+    @font-face { font-family: Bebas; src: url(${dataUrl(path.join(pub, "fonts", "BebasNeue.woff2"), "font/woff2")}); }
+    .logo { position: absolute; left: 58px; top: 50px; font: 150px/1 Bebas, Impact, sans-serif; letter-spacing: 2px; text-shadow: 0 4px 14px #000, 0 0 30px #000; }
+    .logo .a { color: #f3eada; } .logo .b { color: #fd43ae; }
     .pitch { position: absolute; left: 62px; top: 214px; width: 700px; font-weight: 700; font-size: 29px; line-height: 1.3; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
     .pitch b { color: #ffd23f; }
     .cta { position: absolute; left: 62px; bottom: 58px; display: flex; gap: 14px; align-items: center; font-size: 21px; font-weight: 700; }
@@ -105,24 +107,17 @@ try {
   </style></head><body>
     <img class="bg" src="${bg}">
     <div class="shade"></div>
-    <div class="logo">RADRUN</div>
+    <div class="logo"><span class="a">SPIDER</span><span class="b">TAG</span></div>
     <div class="pitch">He swiped your bag. 90 seconds.<br>Swing across the rooftops and <b>YOINK</b> him.</div>
-    <div class="cta"><span class="play">PLAY FREE</span><span class="url">radrun.vyvanse.beer</span></div>
+    <div class="cta"><span class="play">PLAY FREE</span><span class="url">spidertag.vyvanse.beer</span></div>
     <div class="cards">${cards}</div>
   </body></html>`;
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
-  const og = path.join(pub, "og.jpg");
+  const og = path.join(pub, "og-frame.jpg");
   fs.writeFileSync(og, await page.screenshot({ type: "jpeg", quality: 86 }));
   console.log(`og-image: ${path.relative(root, og)} (${(fs.statSync(og).size / 1024).toFixed(1)} KB)`);
-
-  // 3. apple-touch-icon.png from favicon.svg.
-  await page.setViewport({ width: 180, height: 180, deviceScaleFactor: 1 });
-  await page.setContent(`<html><body style="margin:0;background:#141833"><img src="${dataUrl(path.join(pub, "favicon.svg"), "image/svg+xml")}" style="width:180px;height:180px;display:block"></body></html>`, { waitUntil: "load" });
-  const icon = path.join(pub, "apple-touch-icon.png");
-  fs.writeFileSync(icon, await page.screenshot({ type: "png" }));
-  console.log(`og-image: ${path.relative(root, icon)} (${(fs.statSync(icon).size / 1024).toFixed(1)} KB)`);
 } finally {
   await browser.close();
 }

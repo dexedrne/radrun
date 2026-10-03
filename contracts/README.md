@@ -1,6 +1,7 @@
-# RadRun wager contracts
+# SPIDERTAG wager contracts
 
-The SPIDER-TAG wager vault and its test token. The design, the trust model and the numbers are in
+The SPIDERTAG wager vault (1v1 TAG for tokens) and its test token. The game was called RadRun when these were deployed:
+the EIP-712 domain stays `"RadRun GameVault"`, version `"1"` (a deployed vault's signatures depend on it). The design, the trust model and the numbers are in
 [`docs/WAGER.md`](../docs/WAGER.md) §3; this file is how to build, test and deploy them.
 
 | Path | What |

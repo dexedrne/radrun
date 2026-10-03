@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { VYVANSE_ORIGIN, createVyvanseHook, vyvanseParent, type VyvanseWindow } from "../src/ui/vyvanse.ts";
 
-const GAME = "https://radrun.vyvanse.beer";
+const GAME = "https://spidertag.vyvanse.beer";
 
 function memStore() {
   const m = new Map<string, string>();

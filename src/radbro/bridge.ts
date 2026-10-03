@@ -29,9 +29,10 @@ export type BridgeWindow = {
 };
 type Target = { postMessage(message: unknown, targetOrigin: string): void };
 
+/** The portal listing: the slug stays "radrun" (the same radbro.fun entry and its scores); the title is the new name. */
 export const RADRUN: GameInfo = {
   game: "radrun",
-  title: "RadRun",
+  title: "SPIDERTAG",
   objective: "He swiped your bag. Web-swing across the rooftops and tag him or YOINK him before the 90 seconds run out.",
   hint: "Let go of the web near the top of the swing for a perfect release · dive (C in the air) and web out of it to swing faster.",
   // One control per entry, no commas inside one (the portal's play guide takes a comma-separated list).

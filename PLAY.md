@@ -1,9 +1,18 @@
-# Playing RadRun
+# Playing SPIDERTAG
 
-He swiped your bag. You have 90 seconds to tag him (touch) or YOINK him (lasso) before the rug shows up.
+Web-slinger tag over the rooftops. Two modes: **TAG** (whoever holds the bag chases; vs 1-3 bots, or 1v1 online) and
+the **CHASE**: he swiped your bag, and you have 90 seconds to tag him (touch) or YOINK him (lasso) before the rug shows
+up (PLAY on the title, plus CAMPAIGN and PRACTICE). SPIDERTAG wagers (beta) are 1v1 TAG for tokens on Robinhood Chain.
+The coin, $SPIDERTAG, has its own page: https://token.spidertag.vyvanse.beer (also https://spidertag.vyvanse.beer/token).
 
-**Play it: https://radrun.vyvanse.beer** (desktop with a mouse, or a phone / tablet in landscape; the old
-https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redirect there, query strings included).
+**Play it: https://spidertag.vyvanse.beer** (desktop with a mouse, or a phone / tablet in landscape; the old
+https://radrun.vyvanse.beer, https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redirect there,
+path and query strings included, so old challenge, ghost, room and wager links keep working). The game was called
+RadRun until October 2026: storage keys, relay Worker names, the radbro.fun slug and the wager contracts keep the old
+names, so saves, scores and signatures carry over. A browser keeps saves per address, so the first time it opens the new
+one, the game fetches them from the old one once (a hidden frame on radrun.vyvanse.beer/carry.html, the one path there
+that doesn't redirect; `src/ui/carry.ts`) and reloads, unless it was opened on a room, invite or series link or has
+already had a key, click or touch: then they count from the next load.
 
 ## Run it
 
@@ -82,9 +91,9 @@ move switches back to the keyboard prompts. More than one pad: the one pressed l
 
 Easy grab (pause -> Settings) works on the pad too: Cross / A is the Space key (tap = jump, hold = swing).
 
-**Menus** (title, campaign, pause and its settings, results, loading errors, SPIDER-TAG menu, results and pause, the
+**Menus** (title, campaign, pause and its settings, results, loading errors, TAG menu, results and pause, the
 online lobby): a yellow ring shows the focus; the d-pad or the left stick moves it to the nearest control that way,
-**Cross / A** presses it, **Circle / B** is back (pause: resume; results: menu; campaign, SPIDER-TAG and online:
+**Cross / A** presses it, **Circle / B** is back (pause: resume; results: menu; campaign, TAG and online:
 back), **Options / Menu** resumes from the pause and starts a campaign level, **Triangle / Y** on the results =
 retry / rematch. On a slider, left / right changes it. The first press after using the keyboard or mouse only shows
 the ring (so it never starts a round by surprise). A legend in the bottom-right corner shows the menu buttons.
@@ -95,13 +104,13 @@ and needs none); Esc still pauses, and a click on the canvas captures the mouse 
 **Settings** (pause -> Settings -> controller, shown once a pad has been used; remembered in the browser with the
 other settings): stick look speed (0.3-2.5x), stick dead zone (4-35 %, radial: the direction is kept), invert Y for
 the right stick (separate from the mouse's), vibration on / off (dual-rumble where the browser supports it: light on
-webs, zips, yanks and hard landings, firmer on bonks, falls and catches; in SPIDER-TAG on tags). The stick shaping
+webs, zips, yanks and hard landings, firmer on bonks, falls and catches; in TAG on tags). The stick shaping
 is `PAD` in `src/input/gamepad.ts`; the button layout is its `LAYOUT` table (the prompts and the controls lists are
 built from it).
 
 **Replays and online stay the same:** the pad writes the same input as the keyboard, mouse and touch (the left stick
 is the move a touch stick gives, the right stick turns the same camera), so it records the same quantised input word:
-ghost format 4, share links v6, runner packs v3 and the SPIDER-TAG online inputs did not change, and a run made on a
+ghost format 4, share links v6, runner packs v3 and the TAG online inputs did not change, and a run made on a
 pad replays exactly like any other. A full-tilt stick is exactly full speed in every direction (same as W / W+D).
 
 **Sound:** browsers only start audio after a click or a key press in the page; a pad press does not count. Playing
@@ -109,7 +118,7 @@ with only a pad, the menus say so ("sound starts after one click or key press");
 
 **iPhone: play it from the Home Screen.** Safari on iPhone can't go fullscreen from a web page, and in
 landscape its toolbars take a big slice off the top. Two fixes:
-- **Add to Home Screen** (Share -> Add to Home Screen): the RadRun icon then opens full screen with no
+- **Add to Home Screen** (Share -> Add to Home Screen): the SPIDERTAG icon then opens full screen with no
   Safari bars at all (`public/manifest.webmanifest`, icons in `public/icons/` from `node tools/icons.ts`).
   The Home Screen app keeps its own save, so campaign stars and bests start fresh there.
 - **In a Safari tab:** while the toolbars show in landscape (title, campaign, results or pause, never
@@ -162,8 +171,8 @@ C / Circle / SLIDE dive, every round 12 move as before); the swing itself got th
   knees bent, a little flutter; it lets go just before the landing so the feet come down first), a livelier swing
   (the web arm up on the web, knees tucked through the bottom of the arc, legs and the free arm reaching out at its
   ends), a flip or twirl on a perfect release, and the hang pose on a corner web. The thief and ghosts get the same
-  poses; SPIDER-TAG too.
-- **Bots** play the same physics: the chase bots and SPIDER-TAG bots corner-swing at the crossings, the tech / sharp
+  poses; TAG too.
+- **Bots** play the same physics: the chase bots and TAG bots corner-swing at the crossings, the tech / sharp
   bots dive at a target well below and let go in the wider perfect window. Balance: "The chase and difficulties".
 - **The thief keeps the round 12 swing** (his baked hops are unchanged: the packs are still v3 and bake byte for
   byte). Ghosts and links from before this build replay with the round 12 swing and say so (see "Ghost links").
@@ -338,12 +347,11 @@ skill star). Numbers: `.local/r12fix/camp1.txt` and `camp-L*.txt` in the build w
 **Versions.** Links v=6 (bests / ghosts from before are the older build's), ghost format 4 (+ the pitch column and
 C held; formats 1-3 replay with the charge and dive off), pack v3 (v1 / v2 packs are rejected).
 
-## SPIDER-TAG (round 13)
+## TAG (round 13)
 
-Web-slinger tag between Radbros: one of you holds the bag, everyone else runs. **SPIDER-TAG** on the title opens it
-(`?tag`, same district as the title; its own lazy chunk, so the single-player page load is unchanged). "Spider-tag"
-is the working name; the public name is still your call (multiplayer design §8 decision 15; it is one constant, `TAG_NAME` in
-`src/app/TagPage.tsx`, plus the title button in `src/ui/screens.tsx`).
+Web-slinger tag between Radbros: one of you holds the bag, everyone else runs. **TAG** on the title opens it
+(`?tag`, same district as the title; its own lazy chunk, so the single-player page load is unchanged). The game is named after
+it; inside SPIDERTAG the mode is TAG (`TAG_NAME` in `src/app/TagPage.tsx`, plus the title button in `src/ui/screens.tsx`).
 
 **Rules** (`src/game/tagMatch.ts`, the tag table `TAG`; tuning.json may carry a `"tag"` section with the same keys):
 - Whoever holds the bag chases. Pass it by **touching** someone (1.5 m across, 1.8 m up / down), by **Yoink** (your
@@ -387,7 +395,7 @@ the audio, so the lobby's buttons do too (online matches used to be silent: only
 
 ### Online (1v1 private rooms)
 
-ONLINE in the SPIDER-TAG menu loads the online chunk (`src/net/online.tsx`; nothing online is fetched before you
+ONLINE in the TAG menu loads the online chunk (`src/net/online.tsx`; nothing online is fetched before you
 press it): **CREATE ROOM** gives a 5-letter code and an invite link (`?tag&room=CODE`), a friend types the code into
 **JOIN** (or opens the link), you both pick a Radbro and press **READY**. The room plays the host's district (a
 joiner on another district gets a "go there" button). REMATCH after the results = READY again; the results screen
@@ -444,7 +452,8 @@ fits the free plan (multiplayer design §5: about 170 1v1 matches a day, then re
 1. Create a Cloudflare account under the pseudonymous identity (free plan, no card).
 2. On your machine: `cd relay && npx wrangler@4.141.0 login` (a browser sign-in; the token stays in your home directory,
    never in the repo).
-3. In `relay/wrangler.toml`, set `ALLOWED_ORIGINS` to the game's origin(s) (default `https://radrun.vyvanse.beer`)
+3. In `relay/wrangler.toml`, set `ALLOWED_ORIGINS` to the game's origin(s) (default `https://spidertag.vyvanse.beer` and,
+   during the move, the old `https://radrun.vyvanse.beer`)
    and leave `DEV = "0"` in the top-level `[vars]`.
 4. `npx wrangler@4.141.0 deploy`. The first time it asks for a `workers.dev` subdomain: pick a neutral one (it is public).
    It prints the relay URL, `https://radrun-relay.<subdomain>.workers.dev`.
@@ -452,8 +461,8 @@ fits the free plan (multiplayer design §5: about 170 1v1 matches a day, then re
 6. Tell the game where it is, at build time: add `VITE_RELAY_URL=https://radrun-relay.<subdomain>.workers.dev` to
    the Vercel project's Production environment (`vercel env add VITE_RELAY_URL production`, then
    `vercel pull --yes --environment=production` in the deploy clone before `vercel build --prod`). A build without it
-   shows "Online play isn't switched on for this build yet" under ONLINE; offline SPIDER-TAG always works.
-7. Redeploy the site as usual, open https://radrun.vyvanse.beer/?tag -> ONLINE -> CREATE on one device and JOIN on
+   shows "Online play isn't switched on for this build yet" under ONLINE; offline TAG always works.
+7. Redeploy the site as usual, open https://spidertag.vyvanse.beer/?tag -> ONLINE -> CREATE on one device and JOIN on
    another.
 
 Later: `npx wrangler@4.141.0 tail` streams the relay's logs (counters only; it never logs IPs, names or inputs);
@@ -462,7 +471,7 @@ per-Radbro hashes of the first step that differed.
 
 ## WAGER (BETA)
 
-SPIDER-TAG for tokens: two players put up the same stake, play a 1v1 best of 3, and the winner takes the pot minus a
+SPIDERTAG wagers: 1v1 TAG for tokens on Robinhood Chain. Two players put up the same stake, play a 1v1 best of 3, and the winner takes the pot minus a
 3% house fee (1.5% for a winner holding a Radbro; 0 to 5%, set by the vault's owner). The page is the unlisted link
 `?wager` (nothing on the site links to it) and always shows its network label, **BETA · TESTNET** on the Robinhood
 Chain testnet with test tokens. The full design, the trust model and every number are in
@@ -480,7 +489,7 @@ Chain testnet with test tokens. The full design, the trust model and every numbe
 4. NEW MATCH: stake, round length, city, and who can join (the open lobby, an invite link, or one address; holders
    only; a minimum number of series). The other player joins from the lobby or the link. Your page confirms the
    joiner by itself (no popup), both stakes lock, and the series starts.
-5. Best of 3 on the normal SPIDER-TAG scene. The referee replays both players' inputs with the game's own sim and that
+5. Best of 3 on the normal TAG scene. The referee replays both players' inputs with the game's own sim and that
    replay decides every round; the page shows the round result between rounds. Leaving mid-series forfeits it after
    20 s; not turning up before round 1 voids it (nobody pays).
 6. The winner's vault balance is credited when the referee's result is settled on chain. VERIFY THIS MATCH opens the
@@ -546,13 +555,13 @@ mints or launches it): `npm run wager:deploy -- --net rh-mainnet --token <coin> 
 Recorded music, stings, voice lines and sound effects (113 mp3s under `public/audio/`), with the older
 synthesised WebAudio sound as the fallback whenever a file is not loaded yet or fails, so a round is never
 silent. Sound starts when you press PLAY or PRACTICE (browsers only allow audio after a click or a key
-press; on the SPIDER-TAG page any click or key). Nothing is fetched on page open: a round loads about 3 MB
+press; on the TAG page any click or key). Nothing is fetched on page open: a round loads about 3 MB
 alongside its Radbros, without delaying the LOADING screen (the countdown sounds go first); the round's music loop
 streams while it plays.
 
 - **Music:** a calm loop on the title and results; the countdown build (its cut lands exactly on GO); then
   the round's loop from GO, in the **music style** picked in pause -> Settings (remembered with the other
-  settings; SPIDER-TAG follows it too):
+  settings; TAG follows it too):
   - **Chill** (the default): laid-back instrumental loops of about two minutes, one per district mood:
     `chill_rooftops` (dusk rooftops lo-fi, ~84 bpm: Downtown), `chill_market` (night-market chillhop with a warm
     bass, ~92 bpm: Night Market), `chill_harbour` (harbour jazz-hop with sax and upright bass, ~80 bpm: Docks) and
@@ -594,7 +603,7 @@ streams while it plays.
   time); `tracks.ts` streams and crossfades the music and holds the style; `voice.ts` queues the lines; `sfx.ts`
   plays samples with the synth fallback; the fallback music is `score.ts` / `music.ts`. Low quality loads one
   variation per sound and plays at most 6 sampled SFX at once. Dev / test builds report the track, voice lines
-  and files loaded / failed in `window.__play.audio`; SPIDER-TAG reports its track and the audio state in
+  and files loaded / failed in `window.__play.audio`; TAG reports its track and the audio state in
   `window.__tag`. `?sfxdebug` logs every sound asked for to `window.__sfxLog`: each SFX with whether it actually
   played (false = no audio yet, muted, hidden tab or volume 0) and each music loop, sting and fallback score as
   it starts.
@@ -705,8 +714,8 @@ Adding a Radbro (how #723 went in):
    `clips.meta.json` entry (the other Radbros' files stay untouched); `npm run assets -- --meta-only`
    measures the Regular_Jump takeoff / apex / feet-down times (#723: 0.467 / 0.8 / 1.1 s).
 4. Dev server up, `RUGRUN_CHROME_PROFILE` set: `npm run portraits -- --only <id>` (title card),
-   `npm run og-image -- --bg <saved frame>` (share card, one bust per Radbro); the key art busts are
-   composited by the art script (untracked).
+   `npm run og-image -- --bg <saved frame>` (the alternative card `og-frame.jpg`, one bust per Radbro); the
+   card that ships, `og.jpg`, is key art: its busts are composited by the art script (untracked).
 5. `npm test` (`test/roster.test.ts` checks the files, clip meta, lines and links for every Radbro).
 
 **In the air (round 7).** A jump is Regular_Jump frozen on its upright apex; a long drop (falling faster
@@ -942,7 +951,7 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
 | `?bot=follow&k=1.3&seed=123&d=chill&c=652&r=4764` | a whole round played by the test bot (`bot=yoink` lassoes, `bot=chase` = the swinging balance bot on the real sim, `bot=swing` chain-swings for screenshots); `d=chill|normal|degen`. `bot=chase&rec` sends the bot's inputs through the ghost codec, so its catch gives a ghost link (`window.__play.ghost.url`). `&snap` freezes 0.12 s into each chaser jump / release; `&snap=freefall,sky,runnerff` (any subset) freezes once in the chaser's free fall, on a long swing from a tower anchor 30+ m up (`sky`) and in the runner's free fall (`window.__unfreeze()` resumes) |
 | `?portrait=652` | one Radbro's Idle bust from its game GLB (`&yaw=`, `&bust=`, `&t=`; `&clip=Free_Fall&full` any clip, whole body); `npm run portraits` saves every Radbro to `public/ui/` for the title cards (`-- --only 723` for one) |
 | `?bench` | the online step / rollback cost and the determinism self-test hash (open it on a phone and in Firefox / Safari: design gates 3-4) |
-| `?tag&bot=normal&secs=60` | SPIDER-TAG with your slot played by a tag bot (`chill` / `normal` / `sharp`) and a shorter match; online knobs in "SPIDER-TAG" |
+| `?tag&bot=normal&secs=60` | TAG with your slot played by a tag bot (`chill` / `normal` / `sharp`) and a shorter match; online knobs in "TAG" |
 | `?hats` | George's three campaign hats on his head across his clips (one row per hat, 3/4 close-ups; `&yaw=` camera angle, `&lift=` / `&fwd=` try other offsets than `HAT_LIFT` / `HAT_FWD` in `src/app/hats.ts`) |
 
 Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the title and shows the time to beat
@@ -1114,11 +1123,16 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 ## Link previews
 
 `index.html` carries the title, description, theme colour, favicon and the Open Graph / Twitter card
-tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on https://radrun.vyvanse.beer (the canonical
-address; `vercel.json` permanently redirects the old rugrun.vyvanse.beer and vercel.app hosts there, path and
-query kept), so change them if the game moves. Share and
-challenge / ghost links are built from the address the game was opened on.
-`public/og.jpg` (1200x630) is a mid-swing frame from the game with the logo, the pitch and the four
-Radbro portraits; `public/favicon.svg` is drawn by hand. `npm run og-image` (dev server up,
-`RUGRUN_CHROME_PROFILE` set) re-renders `og.jpg` and `apple-touch-icon.png`: `--pick N` takes another
-frozen swing from the `?bot=swing` round, and `--bg <png>` re-composites over a saved frame.
+tags (`twitter:site` / `twitter:creator` @dexedrne). The canonical / og:url / image URLs are absolute on
+https://spidertag.vyvanse.beer (the canonical address; `vercel.json` permanently redirects the old radrun.vyvanse.beer,
+rugrun.vyvanse.beer and vercel.app hosts there, path and query kept, and sends `/token` to
+https://token.spidertag.vyvanse.beer), so change them if the game moves. Share, challenge, ghost, room and wager links
+are built from the address the game was opened on.
+`public/og.jpg` (1200x630) is the key-art card: the six characters over the rooftops, the SPIDERTAG wordmark (Bebas
+Neue) and a VT323 `[ OK ] spidertag.vyvanse.beer` line, an HTML page rendered with headless Chromium outside the repo.
+`og2.jpg` / `og3.jpg` are the RadRun cards, kept for previews cached before the move. The favicon and the install
+icons are the $SPIDERTAG coin's ST mark: `node tools/icons.ts <the 1024 px logo png>` writes `favicon.png`,
+`icons/*.png` and `apple-touch-icon.png`. `npm run og-image` (dev server up, `RUGRUN_CHROME_PROFILE` set) renders the
+older style of card, a mid-swing frame with the wordmark, the pitch and the portraits, into `og-frame.jpg` (never over
+`og.jpg`): `--pick N` takes another frozen swing from the `?bot=swing` round, and `--bg <png>` re-composites over a
+saved frame.

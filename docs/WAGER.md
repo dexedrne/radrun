@@ -1,6 +1,6 @@
-# SPIDER-TAG wager (beta): technical spec
+# SPIDERTAG wagers (beta): technical spec
 
-Two players put up equal stakes of a token, play a 1v1 SPIDER-TAG series (best 2 of 3), and the winner takes the pot
+Two players put up equal stakes of a token, play a 1v1 TAG series (best 2 of 3), and the winner takes the pot
 minus a small house fee. This file is the shared spec for the contracts, the wager relay and the client. The frozen
 interfaces it describes are in the repo:
 
@@ -15,9 +15,10 @@ interfaces it describes are in the repo:
 | Checks tying them together | `test/wager-shared.test.ts` |
 
 **Status:** beta on the Robinhood Chain testnet with a test token only. The page is the unlisted link
-`https://radrun.vyvanse.beer/?wager` (nothing on the site links to it) and always shows **BETA · TESTNET**. Anyone with
+`https://spidertag.vyvanse.beer/?wager` (nothing on the site links to it; the old `radrun.vyvanse.beer` redirects there,
+query kept) and always shows **BETA · TESTNET**. Anyone with
 the link can play: an open lobby plus direct invite links. The real token and Robinhood Chain mainnet come later as a
-configuration change (§8, §11). The live SPIDER-TAG online mode and its relay (`radrun-relay`) are not touched by any of
+configuration change (§8, §11). The live TAG online mode and its relay (`radrun-relay`) are not touched by any of
 this.
 
 ---
@@ -35,7 +36,7 @@ this.
    the creator can ever be player A of it. The offer appears in the open lobby, or only behind its invite link. A joiner
    signs the matching Entry naming the creator; the creator's page then signs an Entry naming the joiner (no popup).
    The relayer submits `lock(entryA, sigA, entryB, sigB)`, and the vault moves both stakes from free to locked.
-4. **Play the series.** Best of 3 SPIDER-TAG rounds (90 s by default) through the wager relay, on the existing online
+4. **Play the series.** Best of 3 TAG rounds (90 s by default) through the wager relay, on the existing online
    netcode. The referee re-simulates every round from the relay-recorded inputs with the canonical sim, and that
    replay decides the winner, not the clients.
 5. **Settle.** The referee signs a `Result` (winner, fee, hash of the input log). Anyone can submit it (the relayer
@@ -799,7 +800,7 @@ dev relay is not.
   must grow by no more than about 2 kB.
 - **What stays out of the main chunk.** viem and everything wager-related live only in the lazy chunk and what it
   imports.
-- **Reused code.** The series view reuses the existing SPIDER-TAG scene, HUD and online session through the TagPage
+- **Reused code.** The series view reuses the existing TAG scene, HUD and online session through the TagPage
   pieces. No renderer changes except the holder cosmetics hook.
 - **Sub-routes.** `?wager` is the lobby. `?wager&join=<matchId>` is an invite link. `?wager&match=<matchId>` is a
   locked series (the page opens it when a match of yours locks). `?wager&verify=<matchId>` is the public replay and

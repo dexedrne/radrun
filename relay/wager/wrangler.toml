@@ -1,4 +1,4 @@
-# RadRun SPIDER-TAG wager relay (docs/WAGER.md §4): a Worker of its own, "radrun-wager-relay", separate from the live
+# The SPIDERTAG wager relay (docs/WAGER.md §4): a Worker of its own, "radrun-wager-relay", separate from the live
 # "radrun-relay" (relay/wrangler.toml), with its own Durable Object classes, so deploying one never rebuilds or
 # redeploys the other. Free plan: SQLite-backed Durable Objects.
 #
@@ -35,8 +35,8 @@ new_sqlite_classes = ["WagerLobby", "WagerRoom"]
 # Every name is listed in src/wager/config.ts WAGER_ENV. Amounts are token base units (the test token has 18 decimals).
 [vars]
 WAGER_NET = "rh-testnet"
-# The site, and a local dev server (npm run dev, port 4870) trying the testnet beta with &net=rh-testnet.
-ALLOWED_ORIGINS = "https://radrun.vyvanse.beer,http://localhost:4870,http://127.0.0.1:4870"
+# The site (and its old address, radrun.vyvanse.beer, while tabs from before the move are around), and a local dev server (npm run dev, port 4870) trying the testnet beta with &net=rh-testnet.
+ALLOWED_ORIGINS = "https://spidertag.vyvanse.beer,https://radrun.vyvanse.beer,http://localhost:4870,http://127.0.0.1:4870"
 # "1" only under wrangler dev: localhost origins, the x-dev-country header, /dev/bench, DEV_RADBRO_* mocks.
 DEV = "0"
 # Empty: the deployment's public RPCs (RPC_URL_PRIVATE, a secret, goes first when set) and RADBRO.rpc for Ethereum.
@@ -105,7 +105,7 @@ class_name = "WagerRoom"
 
 [env.main.vars]
 WAGER_NET = "rh-mainnet"
-ALLOWED_ORIGINS = "https://radrun.vyvanse.beer"
+ALLOWED_ORIGINS = "https://spidertag.vyvanse.beer,https://radrun.vyvanse.beer"
 DEV = "0"
 RPC_URLS = ""
 ETH_RPC_URLS = ""

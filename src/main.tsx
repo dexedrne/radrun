@@ -6,10 +6,13 @@ import { unlockAudio } from "./audio/engine.ts";
 import { startPads } from "./input/padRuntime.ts";
 import { PadRoot } from "./ui/pad.tsx";
 import { startVyvanseHook } from "./ui/vyvanse.ts";
+import { carryOldSaves } from "./ui/carry.ts";
 
 window.addEventListener("error", e => console.error("[window.error]", e.message));
 window.addEventListener("unhandledrejection", e => console.error("[unhandledrejection]", String(e.reason)));
 
+// At spidertag.vyvanse.beer, once per browser: bring the saves over from the old address (ui/carry.ts).
+carryOldSaves();
 // Framed on radbro.fun: tell the portal what this is; the first click focuses the frame + unlocks the audio.
 startBridge({ onFirstGesture: unlockAudio });
 // Framed on vyvanse.beer: the pause menu and the title offer the way back to its menu (dev builds: a localhost parent too).

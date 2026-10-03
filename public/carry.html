@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="robots" content="noindex" />
+<title>SPIDERTAG</title>
+<script>
+  // Served from the old address (radrun.vyvanse.beer; vercel.json keeps this one path from redirecting). The game at
+  // its new address loads it in a hidden frame, once per browser, and gets this browser's saves back: every rugrun.* /
+  // radrun.* key (src/ui/carry.ts). Posted only to the new address; anywhere else it does nothing.
+  (function () {
+    var TO = "https://spidertag.vyvanse.beer";
+    if (location.origin === TO || window.parent === window) return;
+    var items = {};
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && /^(rugrun|radrun)\./.test(k)) items[k] = localStorage.getItem(k);
+      }
+    } catch (e) {
+      /* no storage: nothing to carry */
+    }
+    window.parent.postMessage({ type: "spidertag:carry", items: items }, TO);
+  })();
+</script>
+</html>

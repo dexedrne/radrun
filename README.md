@@ -1,10 +1,18 @@
-# RadRun
+# SPIDERTAG
 
-A rooftop chase with pendulum web swinging and parkour through 40-230 m canyon cities, built on [react-three-game](https://prnth.com/react-three-game/).
+Web-slinger tag over the rooftops: pendulum web swinging and parkour through 40-230 m canyon cities, built on
+[react-three-game](https://prnth.com/react-three-game/). Two modes: **TAG** (whoever holds the bag chases; vs 1-3 bots,
+or 1v1 online) and the **CHASE** (the solo 90-second chase, its campaign and practice). **SPIDERTAG wagers** (beta) are
+1v1 TAG for tokens on Robinhood Chain: `docs/WAGER.md`. The coin, $SPIDERTAG, has its own page:
+https://token.spidertag.vyvanse.beer (https://spidertag.vyvanse.beer/token redirects there).
+
 Design: `docs/specs/2026-09-23-rug-run-design.md`. Quick guide (run, controls, editing, tuning, known
-issues): `PLAY.md`. Live: https://radrun.vyvanse.beer (the old https://rugrun.vyvanse.beer and
-https://radbro-rug-run.vercel.app addresses redirect there, query strings included, so old challenge / ghost
-links keep working). Working title: Rug Run (the `rugrun.*` storage keys and `RUGRUN_*` env vars keep that name).
+issues): `PLAY.md`. Live: https://spidertag.vyvanse.beer (the old https://radrun.vyvanse.beer,
+https://rugrun.vyvanse.beer and https://radbro-rug-run.vercel.app addresses redirect there, path and query strings
+included, so old challenge / ghost / room / wager links keep working). Formerly RadRun, working title Rug Run: the
+`rugrun.*` / `radrun.*` storage keys, the `RUGRUN_*` env vars, the relay Workers (`radrun-relay`,
+`radrun-wager-relay`), the radbro.fun slug `radrun` and the wager contracts' EIP-712 domains keep those names, so saves,
+scores, links and signatures carry over; a browser's saves come over from the old address once (`src/ui/carry.ts`).
 
 Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564, #723 (the cowboy) or #3171, or Retardio #555 or #85, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
@@ -19,7 +27,7 @@ npm run dev          # http://localhost:4870/  (title -> PLAY)
 npm test             # node --test: sim, determinism, city lint, bake checks, runner + round rules
 npm run build        # production build (dev pages stripped) + draco cleanup
 npm run build:test   # build keeping the dev pages and ?bot (preview deployments)
-npm run relay        # the SPIDER-TAG online relay, locally on :8787 (or the Worker emulator: npm run relay:worker)
+npm run relay        # the TAG online relay, locally on :8787 (or the Worker emulator: npm run relay:worker)
 ```
 
 Controls: PLAY captures the mouse · mouse look/aim · WASD run · hold LMB to swing on the building, cable or
@@ -44,10 +52,10 @@ vyvanse.beer (or a localhost page in dev / test builds), never on its own or on 
 PRACTICE on the title = free swinging in the city with your Radbro and George (no runner, no timer);
 first-run tips show once each (pause -> Settings -> show tips again).
 
-SPIDER-TAG on the title (`?tag`) = web-slinger tag between Radbros: whoever holds the bag chases, a touch, a Yoink or
+TAG on the title (`?tag`) = web-slinger tag between Radbros: whoever holds the bag chases, a touch, a Yoink or
 a yank passes it, least time holding the bag wins. Offline against 1-3 bots now; ONLINE = 1v1 private rooms (a code
 or a link) over a tiny relay (`relay/`: a Cloudflare Worker + one Durable Object per room, or `node relay/dev.ts`
-locally) with rollback netcode on the same deterministic sim. PLAY.md "SPIDER-TAG" has the rules, how to run the
+locally) with rollback netcode on the same deterministic sim. PLAY.md "TAG" has the rules, how to run the
 relay locally and the steps to deploy it.
 
 Challenge links: `?c=<652|4764|2564|723>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
@@ -110,7 +118,7 @@ shots).
 
 ## Use it
 
-RadRun is under the [Viral Public License](LICENSE), the same license as Milady, Remilio and
+SPIDERTAG is under the [Viral Public License](LICENSE), the same license as Milady, Remilio and
 react-three-game. Fork it, remix it, ship your own version, sell it; no credit needed. Anything made
 from it keeps the license. The four Radbros are also free to use on their own, as rigged and animated
 models: [dexedrne/radbros-3d](https://github.com/dexedrne/radbros-3d).
@@ -120,5 +128,5 @@ she loads at runtime from his repo, and she is not part of this one. Ask him bef
 own thing.
 
 Credits: Radbros #652, #4764, #2564 and #723 are dexedrne's own, used with permission from the Radbro
-Webring dev · Retardio #555 and #85 are dexedrne's own · the Pockit Milady is by prnth, used with his permission · built on
+Webring dev · Retardio #555 and #85 are dexedrne's own · the wordmark is set in Bebas Neue (SIL Open Font License) · the Pockit Milady is by prnth, used with his permission · built on
 [react-three-game](https://prnth.com/react-three-game/) by prnth.

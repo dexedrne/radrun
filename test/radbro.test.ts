@@ -46,7 +46,7 @@ test("radbro: framed posts game-ready on start, with the full payload", () => {
   assert.deepEqual(Object.keys(m).sort(), ["controls", "game", "hint", "objective", "title", "type", "viewport"]);
   assert.equal(m.type, "radbro:game-ready");
   assert.equal(m.game, "radrun");
-  assert.equal(m.title, "RadRun");
+  assert.equal(m.title, "SPIDERTAG");
   assert.ok(typeof m.objective === "string" && m.objective.length > 10);
   assert.ok(typeof m.hint === "string" && m.hint.length > 10);
   assert.ok(Array.isArray(m.controls) && m.controls.length >= 4 && m.controls.every(c => typeof c === "string"));

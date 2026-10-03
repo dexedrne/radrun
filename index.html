@@ -3,36 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>RadRun</title>
-    <meta name="description" content="He swiped your bag. 90 seconds. Swing across the rooftops and YOINK him." />
+    <title>SPIDERTAG</title>
+    <meta name="description" content="Web-slinger tag over the rooftops: chase down the Radbro who swiped your bag, or play tag 1v1 with a friend." />
     <meta name="theme-color" content="#141833" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="RadRun" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="apple-mobile-web-app-title" content="SPIDERTAG" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://radrun.vyvanse.beer/" />
+    <link rel="preload" href="/fonts/BebasNeue.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="canonical" href="https://spidertag.vyvanse.beer/" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="RadRun" />
-    <meta property="og:title" content="RadRun" />
-    <meta property="og:description" content="He swiped your bag. 90 seconds. Swing across the rooftops and YOINK him." />
-    <meta property="og:url" content="https://radrun.vyvanse.beer/" />
-    <meta property="og:image" content="https://radrun.vyvanse.beer/og3.jpg" />
-    <meta property="og:image:secure_url" content="https://radrun.vyvanse.beer/og3.jpg" />
+    <meta property="og:site_name" content="SPIDERTAG" />
+    <meta property="og:title" content="SPIDERTAG" />
+    <meta property="og:description" content="Web-slinger tag over the rooftops: chase down the Radbro who swiped your bag, or play tag 1v1 with a friend." />
+    <meta property="og:url" content="https://spidertag.vyvanse.beer/" />
+    <meta property="og:image" content="https://spidertag.vyvanse.beer/og.jpg" />
+    <meta property="og:image:secure_url" content="https://spidertag.vyvanse.beer/og.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="RadRun: Radbros #4764, #652, #723 and #2564 with the Retardio boys Cousin #555 and Classic #85 web-swing and wingsuit-glide over rain-slick neon rooftops at dusk" />
+    <meta property="og:image:alt" content="SPIDERTAG: Radbros #4764, #652, #723 and #2564 with the Retardio boys Cousin #555 and Classic #85 web-swing and wingsuit-glide over rain-slick neon rooftops at dusk" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@dexedrne" />
     <meta name="twitter:creator" content="@dexedrne" />
-    <meta name="twitter:title" content="RadRun" />
-    <meta name="twitter:description" content="He swiped your bag. 90 seconds. Swing across the rooftops and YOINK him." />
-    <meta name="twitter:image" content="https://radrun.vyvanse.beer/og3.jpg" />
-    <meta name="twitter:image:alt" content="RadRun: Radbros #4764, #652, #723 and #2564 with the Retardio boys Cousin #555 and Classic #85 web-swing and wingsuit-glide over rain-slick neon rooftops at dusk" />
+    <meta name="twitter:title" content="SPIDERTAG" />
+    <meta name="twitter:description" content="Web-slinger tag over the rooftops: chase down the Radbro who swiped your bag, or play tag 1v1 with a friend." />
+    <meta name="twitter:image" content="https://spidertag.vyvanse.beer/og.jpg" />
+    <meta name="twitter:image:alt" content="SPIDERTAG: Radbros #4764, #652, #723 and #2564 with the Retardio boys Cousin #555 and Classic #85 web-swing and wingsuit-glide over rain-slick neon rooftops at dusk" />
     <style>
+      /* the SPIDERTAG wordmark (Bebas Neue, SIL OFL) */
+      @font-face { font-family: "Bebas Neue"; src: url(/fonts/BebasNeue.woff2) format("woff2"); font-display: swap; }
       html, body { margin: 0; height: 100%; width: 100%; background: #9fc3e6; overflow: hidden; overscroll-behavior: none; }
       /* no double-tap zoom, no grey tap flash, no font boost on rotate */
       html { touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }

@@ -19,6 +19,7 @@ import { radrunPadControls, radrunPadHud } from "./padPrompts.ts";
 import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
 import { MUSIC_STYLES } from "../audio/catalog.ts";
 import { backToVyvanse, vyvanseFramed } from "./vyvanse.ts";
+import { isFramed } from "../radbro/bridge.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -33,6 +34,16 @@ export const scroller: React.CSSProperties = { ...layer, display: "flex", overfl
 export function VyvanseBack({ label = "BACK TO VYVANSE.BEER", style }: { label?: string; style?: React.CSSProperties }) {
   if (!vyvanseFramed()) return null;
   return <button style={{ ...btn(false), ...style }} onClick={backToVyvanse} title="close the game and go back to the vyvanse.beer menu" data-testid="vyvanse-back">{label}</button>;
+}
+
+/** The SPIDERTAG wordmark as on the token banner: Bebas Neue (index.html loads it), SPIDER cream, TAG pink. */
+export function Wordmark({ px, style }: { px: number; style?: React.CSSProperties }) {
+  return (
+    <div role="heading" aria-level={1} aria-label={S.title} data-testid="wordmark"
+      style={{ font: `400 ${px}px/0.92 "Bebas Neue", Impact, "Arial Narrow", sans-serif`, letterSpacing: Math.max(1, Math.round(px / 80)), whiteSpace: "nowrap", filter: "drop-shadow(0 3px 2px #090b16) drop-shadow(0 0 12px rgba(9,11,22,0.8))", ...style }}>
+      <span style={{ color: "#f3eada" }}>SPIDER</span><span style={{ color: "#fd43ae" }}>TAG</span>
+    </div>
+  );
 }
 
 /**
@@ -63,7 +74,7 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
     background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "8px 14px", borderRadius: 10, fontSize: 13,
     boxShadow: "0 3px 12px rgba(0,0,0,0.35)", textAlign: "center",
   };
-  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: RadRun plays in landscape</div>;
+  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: SPIDERTAG plays in landscape</div>;
   return (
     <div style={{ position: "fixed", left: "50%", top: safe("top", 96), transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
       <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
@@ -143,7 +154,7 @@ export function Title(props: {
   const [showControls, setShowControls] = useState(false);
   // tiny (landscape under 400 px: toolbars showing, small phones): no pitch / pick line, smaller cards.
   const img = tiny ? 50 : compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
-  const titlePx = tiny ? 26 : compact ? 32 : narrow ? 40 : 72;
+  const titlePx = tiny ? 32 : compact ? 40 : narrow ? 50 : 88;
   const playBtn = (
     <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: compact ? "8px 28px" : small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play" data-pad-default="">
       {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
@@ -168,9 +179,9 @@ export function Title(props: {
     </button>
   );
   const tagBtn = (
-    <button onClick={() => gotoDistrict(PAGE_DISTRICT, { tag: "1" })} title="web-slinger tag: you vs bots (or a friend online); whoever holds the bag chases"
+    <button onClick={() => gotoDistrict(PAGE_DISTRICT, { tag: "1" })} title="web-slinger tag: you vs 1-3 bots, or 1v1 online with a friend; whoever holds the bag chases"
       style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", borderColor: "#ff3d7f", color: "#ffc2d6" }} data-testid="spider-tag">
-      SPIDER-TAG
+      TAG
     </button>
   );
   const vyvBtn = <VyvanseBack style={{ fontSize: small ? 12 : 13, padding: compact ? "8px 10px" : small ? "10px 12px" : "13px 14px" }} />;
@@ -180,7 +191,7 @@ export function Title(props: {
       <div style={{ margin: "auto", textAlign: "center", maxWidth: oneRow ? 980 : 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
         <RotateHint inline />
         <HomeScreenTip />
-        <div style={{ font: `900 ${titlePx}px/1 ui-monospace, monospace`, letterSpacing: compact ? 3 : 6, color: "#fff", textShadow: compact ? "3px 3px 0 #ff3d7f, 5px 5px 0 rgba(0,0,0,0.35)" : "4px 4px 0 #ff3d7f, 8px 8px 0 rgba(0,0,0,0.35)" }}>{S.title}</div>
+        <Wordmark px={titlePx} style={{ display: "inline-block" }} />
         {!tiny && <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>}
         {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
           <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
@@ -282,6 +293,10 @@ export function Title(props: {
               style={{ ...btn(false), padding: "3px 10px", fontSize: 11, marginRight: 8, background: showControls ? "rgba(159,230,255,0.25)" : "rgba(14,16,30,0.55)" }}>
               controls {showControls ? "▴" : "▾"}
             </button></>
+          )}
+          {(!isFramed() || vyvanseFramed()) && (
+            // Not inside someone else's portal (radbro.fun): only on its own or on vyvanse.beer.
+            <><a href={S.tokenUrl} target="_blank" rel="noopener" style={{ color: "#fd43ae", fontWeight: 700, textDecoration: "none", opacity: 0.95 }} data-testid="token-link">$SPIDERTAG token ↗</a><span style={{ opacity: 0.6 }}> · </span></>
           )}
           <span style={{ opacity: 0.75 }}>{S.credits}</span>
         </div>
