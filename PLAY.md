@@ -11,7 +11,8 @@ path and query strings included, so old challenge, ghost, room and wager links k
 RadRun until October 2026: storage keys, relay Worker names, the radbro.fun slug and the wager contracts keep the old
 names, so saves, scores and signatures carry over. A browser keeps saves per address, so the first time it opens the new
 one, the game fetches them from the old one once (a hidden frame on radrun.vyvanse.beer/carry.html, the one path there
-that doesn't redirect; `src/ui/carry.ts`) and reloads.
+that doesn't redirect; `src/ui/carry.ts`) and reloads, unless it was opened on a room, invite or series link or has
+already had a key, click or touch: then they count from the next load.
 
 ## Run it
 
@@ -713,8 +714,8 @@ Adding a Radbro (how #723 went in):
    `clips.meta.json` entry (the other Radbros' files stay untouched); `npm run assets -- --meta-only`
    measures the Regular_Jump takeoff / apex / feet-down times (#723: 0.467 / 0.8 / 1.1 s).
 4. Dev server up, `RUGRUN_CHROME_PROFILE` set: `npm run portraits -- --only <id>` (title card),
-   `npm run og-image -- --bg <saved frame>` (share card, one bust per Radbro); the key art busts are
-   composited by the art script (untracked).
+   `npm run og-image -- --bg <saved frame>` (the alternative card `og-frame.jpg`, one bust per Radbro); the
+   card that ships, `og.jpg`, is key art: its busts are composited by the art script (untracked).
 5. `npm test` (`test/roster.test.ts` checks the files, clip meta, lines and links for every Radbro).
 
 **In the air (round 7).** A jump is Regular_Jump frozen on its upright apex; a long drop (falling faster

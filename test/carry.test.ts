@@ -23,13 +23,13 @@ test("applyCarry: the old values of rugrun.* / radrun.* keys win; nothing else i
 });
 
 type Listener = (e: { origin: string; source: unknown; data: unknown }) => void;
-function fakeWindow(origin: string, init: Record<string, string> = {}) {
+function fakeWindow(origin: string, init: Record<string, string> = {}, search = "") {
   const ls = store(init);
   const frames: { src: string; contentWindow: object; removed: boolean }[] = [];
-  let listener: Listener | null = null;
+  const listeners = new Map<string, Listener>();
   let reloads = 0;
   const w = {
-    location: { origin, reload: () => { reloads++; } },
+    location: { origin, search, reload: () => { reloads++; } },
     localStorage: ls,
     document: {
       createElement: () => {
@@ -39,10 +39,14 @@ function fakeWindow(origin: string, init: Record<string, string> = {}) {
       },
       body: { appendChild() {} },
     },
-    addEventListener: (_t: string, fn: Listener) => { listener = fn; },
-    removeEventListener: () => { listener = null; },
+    addEventListener: (t: string, fn: Listener) => { listeners.set(t, fn); },
+    removeEventListener: (t: string) => { listeners.delete(t); },
   };
-  return { w: w as unknown as Window, ls, frames, send: (e: Parameters<Listener>[0]) => listener?.(e), reloads: () => reloads };
+  return {
+    w: w as unknown as Window, ls, frames, reloads: () => reloads, listening: () => listeners.size,
+    send: (e: Parameters<Listener>[0]) => listeners.get("message")?.(e),
+    input: (t: string) => listeners.get(t)?.({ origin: "", source: null, data: null }),
+  };
 }
 
 test("carryOldSaves: only at the new address, once; writes, marks and reloads when something came over", () => {
@@ -66,6 +70,7 @@ test("carryOldSaves: only at the new address, once; writes, marks and reloads wh
   assert.equal(f.ls.getItem("rugrun.campaign.v1"), "old stars");
   assert.equal(f.ls.getItem(CARRIED), "1");
   assert.ok(f.frames[0].removed);
+  assert.equal(f.listening(), 0, "every listener removed");
   assert.equal(f.reloads(), 1);
 
   const empty = fakeWindow(NEW_ORIGIN);
@@ -73,4 +78,29 @@ test("carryOldSaves: only at the new address, once; writes, marks and reloads wh
   empty.send({ origin: OLD_ORIGIN, source: empty.frames[0].contentWindow, data: { type: CARRY_MSG, items: {} } });
   assert.equal(empty.ls.getItem(CARRIED), "1");
   assert.equal(empty.reloads(), 0, "a new player: no reload");
+});
+
+test("carryOldSaves: no reload under a page already in use; the saves still come over and count from the next load", () => {
+  const items = { "rugrun.tag": "old picks", "radrun.wager.wallet": "io.rabby" };
+  for (const search of ["?tag&room=ABCD", "?wager&join=0xab", "?wager&match=0xab"]) {
+    const f = fakeWindow(NEW_ORIGIN, {}, search);
+    carryOldSaves(f.w);
+    f.send({ origin: OLD_ORIGIN, source: f.frames[0].contentWindow, data: { type: CARRY_MSG, items } });
+    assert.equal(f.ls.getItem("rugrun.tag"), "old picks", search);
+    assert.equal(f.ls.getItem(CARRIED), "1", search);
+    assert.equal(f.reloads(), 0, `${search}: a room, an invite or a series is never reloaded under`);
+  }
+  for (const t of ["keydown", "pointerdown", "touchstart"]) {
+    const f = fakeWindow(NEW_ORIGIN, {}, "?tag");
+    carryOldSaves(f.w);
+    f.input(t);
+    f.send({ origin: OLD_ORIGIN, source: f.frames[0].contentWindow, data: { type: CARRY_MSG, items } });
+    assert.equal(f.ls.getItem("radrun.wager.wallet"), "io.rabby", t);
+    assert.equal(f.reloads(), 0, `${t} before the saves arrived: no reload`);
+    assert.equal(f.listening(), 0, t);
+  }
+  const menu = fakeWindow(NEW_ORIGIN, {}, "?tag");
+  carryOldSaves(menu.w);
+  menu.send({ origin: OLD_ORIGIN, source: menu.frames[0].contentWindow, data: { type: CARRY_MSG, items } });
+  assert.equal(menu.reloads(), 1, "the TAG menu, untouched: reloaded once");
 });

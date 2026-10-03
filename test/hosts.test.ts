@@ -26,10 +26,12 @@ test("vercel.json: radrun / rugrun / vercel.app hosts go to spidertag.vyvanse.be
   assert.equal(re.exec("/"), null, "the root has its own rule");
   const token = rules.filter(r => r.source.startsWith("/token"));
   assert.deepEqual(token.map(r => [r.source, r.destination]), [
-    ["/token", "https://token.spidertag.vyvanse.beer/"],
-    ["/token/:path*", "https://token.spidertag.vyvanse.beer/:path*"],
+    ["/token{/}?", "https://token.spidertag.vyvanse.beer/"],
+    ["/token/:path+", "https://token.spidertag.vyvanse.beer/:path+"],
   ]);
   assert.ok(token.every(r => !r.has), "/token works on every host");
+  const bare = /^\/token(?:\/)?$/; // what path-to-regexp makes of "/token{/}?": /token/ too, not /tokens
+  assert.ok(bare.test("/token") && bare.test("/token/") && !bare.test("/tokens") && !bare.test("/token/x"));
 });
 
 test("index.html: canonical, og:url and the share image are on spidertag.vyvanse.beer", () => {
