@@ -44,7 +44,7 @@ import { audioState, setAudioVolumes, setMuted, unlockAudio } from "../audio/eng
 import { preloadSfx, sfx } from "../audio/sfx.ts";
 import { music } from "../audio/music.ts";
 import { LAYER_OFF, LAYER_ON } from "../audio/score.ts";
-import { preloadTracks, setMusicStyle } from "../audio/tracks.ts";
+import { preloadCountdown, preloadTracks, setMusicStyle } from "../audio/tracks.ts";
 import { safe } from "../ui/safe.ts";
 
 const DEV = import.meta.env.MODE !== "production";
@@ -554,7 +554,8 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
     return () => { removeEventListener("pointerdown", unlock, o); removeEventListener("keydown", unlock, o); removeEventListener("touchend", unlock, o); };
   }, []);
   useEffect(() => {
-    if (screen !== "online" && screen !== "host" && screen !== "loading" && screen !== "match") return;
+    // (Not on LOADING: an offline PLAY starts the music loop once the Radbros are in, below.)
+    if (screen !== "online" && screen !== "host" && screen !== "match") return;
     preloadSfx();
     preloadTracks(PAGE_DISTRICT);
     // A match that started without a fresh gesture (a room link, the other player's READY): the page's earlier
@@ -568,11 +569,13 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
     if (!game) return;
     unlockAudio();
     preloadSfx();
-    preloadTracks(PAGE_DISTRICT);
+    preloadCountdown();
     const others = botRadbros(radbro, bots, seed);
     const ids = [radbro, ...others];
     useTag.setState({ screen: "loading", flash: null, agreed: null });
     if (!(await loadRadbros(ids))) return;
+    // The music loop (1-2 MB) after the models, so it does not share the line with them (tracks.ts preloadTracks).
+    preloadTracks(PAGE_DISTRICT);
     const slots: TagSlot[] = ids.map((r, i) => ({ radbro: r, touch: i === 0 && game.touch, easy: i === 0 && game.camera.easyGrab, name: i === 0 ? "you" : charTag(r) }));
     useTag.setState({ slots: ids, names: ids.map((r, i) => (i === 0 ? "YOU" : charTag(r))) });
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
