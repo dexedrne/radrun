@@ -7,6 +7,11 @@ export const S = {
   /** The coin wagers are played for, on its own page (spidertag.vyvanse.beer/token redirects there too). */
   tokenUrl: "https://token.spidertag.vyvanse.beer",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
+  /** The title's terminal-font line under the wordmark, and its "[ OK ]" status line. */
+  tagline: "web-slinger tag over the rooftops",
+  host: "spidertag.vyvanse.beer",
+  /** vyvanse.beer's tip jar (SOL to vyvanse.sol or ETH), opened in a new tab like the shooters' titles. */
+  tipUrl: "https://vyvanse.beer/#tip",
   youChase: "You chase one of the others",
   countdownBubble: "finders keepers",
   panicTag: "PANIC",
@@ -24,6 +29,13 @@ export const S = {
   autoLow: "switched to Low quality for smoother play — change in Settings",
   credits: "Radbro #652, #4764, #2564, #723 and #3171 · Retardio #555 and #85 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
+
+/** The title's links to the other vyvanse.beer games, bottom right (their wordmarks in their own colours). */
+export const OTHER_GAMES: readonly { id: string; mark: readonly [string, string]; colors: readonly [string, string]; short: string; url: string }[] = [
+  { id: "radpayne", mark: ["RAD", "PAYNE"], colors: ["#f3eada", "#ff3fa8"], short: "bullet-time noir", url: "https://radpayne.vyvanse.beer" },
+  { id: "rbgo", mark: ["RB", "GO"], colors: ["#ff3fa4", "#22d3ee"], short: "the bomb · Sunbake", url: "https://rbgo.vyvanse.beer" },
+  { id: "radzombies", mark: ["RAD", "ZOMBIES"], colors: ["#e9e4ff", "#77ff67"], short: "the dead · Rad Palace", url: "https://radzombies.vyvanse.beer" },
+];
 
 /** Runner taunt bubbles (voice taunt_1..6): slots 1-4 are reactions (a laugh, a scoff, a hum), 5-6 the only words. */
 export const TAUNTS: Record<RadbroId, string[]> = {

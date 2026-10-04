@@ -1,25 +1,18 @@
-// Plain React DOM screens over the canvas (spec §12): title, loading, in-round HUD, pause, results.
+// Plain React DOM screens over the canvas (spec §12): loading, in-round HUD, pause, results (the title: ui/title.tsx).
 import { useEffect, useState } from "react";
-import { RADBROS, charName, charTag, portraitPath, type RadbroId } from "../game/round.ts";
-import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
+import { charTag } from "../game/round.ts";
 import { useUi } from "./store.ts";
-import { DIFF_BLURB, DIFF_LABEL, MEDAL_COLOR, PERSONA, RADBRO_COLOR, S, clockText, heat, shareText } from "./strings.ts";
-import { challengeUrl, ghostUrl, type Challenge, type Settings, type StoredGhost } from "./prefs.ts";
-import type { GhostChoice } from "../app/PlayPage.tsx";
+import { MEDAL_COLOR, S, clockText, heat, shareText } from "./strings.ts";
+import { challengeUrl, ghostUrl, type Settings } from "./prefs.ts";
 import { hints } from "./hints.ts";
-import { DISTRICTS, DISTRICT_IDS } from "../world/districts.ts";
-import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
-import { DEGEN_STARS, LEVELS, TOTAL_STARS, degenUnlocked, districtUnlocked, starCount, unlockedMutators, type Progress } from "../game/campaign.ts";
-import { MUTATORS } from "../game/mutators.ts";
+import { LEVELS } from "../game/campaign.ts";
 import { CampaignHud, CampaignResult } from "./campaignScreen.tsx";
-import { HomeScreenTip } from "./iphoneFullscreen.tsx";
 import { safe, safePad } from "./safe.ts";
 import { PadText } from "./pad.tsx";
-import { radrunPadControls, radrunPadHud } from "./padPrompts.ts";
+import { radrunPadHud } from "./padPrompts.ts";
 import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
 import { MUSIC_STYLES } from "../audio/catalog.ts";
 import { backToVyvanse, vyvanseFramed } from "./vyvanse.ts";
-import { isFramed } from "../radbro/bridge.ts";
 
 export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
@@ -65,8 +58,8 @@ export function useViewport(): { w: number; h: number; compact: boolean; tiny: b
   return { ...vp, compact: vp.h < 520, tiny: vp.h < 400 && vp.w > vp.h, narrow: vp.w < 560, portrait: vp.h > vp.w };
 }
 
-/** Touch in portrait: ask for landscape (non-blocking; the game still runs). */
-export function RotateHint({ inline = false }: { inline?: boolean }) {
+/** Touch in portrait, in a round: ask for landscape (non-blocking; the game still runs; the title has its own line). */
+export function RotateHint() {
   const touch = useUi(s => s.touch);
   const { portrait } = useViewport();
   if (!touch || !portrait) return null;
@@ -74,7 +67,6 @@ export function RotateHint({ inline = false }: { inline?: boolean }) {
     background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "8px 14px", borderRadius: 10, fontSize: 13,
     boxShadow: "0 3px 12px rgba(0,0,0,0.35)", textAlign: "center",
   };
-  if (inline) return <div style={{ ...pill, marginBottom: 12 }} data-testid="rotate-hint">rotate your phone: SPIDERTAG plays in landscape</div>;
   return (
     <div style={{ position: "fixed", left: "50%", top: safe("top", 96), transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
       <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
@@ -98,210 +90,6 @@ export function MuteButton({ muted, onMute, style }: { muted: boolean; onMute: (
         {muted ? <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19.3 5.7a9 9 0 0 1 0 12.6" />}
       </svg>
     </button>
-  );
-}
-
-// ---- title -----------------------------------------------------------------------------------------
-
-const GHOST_STATUS: Record<string, { text: string; color: string }> = {
-  checking: { text: "checking the replay…", color: "#cfd8e3" },
-  verified: { text: "verified replay", color: "#3ddc84" },
-  unverified: { text: "unverified", color: "#ffb347" },
-};
-const caughtVerb = (kind: string) => (kind === "yoink" ? "yoinked" : kind === "yank" ? "yanked" : kind === "tag" ? "tagged" : "caught");
-
-/** Title: the ghost link's banner (who, what time, whether the replay reproduces it). */
-function GhostBanner({ ghost, active, busy }: { ghost: GhostChoice | null; active: boolean; busy: boolean }) {
-  if (busy) return <div style={{ marginTop: 10, display: "inline-block", ...panel, padding: "6px 12px", fontSize: 13 }}>loading the ghost…</div>;
-  if (!ghost) return null;
-  const { spec, info } = ghost;
-  const st = GHOST_STATUS[info.status];
-  return (
-    <div style={{ marginTop: 10, display: "inline-block", background: "rgba(20,40,60,0.88)", border: "2px solid #9fe6ff", borderRadius: 8, padding: "6px 14px", fontWeight: 800 }} data-testid="ghost-banner">
-      <span style={{ color: "#9fe6ff", letterSpacing: 2, marginRight: 8 }}>{S.ghost} RACE</span>
-      {charTag(spec.chaser)} {caughtVerb(info.kind)} {charTag(spec.runner)} in {spec.claimed.toFixed(1)} s · {DIFF_LABEL[spec.difficulty]}
-      <span style={{ color: st.color, marginLeft: 8, fontWeight: 700 }} data-testid="ghost-status">{st.text}{info.older ? (info.status === "unverified" ? " · made on an older build" : " · from an older version (replayed with its own swing)") : ""}</span>
-      <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.85, marginTop: 2 }}>
-        {active ? "same city, same start, same runner: PLAY races their ghost" : `pick ${charTag(spec.chaser)} and ${DIFF_LABEL[spec.difficulty]} to race the ghost`}
-      </div>
-    </div>
-  );
-}
-
-const TITLE_SHADE = "linear-gradient(180deg, rgba(10,12,30,0.15), rgba(10,12,30,0.55))";
-
-/** Title (round 4: over the key art until the scene is ready, then over the live city). */
-export function Title(props: {
-  chaser: RadbroId; setChaser: (c: RadbroId) => void; difficulty: Difficulty; setDifficulty: (d: Difficulty) => void;
-  challenge: Challenge; onPlay: () => void; onPractice: () => void; ready: boolean; muted: boolean; onMute: () => void;
-  ghost: GhostChoice | null; ghostBusy: boolean; ghostActive: boolean; bestGhost: StoredGhost | null; onRaceBest: () => void;
-  /** Round 4: campaign progress (locks), the free-play mutators and the CAMPAIGN button. */
-  progress: Progress; freeMut: number; setFreeMut: (m: number) => void; onCampaign: () => void;
-}) {
-  const { chaser, difficulty, challenge, progress } = props;
-  const availMut = unlockedMutators(progress) | props.freeMut;
-  const stars = starCount(progress);
-  const touch = useUi(s => s.touch);
-  const pad = useUi(s => s.pad);
-  const { compact, tiny, narrow, w, h } = useViewport();
-  // A short desktop window (a 1280x720 frame on radbro.fun, a 768 px laptop): all five Radbro cards in one
-  // row, so PLAY sits above the fold instead of under a second row of cards.
-  const oneRow = !compact && !narrow && h < 820 && w >= 1000;
-  // Phones (landscape = compact, portrait = narrow): the controls strip folds into a small toggle next to
-  // the credits (the touch buttons are labelled and the first-run tips teach them), blurbs hide and the
-  // buttons shrink, so the whole title fits on one screen.
-  const small = compact || narrow;
-  const [showControls, setShowControls] = useState(false);
-  // tiny (landscape under 400 px: toolbars showing, small phones): no pitch / pick line, smaller cards.
-  const img = tiny ? 50 : compact ? 60 : narrow ? 48 : 124; // narrow (portrait phone): four cards in one row
-  const titlePx = tiny ? 32 : compact ? 40 : narrow ? 50 : 88;
-  const playBtn = (
-    <button onClick={props.onPlay} disabled={!props.ready} style={{ ...btn(true), fontSize: small ? 18 : 22, padding: compact ? "8px 28px" : small ? "10px 34px" : "12px 48px", opacity: props.ready ? 1 : 0.5 }} data-testid="play" data-pad-default="">
-      {props.ready ? (props.ghostActive ? "RACE GHOST" : "PLAY") : "loading city…"}
-    </button>
-  );
-  const bestBtn = props.bestGhost && (
-    <button onClick={props.onRaceBest} disabled={!props.ready} title="race the ghost of your best run (same round)"
-      style={{ ...btn(false), fontSize: small ? 12 : 13, padding: small ? "10px 12px" : "13px 14px", borderColor: "#9fe6ff", opacity: props.ready ? 1 : 0.5 }} data-testid="race-best">
-      race your best · {props.bestGhost.t.toFixed(1)} s
-    </button>
-  );
-  const campaignBtn = (
-    <button onClick={props.onCampaign} disabled={!props.ready} title="12 levels across the four districts, 3 stars each"
-      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", borderColor: "#ffd23f", color: "#ffe9a3", opacity: props.ready ? 1 : 0.5 }} data-testid="campaign">
-      CAMPAIGN · {stars}/{TOTAL_STARS} ★
-    </button>
-  );
-  const practiceBtn = (
-    <button onClick={props.onPractice} disabled={!props.ready} title="free swinging in the city: no runner, no timer"
-      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", opacity: props.ready ? 1 : 0.5 }} data-testid="practice">
-      PRACTICE
-    </button>
-  );
-  const tagBtn = (
-    <button onClick={() => gotoDistrict(PAGE_DISTRICT, { tag: "1" })} title="web-slinger tag: you vs 1-3 bots, or 1v1 online with a friend; whoever holds the bag chases"
-      style={{ ...btn(false), fontSize: small ? 13 : 15, padding: compact ? "8px 10px" : small ? "10px 14px" : "13px 20px", borderColor: "#ff3d7f", color: "#ffc2d6" }} data-testid="spider-tag">
-      TAG
-    </button>
-  );
-  const vyvBtn = <VyvanseBack style={{ fontSize: small ? 12 : 13, padding: compact ? "8px 10px" : small ? "10px 12px" : "13px 14px" }} />;
-  return (
-    <div style={{ ...scroller, background: props.ready ? TITLE_SHADE : `${TITLE_SHADE}, #9fc3e6 url(/ui/key-art.webp) center / cover no-repeat` }}>
-      <MuteButton muted={props.muted} onMute={props.onMute} style={{ top: safe("top", 10), right: safe("right", 12), zIndex: 21 }} />
-      <div style={{ margin: "auto", textAlign: "center", maxWidth: oneRow ? 980 : 760, padding: compact ? "8px 12px" : 16, boxSizing: "border-box" }}>
-        <RotateHint inline />
-        <HomeScreenTip />
-        <Wordmark px={titlePx} style={{ display: "inline-block" }} />
-        {!tiny && <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 12 : 14, opacity: 0.95, textShadow: "0 1px 2px #000" }}>{S.pitch}</div>}
-        {(props.ghost || props.ghostBusy) ? <><br /><GhostBanner ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} /></> : challenge.t !== null && (
-          <div style={{ marginTop: 10, display: "inline-block", background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "6px 12px", borderRadius: 6 }}>
-            challenge: beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs ${charTag(challenge.r)}` : ""}
-          </div>
-        )}
-        <div style={{ ...panel, marginTop: tiny ? 6 : small ? 8 : 16, padding: small ? "8px 12px" : panel.padding }}>
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: compact ? 6 : 10 }} data-testid="districts">
-            {DISTRICT_IDS.map(id => {
-              const open = id === PAGE_DISTRICT || districtUnlocked(progress, id);
-              const first = LEVELS.find(l => l.map === id);
-              return (
-                <button key={id} onClick={() => open && id !== PAGE_DISTRICT && gotoDistrict(id)} data-testid={`map-${id}`} disabled={!open}
-                  title={open ? DISTRICTS[id].blurb : `locked: catch him in campaign level ${first?.n} (${first?.name}) to open ${DISTRICTS[id].name} in free play`}
-                  style={{ ...btn(false), padding: compact ? "5px 9px" : "7px 12px", fontSize: compact ? 11 : 12, opacity: open ? 1 : 0.45,
-                    background: id === PAGE_DISTRICT ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.06)",
-                    borderColor: id === PAGE_DISTRICT ? "#9fe6ff" : "rgba(255,255,255,0.3)" }}>
-                  {open ? "" : "🔒 "}{DISTRICTS[id].name}
-                </button>
-              );
-            })}
-          </div>
-          {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: -4, marginBottom: 10 }}>{DISTRICTS[PAGE_DISTRICT].blurb}</div>}
-          {!tiny && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: small ? 4 : 8 }}>pick your Radbro or Retardio · {S.youChase}</div>}
-          <div style={{ display: "flex", gap: narrow ? 6 : 10, justifyContent: "center", flexWrap: "wrap" }}>
-            {RADBROS.map(id => (
-              <button key={id} onClick={() => props.setChaser(id)} data-testid={`card-${id}`}
-                style={{
-                  width: img + 26, padding: compact ? "6px 4px" : "12px 8px", borderRadius: 10, cursor: "pointer", color: "#fff", font: `700 ${compact || narrow ? 12 : 14}px ui-monospace, monospace`,
-                  background: id === chaser ? "rgba(255,61,127,0.35)" : "rgba(255,255,255,0.06)",
-                  border: id === chaser ? "2px solid #ff3d7f" : "2px solid rgba(255,255,255,0.2)",
-                }}>
-                <div style={{
-                  margin: compact ? "0 auto 4px" : "0 auto 8px", width: img, height: img, borderRadius: 10, overflow: "hidden",
-                  background: `radial-gradient(circle at 50% 38%, ${RADBRO_COLOR[id].body}66, ${RADBRO_COLOR[id].accent}22 62%, rgba(0,0,0,0.25))`,
-                  boxShadow: id === chaser ? "0 0 0 1px rgba(255,255,255,0.25) inset" : "none",
-                }}>
-                  <img src={portraitPath(id)} alt="" width={img} height={img} draggable={false}
-                    style={{ display: "block", width: img, height: img, filter: id === chaser ? "none" : "saturate(0.8) brightness(0.9)" }} />
-                </div>
-                <div>{narrow || compact ? charTag(id) : charName(id)}</div>
-                {!compact && <div style={{ fontSize: 11, opacity: 0.7, fontWeight: 400 }}>{PERSONA[id]}</div>}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap", marginTop: compact ? 8 : 14 }}>
-            {DIFFICULTIES.map(d => {
-              const open = d !== "degen" || degenUnlocked(progress) || d === difficulty;
-              return (
-                <button key={d} onClick={() => open && props.setDifficulty(d)} data-testid={`diff-${d}`} disabled={!open} title={open ? undefined : `locked: earn ${DEGEN_STARS} campaign stars (${stars} so far)`}
-                  style={{ ...btn(false), padding: compact ? "8px 11px" : "10px 18px", fontSize: compact ? 13 : 15, opacity: open ? 1 : 0.45, background: d === difficulty ? (d === "degen" ? "rgba(255,61,127,0.32)" : "rgba(255,210,63,0.3)") : "rgba(255,255,255,0.06)", borderColor: d === difficulty ? (d === "degen" ? "#ff3d7f" : "#ffd23f") : "rgba(255,255,255,0.35)" }}>
-                  {open ? "" : "🔒 "}{DIFF_LABEL[d]}
-                </button>
-              );
-            })}
-            {compact && playBtn}
-            {compact && campaignBtn}
-            {compact && practiceBtn}
-            {compact && tagBtn}
-            {compact && bestBtn}
-            {compact && vyvBtn}
-          </div>
-          {!small && <div style={{ fontSize: 11, opacity: 0.75, marginTop: 6 }}>{DIFF_BLURB[difficulty]}</div>}
-          {availMut !== 0 && (
-            <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: compact ? 6 : 10 }} data-testid="mutators">
-              <span style={{ fontSize: 11, opacity: 0.75, alignSelf: "center" }}>mutators:</span>
-              {MUTATORS.filter(m => (availMut & m.bit) !== 0).map(m => {
-                const on = (props.freeMut & m.bit) !== 0;
-                return (
-                  <button key={m.id} onClick={() => props.setFreeMut(props.freeMut ^ m.bit)} title={m.blurb} data-testid={`mut-${m.id}`}
-                    style={{ ...btn(false), padding: "4px 9px", fontSize: 11, background: on ? "rgba(159,230,255,0.25)" : "rgba(255,255,255,0.05)", borderColor: on ? "#9fe6ff" : "rgba(255,255,255,0.25)" }}>
-                    {on ? "✓ " : ""}{m.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {!compact && <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: small ? 8 : 10, marginTop: small ? 10 : 14, flexWrap: "wrap" }}>{playBtn}{campaignBtn}{practiceBtn}{tagBtn}{bestBtn}{vyvBtn}</div>}
-        </div>
-        {(!small || showControls) && <div style={{ ...panel, marginTop: small ? 6 : 12, padding: small ? "6px 12px" : panel.padding, fontSize: small ? 11 : 12, lineHeight: small ? 1.5 : 1.7, textAlign: "left", display: "inline-block" }} data-testid="controls">
-          {pad ? (
-            <><b>controller</b>{radrunPadControls().map(([k, d]) => <span key={k + d}> · <PadText text={k} /> {d}</span>)}</>
-          ) : touch ? (
-            <><b>controls</b> · left thumb = run · drag the right side = look · hold <b>WEB</b> = swing, let go near the top = perfect, steer into a cross street = corner swing ·
-            <b>ZIP</b> = zip where you look (red dashed ring on him = <b>yank</b>) · JUMP (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
-            hold <b>GLIDE</b> in the air = wingsuit; pitch down for speed, up for height ·
-            <b>SLIDE</b> tap = slide · hold = <b>charge a leap</b> · in the air = head-first <b>dive</b> (web out of it = fast swing) · red ring on him + WEB = <b>YOINK</b> · HIM = look at him</>
-          ) : (
-            <><b>controls</b> · mouse look/aim · WASD run · LMB hold = <b>swing</b> (let go near the top = perfect; steer into a cross street = corner swing) ·
-            E / Shift = <b>zip where you look</b> (red dashed ring on him = <b>yank</b>) · Space jump (again in the air = double jump; on a wall = wall kick; end of a zip = pop) ·
-            hold G in the air = <b>wingsuit glide</b> (look down for speed, pull up for height) ·
-            C tap = slide · C hold = <b>charge a leap</b> · C in the air = head-first <b>dive</b> (web out of it = fast swing) · ledges and low walls are climbed / vaulted by themselves ·
-            red ring on him + LMB = <b>YOINK</b> · Q/RMB look at him · R retry · M mute · Esc pause</>
-          )}
-        </div>}
-        <div style={{ marginTop: small ? 4 : 10, fontSize: small ? 10 : 11, textShadow: "0 1px 2px #000" }}>
-          {small && (
-            <><button onClick={() => setShowControls(v => !v)} aria-expanded={showControls} data-testid="controls-toggle"
-              style={{ ...btn(false), padding: "3px 10px", fontSize: 11, marginRight: 8, background: showControls ? "rgba(159,230,255,0.25)" : "rgba(14,16,30,0.55)" }}>
-              controls {showControls ? "▴" : "▾"}
-            </button></>
-          )}
-          {(!isFramed() || vyvanseFramed()) && (
-            // Not inside someone else's portal (radbro.fun): only on its own or on vyvanse.beer.
-            <><a href={S.tokenUrl} target="_blank" rel="noopener" style={{ color: "#fd43ae", fontWeight: 700, textDecoration: "none", opacity: 0.95 }} data-testid="token-link">$SPIDERTAG token ↗</a><span style={{ opacity: 0.6 }}> · </span></>
-          )}
-          <span style={{ opacity: 0.75 }}>{S.credits}</span>
-        </div>
-      </div>
-    </div>
   );
 }
 

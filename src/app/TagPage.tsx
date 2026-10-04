@@ -633,7 +633,7 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
   }, [game, toMenu, host]);
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
-  if (!game) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
+  if (!game) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#090b16 url(/ui/key-art.webp) 55% 32% / cover no-repeat" }}>loading…</div>;
   const inMatch = screen === "match";
   return (
     <>

@@ -18,11 +18,31 @@ already had a key, click or touch: then they count from the next load.
 
 ```sh
 npm ci
-npm run dev        # open http://localhost:4870/  -> pick a Radbro -> Chill / Normal / Degen -> PLAY (or PRACTICE)
+npm run dev        # open http://localhost:4870/  -> PLAY (or your Radbro's row: pick him, Chill / Normal / Degen, the district)
 ```
 
 Node 23.6 or newer. A WebGPU browser is best (recent Chrome/Chromium); `?webgl2` forces the WebGL2
 backend. `npm run build && npm run preview` serves the production build on http://localhost:4871/.
+
+## The title
+
+Laid out like the shooters' titles (RadZombies'): the key art full-bleed under soft shading, the SPIDERTAG wordmark
+and a terminal-font tagline top left, then the menu as a list of big items with a pink focus bar: **PLAY** (RACE GHOST
+on a ghost link), **RACE YOUR BEST** (when you have a best run for this Radbro, difficulty and mutators),
+**CAMPAIGN** with your stars, **PRACTICE**, **TAG**, **your Radbro's row** (his bust, his name, the difficulty and the
+district), **CONTROLS** (the keys, the touch buttons or the pad's, and the credits) and, framed by vyvanse.beer,
+**BACK TO VYVANSE.BEER**. A line under the list says what the focused entry does. Bottom left the
+"[ OK ] spidertag.vyvanse.beer" status line ("[ .. ] loading the city" until PLAY is ready), bottom right links to
+RadPayne, RBGO and RadZombies; top right the $SPIDERTAG token page, the tip jar (vyvanse.beer/#tip in a new tab) and
+the speaker. The token and the tip jar never show inside someone else's portal (radbro.fun); the other games' links
+open in a new tab when the game is framed. Your Radbro's row opens the **character select**: the seven as cards, then
+the difficulty, the district (a district change reloads the page) and any mutators you have unlocked; DONE (or Esc,
+or Circle / B) goes back. The arrow keys move the focus down the list, on through the other games and back to the top
+(as on the shooters; left / right on your Radbro's row changes him), the mouse moves the same focus, Enter picks what is
+highlighted, Tab follows the same order; a pad's up / down walks the same loop. Landscape phones get the list in two
+columns, portrait phones one narrow column, both inside the safe areas; a title or character select that would scroll
+(a challenge or ghost line on a short window, a small phone with the districts and mutators unlocked) shrinks its type
+and gaps until it fits. Behind the key art the city stops rendering while the title is up (`src/ui/title.tsx`).
 
 ## Controls
 
@@ -45,8 +65,7 @@ backend. `npm run build && npm run preview` serves the production build on http:
 
 **Phone / tablet (touch).** Turns on by itself on a touch screen (coarse pointer, or at the first touch);
 `?touch` forces it on, `?touch=0` off. Landscape plays best (portrait shows a "rotate your phone" hint).
-On a phone-sized screen the title's controls list folds into a small **controls** button next to the
-credits (tap to show it), so the whole title fits on one screen.
+The title's **CONTROLS** lists the touch controls (the touch buttons are labelled and the first-run tips teach them).
 
 | | |
 |---|---|
@@ -92,7 +111,8 @@ move switches back to the keyboard prompts. More than one pad: the one pressed l
 Easy grab (pause -> Settings) works on the pad too: Cross / A is the Space key (tap = jump, hold = swing).
 
 **Menus** (title, campaign, pause and its settings, results, loading errors, TAG menu, results and pause, the
-online lobby): a yellow ring shows the focus; the d-pad or the left stick moves it to the nearest control that way,
+online lobby): a yellow ring shows the focus (on the title, the menu's pink bar and a pale ring on its cards, chips and
+links); the d-pad or the left stick moves it to the nearest control that way,
 **Cross / A** presses it, **Circle / B** is back (pause: resume; results: menu; campaign, TAG and online:
 back), **Options / Menu** resumes from the pause and starts a campaign level, **Triangle / Y** on the results =
 retry / rematch. On a slider, left / right changes it. The first press after using the keyboard or mouse only shows
@@ -126,8 +146,8 @@ landscape its toolbars take a big slice off the top. Two fixes:
   for the rest of the tab session. The title also shows a one-time "Add to Home Screen" tip (✕ hides it).
 
 The HUD, the touch buttons and the menus stay clear of the notch / Dynamic Island side and the home
-indicator (safe-area insets), and a landscape phone under 400 px tall (toolbars showing, small phones)
-gets a tighter title: no pitch line, smaller cards.
+indicator (safe-area insets); a landscape phone gets the title's list in two columns, so it fits on one screen with the
+toolbars showing.
 
 **Quality (pause -> Settings).** High is the default everywhere (on touch devices High already caps the
 pixel ratio: 1.25x on phones, 1.5x on tablets). Low = pixel ratio 1, anti-aliasing off (after a reload),
@@ -351,7 +371,7 @@ C held; formats 1-3 replay with the charge and dive off), pack v3 (v1 / v2 packs
 
 Web-slinger tag between Radbros: one of you holds the bag, everyone else runs. **TAG** on the title opens it
 (`?tag`, same district as the title; its own lazy chunk, so the single-player page load is unchanged). The game is named after
-it; inside SPIDERTAG the mode is TAG (`TAG_NAME` in `src/app/TagPage.tsx`, plus the title button in `src/ui/screens.tsx`).
+it; inside SPIDERTAG the mode is TAG (`TAG_NAME` in `src/app/TagPage.tsx`, plus the title entry in `src/ui/title.tsx`).
 
 **Rules** (`src/game/tagMatch.ts`, the tag table `TAG`; tuning.json may carry a `"tag"` section with the same keys):
 - Whoever holds the bag chases. Pass it by **touching** someone (1.5 m across, 1.8 m up / down), by **Yoink** (your
@@ -678,7 +698,7 @@ deflate-raw (CompressionStream), base64url.
 
 ## Radbros
 
-Pick your Radbro or Retardio on the title; you chase one of the others (the link's `r=` if it names one, else at
+Pick your Radbro or Retardio on the title (your Radbro's row: the character select); you chase one of the others (the link's `r=` if it names one, else at
 random). All of them are playable from the start (none is a campaign unlock), and the pick is cosmetic: the
 round is the same with any pair, so ghost links replay the same whoever you pick.
 
@@ -823,7 +843,7 @@ everywhere.
 
 ## Districts
 
-Pick the district on the title (a district change reloads the page; Retry never does).
+Pick the district in the title's character select (your Radbro's row; a district change reloads the page; Retry never does).
 
 | District | URL | Feel |
 |---|---|---|
@@ -887,7 +907,7 @@ round options, part of ghost links and (where they touch the sim) the round hash
 
 Free play starts with each district's defaults: **the Docks have wind** (the Night Market's few anchors are
 part of its layout). Every other mutator appears as a toggle
-on the title once you have caught him in a campaign level that uses it. Campaign levels set their own
+in the title's character select once you have caught him in a campaign level that uses it. Campaign levels set their own
 mutators.
 Values live in `MECH` (`src/sim/tuning.ts`), overridable in `tuning.json` under `"mechanics"` and with the
 `?tune` sliders. Bots: `&mu=<bits>` (snap 1, wind 2, lowgrav 4, noyoink 8, onelife 16, sixty 32, night 64).
@@ -936,8 +956,9 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
   The WAGMI board reads "SWING · CHASE · YOINK · REPEAT / WE'RE ALL GONNA MAKE IT" (its painted
   taglines were lettered over; no money or earning lines on the boards). To change a board, replace its
   `.webp` (same name) or point the `ad_<name>` material in `decor.json` at another texture.
-- **Key art**: `public/ui/key-art.webp` behind the title while the city loads (the four Radbro busts are
-  composited from the title-card renders, never generated).
+- **Key art**: `public/ui/key-art.webp` (1600x900 webp, ~210 KB, preloaded by `index.html`), full-bleed behind the
+  title, its overlays and the boot screens: the six web-swinging over neon rooftops in the rain, the SPIDERTAG share
+  card's art. The title's terminal font is VT323 (`public/fonts/VT323.woff2`, SIL OFL, `public/fonts/OFL-VT323.txt`).
 
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 

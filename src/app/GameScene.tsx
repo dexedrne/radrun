@@ -102,10 +102,11 @@ const FORCE_WEBGL = new URLSearchParams(location.search).has("webgl2");
 /** Renderer options fixed at creation: the WebGL2 switch and anti-aliasing (off on Low). */
 const GL_CONFIG = { antialias: ANTIALIAS, ...(FORCE_WEBGL ? { forceWebGL: true } : {}) };
 
-export function SceneCanvas({ prefab, children }: { prefab: Prefab; children?: React.ReactNode }) {
+export function SceneCanvas({ prefab, frameloop = "always", children }: { prefab: Prefab; frameloop?: "always" | "never"; children?: React.ReactNode }) {
   return (
     <GameCanvas
       flat
+      frameloop={frameloop}
       dpr={lowQuality() ? 1 : HIGH_DPR}
       glConfig={GL_CONFIG}
       onCreated={s => {

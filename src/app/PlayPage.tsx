@@ -12,7 +12,8 @@ import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
 import { LINK_VERSION, applySettings, getBestGhost, lastPicks, loadSettings, padSettingsOf, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
 import { padActive, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
-import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
+import { Loading, Pause, ResultsScreen, RoundHud, Toast } from "../ui/screens.tsx";
+import { Title, TITLE_ART } from "../ui/title.tsx";
 import { CampaignScreen } from "../ui/campaignScreen.tsx";
 import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaign.ts";
 import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
@@ -89,13 +90,14 @@ const lockMouse = () => { if (!isTouch() && !padActive() && document.pointerLock
 /** PLAY / PRACTICE / a level: fullscreen on touch, else the mouse (not when the pad pressed it). */
 const grabInput = () => { if (isTouch()) enterFullscreen(); else if (!padActive()) requestLock(canvasEl()); };
 
-function Scene({ game }: { game: PlayGame }) {
+/** idle: the title's opaque key art covers the city, so it stops rendering (power and heat on phones) until a round. */
+function Scene({ game, idle }: { game: PlayGame; idle: boolean }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const hidePlayer = useCallback(() => game.mode !== "round", [game]);
   const ropeFrom = useCallback((out: Vector3) => handWorld(game.setup.chaser, "right", out) !== null, [game]);
   const isNight = useCallback(() => game.mode === "round" && ((game.setup.mutators ?? 0) & M_NIGHT) !== 0, [game]);
   return (
-    <SceneCanvas prefab={prefab}>
+    <SceneCanvas prefab={prefab} frameloop={idle ? "never" : "always"}>
       <AssetsBridge />
       <StructuresView model={game.model} district={PAGE_DISTRICT} />
       <PlayDriver game={game} />
@@ -265,8 +267,8 @@ export default function PlayPage() {
   const startLevel = useCallback((n: number) => {
     const level = LEVELS[n - 1];
     if (!level) return;
-    if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
     rememberPicks(chaser, difficulty);
+    if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
     unlockAudio();
     grabInput();
     useUi.setState({ campaignSel: n });
@@ -415,12 +417,12 @@ export default function PlayPage() {
   muteRef.current = toggleMute;
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
-  if (!game || !settings) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
+  if (!game || !settings) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", font: "400 22px VT323, ui-monospace, monospace", color: "#ffd23f", background: `linear-gradient(rgba(5,7,17,0.55), rgba(5,7,17,0.35)), ${TITLE_ART} 55% 32% / cover no-repeat #090b16` }}>[ .. ] loading…</div>;
   const practice = screen === "practice";
   const inRound = screen === "countdown" || screen === "chase" || practice;
   return (
     <>
-      <Scene game={game} />
+      <Scene game={game} idle={ready && (screen === "boot" || screen === "title")} />
       {(screen === "boot" || screen === "title") && (
         <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready}
           muted={settings.muted} onMute={toggleMute} ghost={linkGhost} ghostBusy={linkGhostBusy} ghostActive={ghostActive}

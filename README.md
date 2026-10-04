@@ -128,5 +128,5 @@ she loads at runtime from his repo, and she is not part of this one. Ask him bef
 own thing.
 
 Credits: Radbros #652, #4764, #2564 and #723 are dexedrne's own, used with permission from the Radbro
-Webring dev · Retardio #555 and #85 are dexedrne's own · the wordmark is set in Bebas Neue (SIL Open Font License) · the Pockit Milady is by prnth, used with his permission · built on
+Webring dev · Retardio #555 and #85 are dexedrne's own · the wordmark is set in Bebas Neue and the title's terminal lines in VT323 (both SIL Open Font License) · the Pockit Milady is by prnth, used with his permission · built on
 [react-three-game](https://prnth.com/react-three-game/) by prnth.
