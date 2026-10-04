@@ -4,15 +4,18 @@
 // vyvanse.beer when framed by it); the "[ OK ]" status line bottom left and the other games bottom right; the
 // $SPIDERTAG token, the tip jar and the speaker top right (the token and the tip jar never inside someone else's
 // portal, radbro.fun's included). Your Radbro's row opens the character select (the roster, the difficulty, the
-// district and the mutators); CONTROLS opens the controls and the credits. The arrows move the focus down the list
-// and Enter picks (left / right on your Radbro's row changes him); a pad moves the same focus (ui/padNav.ts). Landscape
-// phones get the list in two columns, portrait phones one narrow column; everything stays inside the safe area.
+// district and the mutators); CONTROLS opens the controls and the credits. The arrows move the focus down the list,
+// then on through the other games and back to the top, as on the shooters; Enter picks what is highlighted (left /
+// right on your Radbro's row changes him); the mouse moves the same focus, and a pad walks the same list
+// (data-pad-cycle, ui/padNav.ts). Landscape phones get the list in two columns, portrait phones one narrow column;
+// everything stays inside the safe area, and a screen that would scroll (a challenge or ghost line on a short
+// window, a full character select on a small phone) shrinks its type and gaps until it fits.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RADBROS, charName, charTag, portraitPath, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type Difficulty } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
 import { DIFF_BLURB, DIFF_LABEL, OTHER_GAMES, PERSONA, RADBRO_COLOR, S } from "./strings.ts";
-import type { Challenge, StoredGhost } from "./prefs.ts";
+import { rememberPicks, type Challenge, type StoredGhost } from "./prefs.ts";
 import type { GhostChoice } from "../app/PlayPage.tsx";
 import { DISTRICTS, DISTRICT_IDS } from "../world/districts.ts";
 import { PAGE_DISTRICT, gotoDistrict } from "../app/district.ts";
@@ -51,6 +54,27 @@ function layoutOf(w: number, h: number): Layout {
     phone: null, mark: clamp(56, Math.min(h * 0.16, w * 0.15), 190), tag: clamp(20, h * 0.046, 50), item: clamp(22, h * 0.043, 42), gap: clamp(5, h * 0.009, 10),
     status: clamp(18, h * 0.04, 40), pill: clamp(18, h * 0.03, 24), padX: clamp(16, w * 0.035, 64), top: clamp(14, h * 0.04, 44), bottom: clamp(14, h * 0.035, 36),
   };
+}
+
+/** True once the web fonts are in (their metrics decide what fits). */
+function useFontsReady(): boolean {
+  const [ok, setOk] = useState(() => document.fonts?.status === "loaded");
+  useEffect(() => { void document.fonts?.ready.then(() => setOk(true)); }, []);
+  return ok;
+}
+
+/**
+ * The scale a screen's type and gaps take so that `ref` (its scroller) does not scroll: 1 = as laid out, down to `min`
+ * in 5 % steps, measured before paint; it starts over at 1 whenever `key` (the size, what shows) changes.
+ */
+function useFit(ref: React.RefObject<HTMLElement | null>, key: string, min = 0.7): number {
+  const [fit, setFit] = useState(1);
+  useLayoutEffect(() => setFit(1), [key]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && el.scrollHeight > el.clientHeight + 1) setFit(f => (f > min ? Math.max(min, Math.round((f - 0.05) * 100) / 100) : f));
+  });
+  return fit;
 }
 
 /** A big Bebas menu item: a pale left bar, or the pink bar and fill when it has the focus. */
@@ -127,13 +151,15 @@ export function Title(props: TitleProps) {
   const touch = useUi(s => s.touch);
   const pad = useUi(s => s.pad);
   const { w, h, portrait } = useViewport();
-  const L = layoutOf(w, h);
-  const [focus, setFocus] = useState(0);
+  const base = layoutOf(w, h);
+  /** The highlighted entry by its key (it stays put when RACE YOUR BEST comes or goes); "game-<id>" = one of the other games. */
+  const [focusKey, setFocusKey] = useState("play");
   const [pick, setPick] = useState(false);
   const [controls, setControls] = useState(false);
   /** Where a pad's focus lands (PLAY; back from an overlay, the row that opened it). */
   const [home, setHome] = useState("play");
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const rootRef = useRef<HTMLDivElement>(null);
   const markRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
   const [pillsAbove, setPillsAbove] = useState(0);
@@ -166,33 +192,41 @@ export function Title(props: TitleProps) {
     { key: "campaign", testid: "campaign", label: on => <>CAMPAIGN <Sub on={on} color={GOLD}>★ {stars}/{TOTAL_STARS}</Sub></>, act: props.onCampaign, off: !ready,
       desc: `${LEVELS.length} levels across the ${DISTRICT_IDS.length} districts, 3 stars each` },
     { key: "practice", testid: "practice", label: () => "PRACTICE", act: props.onPractice, off: !ready, desc: "free swinging in the city: no runner, no timer" },
-    { key: "tag", testid: "spider-tag", label: () => "TAG", act: () => gotoDistrict(PAGE_DISTRICT, { tag: "1" }), desc: "web-slinger tag: you vs 1-3 bots, or 1v1 online with a friend; whoever holds the bag chases" },
+    { key: "tag", testid: "spider-tag", label: () => "TAG", act: () => { rememberPicks(chaser, difficulty); gotoDistrict(PAGE_DISTRICT, { tag: "1" }); }, desc: "web-slinger tag: you vs 1-3 bots, or 1v1 online with a friend; whoever holds the bag chases" },
     { key: "chaser", testid: "chaser", label: on => chaserRow(on), act: () => setPick(true),
       desc: keys ? "left / right: change your Radbro · enter: the roster, the difficulty, the district" : "your Radbro or Retardio, the difficulty and the district" },
     { key: "controls", testid: "controls-toggle", label: () => "CONTROLS", act: () => setControls(true), desc: "the keys, the touch buttons or the pad, and the credits" },
     ...(vyvanseFramed() ? [{ key: "vyv", testid: "vyvanse-back", label: () => "BACK TO VYVANSE.BEER", act: backToVyvanse, desc: "close the game and go back to the vyvanse.beer menu" }] : []),
   ];
-  const cur = Math.min(focus, entries.length - 1);
+  const at = entries.findIndex(e => e.key === focusKey);
+  const game = OTHER_GAMES.find(g => `game-${g.id}` === focusKey) ?? null;
+  /** The highlighted entry (-1: one of the other games has the focus). */
+  const cur = at >= 0 ? at : game ? -1 : 0;
   const overlay = pick || controls;
 
-  // The keys on the list: up / down move the focus (past the items still waiting for the city), Enter picks.
+  // The keys: up / down go round the list and the other games (past the items still waiting for the city), as a pad
+  // does; Enter picks the highlighted entry, whichever button holds the page's focus (a link or another button, e.g.
+  // the speaker, keeps its own Enter).
   useEffect(() => {
     if (overlay) return;
     const kd = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return;
-      const n = entries.length;
       if (e.code === "ArrowDown" || e.code === "ArrowUp") {
+        const ring = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-pad-cycle]") ?? [])].filter(el => !(el as HTMLButtonElement).disabled);
+        const n = ring.length;
+        if (!n) return;
         const d = e.code === "ArrowDown" ? 1 : -1;
-        let i = cur;
-        for (let k = 0; k < n; k++) { i = (i + d + n) % n; if (!entries[i].off) break; }
-        setFocus(i);
-        refs.current[i]?.focus();
+        let k = ring.indexOf(document.activeElement as HTMLElement);
+        if (k < 0 && cur >= 0) k = ring.indexOf(refs.current[cur] as HTMLElement);
+        ring[k < 0 ? (d > 0 ? 0 : n - 1) : (k + d + n) % n].focus();
         e.preventDefault();
-      } else if ((e.code === "ArrowLeft" || e.code === "ArrowRight") && entries[cur].key === "chaser") {
+      } else if ((e.code === "ArrowLeft" || e.code === "ArrowRight") && entries[cur]?.key === "chaser") {
         cycle(e.code === "ArrowRight" ? 1 : -1);
         e.preventDefault();
-      } else if ((e.code === "Enter" || e.code === "NumpadEnter") && !(document.activeElement instanceof HTMLButtonElement || document.activeElement instanceof HTMLAnchorElement || document.activeElement instanceof HTMLInputElement)) {
-        if (!entries[cur].off) entries[cur].act();
+      } else if (e.code === "Enter" || e.code === "NumpadEnter") {
+        const a = document.activeElement;
+        if (a instanceof HTMLAnchorElement || a instanceof HTMLInputElement || (a instanceof HTMLButtonElement && !refs.current.includes(a))) return;
+        if (cur >= 0 && !entries[cur].off) entries[cur].act();
         e.preventDefault();
       }
     };
@@ -205,10 +239,15 @@ export function Title(props: TitleProps) {
     setPick(false);
     setControls(false);
     setHome(key);
+    setFocusKey(key);
     const i = entries.findIndex(e => e.key === key);
-    setFocus(i);
     requestAnimationFrame(() => refs.current[i]?.focus({ preventScroll: true }));
   };
+
+  // Shrink to fit (a challenge or ghost line, the iPhone tip, a pad's legend): never a scrolling title.
+  const fonts = useFontsReady();
+  const fit = useFit(rootRef, [w, h, entries.length, challenge.t !== null, !!props.ghost, props.ghostBusy, props.ghost?.info.status, !!props.ghost?.info.older, pad, touch, fonts].join());
+  const L: Layout = fit === 1 ? base : { ...base, mark: base.mark * fit, tag: Math.max(14, base.tag * fit), item: Math.max(16, base.item * fit), gap: base.gap * fit, top: base.top * fit, bottom: base.bottom * fit };
 
   // The pills top right drop below the wordmark's line when the two would meet (a narrow window, a phone).
   useLayoutEffect(() => {
@@ -218,8 +257,6 @@ export function Title(props: TitleProps) {
     const need = m.right + 16 > left ? Math.ceil(p.getBoundingClientRect().height) + 10 : 0;
     if (need !== pillsAbove) setPillsAbove(need);
   });
-  const [, setFonts] = useState(0);
-  useEffect(() => { void document.fonts?.ready.then(() => setFonts(1)); }, []);
 
   const art = `${TITLE_ART} ${L.phone === "portrait" ? "36% 50%" : "55% 32%"} / cover no-repeat`;
   const shade = L.phone === "portrait"
@@ -236,14 +273,14 @@ export function Title(props: TitleProps) {
   });
 
   return (
-    <div data-testid="title" style={{ position: "fixed", inset: 0, zIndex: 20, overflow: "hidden auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
+    <div ref={rootRef} data-testid="title" style={{ position: "fixed", inset: 0, zIndex: 20, overflow: "hidden auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
       background: `${shade}, ${art} #090b16`, boxShadow: "inset 0 0 90px 20px rgba(6,7,18,0.4)" } as React.CSSProperties}>
       <div inert={overlay} style={{ visibility: overlay ? "hidden" : undefined, minHeight: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "flex-start",
         padding: `${inset("top", L.top + pillsAbove)} ${inset("right", L.padX)} ${inset("bottom", L.bottom)} ${inset("left", L.padX)}` }}>
         <div ref={markRef} style={{ maxWidth: "100%" }}><Wordmark px={L.mark} /></div>
         <div style={{ marginTop: L.phone ? 2 : "0.6vh", font: `400 ${L.tag}px/1 ${VT}`, letterSpacing: "0.06em", color: "#f2e9e1", textShadow: GLOW }}>{S.tagline}</div>
         {(touch && portrait) || props.ghost || props.ghostBusy || challenge.t !== null ? (
-          <div style={{ marginTop: L.phone ? 8 : 14, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, maxWidth: "min(760px, 100%)" }}>
+          <div style={{ marginTop: (L.phone ? 8 : 14) * fit, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 * fit, maxWidth: "min(760px, 100%)" }}>
             {touch && portrait && <div style={notice(GOLD, L.tag * 0.85)} data-testid="rotate-hint"><span style={{ color: GOLD }}>[ !! ]</span> rotate your phone: SPIDERTAG plays in landscape</div>}
             {(props.ghost || props.ghostBusy)
               ? <GhostLine ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} px={L.tag * 0.82} />
@@ -252,26 +289,29 @@ export function Title(props: TitleProps) {
         ) : null}
         <HomeScreenTip />
         <div role="menu" aria-label="main menu" style={twoCol
-          ? { marginTop: 10, display: "grid", gridAutoFlow: "column", gridTemplateRows: `repeat(${rows}, auto)`, columnGap: 10, rowGap: L.gap, alignItems: "center" }
-          : { marginTop: L.phone ? 18 : "clamp(16px, 4.5vh, 48px)", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: L.gap }}>
+          ? { marginTop: 10 * fit, display: "grid", gridAutoFlow: "column", gridTemplateRows: `repeat(${rows}, auto)`, columnGap: 10, rowGap: L.gap, alignItems: "center" }
+          : { marginTop: (L.phone ? 18 : clamp(16, h * 0.045, 48)) * fit * fit, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: L.gap }}>
           {entries.map((e, i) => {
             const on = i === cur;
             return (
-              <button key={e.key} ref={el => { refs.current[i] = el; }} role="menuitem" data-testid={e.testid} data-st-item="" data-pad-default={e.key === home ? "" : undefined}
-                disabled={e.off} onClick={e.act} onMouseEnter={() => setFocus(i)} onFocus={() => setFocus(i)} style={itemStyle(on, e.off, L.item)}>
+              <button key={e.key} ref={el => { refs.current[i] = el; }} role="menuitem" data-testid={e.testid} data-st-item="" data-pad-cycle="" data-pad-default={e.key === home ? "" : undefined}
+                disabled={e.off} onClick={e.act} onMouseEnter={() => { setFocusKey(e.key); refs.current[i]?.focus({ preventScroll: true }); }} onFocus={() => setFocusKey(e.key)} style={itemStyle(on, e.off, L.item)}>
                 {e.label(on)}
               </button>
             );
           })}
         </div>
-        {!L.phone && <div style={{ marginTop: "clamp(10px, 2vh, 22px)", maxWidth: "min(52em, 100%)", font: `400 ${Math.round(L.tag * 0.64)}px/1.2 ${VT}`, letterSpacing: "0.03em", color: "#f2e9e1", textShadow: `${GLOW}, 0 0 3px #000` }} data-testid="title-desc">&gt; {entries[cur].desc}</div>}
+        {!L.phone && <div style={{ marginTop: clamp(10, h * 0.02, 22) * fit * fit, maxWidth: "min(52em, 100%)", boxSizing: "border-box", padding: "0.2em 1.2em 0.16em 0.5em", borderRadius: 2, background: GLASS, font: `400 ${Math.round(L.tag * 0.64)}px/1.2 ${VT}`, letterSpacing: "0.03em", color: "#f2e9e1", textShadow: `${GLOW}, 0 0 3px #000` }} data-testid="title-desc">
+          &gt; {cur >= 0 ? entries[cur].desc : game ? `play ${game.mark.join("")}: ${game.short} (${game.url.replace(/^https:\/\//, "")})` : ""}
+        </div>}
         <div style={{ marginTop: "auto", paddingTop: L.phone ? 12 : 24, paddingBottom: pad ? 34 : 0, width: "100%", boxSizing: "border-box", display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: L.phone ? 8 : 16 }}>
           <div style={{ font: `400 ${L.status}px/1 ${VT}`, letterSpacing: "0.04em", color: ready ? MINT : GOLD, textShadow: GLOW, whiteSpace: "nowrap" }} data-testid="status">
             {ready ? `[ OK ] ${S.host}` : "[ .. ] loading the city"}
           </div>
           <div style={{ display: "flex", gap: L.phone ? 6 : 10, flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
             {OTHER_GAMES.map(g => (
-              <a key={g.id} href={g.url} target={framed ? "_blank" : undefined} rel="noopener" className="st-f" data-pad-item="" data-testid={`game-${g.id}`}
+              <a key={g.id} href={g.url} target={framed ? "_blank" : undefined} rel="noopener" className="st-f" data-pad-item="" data-pad-cycle="" data-testid={`game-${g.id}`}
+                onFocus={() => setFocusKey(`game-${g.id}`)} onMouseEnter={ev => { setFocusKey(`game-${g.id}`); ev.currentTarget.focus({ preventScroll: true }); }}
                 style={{ display: "block", padding: slim ? "6px 10px 5px" : "8px 14px 7px", textDecoration: "none", borderRadius: 3, border: "1.5px solid rgba(243,234,216,0.25)", background: "rgba(5,7,17,0.62)" }}>
                 <div style={{ font: `400 ${L.phone ? 19 : slim ? 22 : 26}px/0.9 ${BEBAS}`, letterSpacing: "0.03em" }}>
                   <span style={{ color: g.colors[0] }}>{g.mark[0]}</span><span style={{ color: g.colors[1] }}>{g.mark[1]}</span>
@@ -325,12 +365,12 @@ function overlayRoot(L: Layout, dark = false): React.CSSProperties {
     background: L.phone === "portrait" ? `rgba(5,7,17,${dark ? 0.72 : 0.5})` : `linear-gradient(90deg, rgba(5,7,17,${a}), rgba(5,7,17,${b}) 55%, rgba(5,7,17,${c}))`,
   };
 }
-const overlayCol = (L: Layout): React.CSSProperties => ({
-  minHeight: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: L.phone ? 8 : "clamp(10px, 2.2vh, 22px)",
+const overlayCol = (L: Layout, fit = 1): React.CSSProperties => ({
+  minHeight: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: L.phone ? 8 * fit : `clamp(${10 * fit}px, ${2.2 * fit}vh, ${22 * fit}px)`,
   padding: `${inset("top", L.top)} ${inset("right", L.padX)} ${inset("bottom", L.bottom)} ${inset("left", L.padX)}`,
 });
-function Heading({ a, b, sub, L }: { a: string; b: string; sub?: string; L: Layout }) {
-  const px = L.phone === "landscape" ? clamp(28, L.mark * 0.62, 40) : L.phone ? 44 : clamp(44, L.mark * 0.5, 84);
+function Heading({ a, b, sub, L, fit = 1 }: { a: string; b: string; sub?: string; L: Layout; fit?: number }) {
+  const px = (L.phone === "landscape" ? clamp(28, L.mark * 0.62, 40) : L.phone ? 44 : clamp(44, L.mark * 0.5, 84)) * fit;
   return (
     <div>
       <div role="heading" aria-level={2} style={{ font: `400 ${px}px/0.9 ${BEBAS}`, letterSpacing: "0.03em", textShadow: "0 3px 10px #000" }}>
@@ -346,24 +386,29 @@ function PickScreen(p: TitleProps & { L: Layout; onClose: () => void }) {
   const { L, chaser, difficulty, progress } = p;
   const { w, h } = useViewport();
   useOverlayKeys(p.onClose);
+  // a small phone with the districts and mutators unlocked: smaller cards, chips and gaps until DONE is on screen
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fonts = useFontsReady();
+  const fit = useFit(rootRef, [w, h, unlockedMutators(progress) | p.freeMut, DISTRICT_IDS.filter(id => districtUnlocked(progress, id)).length, degenUnlocked(progress), fonts].join(), 0.6);
   // the picked card takes the focus (keys: the arrows go on from it)
   useEffect(() => { document.querySelector<HTMLElement>(`[data-testid="card-${chaser}"]`)?.focus({ preventScroll: true }); }, []);
   const stars = starCount(progress);
   const availMut = unlockedMutators(progress) | p.freeMut;
   const cols = L.phone === "portrait" ? 4 : RADBROS.length;
-  const gap = L.phone ? 6 : 10;
+  const gap = (L.phone ? 6 : 10) * Math.min(1, fit + 0.2);
   // the cards' largest size; the grid shrinks them to the width there is (safe areas included)
-  const card = Math.round(L.phone === "landscape" ? h * 0.21 : L.phone ? 120 : clamp(96, h * 0.2, 230));
-  const fit = Math.min(card, (w - 2 * L.padX - (cols - 1) * gap) / cols);
-  const namePx = L.phone ? 18 : clamp(18, fit * 0.14, 30);
-  const chip = L.phone ? 17 : clamp(18, h * 0.027, 28);
-  const label = (t: string) => <span style={{ width: L.phone ? "auto" : "6.2em", flex: "none", font: `400 ${L.phone ? 16 : Math.round(chip * 0.82)}px/1 ${VT}`, letterSpacing: "0.05em", color: SAND, textShadow: GLOW }}>&gt; {t}</span>;
-  const blurb = (t: string) => !L.phone && <span style={{ marginLeft: 6, font: `400 ${Math.round(chip * 0.86)}px/1.1 ${VT}`, color: "#f2e9e1", opacity: 0.9, textShadow: GLOW }}>{t}</span>;
-  const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", maxWidth: "100%" };
+  const card = Math.round((L.phone === "landscape" ? h * 0.21 : L.phone ? 120 : clamp(96, h * 0.2, 230)) * fit);
+  const cardPx = Math.min(card, (w - 2 * L.padX - (cols - 1) * gap) / cols);
+  const namePx = L.phone ? clamp(12, cardPx * 0.3, 18) : clamp(18, cardPx * 0.14, 30);
+  const chip = Math.max(13, (L.phone ? 17 : clamp(18, h * 0.027, 28)) * Math.min(1, fit + 0.15));
+  const label = (t: string) => <span style={{ width: L.phone ? "auto" : "6.2em", flex: "none", font: `400 ${L.phone ? Math.round(chip * 0.94) : Math.round(chip * 0.82)}px/1 ${VT}`, letterSpacing: "0.05em", color: SAND, textShadow: GLOW }}>&gt; {t}</span>;
+  // the difficulty's and the district's line, on glass (they sit over the busiest part of the art)
+  const blurb = (t: string) => !L.phone && <span style={{ marginLeft: 6, padding: "0.2em 1em 0.14em 0.45em", borderRadius: 2, background: GLASS, font: `400 ${Math.round(chip * 0.86)}px/1.1 ${VT}`, color: "#f2e9e1", textShadow: GLOW }}>{t}</span>;
+  const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6 * Math.min(1, fit + 0.2), flexWrap: "wrap", maxWidth: "100%" };
   return (
-    <div data-pad-modal="" data-testid="pick" role="dialog" aria-label="pick your Radbro" style={overlayRoot(L)}>
-      <div style={overlayCol(L)}>
-        <Heading a="PICK YOUR " b="RADBRO" sub={`or Retardio · ${S.youChase.toLowerCase()}`} L={L} />
+    <div ref={rootRef} data-pad-modal="" data-testid="pick" role="dialog" aria-label="pick your Radbro" style={overlayRoot(L)}>
+      <div style={overlayCol(L, fit)}>
+        <Heading a="PICK YOUR " b="RADBRO" sub={`or Retardio · ${S.youChase.toLowerCase()}`} L={L} fit={Math.min(1, fit + 0.15)} />
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, ${card}px))`, gap, width: "100%" }} data-testid="roster">
           {RADBROS.map(id => {
             const sel = id === chaser;
@@ -376,7 +421,7 @@ function PickScreen(p: TitleProps & { L: Layout; onClose: () => void }) {
                   <img src={portraitPath(id)} alt="" draggable={false} style={{ display: "block", width: "100%", height: "100%", filter: sel ? "none" : "saturate(0.85) brightness(0.9)" }} />
                 </div>
                 <div style={{ borderLeft: `4px solid ${sel ? PINK : BAR_OFF}`, background: sel ? PINK : GLASS, color: sel ? INK : CREAM, padding: L.phone ? "4px 6px 3px" : "6px 8px 5px" }}>
-                  <div style={{ font: `400 ${namePx}px/1 ${BEBAS}`, letterSpacing: "0.05em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{L.phone || fit < 120 ? charTag(id) : charName(id).toUpperCase()}</div>
+                  <div style={{ font: `400 ${namePx}px/1 ${BEBAS}`, letterSpacing: "0.05em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{L.phone || cardPx < 120 ? charTag(id) : charName(id).toUpperCase()}</div>
                   {!L.phone && <div style={{ marginTop: 2, font: `400 ${Math.round(namePx * 0.8)}px/1 ${VT}`, letterSpacing: "0.03em", opacity: 0.9 }}>{PERSONA[id]}</div>}
                 </div>
               </button>
@@ -402,7 +447,7 @@ function PickScreen(p: TitleProps & { L: Layout; onClose: () => void }) {
             const open = id === PAGE_DISTRICT || districtUnlocked(progress, id);
             const first = LEVELS.find(l => l.map === id);
             return (
-              <button key={id} onClick={() => open && id !== PAGE_DISTRICT && gotoDistrict(id)} disabled={!open} className="st-f" data-testid={`map-${id}`} aria-pressed={id === PAGE_DISTRICT}
+              <button key={id} onClick={() => { if (open && id !== PAGE_DISTRICT) { rememberPicks(chaser, difficulty); gotoDistrict(id); } }} disabled={!open} className="st-f" data-testid={`map-${id}`} aria-pressed={id === PAGE_DISTRICT}
                 title={open ? DISTRICTS[id].blurb : `locked: catch him in campaign level ${first?.n} (${first?.name}) to open ${DISTRICTS[id].name} in free play`} style={chipStyle(id === PAGE_DISTRICT, open, chip)}>
                 {open ? "" : "🔒 "}{DISTRICTS[id].name.toUpperCase()}
               </button>
@@ -423,7 +468,7 @@ function PickScreen(p: TitleProps & { L: Layout; onClose: () => void }) {
             })}
           </div>
         )}
-        <button onClick={p.onClose} data-st-item="" data-testid="pick-done" data-pad-btn="EAST START" style={{ ...itemStyle(true, false, L.phone ? 24 : clamp(24, h * 0.043, 40)), marginTop: L.phone ? 2 : 6 }}>DONE</button>
+        <button onClick={p.onClose} data-st-item="" data-testid="pick-done" data-pad-btn="EAST START" style={{ ...itemStyle(true, false, (L.phone ? 24 : clamp(24, h * 0.043, 40)) * Math.min(1, fit + 0.2)), marginTop: (L.phone ? 2 : 6) * fit }}>DONE</button>
       </div>
     </div>
   );

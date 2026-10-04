@@ -90,13 +90,14 @@ const lockMouse = () => { if (!isTouch() && !padActive() && document.pointerLock
 /** PLAY / PRACTICE / a level: fullscreen on touch, else the mouse (not when the pad pressed it). */
 const grabInput = () => { if (isTouch()) enterFullscreen(); else if (!padActive()) requestLock(canvasEl()); };
 
-function Scene({ game }: { game: PlayGame }) {
+/** idle: the title's opaque key art covers the city, so it stops rendering (power and heat on phones) until a round. */
+function Scene({ game, idle }: { game: PlayGame; idle: boolean }) {
   const prefab = useMemo(() => playPrefab(game, { nodes: [], materials: {} }), [game]);
   const hidePlayer = useCallback(() => game.mode !== "round", [game]);
   const ropeFrom = useCallback((out: Vector3) => handWorld(game.setup.chaser, "right", out) !== null, [game]);
   const isNight = useCallback(() => game.mode === "round" && ((game.setup.mutators ?? 0) & M_NIGHT) !== 0, [game]);
   return (
-    <SceneCanvas prefab={prefab}>
+    <SceneCanvas prefab={prefab} frameloop={idle ? "never" : "always"}>
       <AssetsBridge />
       <StructuresView model={game.model} district={PAGE_DISTRICT} />
       <PlayDriver game={game} />
@@ -266,8 +267,8 @@ export default function PlayPage() {
   const startLevel = useCallback((n: number) => {
     const level = LEVELS[n - 1];
     if (!level) return;
-    if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
     rememberPicks(chaser, difficulty);
+    if (level.map !== PAGE_DISTRICT) { gotoDistrict(level.map, { lvl: String(n) }); return; }
     unlockAudio();
     grabInput();
     useUi.setState({ campaignSel: n });
@@ -421,7 +422,7 @@ export default function PlayPage() {
   const inRound = screen === "countdown" || screen === "chase" || practice;
   return (
     <>
-      <Scene game={game} />
+      <Scene game={game} idle={ready && (screen === "boot" || screen === "title")} />
       {(screen === "boot" || screen === "title") && (
         <Title chaser={chaser} setChaser={setChaser} difficulty={difficulty} setDifficulty={setDifficulty} challenge={challenge} onPlay={onPlay} onPractice={onPractice} ready={ready}
           muted={settings.muted} onMute={toggleMute} ghost={linkGhost} ghostBusy={linkGhostBusy} ghostActive={ghostActive}

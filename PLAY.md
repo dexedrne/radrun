@@ -37,9 +37,12 @@ RadPayne, RBGO and RadZombies; top right the $SPIDERTAG token page, the tip jar 
 the speaker. The token and the tip jar never show inside someone else's portal (radbro.fun); the other games' links
 open in a new tab when the game is framed. Your Radbro's row opens the **character select**: the seven as cards, then
 the difficulty, the district (a district change reloads the page) and any mutators you have unlocked; DONE (or Esc,
-or Circle / B) goes back. The arrow keys move the focus down the list (left / right on your Radbro's row changes him),
-Enter picks, Tab follows the same order; a pad moves the same focus. Landscape phones get the list in two columns,
-portrait phones one narrow column, both inside the safe areas (`src/ui/title.tsx`).
+or Circle / B) goes back. The arrow keys move the focus down the list, on through the other games and back to the top
+(as on the shooters; left / right on your Radbro's row changes him), the mouse moves the same focus, Enter picks what is
+highlighted, Tab follows the same order; a pad's up / down walks the same loop. Landscape phones get the list in two
+columns, portrait phones one narrow column, both inside the safe areas; a title or character select that would scroll
+(a challenge or ghost line on a short window, a small phone with the districts and mutators unlocked) shrinks its type
+and gaps until it fits. Behind the key art the city stops rendering while the title is up (`src/ui/title.tsx`).
 
 ## Controls
 

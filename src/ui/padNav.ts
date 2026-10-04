@@ -3,7 +3,8 @@
 // left / right on a slider changes it, a text box with data-pad-chars opens the on-screen picker (PadKeyboard), and
 // a control with data-pad-btn="EAST START ..." is pressed by those buttons wherever the focus is (Circle / B = back,
 // Options / Start = resume, Triangle / Y = retry). While a [data-pad-modal] element is up (pause, the picker) only
-// its controls take part; [data-pad-default] marks where the focus lands first; [data-pad-skip] opts out.
+// its controls take part; [data-pad-default] marks where the focus lands first; [data-pad-skip] opts out. Controls
+// marked [data-pad-cycle] form one list: up / down go through them in page order and wrap (a title's menu).
 import { create } from "zustand";
 import type { NavDir, PadButton } from "../input/gamepad.ts";
 
@@ -121,6 +122,11 @@ export class MenuNav {
     const cur = this.cur;
     if (!cur) return;
     if (cur instanceof HTMLInputElement && cur.type === "range" && (dir === "left" || dir === "right")) { this.nudge(cur, dir === "right" ? 1 : -1); this.auto = false; return; }
+    if ((dir === "up" || dir === "down") && cur.hasAttribute("data-pad-cycle")) {
+      const ring = this.items().filter(e => e.hasAttribute("data-pad-cycle") && !(e as HTMLButtonElement).disabled);
+      const k = ring.indexOf(cur);
+      if (k >= 0 && ring.length > 1) { this.focus(ring[(k + (dir === "down" ? 1 : -1) + ring.length) % ring.length]); this.auto = false; return; }
+    }
     const items = this.items().filter(e => e !== cur);
     const i = pickNext(rectOf(cur), items.map(rectOf), dir);
     if (i >= 0) this.focus(items[i]);
