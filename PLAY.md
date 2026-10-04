@@ -1016,6 +1016,9 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
   layout changed); hand edits to other decor nodes are kept.
 - `npm run restyle-city` re-applies the look from `src/world/toPrefab.ts` (materials table, facade
   rule, roof caps) to `city.json` without touching gameplay geometry.
+- **The city and decor never move in the game:** their transforms are composed once and then skipped every
+  frame (`FreezeStatic` in `src/app/GameScene.tsx`; visibility still switches). Something that should move
+  belongs in code next to the actors (like the Milady), not in `city.json` / `decor.json`.
 - The sky gradient and fog colour are `SKY_COLORS` in `src/app/cityLook.tsx`.
 
 ## tuning.json
