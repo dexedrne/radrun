@@ -5,7 +5,7 @@ import type { CityModel } from "../world/cityModel.ts";
 import { PlayGame } from "../game/play.ts";
 import { decodePack } from "../route/trackPack.ts";
 import { applyGeorgeJson } from "./george.config.ts";
-import { PAGE_DISTRICT, lv } from "./district.ts";
+import { PAGE_DISTRICT, levelFetchUrl, lv } from "./district.ts";
 import { TUNING_URL } from "../world/districts.ts";
 import { decorKeepOuts } from "../world/structures.ts";
 
@@ -15,7 +15,7 @@ let booting: Promise<Sandbox> | null = null;
 
 async function getJson<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(`${url}?v=${Date.now()}`);
+    const r = await fetch(levelFetchUrl(url));
     return r.ok ? ((await r.json()) as T) : null;
   } catch {
     return null;
@@ -52,7 +52,7 @@ export function bootPlay(): Promise<PlayGame> {
     const [model, tuningJson, packBuf] = await Promise.all([
       getJson<CityModel>(lv("city.model.json")),
       getJson<TuningJson>(TUNING_URL),
-      fetch(`${lv("runner.pack.bin")}?v=${Date.now()}`).then(r => (r.ok ? r.arrayBuffer() : null), () => null),
+      fetch(levelFetchUrl(lv("runner.pack.bin"))).then(r => (r.ok ? r.arrayBuffer() : null), () => null),
     ]);
     if (!model) throw new Error(`${lv("city.model.json")} missing: run npm run level`);
     if (!packBuf) throw new Error(`${lv("runner.pack.bin")} missing: run npm run level`);

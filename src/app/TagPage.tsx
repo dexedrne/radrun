@@ -21,7 +21,7 @@ import { PH_COUNTDOWN, PH_OVER, TAG_KIND_YANK, TAG_KIND_YOINK } from "../game/ta
 import { applyTuningJson, type TuningJson } from "../sim/tuning.ts";
 import type { CityModel } from "../world/cityModel.ts";
 import { DISTRICTS, TUNING_URL } from "../world/districts.ts";
-import { PAGE_DISTRICT, gotoDistrict, lv } from "./district.ts";
+import { PAGE_DISTRICT, gotoDistrict, levelFetchUrl, lv } from "./district.ts";
 import { SceneCanvas, playPrefab } from "./GameScene.tsx";
 import { AssetsBridge, clipsPath, CLIP_META, loadManifest, modelPath } from "./characters.ts";
 import { StructuresView } from "./StructuresView.tsx";
@@ -112,7 +112,7 @@ declare global {
 
 async function getJson<T>(url: string): Promise<T | null> {
   try {
-    const r = await fetch(`${url}?v=${Date.now()}`);
+    const r = await fetch(levelFetchUrl(url));
     return r.ok ? ((await r.json()) as T) : null;
   } catch {
     return null;
