@@ -498,8 +498,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
  * ground per cycle, so their locomotion loops play this much slower (no foot sliding). Measured with their clips.
  */
 const STRIDE: Partial<Record<RadbroId, Record<string, number>>> = {
-  retardio555: { Casual_Walk: 1.03, Run_02: 1.13, Lean_Forward_Sprint: 1.09 },
-  retardio85: { Casual_Walk: 0.96, Run_02: 1.03, Lean_Forward_Sprint: 1.01 },
+  retardio555: { Casual_Walk: 1.12, Run_02: 1.22, Lean_Forward_Sprint: 1.17 },
+  retardio85: { Casual_Walk: 1.08, Run_02: 1.11, Lean_Forward_Sprint: 1.08 },
 };
 
 /**
