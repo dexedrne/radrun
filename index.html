@@ -14,6 +14,8 @@
     <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preload" href="/fonts/BebasNeue.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/VT323.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/ui/key-art.webp" as="image" type="image/webp" />
     <link rel="canonical" href="https://spidertag.vyvanse.beer/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="SPIDERTAG" />
@@ -34,9 +36,10 @@
     <meta name="twitter:image" content="https://spidertag.vyvanse.beer/og.jpg" />
     <meta name="twitter:image:alt" content="SPIDERTAG: Radbros #4764, #652, #723 and #2564 with the Retardio boys Cousin #555 and Classic #85 web-swing and wingsuit-glide over rain-slick neon rooftops at dusk" />
     <style>
-      /* the SPIDERTAG wordmark (Bebas Neue, SIL OFL) */
+      /* the SPIDERTAG wordmark and the title's menu (Bebas Neue), its terminal lines (VT323); both SIL OFL */
       @font-face { font-family: "Bebas Neue"; src: url(/fonts/BebasNeue.woff2) format("woff2"); font-display: swap; }
-      html, body { margin: 0; height: 100%; width: 100%; background: #9fc3e6; overflow: hidden; overscroll-behavior: none; }
+      @font-face { font-family: "VT323"; src: url(/fonts/VT323.woff2) format("woff2"); font-display: swap; }
+      html, body { margin: 0; height: 100%; width: 100%; background: #090b16; overflow: hidden; overscroll-behavior: none; }
       /* no double-tap zoom, no grey tap flash, no font boost on rotate */
       html { touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
       body { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; }
@@ -46,6 +49,11 @@
          up makes Safari minimise its toolbars */
       html.rr-scroll, html.rr-scroll body { overflow: visible; }
       html.rr-scroll body { height: auto; min-height: 100%; padding-bottom: 160px; }
+      /* the title (ui/title.tsx): its cards, chips and pills ring the focus (mouse, keys, a pad); its menu
+         items show the focus as their pink bar instead of the pad's ring */
+      .st-f:hover, .st-f:focus-visible, .st-f[data-pad-focus] { outline: 2px solid #f3eada !important; outline-offset: 2px !important; box-shadow: 0 0 18px rgba(253,67,174,0.5) !important; }
+      .st-f:focus:not(:focus-visible):not([data-pad-focus]):not(:hover) { outline: none; }
+      button[data-st-item], button[data-st-item]:focus, button[data-st-item][data-pad-focus] { outline: none !important; box-shadow: none !important; }
       @keyframes rr-swipe { 0%, 100% { transform: translateY(6px); opacity: 0.55; } 50% { transform: translateY(-6px); opacity: 1; } }
     </style>
   </head>

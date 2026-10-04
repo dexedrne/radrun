@@ -12,7 +12,8 @@ import { attachDom } from "../input/input.ts";
 import { useUi, type GhostInfo } from "../ui/store.ts";
 import { LINK_VERSION, applySettings, getBestGhost, lastPicks, loadSettings, padSettingsOf, pickRunner, readChallenge, rememberPicks, saveSettings, type Settings, type StoredGhost } from "../ui/prefs.ts";
 import { padActive, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
-import { Loading, Pause, ResultsScreen, RoundHud, Title, Toast } from "../ui/screens.tsx";
+import { Loading, Pause, ResultsScreen, RoundHud, Toast } from "../ui/screens.tsx";
+import { Title, TITLE_ART } from "../ui/title.tsx";
 import { CampaignScreen } from "../ui/campaignScreen.tsx";
 import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaign.ts";
 import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
@@ -415,7 +416,7 @@ export default function PlayPage() {
   muteRef.current = toggleMute;
 
   if (err) return <div style={{ padding: 20 }}>Failed to load: {err}</div>;
-  if (!game || !settings) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", background: "#9fc3e6 url(/ui/key-art.webp) center / cover no-repeat" }}>loading…</div>;
+  if (!game || !settings) return <div style={{ padding: 20, height: "100%", boxSizing: "border-box", font: "400 22px VT323, ui-monospace, monospace", color: "#ffd23f", background: `linear-gradient(rgba(5,7,17,0.55), rgba(5,7,17,0.35)), ${TITLE_ART} 55% 32% / cover no-repeat #090b16` }}>[ .. ] loading…</div>;
   const practice = screen === "practice";
   const inRound = screen === "countdown" || screen === "chase" || practice;
   return (
