@@ -105,9 +105,18 @@ function fadeOut(e: Engine, t: Track, tau: number): void {
   t.stopAt = now + tau * 6;
 }
 
-/** Start streaming the round's loop (with the round) and decode the countdown build + stings. */
-export function preloadTracks(district: string): void {
+/** Decode the countdown build (small; it plays the moment the countdown starts). */
+export function preloadCountdown(): void {
   preloadSamples([musicPath(MUSIC.countdown)], true);
+}
+
+/**
+ * Start streaming the round's loop and decode the countdown build + stings. LOADING calls it once the round's models
+ * are in: the loop (1-2 MB) and the stings are not needed before GO / the round's end, and would otherwise share the
+ * line with the models the round waits for (the procedural score covers the loop until it can play).
+ */
+export function preloadTracks(district: string): void {
+  preloadCountdown();
   preloadSamples([musicPath(MUSIC.win), musicPath(MUSIC.yoink), musicPath(MUSIC.rugged)]);
   const go = (e: Engine) => { track(e, roundTrack(style, district, rotation)); };
   const e = engine();

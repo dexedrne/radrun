@@ -12,7 +12,8 @@ import type { BakeReport } from "../src/route/bake.ts";
 import { applyTuningJson } from "../src/sim/tuning.ts";
 import { lintModel, RULES } from "../src/world/derive.ts";
 import type { CityModel } from "../src/world/cityModel.ts";
-import { DISTRICTS, DISTRICT_IDS, districtFromSearch, type DistrictId } from "../src/world/districts.ts";
+import { DISTRICTS, DISTRICT_IDS, TUNING_URL, districtFromSearch, levelUrl, type DistrictId } from "../src/world/districts.ts";
+import { levelFetchUrl } from "../src/app/district.ts";
 import { Round } from "../src/game/round.ts";
 import { chaseDist } from "../src/sim/player.ts";
 import { emptyInput } from "../src/sim/player.ts";
@@ -94,6 +95,13 @@ test("districts: the page district comes from ?map= or a link's m=, else Downtow
   assert.equal(districtFromSearch("?map=towers"), "towers");
   assert.equal(districtFromSearch("?v=2&m=docks&c=652"), "docks");
   assert.equal(districtFromSearch("?map=nope"), "downtown");
+});
+
+test("level files: outside the dev server the game fetches their plain URLs (cacheable, the PrefabRefs' own)", () => {
+  for (const id of DISTRICT_IDS) {
+    for (const f of ["city.model.json", "runner.pack.bin", "city.json", "decor.json"]) assert.equal(levelFetchUrl(levelUrl(id, f)), levelUrl(id, f));
+  }
+  assert.equal(levelFetchUrl(TUNING_URL), TUNING_URL);
 });
 
 test("chase tweak: Downtown / no district is the classic round; a tweak keeps the rng draws and changes only its knobs", { skip: stale("downtown") }, () => {

@@ -577,7 +577,8 @@ synthesised WebAudio sound as the fallback whenever a file is not loaded yet or 
 silent. Sound starts when you press PLAY or PRACTICE (browsers only allow audio after a click or a key
 press; on the TAG page any click or key). Nothing is fetched on page open: a round loads about 3 MB
 alongside its Radbros, without delaying the LOADING screen (the countdown sounds go first); the round's music loop
-streams while it plays.
+and the end stings start loading once the Radbros are in (they are not needed before GO, and the models get the
+line to themselves), and the loop streams while it plays.
 
 - **Music:** a calm loop on the title and results; the countdown build (its cut lands exactly on GO); then
   the round's loop from GO, in the **music style** picked in pause -> Settings (remembered with the other
@@ -1015,6 +1016,9 @@ Challenge links (all builds): `?c=652&r=4764&d=normal&t=41.2` preselects the tit
   layout changed); hand edits to other decor nodes are kept.
 - `npm run restyle-city` re-applies the look from `src/world/toPrefab.ts` (materials table, facade
   rule, roof caps) to `city.json` without touching gameplay geometry.
+- **The city and decor never move in the game:** their transforms are composed once and then skipped every
+  frame (`FreezeStatic` in `src/app/GameScene.tsx`; visibility still switches). Something that should move
+  belongs in code next to the actors (like the Milady), not in `city.json` / `decor.json`.
 - The sky gradient and fog colour are `SKY_COLORS` in `src/app/cityLook.tsx`.
 
 ## tuning.json

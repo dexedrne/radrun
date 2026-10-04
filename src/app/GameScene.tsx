@@ -2,6 +2,8 @@
 // lights, PrefabRefs to city.json / decor.json, the player stand-in) with the runtime systems as
 // children. Mounted once; restarts never remount it.
 import { useEffect, useMemo, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import type { Object3D } from "three";
 import { GameCanvas, PrefabRoot, useScenePendingLoads, type Prefab, type GameObject } from "react-three-game";
 import type { ViewGame } from "./viewGame.ts";
 import type { Sandbox } from "../game/sandbox.ts";
@@ -97,6 +99,38 @@ export function GameScene({ game, children }: { game: Sandbox; children?: React.
   );
 }
 
+const freeze = (o: Object3D) => {
+  if (!o.matrixAutoUpdate) return;
+  o.updateMatrix(); // compose it once (this also marks its world matrix for the next update)
+  o.matrixAutoUpdate = false;
+};
+
+/**
+ * The city and decor prefabs never move on a game page (no editor here), yet three recomposes every object's matrix
+ * and world matrix every frame (~700 nodes, a tenth of a low-end frame). Freeze them: each composed once, then
+ * matrixAutoUpdate off. Their ancestors up to the scene are static too and are frozen as well, or they would push
+ * the whole tree through every frame anyway. Everything that moves (camera, actors, bones, FX, the Milady) keeps
+ * auto-update and still updates its own subtree. Re-checked every 60 frames: decor loads late, and a node r3g
+ * rebuilds starts unfrozen (correct, just not skipped). Visibility (quality.tsx) is unaffected.
+ */
+function FreezeStatic() {
+  const scene = useThree(s => s.scene);
+  const frame = useRef(0);
+  useFrame(() => {
+    if (frame.current++ % 60 !== 0) return;
+    const roots: Object3D[] = [];
+    scene.traverse(o => {
+      const id = o.userData.prefabNodeId;
+      if (id === "city" || id === "decor") roots.push(o);
+    });
+    for (const r of roots) {
+      r.traverse(freeze);
+      for (let p = r.parent; p; p = p.parent) freeze(p);
+    }
+  });
+  return null;
+}
+
 /** The one canvas + PrefabRoot. Mounted once per page; children are the runtime systems. */
 const FORCE_WEBGL = new URLSearchParams(location.search).has("webgl2");
 /** Renderer options fixed at creation: the WebGL2 switch and anti-aliasing (off on Low). */
@@ -121,6 +155,7 @@ export function SceneCanvas({ prefab, frameloop = "always", children }: { prefab
       <SkyGradient />
       <CityLook />
       <QualityView />
+      <FreezeStatic />
       <PrefabRoot data={prefab}>
         <LoadBridge />
         {children}

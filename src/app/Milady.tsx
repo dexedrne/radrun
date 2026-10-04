@@ -23,7 +23,7 @@ import { RADBRO_RIG, retargetClip } from "../vrm/retarget.ts";
 import { clipsPath } from "./characters.ts";
 import { useUi } from "../ui/store.ts";
 import { FRAME } from "./frame.ts";
-import { lv } from "./district.ts";
+import { levelFetchUrl, lv } from "./district.ts";
 
 /** prnthh/Pockit main at the time of writing; bump deliberately. */
 export const POCKIT_SHA = "8009d19eb16815e2f5e39f0fb7adaac69cf691c8";
@@ -73,7 +73,8 @@ type Stand = { x: number; y: number; z: number; yaw: number };
 /** Her stand from decor.json (Data kind "miladyStand"), transform copied once. */
 async function findStand(): Promise<Stand | null> {
   try {
-    const d = await (await fetch(`${lv("decor.json")}?v=${Date.now()}`)).json();
+    // The same URL as the decor PrefabRef's own fetch (a build: the browser cache answers, no second download).
+    const d = await (await fetch(levelFetchUrl(lv("decor.json")))).json();
     type N = { components?: Record<string, { type?: string; properties?: Record<string, unknown> }>; children?: N[] };
     let hit: Stand | null = null;
     const walk = (n: N, ox: number, oy: number, oz: number) => {

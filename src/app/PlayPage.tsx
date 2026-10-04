@@ -36,7 +36,7 @@ import { botParams, startBot } from "./dev/BotDriver.ts";
 import { setAudioLow, setAudioVolumes, setMuted, unlockAudio } from "../audio/engine.ts";
 import { preloadSfx } from "../audio/sfx.ts";
 import { preloadVoices, voice } from "../audio/voice.ts";
-import { preloadTracks, setMusicStyle } from "../audio/tracks.ts";
+import { preloadCountdown, preloadTracks, setMusicStyle } from "../audio/tracks.ts";
 import type { Vector3 } from "three";
 import { DISTRICT_MUTATORS, M_NIGHT } from "../game/mutators.ts";
 import { bridge, chaseResult, requestLock } from "../radbro/bridge.ts";
@@ -117,15 +117,17 @@ function Scene({ game, idle }: { game: PlayGame; idle: boolean }) {
 /** LOADING (spec §20 item 4): preload the round pair's GLBs, then mount their nodes. */
 async function loadPair(chaser: RadbroId, runner: RadbroId): Promise<boolean> {
   useUi.setState({ screen: "loading", load: { progress: 0, error: null } });
-  // The round's sounds and voices load alongside (never awaited; the procedural audio covers gaps).
+  // The round's sounds and voices load alongside (never awaited; the procedural audio covers gaps). The round's
+  // music loop and stings wait for the models (they are not needed before GO; tracks.ts preloadTracks).
   preloadSfx();
   preloadVoices(chaser, runner);
-  preloadTracks(PAGE_DISTRICT);
+  preloadCountdown();
   const failed = await loadManifest(manifestFor(chaser, runner), f => useUi.setState({ load: { progress: f, error: null } }));
   if (failed) {
     useUi.setState(s => ({ load: { progress: s.load.progress, error: failed } }));
     return false;
   }
+  preloadTracks(PAGE_DISTRICT);
   const cur = useUi.getState().pair;
   if (!cur || cur.chaser !== chaser || cur.runner !== runner) {
     useUi.setState({ pair: { chaser, runner } });
