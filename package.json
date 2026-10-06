@@ -34,6 +34,8 @@
     "portraits": "node tools/portraits.ts",
     "assets": "node tools/assets.ts",
     "gen-textures": "node tools/gen-textures.ts",
+    "pbr-maps": "node tools/pbr-maps.ts",
+    "pbr-shots": "node tools/pbr-shots.ts",
     "restyle-city": "node tools/restyle-city.ts",
     "gen-props": "node tools/gen-props.ts",
     "og-image": "node tools/og-image.ts",

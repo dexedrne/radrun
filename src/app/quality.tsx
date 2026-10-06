@@ -5,6 +5,7 @@
 //        reload), no blob shadows or runner trail, and decor.json's antennas hidden. Round 9: the rooftop
 //        obstacles you can touch are solid "prop" boxes in city.json - never hidden at any quality (what you
 //        see is what you hit); only untouchable tower-top decor is thinned.
+// City surfaces: Low and touch devices omit normals and use half-size roughness (cityLook.tsx).
 // The views read lowQuality() every frame, so a switch takes effect immediately.
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";

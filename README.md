@@ -108,7 +108,8 @@ Rooftop decor (signs, the Milady's balloon stand tagged `Data {kind: "miladyStan
 `rooftop-props` group of water towers / AC units / antennas from `npm run gen-props`) lives in
 `public/levels/decor.json`, editable in `?editor=decor`. City textures (`public/textures/`, from
 `npm run gen-textures`) are mapped in world space at runtime (`src/app/cityLook.tsx`); `PLAY.md` has the
-details. `npm run portraits` renders the title-card busts into `public/ui/`.
+details. `npm run pbr-maps` derives tiling normal and roughness maps from those albedos;
+[city surface maps](docs/PBR.md) covers regeneration, quality budgets and fixed-view captures. `npm run portraits` renders the title-card busts into `public/ui/`.
 
 Tools (print results, never gate the build): `npm run balance` (follower/camper/swinging bots per difficulty),
 `npm run probe:canyon` (street-width probe), `RUGRUN_CHROME_PROFILE=<throwaway dir> npm run shot`

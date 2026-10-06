@@ -12,8 +12,11 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { ClampToEdgeWrapping, LinearFilter, RepeatWrapping, SRGBColorSpace, TextureLoader, type Material, type Mesh, type Texture } from "three";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
-import { abs, atan, color, mix, normalWorld, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, texture, vec2, PI } from "three/tsl";
+import { abs, atan, color, mix, normalWorldGeometry, normalize, positionLocal, positionWorld, replaceDefaultUV, select, sign, smoothstep, texture, vec2, PI } from "three/tsl";
 import { PAGE } from "./district.ts";
+import { lowQuality } from "./quality.tsx";
+import { detectTouch } from "../input/touch.ts";
+import { beginPbr, disposePbr, prunePbr, syncPbr } from "./pbr.ts";
 
 /** Sky gradient stops (sRGB). The fog uses the horizon colour so distant boxes melt into it. */
 /** Sky / fog of this page's district (Downtown: horizon #d3dcea, mid #98bde6, zenith #4c83d0). */
@@ -21,7 +24,7 @@ export const SKY_COLORS = { horizon: PAGE.look.skyHorizon, mid: PAGE.look.skyMid
 export const FOG_COLOR = PAGE.look.fog;
 
 const worldUV = () => {
-  const n = normalWorld, p = positionWorld;
+  const n = normalWorldGeometry, p = positionWorld;
   const wallX = vec2(p.z.mul(sign(n.x)).negate(), p.y); // faces looking along +-x: "right" is -+z
   const wallZ = vec2(p.x.mul(sign(n.z)), p.y);
   const top = vec2(p.x, p.z);
@@ -33,15 +36,20 @@ function isLevelMaterial(m: Material): m is MeshStandardNodeMaterial | MeshBasic
   return m.constructor === MeshStandardNodeMaterial || m.constructor === MeshBasicNodeMaterial;
 }
 
-function sync(m: Material): void {
+function sync(m: Material, low: boolean, active: Set<MeshStandardNodeMaterial>): void {
   if (!isLevelMaterial(m)) return;
   const map = (m as { map?: Texture | null }).map;
   const want = !!map && map.wrapS === RepeatWrapping;
   const has = m.userData.rugrunWorldUV === true;
-  if (want === has) return;
-  m.contextNode = want ? WORLD_UV : null;
-  m.userData.rugrunWorldUV = want;
-  m.needsUpdate = true;
+  if (want !== has) {
+    m.contextNode = want ? WORLD_UV : null;
+    m.userData.rugrunWorldUV = want;
+    m.needsUpdate = true;
+  }
+  if (m instanceof MeshStandardNodeMaterial) {
+    active.add(m);
+    syncPbr(m, low, want);
+  }
 }
 
 /** Applies the world-space rule to every level material in the scene (re-checked every few frames, so
@@ -49,14 +57,25 @@ function sync(m: Material): void {
 export function CityLook() {
   const scene = useThree(s => s.scene);
   const frame = useRef(0);
+  useEffect(() => () => disposePbr(), [scene]);
   useFrame(() => {
     if (frame.current++ % 10) return;
+    beginPbr();
+    const low = lowQuality() || detectTouch();
+    const active = new Set<MeshStandardNodeMaterial>();
+    const visited = new Set<Material>();
+    const apply = (m: Material) => {
+      if (visited.has(m)) return;
+      visited.add(m);
+      sync(m, low, active);
+    };
     scene.traverse(o => {
       const mm = (o as Mesh).material;
       if (!mm) return;
-      if (Array.isArray(mm)) mm.forEach(sync);
-      else sync(mm);
+      if (Array.isArray(mm)) mm.forEach(apply);
+      else apply(mm);
     });
+    prunePbr(active);
   });
   return null;
 }

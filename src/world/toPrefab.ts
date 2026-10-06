@@ -32,7 +32,7 @@ export const CITY_MATERIALS: Record<string, PrefabMaterial> = {
   stand: { name: "balloon stand", color: "#e86a92", roughness: 0.9, metalness: 0 },
   skyline: { name: "skyline", materialType: "basic", color: "#b3c3dc", ...tex("/textures/facade_grid.png", [0.03125, 0.020833]) },
   ground: { name: "streets", color: "#c4c6d0", roughness: 1, metalness: 0, ...tex("/textures/street.png", [0.0238095, 0.0238095]) },
-  water: { name: "water", materialType: "basic", color: "#4f9dbf", ...tex("/textures/water.png", [0.0625, 0.0625]) },
+  water: { name: "water", roughness: 0.12, metalness: 0, color: "#4f9dbf", ...tex("/textures/water.png", [0.0625, 0.0625]) },
 };
 
 /** The materials table for a district: the street texture spans exactly one block pitch (its block /

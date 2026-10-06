@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "convention": "OpenGL +Y; linear data; periodic filters and gradients",
+  "records": [
+    {
+      "albedo": "/textures/facade_grid.png",
+      "albedoSha256": "eac4c8b6ae684c8de93e4b3d368fc6ea4a2f59b6c487c82e8a7ba53d0b40d2cf",
+      "size": [
+        256,
+        384
+      ],
+      "profile": {
+        "roughness": 0.85,
+        "strength": 4,
+        "normalScale": 0.7
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "3b60dacb24d0fb6f8e165ece0dfe7c8e6b180c69704184755e67bfce2878b037",
+          "bytes": 18196
+        },
+        "height": {
+          "sha256": "a995c05bf0fdc4c7ccc33ed5dca3db01eb94f22a40f3424ad9c2e34f3b325ad6",
+          "bytes": 5182
+        },
+        "roughness": {
+          "sha256": "9a5f601a585e52c19356f1fa75c5002025aae5792407ceadc6d643d8f3845dcc",
+          "bytes": 2902
+        },
+        "roughnessLow": {
+          "sha256": "7bd6e79d1bfca7989d9052a50346fdac7e0a9a453f46f37480e5363d7882bf8b",
+          "bytes": 1454
+        }
+      }
+    },
+    {
+      "albedo": "/textures/facade_brick.png",
+      "albedoSha256": "7522db68007402e4fc76b4854d1e206a436040bdad87ec3f1e97de78b8315b78",
+      "size": [
+        256,
+        384
+      ],
+      "profile": {
+        "roughness": 0.9,
+        "strength": 4,
+        "normalScale": 0.7
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "6130fb36b125fe580984435281fb71c309d23bf39ff36ac44ed6967f3b3570ea",
+          "bytes": 34805
+        },
+        "height": {
+          "sha256": "b1f7232248480f1ba2c2d28dcca1a28a5fc422f8b262d4b49adf7715a9544ed2",
+          "bytes": 9079
+        },
+        "roughness": {
+          "sha256": "e62bb4e118fcf5594b6a5e4b9944f139d11ec2addf59d6be24c33f1d0e26ef5d",
+          "bytes": 2268
+        },
+        "roughnessLow": {
+          "sha256": "5f0d065d1e1eb755b478f129a8a5d69eaddba9595b2edbaa9f44babcb4c4160e",
+          "bytes": 1146
+        }
+      }
+    },
+    {
+      "albedo": "/textures/facade_glass.png",
+      "albedoSha256": "a5ef1664a541e32a69d1428d43116a1f951b7fde837c666e165958eb22cc3197",
+      "size": [
+        256,
+        384
+      ],
+      "profile": {
+        "roughness": 0.72,
+        "strength": 3,
+        "normalScale": 0.5
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "56fe117ea5c1e6a077e157397565b5ee5fbae4cbfb3052a02fcfbd8d37af2d6f",
+          "bytes": 5817
+        },
+        "height": {
+          "sha256": "beed7f772b8ea6cefeb99eaeb8ab0e253156e773bb6ccbcb9bea946a83f8986e",
+          "bytes": 2372
+        },
+        "roughness": {
+          "sha256": "d6c922cbf17ee2352131fee1bc56b5764e1c711a43da93600b2492a760622096",
+          "bytes": 3168
+        },
+        "roughnessLow": {
+          "sha256": "7d0876bc710e6f2816febb6580011d8a7addcdb80b4362a506158f8eb6fbaf53",
+          "bytes": 1611
+        }
+      }
+    },
+    {
+      "albedo": "/textures/roof.png",
+      "albedoSha256": "7d78b2d501c93e157cda9f1a148e88488b8a764b0abf7116975b70f8e3e42879",
+      "size": [
+        128,
+        128
+      ],
+      "profile": {
+        "roughness": 0.94,
+        "strength": 3,
+        "normalScale": 0.6
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "b5da980c7cea2e30244e8ac1c59cdc2e34d5ac9f15a098e4adb3096744d69ee4",
+          "bytes": 5560
+        },
+        "height": {
+          "sha256": "82b8e605142eb3ec0fc160ef617143aa0e8bd509fc3c6707566a80412925bc67",
+          "bytes": 3073
+        },
+        "roughness": {
+          "sha256": "e1048b58cee0f2a72828a4ffc91be9f8377fb28e6786fa3f246ebc11a29c58f3",
+          "bytes": 1246
+        },
+        "roughnessLow": {
+          "sha256": "f673c353c5a92aaa4d601011c2458af2b29137efa1f749123af0618a1d2cbf2d",
+          "bytes": 486
+        }
+      }
+    },
+    {
+      "albedo": "/textures/street.png",
+      "albedoSha256": "d4197c1ef7c156a71e3708e4828c0c7c1b92032cb95a2b4bf8141eb26bd58480",
+      "size": [
+        512,
+        512
+      ],
+      "profile": {
+        "roughness": 0.96,
+        "strength": 2,
+        "normalScale": 0.5
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "2fd4c598a1fc24d0c04bd3efbc686097501664dc06accc64d60305b561dc6d24",
+          "bytes": 67896
+        },
+        "height": {
+          "sha256": "223700c5e903b4de8778bb7a5a46b834a3c06e7ca151e8067dc47826f99788d2",
+          "bytes": 36066
+        },
+        "roughness": {
+          "sha256": "bfb7450847aaae8cc8f15c1c3f5129b9027a6d574f5ad2d000a3e46b643e2da6",
+          "bytes": 43456
+        },
+        "roughnessLow": {
+          "sha256": "b9c533a007ff64284c88df047ab48bcda74a3cef2af2e3f04ee44dfcacf80c0b",
+          "bytes": 22902
+        }
+      }
+    },
+    {
+      "albedo": "/textures/water.png",
+      "albedoSha256": "dd04b0ff14c90808f56f5b76df7572b78d5ce8d54984949214ef0ace0f78222f",
+      "size": [
+        256,
+        256
+      ],
+      "profile": {
+        "roughness": 0.12,
+        "strength": 2,
+        "normalScale": 0.4
+      },
+      "outputs": {
+        "normal": {
+          "sha256": "64153a3efe5e826323e799b4c144e96c54cbf21fc935486d43626aeb488e1918",
+          "bytes": 3573
+        },
+        "height": {
+          "sha256": "0da93202e943167f81e03111635f3402ea32a679ece84a1a02e148153fd22724",
+          "bytes": 6011
+        },
+        "roughness": {
+          "sha256": "f9edd63e3fec3c6ecdd2278a6127798866bc002f52552b0a3026810a2f2abf63",
+          "bytes": 9649
+        },
+        "roughnessLow": {
+          "sha256": "647e9054bcdf3364d46882723bdfd89a0340a56203df75406fc91a1554e1ce27",
+          "bytes": 3296
+        }
+      }
+    }
+  ]
+}

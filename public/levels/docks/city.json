@@ -165,7 +165,8 @@
   },
   "water": {
    "name": "water",
-   "materialType": "basic",
+   "roughness": 0.12,
+   "metalness": 0,
    "color": "#4f9dbf",
    "texture": "/textures/water.png",
    "repeat": true,
