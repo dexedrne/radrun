@@ -31,7 +31,7 @@ const browser = await puppeteer.launch({
   executablePath: process.env.CHROME_PATH ?? "/usr/bin/chromium",
   headless: true,
   userDataDir: profile,
-  args: [`--user-data-dir=${profile}`, "--use-angle=swiftshader", "--window-size=900,600"],
+  args: [`--user-data-dir=${profile}`, "--mute-audio", "--disable-dev-shm-usage", "--use-angle=swiftshader", "--window-size=900,600"],
   defaultViewport: { width: 900, height: 600 },
 });
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

@@ -958,7 +958,7 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
   taglines were lettered over; no money or earning lines on the boards). To change a board, replace its
   `.webp` (same name) or point the `ad_<name>` material in `decor.json` at another texture.
 - **Key art**: `public/ui/key-art.webp` (1600x900 webp, ~210 KB, preloaded by `index.html`), full-bleed behind the
-  title, its overlays and the boot screens: the six web-swinging over neon rooftops in the rain, the SPIDERTAG share
+  title, its overlays and the boot screens: #4764, #652, #3704 and #3710 lead the rooftop chase, with #555 and #85 supporting, the SPIDERTAG share
   card's art. The title's terminal font is VT323 (`public/fonts/VT323.woff2`, SIL OFL, `public/fonts/OFL-VT323.txt`).
 
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
@@ -1153,9 +1153,9 @@ https://spidertag.vyvanse.beer (the canonical address; `vercel.json` permanently
 rugrun.vyvanse.beer and vercel.app hosts there, path and query kept, and sends `/token` to
 https://token.spidertag.vyvanse.beer), so change them if the game moves. Share, challenge, ghost, room and wager links
 are built from the address the game was opened on.
-`public/og.jpg` (1200x630) is the key-art card: the six characters over the rooftops, the SPIDERTAG wordmark (Bebas
+`public/og.jpg` (1200x630) is the key-art card: the main four over the rooftops, the SPIDERTAG wordmark (Bebas
 Neue) and a VT323 `[ OK ] spidertag.vyvanse.beer` line, an HTML page rendered with headless Chromium outside the repo.
-`og2.jpg` / `og3.jpg` are the RadRun cards, kept for previews cached before the move. The favicon and the install
+`og2.jpg` / `og3.jpg` carry the same current cast for previews cached at those URLs. `ui/cartridge.webp` is a square, textless key-art thumbnail. Replaced art is preserved beside each file as `*.prev.*`. The favicon and the install
 icons are the $SPIDERTAG coin's ST mark: `node tools/icons.ts <the 1024 px logo png>` writes `favicon.png`,
 `icons/*.png` and `apple-touch-icon.png`. `npm run og-image` (dev server up, `RUGRUN_CHROME_PROFILE` set) renders the
 older style of card, a mid-swing frame with the wordmark, the pitch and the portraits, into `og-frame.jpg` (never over

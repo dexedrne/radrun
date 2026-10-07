@@ -24,8 +24,8 @@ const pub = (f: string) => new URL(`../public/${f}`, import.meta.url);
 const USED = ["Idle", "Casual_Walk", "Run_02", "Lean_Forward_Sprint", "Regular_Jump", "Grab_Bar_and_Swing_Forward", "Rope_Hang_Idle",
   "Big_Wave_Hello", "Victory_Cheer", "Falling_Down", "Fishing_Cast", "Waltz"];
 
-test("roster: five Radbros and the two Retardios, #723 and #3171 included", () => {
-  assert.deepEqual([...RADBROS], ["652", "4764", "2564", "723", "3171", "retardio555", "retardio85"]);
+test("roster: the main four lead the seven Radbros and two Retardios", () => {
+  assert.deepEqual([...RADBROS], ["4764", "652", "3704", "3710", "723", "3171", "retardio555", "retardio85", "2564"]);
 });
 
 test("roster: Retardio ids, files and names stay apart from the Radbro token numbers", () => {
@@ -103,6 +103,8 @@ test("the Radbro you pick never changes the round (same seed -> same hash and ca
     return `${r.steps}/${r.caught}/${round.hash()}`;
   };
   const base = run("652", "4764");
+  assert.equal(run("3704", "3710"), base);
+  assert.equal(run("3710", "3704"), base);
   assert.equal(run("723", "652"), base);
   assert.equal(run("2564", "723"), base);
   assert.equal(run("retardio555", "retardio85"), base);

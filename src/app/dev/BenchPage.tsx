@@ -13,6 +13,7 @@ import { lv, PAGE } from "../district.ts";
 import { TagMatch, type TagSlot } from "../../game/tagMatch.ts";
 import { TagBot } from "../../game/tagBot.ts";
 import { SELFTEST_HASH, selfTestHash } from "../../net/selftest.ts";
+import { RADBROS } from "../../game/radbros.ts";
 
 type Row = { label: string; value: string };
 
@@ -20,7 +21,7 @@ declare global {
   interface Window { __bench?: { selfTest: string; ok: boolean; rows: Row[] } }
 }
 
-const ROSTER = ["652", "4764", "2564", "723", "3171"] as const;
+const ROSTER = RADBROS;
 const hex = (h: number) => `0x${(h >>> 0).toString(16).padStart(8, "0")}`;
 
 async function run(log: (r: Row) => void): Promise<void> {
