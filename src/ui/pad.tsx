@@ -24,8 +24,8 @@ const FACE_XB: Record<string, { color: string; letter: string }> = {
 export function Glyph({ b, kind, size = "1.35em" }: { b: PadToken; kind: PadKind; size?: string }) {
   const label = PAD_NAMES[kind][b];
   const svg = (children: React.ReactNode, w = 24) => (
-    <svg viewBox={`0 0 ${w} 24`} width={`calc(${size} * ${w / 24})`} height={size} role="img" aria-label={label}
-      style={{ display: "inline-block", verticalAlign: "-0.32em", margin: "0 0.12em", flex: "none" }}>{children}</svg>
+    <svg viewBox={`0 0 ${w} 24`} height={size} role="img" aria-label={label}
+      style={{ width: `calc(${size} * ${w / 24})`, display: "inline-block", verticalAlign: "-0.32em", margin: "0 0.12em", flex: "none" }}>{children}</svg>
   );
   if (b === "SOUTH" || b === "EAST" || b === "WEST" || b === "NORTH") {
     if (kind === "ps") {

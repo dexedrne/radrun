@@ -1,9 +1,11 @@
 // Touch-device detection, the phone quality default and fullscreen (spec §4 "Touch").
 // `?touch` / `?touch=1` forces touch controls on, `?touch=0` off; otherwise a coarse primary pointer
 // (phones, tablets) turns them on, and PlayPage also switches them on at the first touch.
+import { isPhone } from "../phone.ts";
 import { isFramed } from "../radbro/bridge.ts";
 
 export function detectTouch(search: string = location.search): boolean {
+  if (isPhone() || new URLSearchParams(search).get("device") === "phone") return true;
   const q = new URLSearchParams(search).get("touch");
   if (q !== null) return q !== "0";
   try {
@@ -24,7 +26,7 @@ export function smallScreen(): boolean {
 
 /** Canvas dpr range: touch devices cap at 1.5 (1.25 on phones); desktop keeps r3g's [1, 1.5]. */
 export function canvasDpr(touch: boolean): [number, number] {
-  return [1, touch && smallScreen() ? 1.25 : 1.5];
+  return [1, isPhone() || (touch && smallScreen()) ? 1.25 : 1.5];
 }
 
 /** iPhone / iPod: no element fullscreen API in any browser there (all of them are WebKit). */

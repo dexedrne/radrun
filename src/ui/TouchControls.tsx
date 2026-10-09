@@ -23,6 +23,7 @@ const round = (size: number, extra: React.CSSProperties = {}): React.CSSProperti
 });
 
 export function TouchControls({ input, onPause, noRunner = false }: { input: InputLatch; onPause: () => void; noRunner?: boolean }) {
+  const phone = useUi(s => s.phone);
   const ring = useUi(s => s.round.ring);
   const zip = useUi(s => s.round.zip);
   const base = useRef<HTMLDivElement>(null);
@@ -197,9 +198,17 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
       {/* pause */}
       <div data-testid="touch-pause"
         onPointerDown={e => { stop(e); onPause(); }}
-        style={round(44, { left: safe("left", 10), top: safe("top", 10), background: "rgba(14,16,30,0.55)", fontSize: 14, border: "1px solid rgba(255,255,255,0.4)" })}>
+        style={round(44, { left: safe("left", 10), top: safe("top", phone ? 116 : 10), background: "rgba(14,16,30,0.55)", fontSize: 14, border: "1px solid rgba(255,255,255,0.4)" })}>
         II
       </div>
     </div>
   );
+}
+
+/** Optional touch access while the phone's primary controller is connected. */
+export function PhoneTouchToggle() {
+  const phone = useUi(s => s.phone), connected = useUi(s => s.padConnected), requested = useUi(s => s.touchRequested);
+  if (!phone || !connected) return null;
+  return <button data-testid="phone-touch-toggle" aria-pressed={requested} onClick={() => useUi.setState({ touchRequested: !requested })}
+    style={{position: "fixed", zIndex: 13, top: safe("top", 10), right: safe("right", 10), minWidth: 44, minHeight: 44, color: "white", background: "#141833bb", border: "1px solid #ffffff66", borderRadius: 8}}>TOUCH</button>;
 }

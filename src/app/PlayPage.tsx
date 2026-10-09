@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // The game page: TITLE -> LOADING -> COUNTDOWN -> CHASE -> RESULTS over one canvas that is mounted
 // once, plus TITLE -> PRACTICE (free swinging with your Radbro and George, no runner; pause -> Back
 // to title). Restart / Retry create a fresh Round outside React (nothing remounts). ?bot=... runs the
@@ -19,7 +20,7 @@ import { LEVELS, loadProgress, type Level, type Progress } from "../game/campaig
 import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
 import { GhostView } from "./GhostView.tsx";
 import { S } from "../ui/strings.ts";
-import { TouchControls } from "../ui/TouchControls.tsx";
+import { TouchControls, PhoneTouchToggle } from "../ui/TouchControls.tsx";
 import { SwipeUp, useIphoneScrollRoom } from "../ui/iphoneFullscreen.tsx";
 import { enterFullscreen } from "../input/touch.ts";
 import { bootPlay } from "./boot.ts";
@@ -150,6 +151,8 @@ export default function PlayPage() {
   const ready = useUi(s => s.sceneReady);
   const touch = useUi(s => s.touch);
   const pad = useUi(s => s.pad);
+  const phone = useUi(s => s.phone);
+  const phoneTouch = useUi(s => !s.padConnected || s.touchRequested);
   const rHeld = useRef<number | null>(null);
   const muteRef = useRef<() => void>(() => undefined);
   const autoLow = useUi(s => s.autoLow);
@@ -393,6 +396,7 @@ export default function PlayPage() {
 
   const setSettings = (s: Settings) => {
     if (!game) return;
+    if (isPhone()) s = { ...s, quality: "low" };
     setSettingsState(s);
     saveSettings(s);
     if (s.quality !== useUi.getState().quality) useUi.setState({ quality: s.quality });
@@ -401,6 +405,7 @@ export default function PlayPage() {
     applyAudio(s);
     game.retune();
   };
+  useEffect(() => { if (phone && settings?.quality === "high") setSettings({ ...settings, quality: "low" }); }, [phone, settings]);
   useEffect(() => { if (settings) useUi.setState({ autoQuality: autoQualityAllowed(settings) }); }, [settings]);
   // Auto quality asked for Low (PlayDriver): switch once, remember it, tell the player.
   useEffect(() => {
@@ -434,7 +439,8 @@ export default function PlayPage() {
       {screen === "campaign" && <CampaignScreen onStart={startLevel} onBack={() => useUi.setState({ screen: "title" })} ready={ready} />}
       {screen === "loading" && <Loading onRetry={() => begin(randomSeed())} onMenu={toMenu} />}
       {(inRound || screen === "results") && <RoundHud reducedMotion={settings.reducedMotion} easyGrab={settings.easyGrab} practice={practice} muted={settings.muted} onMute={toggleMute} />}
-      {touch && !pad && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
+      {inRound && !paused && !BOT && <PhoneTouchToggle />}
+      {touch && (phone ? phoneTouch : !pad) && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} onNext={startLevel} onLevels={toLevels} />}
       <Toast />
       {!BOT && <SwipeUp show={screen === "title" || screen === "campaign" || screen === "results" || (paused && inRound)} />}

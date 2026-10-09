@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // The page's district (round 4): read once from ?map=<id> (or a ghost link's m=<id>). Switching
 // district is a navigation, so everything that loads level files or picks a look reads this constant.
 import { DISTRICTS, districtFromSearch, levelUrl, type District, type DistrictId } from "../world/districts.ts";
@@ -22,6 +23,7 @@ export const levelFetchUrl = (url: string): string =>
 export function gotoDistrict(id: DistrictId, keep: Record<string, string> = {}): void {
   const u = new URL(location.href);
   const q = new URLSearchParams();
+  if (isPhone()) q.set("device", "phone");
   if (id !== "downtown") q.set("map", id);
   for (const [k, v] of Object.entries(keep)) q.set(k, v);
   const cur = new URLSearchParams(location.search);

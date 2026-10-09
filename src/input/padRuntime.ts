@@ -1,3 +1,4 @@
+import { getPads, isPhone } from "../phone.ts";
 // Round 14: the Gamepad API side. One poll per frame (a rAF loop, and the game drivers poll first thing in their
 // frame so a press reaches the very next step): the most recently used pad drives either the Radbro (while the page
 // says a round is live: its InputLatch) or the menus (padNav.ts). Hot-plug works through navigator.getGamepads();
@@ -64,7 +65,7 @@ function leavePlay(): void {
 
 const readPads = (): (Gamepad | null)[] => {
   try {
-    return Array.from(navigator.getGamepads?.() ?? []);
+    return getPads();
   } catch {
     return []; // no permission (a frame without "gamepad"), or no API
   }
@@ -76,7 +77,14 @@ export function pollPads(now = performance.now()): void {
   const dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 1 / 60;
   lastT = now;
   const pads = readPads();
+  const first = pads.find(gp => gp?.connected && !/motion sensor|accelerometer|gyroscope/i.test(gp.id));
+  const connected = !!first;
+  if (connected !== useUi.getState().padConnected) useUi.setState({ padConnected: connected, touchRequested: false });
+  if (!connected) { primary = -1; drop(); trackers.clear(); }
   let firstTouch = false;
+  if (isPhone() && first && (!pads[primary]?.connected || useUi.getState().pad === null)) {
+    primary = first.index; claim(first); firstTouch = true;
+  }
   for (const gp of pads) {
     if (!gp || !gp.connected) continue;
     let t = trackers.get(gp.index);
@@ -84,6 +92,7 @@ export function pollPads(now = performance.now()): void {
     t.update(gp);
     // Only the standard mapping's four stick axes (other mappings may park triggers at -1 on an axis).
     const moved = gp.mapping === "standard" && gp.axes.slice(0, 4).some(a => Math.abs(a) > 0.5);
+    if (isPhone() && useUi.getState().touchRequested && (t.fresh || moved)) useUi.setState({ touchRequested: false });
     if (t.fresh || (moved && (primary !== gp.index || useUi.getState().pad === null))) {
       if (useUi.getState().pad === null) firstTouch = true;
       primary = gp.index;
@@ -121,7 +130,7 @@ export function pollPads(now = performance.now()): void {
 export function padRumble(strong: number, weak: number, ms: number): void {
   if (!settings.rumble || primary < 0 || useUi.getState().pad === null) return;
   try {
-    const gp = navigator.getGamepads?.()[primary] as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, p: object) => Promise<unknown> } }) | null;
+    const gp = getPads()[primary] as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, p: object) => Promise<unknown> } }) | null;
     const p = gp?.vibrationActuator?.playEffect?.("dual-rumble", { startDelay: 0, duration: ms, strongMagnitude: Math.min(1, strong), weakMagnitude: Math.min(1, weak) });
     if (p && typeof p.catch === "function") void p.catch(() => undefined);
   } catch {
@@ -142,7 +151,7 @@ export const rumble = {
 
 /** Start polling (main.tsx, once). Keyboard / mouse / touch input hands the prompts back. */
 export function startPads(): void {
-  if (started || typeof window === "undefined" || typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return;
+  if (started || typeof window === "undefined" || typeof navigator === "undefined") return;
   started = true;
   installPadCss();
   addEventListener("gamepadconnected", () => { if (!useUi.getState().padSeen) useUi.setState({ padSeen: true }); });
@@ -151,7 +160,7 @@ export function startPads(): void {
     trackers.delete(i);
     if (i === primary) { primary = -1; drop(); }
   });
-  const other = (e: Event) => { if (e.isTrusted) drop(); };
+  const other = (e: Event) => { if (e.isTrusted && !(isPhone() && useUi.getState().padConnected)) drop(); };
   addEventListener("keydown", other, true);
   addEventListener("mousedown", other, true);
   addEventListener("touchstart", other, { capture: true, passive: true });
