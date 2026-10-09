@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // Graphics quality (pause -> Settings -> Quality, stored with the other settings).
 //  High: r3g's pixel ratio range (touch devices capped per input/touch.ts: 1.25 on phones, 1.5 on
 //        tablets), anti-aliasing, blob shadows, the runner trail, every rooftop prop.
@@ -12,7 +13,7 @@ import type { Object3D } from "three";
 import { useUi } from "../ui/store.ts";
 import { canvasDpr, detectTouch } from "../input/touch.ts";
 
-export const lowQuality = (): boolean => useUi.getState().quality === "low";
+export const lowQuality = (): boolean => isPhone() || useUi.getState().quality === "low";
 
 /** Pixel-ratio range for High (the touch-step default). */
 export const HIGH_DPR = canvasDpr(detectTouch());
@@ -31,11 +32,12 @@ export function QualityView() {
   const setDpr = useThree(s => s.setDpr);
   const scene = useThree(s => s.scene);
   const quality = useUi(s => s.quality);
+  const phone = useUi(s => s.phone);
   const st = useRef<{ group: Object3D | null; frame: number }>({ group: null, frame: 0 });
 
   useEffect(() => {
-    setDpr(quality === "low" ? 1 : HIGH_DPR);
-  }, [quality, setDpr]);
+    setDpr(phone || quality === "low" ? 1 : HIGH_DPR);
+  }, [phone, quality, setDpr]);
 
   // decor.json loads late and r3g may rebuild nodes, so re-check every 30 frames (cheap: the props
   // group is found once, then only the decor prefab's ~300 nodes are walked).

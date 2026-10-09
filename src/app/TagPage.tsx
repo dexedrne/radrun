@@ -35,7 +35,7 @@ import { attachDom } from "../input/input.ts";
 import { requestLock } from "../radbro/bridge.ts";
 import { VyvanseBack, Wordmark, btn, layer, panel, scroller } from "../ui/screens.tsx";
 import { RADBRO_COLOR } from "../ui/strings.ts";
-import { TouchControls } from "../ui/TouchControls.tsx";
+import { TouchControls, PhoneTouchToggle } from "../ui/TouchControls.tsx";
 import { applySettings, loadSettings, padSettingsOf } from "../ui/prefs.ts";
 import { padActive, pollPads, rumble, setPadHooks, setPadSettings } from "../input/padRuntime.ts";
 import { PadText } from "../ui/pad.tsx";
@@ -519,6 +519,8 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
   const ready = useUi(s => s.sceneReady);
   const touch = useUi(s => s.touch);
   const pad = useUi(s => s.pad);
+  const phone = useUi(s => s.phone);
+  const phoneTouch = useUi(s => !s.padConnected || s.touchRequested);
   const [radbro, setRadbro] = useState<RadbroId>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").radbro as RadbroId) || "652"; } catch { return "652"; } });
   const [bots, setBots] = useState(() => { try { return Number(JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").bots) || 1; } catch { return 1; } });
   const [level, setLevel] = useState<BotLevel>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").level as BotLevel) || "normal"; } catch { return "normal"; } });
@@ -645,7 +647,8 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
       {screen === "loading" && <Loading />}
       {(inMatch || screen === "results") && <Hud onLeave={host ? undefined : toMenu} />}
       {screen === "results" && !host && <Results onRematch={rematch} onMenu={toMenu} />}
-      {touch && !pad && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
+      {inMatch && !paused && !AUTO && <PhoneTouchToggle />}
+      {touch && (phone ? phoneTouch : !pad) && inMatch && !paused && !AUTO && <TouchControls input={game.input} onPause={() => { if (!game.link) { game.paused = true; setPaused(true); } }} />}
       {host && <host.Overlay game={game} />}
       {online && !host && (
         <Suspense fallback={screen === "online" ? <div style={{ ...layer, display: "grid", placeItems: "center" }}><div style={panel}>loading online…</div></div> : null}>

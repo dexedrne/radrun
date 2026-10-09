@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // Small zustand UI store. The drivers push HUD numbers at 10 Hz so the canvas tree never re-renders.
 import { create } from "zustand";
 import type { RadbroId } from "../game/round.ts";
@@ -110,6 +111,9 @@ export type UiState = {
   locked: boolean;
   /** Touch controls on (coarse pointer, ?touch, or the first touch on the page). */
   touch: boolean;
+  phone: boolean;
+  padConnected: boolean;
+  touchRequested: boolean;
   /**
    * Round 14: the last device used is a gamepad of this kind (PlayStation or Xbox glyphs), or null (keyboard /
    * mouse / touch prompts). padSeen: a pad was used on this page (pause -> Settings shows the controller block).
@@ -154,6 +158,9 @@ export const useUi = create<UiState>(() => ({
   sceneReady: false,
   locked: false,
   touch: detectTouch(),
+  phone: isPhone(),
+  padConnected: false,
+  touchRequested: false,
   pad: null,
   padSeen: false,
   backend: "",
@@ -190,3 +197,8 @@ export function showBanner(text: string): void {
 export function showBubble(text: string, delay = 0): void {
   useUi.setState({ bubble: { text, t: performance.now() + delay * 1000 } });
 }
+
+if (typeof window !== "undefined") addEventListener("vyvanse:device", () => {
+  const phone = isPhone();
+  useUi.setState({ phone, ...(phone ? { touch: true, quality: "low", touchRequested: false } : {}) });
+});

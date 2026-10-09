@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // Settings, personal bests and challenge links. localStorage is optional (every access try/catch).
 import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
@@ -65,7 +66,7 @@ export function loadSettings(cam: CameraTuning): Settings {
     fov: s.fov ?? cam.fov,
     reducedMotion: s.reducedMotion ?? cam.reducedMotion,
     easyGrab: s.easyGrab ?? cam.easyGrab,
-    quality: s.quality === "low" ? "low" : "high",
+    quality: isPhone() || s.quality === "low" ? "low" : "high",
     // Round 1-3 had one "volume" (SFX only): it becomes the SFX volume.
     music: num(s.music, 0.6),
     sfx: num(s.sfx, num(s.volume, 0.8)),
@@ -89,11 +90,11 @@ export const padSettingsOf = (s: Settings): PadSettings => ({ sens: s.padSens, i
 /** The stored quality (read before the canvas exists). Default High; on touch devices High already
  * caps the pixel ratio (1.25 on phones, 1.5 on tablets; see input/touch.ts canvasDpr). */
 export function loadQuality(): Quality {
-  return load().settings?.quality === "low" ? "low" : "high";
+  return isPhone() || load().settings?.quality === "low" ? "low" : "high";
 }
 export function saveSettings(settings: Settings): void {
   const s = load();
-  s.settings = settings;
+  s.settings = isPhone() ? { ...settings, quality: s.settings?.quality ?? "high" } : settings;
   save(s);
 }
 export function applySettings(cam: CameraTuning, s: Settings): void {

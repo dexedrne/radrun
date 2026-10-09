@@ -1,3 +1,4 @@
+import { isPhone } from "../phone.ts";
 // ONLINE (the lazy net chunk, loaded only when ONLINE is pressed or a room link is opened): the lobby for 1v1 private
 // rooms (CREATE gives a code + a link, JOIN takes a code; pick a Radbro; READY), then the match through the relay with
 // rollback (net/session.ts) and the results agreement. Stays mounted during the match to keep the socket, and says
@@ -333,8 +334,9 @@ const rttOf = (t: Transport) => (Number.isFinite(t.minRtt) ? Math.round(t.minRtt
 
 /** Dev / test parameters that survive the room link rewrite. */
 function keepDevParams(): string {
-  if (!DEV) return "";
+  const phone = isPhone() ? "&device=phone" : "";
+  if (!DEV) return phone;
   const q = new URLSearchParams(location.search), out: string[] = [];
   for (const k of ["bot", "secs", "relay", "autoready", "lag"]) if (q.has(k)) out.push(`&${k}${q.get(k) ? `=${q.get(k)}` : ""}`);
-  return out.join("");
+  return phone + out.join("");
 }
