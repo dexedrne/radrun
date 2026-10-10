@@ -18,10 +18,14 @@ import { RadbroReader } from "./radbro.ts";
 import { WagerRoomCore, type LobbyLink } from "./room.ts";
 import { makeServices, type Services } from "./services.ts";
 import { parseSettings, type Vars } from "./settings.ts";
+import { consumeBudget, moderatePlayerName } from '../../src/moderation.ts';
+import { networkBucket } from '../../src/network.ts';
+import type { ModerationState } from '../../src/playerModeration.ts';
 
 export interface Env {
   LOBBY: DurableObjectNamespace;
   ROOMS: DurableObjectNamespace;
+  TYPESAFE_API_KEY?: string;
   [k: string]: unknown;
 }
 
@@ -132,14 +136,21 @@ export class WagerLobby {
   private readonly ctx: DurableObjectState;
   private readonly core: WagerLobbyCore;
   private readonly wraps = new WeakMap<CfWebSocket, LobbyConn>();
+  private moderation: ModerationState = {};
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
     const sv = services(env);
     const sql = doSql(ctx);
+    void ctx.blockConcurrencyWhile(async () => { Object.assign(this.moderation, await ctx.storage.get<ModerationState>('moderation') ?? {}); });
     this.core = new WagerLobbyCore({
       clock: realClock, sql, settings: sv.settings, chain: sv.chain, sims: sv.sims, referee: sv.referee?.address ?? null, radbro: new RadbroReader({ src: sv.radbroSrc, now: Date.now, cacheMs: sv.settings.radbro.cacheMs, sql }),
       relayer: sv.relayer, faucet: sv.faucet, rooms: roomLink(env), connections: () => ctx.getWebSockets().map(ws => this.wrap(ws)), log: m => console.log(m),
+      moderationState: this.moderation, onModeration: () => ctx.waitUntil(ctx.storage.put('moderation', this.moderation)),
+      moderateName: async (name, ip) => {
+        const req = new Request('https://lobby/name', { headers: { 'CF-Connecting-IP': ip } });
+        return moderatePlayerName(name, { TYPESAFE_API_KEY: env.TYPESAFE_API_KEY, ROOMS: env.LOBBY }, await networkBucket(req, false, env.TYPESAFE_API_KEY ?? '') ?? undefined);
+      },
     });
     // Keepalive pings are answered without waking the hibernating object.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
@@ -166,6 +177,12 @@ export class WagerLobby {
 
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url), meta = metaOf(req);
+    if (url.pathname === '/budget' && req.method === 'POST') {
+      const x = await req.json().catch(() => null) as { network?: string; units?: number } | null;
+      if (!x) return new Response('bad budget', { status: 400 });
+      const allowed = await this.ctx.storage.transaction(s => consumeBudget(s, x.network ?? '', x.units ?? 0));
+      return Response.json({ allowed });
+    }
     if (url.pathname === "/lobby") {
       const pair = new WebSocketPair();
       const [client, server] = [pair[0], pair[1]];

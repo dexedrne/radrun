@@ -5,7 +5,12 @@ interface DurableObjectNamespace {
   idFromName(name: string): DurableObjectId;
   get(id: DurableObjectId): DurableObjectStub;
 }
-interface DurableObjectState { readonly id: DurableObjectId }
+interface DurableObjectStorage {
+  get<T>(key: string): Promise<T | undefined>;
+  put<T>(key: string, value: T): Promise<void>;
+  transaction<T>(fn: (storage: DurableObjectStorage) => Promise<T>): Promise<T>;
+}
+interface DurableObjectState { readonly id: DurableObjectId; readonly storage: DurableObjectStorage; waitUntil(promise: Promise<unknown>): void }
 interface CfWebSocket {
   accept(): void;
   binaryType: "arraybuffer" | "blob";

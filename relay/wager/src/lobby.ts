@@ -11,6 +11,7 @@
 // settle or void is confirmed on-chain.
 import { hashTypedData, recoverAddress, type Address, type Hex } from "viem";
 import { cleanName } from "../../../src/net/wire.ts";
+import { RoomModeration, moderateText, neutralName, textHash, type Decision, type ModerationState } from '../../src/playerModeration.ts';
 import {
   capturedFees, entryDigest, entryFromJson, matchIdCreator, sessionAuthFromJson, sessionAuthTypedData, type Entry, type EntryJson, type SessionAuthJson,
 } from "../../../src/wager/eip712.ts";
@@ -75,6 +76,9 @@ export type LobbyDeps = {
   /** Every open lobby socket (the Durable Object's getWebSockets()). */
   connections(): LobbyConn[];
   log?: Logger;
+  moderateName?(name: string, ip: string): Promise<Decision>;
+  moderationState?: ModerationState;
+  onModeration?(): void;
 };
 
 type OfferRec = { offer: Offer; sig: Hex };
@@ -144,6 +148,8 @@ export class LobbyError extends Error {
 const fail = (code: WagerErrorCode, message: string): never => { throw new LobbyError(code, message); };
 
 export class WagerLobbyCore {
+  private readonly moderationState: ModerationState;
+  private readonly moderation: RoomModeration;
   private readonly d: LobbyDeps;
   private readonly offers = new Map<string, OfferRec>();
   private readonly chains = new Map<string, Promise<void>>();
@@ -154,6 +160,8 @@ export class WagerLobbyCore {
   private readonly signing = new Map<string, { creator: Address; done: (sig: Hex | null, why?: string) => void }>();
 
   constructor(d: LobbyDeps) {
+    this.moderationState = d.moderationState ?? {};
+    this.moderation = new RoomModeration(this.moderationState, () => d.clock.now());
     this.d = d;
     const q = (s: string) => d.sql.exec(s);
     q("CREATE TABLE IF NOT EXISTS players (address TEXT PRIMARY KEY, name TEXT, rating REAL NOT NULL, wins INTEGER NOT NULL, losses INTEGER NOT NULL, forfeits INTEGER NOT NULL, voids INTEGER NOT NULL, held INTEGER NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, cosmetic TEXT)");
@@ -252,14 +260,16 @@ export class WagerLobbyCore {
       s.ch = newChallenge(this.now, s.relay, this.d.settings.timing.challengeTtlMs);
       c.save();
       this.sendTo(c, { t: "challenge", ...s.ch });
-      this.sendTo(c, { t: "offers", offers: this.offersFor(null) });
+      this.sendTo(c, { t: "offers", offers: await this.offersFor(null) });
       return;
     }
+    if ((m as { t: string }).t === 'chat') fail('bad', 'not sent');
     switch (m.t) {
       case "login": return this.login(c, m);
       case "ping": this.sendTo(c, { t: "pong" }); return;
       case "session": return this.session(c, m.auth, m.sig);
       case "profile": return this.profile(c, m);
+      case 'report': return this.report(c, m);
       case "create": return this.create(c, m);
       case "cancel": return this.cancel(c, m.matchId);
       case "join": return this.join(c, m.entry, m.sig);
@@ -294,9 +304,9 @@ export class WagerLobbyCore {
     c.state.player = r.player;
     c.save();
     this.touch(r.player);
-    const [you, config] = await Promise.all([this.card(r.player), this.config(null)]);
+    const [you, config] = await Promise.all([this.card(r.player, true), this.config(null)]);
     this.sendTo(c, { t: "welcome", you, config });
-    this.sendTo(c, { t: "offers", offers: this.offersFor(r.player) });
+    this.sendTo(c, { t: "offers", offers: await this.offersFor(r.player) });
   }
 
   private touch(p: Address): void {
@@ -319,13 +329,25 @@ export class WagerLobbyCore {
    * address that has logged in gets the Ethereum reads: GET /player/<any address> must not turn the relay into a free
    * proxy for public RPCs (or fill its cache).
    */
-  async card(a: Address): Promise<PlayerCard> {
-    const r = this.row(a);
+  async card(a: Address, admission = false): Promise<PlayerCard> {
+    let r = this.row(a);
+    const actor = await textHash('profile:' + a.toLowerCase());
+    const plain = r?.name ? await moderateText(r.name, 'name') : null;
+    const checked = plain && this.moderationState[actor]?.evidence.some(e => e.hash === plain.hash && e.until > this.now && !e.held);
+    if (r?.name && (plain?.action !== 'allow' || admission && !checked)) {
+      const decision = plain?.action === 'block' ? plain : await this.checkName(r.name, this.conns(a)[0]?.state.ip ?? '');
+      if (decision.action !== 'allow') {
+        this.d.sql.exec('UPDATE players SET name = ? WHERE address = ? AND name = ?', neutralName(actor), a.toLowerCase(), r.name);
+        this.toPlayer(a, { t: 'error', code: 'bad', message: 'Your name was replaced with ' + neutralName(actor) + '.' });
+      }
+      if (admission) { this.moderation.observe(actor, decision); this.d.onModeration?.(); }
+      r = this.row(a);
+    }
     const h = r ? await this.d.radbro.holder(a) : { holder: false, ids: [] };
     let cosmetic: Cosmetic | null = null;
     try { cosmetic = r?.cosmetic ? (JSON.parse(r.cosmetic) as Cosmetic) : null; } catch { /* ignore */ }
     return {
-      address: a, name: r?.name || shortAddr(a), rating: Math.round(r?.rating ?? ELO.start), wins: r?.wins ?? 0, losses: r?.losses ?? 0,
+      address: a, name: this.moderation.muted(actor) ? neutralName(actor) : r?.name || shortAddr(a), rating: Math.round(r?.rating ?? ELO.start), wins: r?.wins ?? 0, losses: r?.losses ?? 0,
       forfeits: r?.forfeits ?? 0, voids: r?.voids ?? 0, held: r?.held ?? 0, firstSeen: r?.first_seen ?? 0, holder: h.holder, radbros: h.ids,
       cosmetic: h.holder ? cosmetic : null,
     };
@@ -335,7 +357,11 @@ export class WagerLobbyCore {
     const p = c.state.player ?? fail("auth", "log in first");
     if (m.name !== undefined) {
       if (typeof m.name !== "string") fail("bad", "bad name");
-      this.d.sql.exec("UPDATE players SET name = ? WHERE address = ?", cleanName(m.name), p.toLowerCase());
+      const decision = await this.checkName(m.name, c.state.ip), actor = await textHash('profile:' + p.toLowerCase());
+      this.moderation.observe(actor, decision); this.d.onModeration?.();
+      const name = decision.action !== 'allow' || this.moderation.muted(actor) ? neutralName(actor) : cleanName(m.name);
+      this.d.sql.exec("UPDATE players SET name = ? WHERE address = ?", name, p.toLowerCase());
+      if (name !== cleanName(m.name)) this.sendTo(c, { t: 'error', code: 'bad', message: 'Your name was replaced with ' + name + '.' });
     }
     if (m.cosmetic !== undefined) {
       const x = m.cosmetic;
@@ -344,6 +370,33 @@ export class WagerLobbyCore {
       this.d.sql.exec("UPDATE players SET cosmetic = ? WHERE address = ?", x ? JSON.stringify({ web: x.web, trail: x.trail }) : null, p.toLowerCase());
     }
     this.toPlayer(p, { t: "card", card: await this.card(p) });
+    await this.refreshOffers(p);
+  }
+
+  private async checkName(name: string, ip: string): Promise<Decision> {
+    const raw = await moderateText(name, 'name');
+    if (raw.action === 'block') return raw;
+    return this.d.moderateName ? this.d.moderateName(name, ip).catch(() => moderateText(cleanName(name), 'name')) : moderateText(cleanName(name), 'name');
+  }
+
+  private async report(c: LobbyConn, m: Extract<LobbyClientMsg, { t: 'report' }>): Promise<void> {
+    const player = c.state.player ?? fail('auth', 'log in first'), target = addr(m.player);
+    if (!target) return fail('bad', 'bad report');
+    if (sameAddr(player, target)) fail('bad', 'bad report');
+    const match = m.matchId ? this.match(normId(m.matchId)) : null;
+    if (m.matchId ? !match || ![match.a, match.b].some(a => sameAddr(a, player)) || ![match.a, match.b].some(a => sameAddr(a, target)) : !this.d.connections().some(q => sameAddr(q.state.player, target))) fail('bad', 'that player is not here');
+    const actor = await textHash('profile:' + target.toLowerCase()), reporter = await textHash('profile:' + player.toLowerCase());
+    if (!this.moderation.chatAllowed(reporter)) fail('rate', 'Please wait before reporting again.');
+    const context = m.matchId ? normId(m.matchId) : 'lobby';
+    const scoped = await textHash(context + ':' + actor);
+    this.moderation.copyEvidence(scoped, actor);
+    const source = this.moderationState[actor];
+    if (this.moderation.report(scoped, reporter) && !m.matchId && source) {
+      source.mutedUntil = this.moderationState[scoped].mutedUntil;
+      this.toPlayer(target, { t: 'error', code: 'bad', message: 'Room talk is muted for five minutes.' });
+      await this.refreshOffers(target);
+    }
+    this.d.onModeration?.(); this.sendTo(c, { t: 'error', code: 'bad', message: 'Report received.' });
   }
 
   // ---- the relay config ---------------------------------------------------------------------------------------------
@@ -416,18 +469,30 @@ export class WagerLobbyCore {
   // ---- offers -------------------------------------------------------------------------------------------------------
 
   /** Listed offers, plus the player's own and the named invites to them. */
-  private offersFor(p: Address | null): Offer[] {
-    return [...this.offers.values()]
-      .map(r => r.offer)
-      .filter(o => o.listed || (p && (sameAddr(o.creator.address, p) || sameAddr(o.opponent, p))))
-      .sort((a, b) => b.createdAt - a.createdAt);
+  private async publicOffer(o: Offer): Promise<Offer> {
+    return { ...o, creator: { ...o.creator, name: (await this.card(o.creator.address)).name } };
   }
 
-  private broadcastOffer(o: Offer): void {
+  private async refreshOffers(player: Address): Promise<void> {
+    for (const rec of this.offers.values()) if (sameAddr(rec.offer.creator.address, player)) await this.broadcastOffer(rec.offer);
+  }
+
+  private async offersFor(p: Address | null): Promise<Offer[]> {
+    const visible = [...this.offers.values()]
+      .map(r => r.offer)
+      .filter(o => o.listed || (p && (sameAddr(o.creator.address, p) || sameAddr(o.opponent, p))));
+    return (await Promise.all(visible.map(o => this.publicOffer(o))))
+      .filter((o, i) => this.offers.get(o.matchId)?.offer === visible[i]).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  private async broadcastOffer(o: Offer): Promise<Offer | null> {
+    const shown = await this.publicOffer(o);
+    if (this.offers.get(o.matchId)?.offer !== o) return null;
     for (const c of this.conns()) {
       const p = c.state.player;
-      if (o.listed || (p && (sameAddr(o.creator.address, p) || sameAddr(o.opponent, p)))) this.sendTo(c, { t: "offer", offer: o });
+      if (o.listed || (p && (sameAddr(o.creator.address, p) || sameAddr(o.opponent, p)))) this.sendTo(c, { t: "offer", offer: shown });
     }
+    return shown;
   }
 
   private removeOffer(id: string, reason: "cancelled" | "matched" | "expired" | "creator-left"): OfferRec | null {
@@ -525,8 +590,8 @@ export class WagerLobbyCore {
     if (this.offers.has(id)) fail("terms", "that match id is taken");
     this.offers.set(id, { offer, sig: m.sig });
     this.d.sql.exec("INSERT OR REPLACE INTO offers (match_id, json, deadline) VALUES (?, ?, ?)", id, JSON.stringify({ offer, sig: m.sig }), offer.deadline);
-    this.broadcastOffer(offer);
-    if (!offer.listed) this.toPlayer(me, { t: "offer", offer });
+    const shown = await this.broadcastOffer(offer);
+    if (shown && !offer.listed) this.toPlayer(me, { t: "offer", offer: shown });
   }
 
   private cancel(c: LobbyConn, matchId: unknown): void {
@@ -658,7 +723,7 @@ export class WagerLobbyCore {
       if (o.opponent && this.conns(a.player).length && Number(o.deadline) > this.now / 1000 + 60 && !this.offers.has(id) && (!m || m.state === MS_NONE)) {
         this.offers.set(id, rec);
         this.d.sql.exec("INSERT OR REPLACE INTO offers (match_id, json, deadline) VALUES (?, ?, ?)", id, JSON.stringify(rec), o.deadline);
-        this.broadcastOffer(o);
+        await this.broadcastOffer(o);
       }
     };
     const relayer = this.d.relayer;
@@ -794,7 +859,8 @@ export class WagerLobbyCore {
   async matchStatus(idIn: string): Promise<MatchStatus> {
     const id = normId(idIn);
     const off = this.offers.get(id);
-    if (off) return { matchId: id, state: "open", offer: off.offer, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
+    const offer = off ? await this.publicOffer(off.offer) : null;
+    if (off && this.offers.get(id) === off) return { matchId: id, state: "open", offer, series: null, outcome: null, settlement: null, lockTx: null, settleTx: null };
     const r = this.match(id);
     // Only a match the lobby knows has a room (a room that initialised itself from the chain has told the lobby): an
     // unknown id never wakes a room.

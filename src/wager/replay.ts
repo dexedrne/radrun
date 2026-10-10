@@ -7,7 +7,6 @@ import type { RadbroId } from "../game/radbros.ts";
 import { Fnv1a } from "../sim/math.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import { CityIndex, type CityModel } from "../world/cityModel.ts";
-import { NET_VERSION } from "../net/wire.ts";
 import { SELFTEST_HASH } from "../net/selftest.ts";
 import { rulesHash, simId, type SimCompat } from "./eip712.ts";
 import {
@@ -34,8 +33,10 @@ export function tuningHash(t: Tuning, tag: TagTable): string {
 }
 
 /** The sim a client or the referee runs (compare with Rules.simId via eip712.simId). */
+// Moderation transport changes must not invalidate existing signed wager rules or replay logs.
+const WAGER_SIM_VERSION = 3;
 export const simCompat = (a: SimAssets): SimCompat =>
-  ({ v: NET_VERSION, selftest: SELFTEST_HASH, tuning: tuningHash(a.tuning, { ...TAG, ...a.tag }), city: a.model.hash });
+  ({ v: WAGER_SIM_VERSION, selftest: SELFTEST_HASH, tuning: tuningHash(a.tuning, { ...TAG, ...a.tag }), city: a.model.hash });
 
 export const endStepFor = (roundSeconds: number): number => COUNTDOWN_STEPS + Math.round(roundSeconds * STEP_HZ);
 

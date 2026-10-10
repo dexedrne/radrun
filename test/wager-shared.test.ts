@@ -101,6 +101,12 @@ test("rules: the hash covers the district and the sim", () => {
   assert.notEqual(rulesHash(makeRules("downtown", sim)), rulesHash(makeRules("downtown", { ...sim, tuning: "0" })));
 });
 
+test('moderation transport changes preserve the existing wager simulation rules', () => {
+  const sim = simCompat(assets);
+  assert.equal(sim.v, 3);
+  assert.equal(rulesHash(makeRules('downtown', sim)), rulesHash(makeRules('downtown', { ...sim, v: 3 })));
+});
+
 test("series rules: score, draws, seeds, and round 2 hands the bag to the other player", () => {
   assert.deepEqual(scoreRounds([0, 0]), { score: [2, 0], draws: 0, done: true, winner: 0, void: false });
   assert.deepEqual(scoreRounds([0, 1, 1]), { score: [1, 2], draws: 0, done: true, winner: 1, void: false });

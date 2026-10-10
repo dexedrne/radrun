@@ -306,6 +306,7 @@ export type LobbyClientMsg =
   /** Ask the relayer to submit openSession (gasless). */
   | { t: "session"; auth: SessionAuthJson; sig: Hex }
   | { t: "profile"; name?: string; cosmetic?: Cosmetic | null }
+  | { t: 'report'; player: Address; matchId?: Hex }
   | { t: "create"; entry: EntryJson; sig: Hex; listed: boolean; holdersOnly?: boolean; minSeries?: number }
   | { t: "cancel"; matchId: Hex }
   | { t: "join"; entry: EntryJson; sig: Hex }

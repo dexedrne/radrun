@@ -206,6 +206,7 @@ export class LobbyClient {
   /** The answer to the lobby's `sign`: the named Entry's signature, or null and why not. */
   signed(matchId: Hex, sig: Hex | null, why?: string) { return this.send({ t: "signed", matchId, sig, ...(why ? { why } : {}) }); }
   profile(p: { name?: string; cosmetic?: Cosmetic | null }) { return this.send({ t: "profile", ...p }); }
+  report(player: Address, matchId?: Hex) { return this.send({ t: 'report', player, matchId }); }
 
   close(): void {
     this.stopped = true;

@@ -11,6 +11,7 @@ import {
   encodeRelayInput, type ClientMsg, type Compat, type PlayerInfo, type RoomConfig, type ServerMsg, type StartMsg,
 } from "../../src/net/wire.ts";
 import { isRadbroId } from "../../src/game/radbros.ts";
+import { RoomModeration, moderateText, neutralName, textHash, type Decision, type ModerationState } from './playerModeration.ts';
 
 export type Sock = { send(data: string | Uint8Array): void; close(code?: number, reason?: string): void };
 
@@ -20,6 +21,9 @@ export type RoomEnv = {
   /** Dev latency knob: injected round trip (ms) between the two players (each relay leg gets a quarter each way). */
   lagMs: number;
   random(): number;
+  moderateName?(name: string, network?: string): Promise<Decision>;
+  moderationState?: ModerationState;
+  onModeration?(): void;
 };
 
 /**
@@ -38,11 +42,14 @@ export function inputDelayFor(peerRttMs: number): number {
 type Player = {
   slot: number; sock: Sock; name: string; radbro: string; touch: boolean; easy: boolean; ready: boolean; compat: Compat; token: string;
   rtt: number; credit: number; creditAt: number; upTo: number; lastAck: number; ended: { step: number; hash: number } | null;
+  moderationId: string;
 };
 
 export class RoomCore {
   readonly code: string;
   private readonly env: RoomEnv;
+  private readonly moderationState: ModerationState;
+  private readonly moderation: RoomModeration;
   private readonly players: (Player | null)[] = new Array(RELAY.maxPlayers).fill(null);
   private compat: Compat | null = null;
   config: RoomConfig = { district: "downtown", mode: "tag", seconds: 180, maxPlayers: RELAY.maxPlayers };
@@ -60,6 +67,8 @@ export class RoomCore {
   constructor(code: string, env: RoomEnv) {
     this.code = code;
     this.env = env;
+    this.moderationState = env.moderationState ?? {};
+    this.moderation = new RoomModeration(this.moderationState, env.now);
     this.lastActive = env.now();
   }
 
@@ -85,9 +94,11 @@ export class RoomCore {
   }
 
   /** A socket opened on this room: it must say hello first. Returns the handler for its messages and its close. */
-  open(sock: Sock): { message: (data: string | ArrayBuffer | Uint8Array) => void; close: () => void } {
+  open(sock: Sock, trusted: { network?: string } = {}): { message: (data: string | ArrayBuffer | Uint8Array) => void; close: () => void } {
     let me: Player | null = null;
+    let pending = false, closed = false;
     const handle = (data: string | ArrayBuffer | Uint8Array) => {
+      if (closed || pending) return;
       this.lastActive = this.env.now();
       const size = typeof data === "string" ? data.length : data.byteLength;
       if (size > RELAY.maxMsgBytes) { sock.close(1009, "too big"); return; }
@@ -101,11 +112,21 @@ export class RoomCore {
       if (typeof data === "string") {
         let m: ClientMsg;
         try { m = JSON.parse(data) as ClientMsg; } catch { sock.close(1003, "bad json"); return; }
+        if (!m || typeof m !== 'object') { sock.close(1003, 'bad json'); return; }
         if (!me) {
           if (m.t !== "hello") { sock.close(1008, "hello first"); return; }
-          me = this.join(sock, m);
+          if (!this.env.moderateName) { me = this.join(sock, m); return; }
+          pending = true;
+          void this.env.moderateName(String(m.name ?? ''), trusted.network).catch(() => moderateText(cleanName(String(m.name ?? '')), 'name')).then(async decision => {
+            const old = typeof m.moderationToken === 'string' && m.moderationToken.length <= 64 ? m.moderationToken : '';
+            const hash = old ? await textHash(old) : '';
+            const token = hash && Object.hasOwn(this.moderationState, hash) ? old : crypto.randomUUID();
+            const id = await textHash(token);
+            if (!closed) me = this.join(sock, m, { decision, token, id });
+          }).catch(() => sock.close(1011, 'name check unavailable')).finally(() => { pending = false; });
           return;
         }
+        if ((m as { t: string }).t === 'chat') { this.send(me, { t: 'error', code: 'chat-blocked', message: 'not sent' }); return; }
         this.control(me, m);
         return;
       }
@@ -114,11 +135,11 @@ export class RoomCore {
     };
     return {
       message: data => { if (this.env.lagMs > 0) this.env.setTimeout(() => handle(data), this.env.lagMs / 4); else handle(data); },
-      close: () => { if (me) this.leave(me); me = null; },
+      close: () => { closed = true; if (me) this.leave(me); me = null; },
     };
   }
 
-  private join(sock: Sock, h: Extract<ClientMsg, { t: "hello" }>): Player | null {
+  private join(sock: Sock, h: Extract<ClientMsg, { t: "hello" }>, checked?: { decision: Decision; token: string; id: string }): Player | null {
     const err = (code: "full" | "version" | "bad", message: string) => {
       try { sock.send(encodeJson({ t: "error", code, message })); } catch { /* closed */ }
       sock.close(1008, code);
@@ -142,9 +163,16 @@ export class RoomCore {
       slot, sock, name: cleanName(String(h.name ?? "")), radbro: h.radbro, touch: !!h.touch, easy: !!h.easy, ready: false,
       compat: h.compat, token: Math.floor(this.env.random() * 2 ** 32).toString(36) + Math.floor(this.env.random() * 2 ** 32).toString(36),
       rtt: 0, credit: RELAY.msgBurst, creditAt: now, upTo: 0, lastAck: 0, ended: null,
+      moderationId: checked?.id ?? crypto.randomUUID(),
     };
+    if (checked) {
+      if (checked.decision.action !== 'allow') p.name = neutralName(checked.id);
+      this.moderation.observe(p.moderationId, checked.decision); this.env.onModeration?.();
+    }
     this.players[slot] = p;
-    this.send(p, { t: "welcome", slot, token: p.token, host: this.hostSlot() === slot, room: this.code, players: this.info(), config: this.config, lag: this.env.lagMs });
+    this.send(p, { t: "welcome", slot, token: p.token, host: this.hostSlot() === slot, room: this.code, players: this.info(), config: this.config, lag: this.env.lagMs, ...(checked ? { moderationToken: checked.token } : {}) });
+    if (checked?.decision.action !== undefined && checked.decision.action !== 'allow') this.send(p, { t: 'error', code: 'name-replaced', message: 'Your name was replaced with ' + p.name + '.' });
+    if (this.moderation.muted(p.moderationId)) this.send(p, { t: 'error', code: 'room-muted', message: 'Room talk muted for five minutes.' });
     this.lobby();
     return p;
   }
@@ -155,6 +183,16 @@ export class RoomCore {
 
   private control(p: Player, m: ClientMsg): void {
     switch (m.t) {
+      case 'report': {
+        const target = Number.isInteger(m.slot) ? this.players[m.slot] : null;
+        if (!target || target === p) return;
+        if (!this.moderation.chatAllowed(p.moderationId)) { this.send(p, { t: 'error', code: 'rate', message: 'Please wait before reporting again.' }); return; }
+        const wasMuted = this.moderation.muted(target.moderationId);
+        if (this.moderation.report(target.moderationId, p.moderationId) && !wasMuted) this.each(q => {
+          if (q.moderationId === target.moderationId) this.send(q, { t: 'error', code: 'room-muted', message: 'Room talk muted for five minutes.' });
+        });
+        this.env.onModeration?.(); this.send(p, { t: 'error', code: 'report-received', message: 'Report received.' }); return;
+      }
       case "pick":
         if (this.state !== "play" && isRadbroId(m.radbro)) { p.radbro = m.radbro; p.ready = false; this.lobby(); }
         return;

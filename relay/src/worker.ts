@@ -6,12 +6,16 @@
 // (comma-separated; localhost is always allowed when DEV = "1"). DEV_LAG_MS (dev only) injects a round trip.
 import { RoomCore, type Sock } from "./room.ts";
 import { isRoomCode, roomCode } from "../../src/net/wire.ts";
+import { consumeBudget, moderatePlayerName } from './moderation.ts';
+import { networkBucket } from './network.ts';
+import type { ModerationState } from './playerModeration.ts';
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
   ALLOWED_ORIGINS?: string;
   DEV?: string;
   DEV_LAG_MS?: string;
+  TYPESAFE_API_KEY?: string;
 }
 
 const originOk = (req: Request, env: Env): boolean => {
@@ -59,28 +63,46 @@ export class Room {
   private core: RoomCore | null = null;
   private claimedAt = 0;
   private lag = 0;
+  private readonly state: DurableObjectState;
+  private readonly binding: Env;
+  private moderation: ModerationState = {};
 
-  constructor(_state: DurableObjectState, _env: Env) {}
+  constructor(state: DurableObjectState, env: Env) {
+    this.state = state; this.binding = env;
+    void state.blockConcurrencyWhile(async () => { this.moderation = await state.storage.get<ModerationState>('moderation') ?? {}; });
+  }
+  private env() {
+    return { now: Date.now, setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), lagMs: this.lag, random: Math.random,
+      moderateName: (name: string, network?: string) => moderatePlayerName(name, this.binding, network), moderationState: this.moderation,
+      onModeration: () => this.state.waitUntil(this.state.storage.put('moderation', this.moderation)) };
+  }
 
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
+    if (url.pathname === '/budget' && req.method === 'POST') {
+      const x = await req.json().catch(() => null) as { network?: string; units?: number } | null;
+      if (!x) return new Response('bad budget', { status: 400 });
+      const allowed = await this.state.storage.transaction(s => consumeBudget(s, x.network ?? '', x.units ?? 0));
+      return Response.json({ allowed });
+    }
     if (url.pathname === "/claim") {
       // A code stays claimed for 10 minutes or while anyone is in the room.
       if ((this.core && this.core.size > 0) || Date.now() - this.claimedAt < 600_000) return new Response("taken", { status: 409 });
       this.claimedAt = Date.now();
       this.lag = Number(url.searchParams.get("lag") ?? 0) || 0;
-      this.core = new RoomCore(url.searchParams.get("code") ?? "?????", { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), lagMs: this.lag, random: Math.random });
+      this.core = new RoomCore(url.searchParams.get("code") ?? "?????", this.env());
       return new Response("ok");
     }
     const code = url.searchParams.get("room") ?? "";
-    this.core ??= new RoomCore(code, { now: () => Date.now(), setTimeout: (f, ms) => setTimeout(f, ms), lagMs: this.lag, random: Math.random });
+    const network = await networkBucket(req, this.binding.DEV === '1', this.binding.TYPESAFE_API_KEY ?? '') ?? undefined;
+    this.core ??= new RoomCore(code, this.env());
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     server.accept();
     // Binary frames as ArrayBuffers (newer compatibility dates default to Blob).
     server.binaryType = "arraybuffer";
     const sock: Sock = { send: d => server.send(d), close: (c, r) => { try { server.close(c ?? 1000, r ?? ""); } catch { /* closed */ } } };
-    const h = this.core.open(sock);
+    const h = this.core.open(sock, { network });
     server.addEventListener("message", e => h.message(e.data));
     server.addEventListener("close", () => h.close());
     server.addEventListener("error", () => h.close());

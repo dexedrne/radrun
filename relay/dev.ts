@@ -7,12 +7,14 @@ import http from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { RoomCore } from "./src/room.ts";
 import { isRoomCode, roomCode } from "../src/net/wire.ts";
+import { moderatePlayerName } from './src/moderation.ts';
 
 const arg = (k: string, d: number) => { const i = process.argv.indexOf(k); return i > 0 ? Number(process.argv[i + 1]) : d; };
 const PORT = arg("--port", 8787);
 const LAG = arg("--lag", 0);
 const rooms = new Map<string, RoomCore>();
-const env = (lag: number) => ({ now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), lagMs: lag, random: Math.random });
+const env = (lag: number) => ({ now: () => Date.now(), setTimeout: (f: () => void, ms: number) => setTimeout(f, ms), lagMs: lag, random: Math.random,
+  moderateName: (name: string) => moderatePlayerName(name, { ROOMS: {} as DurableObjectNamespace }) });
 const localOrigin = (o: string | undefined) => !o || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
 
 const server = http.createServer((req, res) => {

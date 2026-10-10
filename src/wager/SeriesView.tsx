@@ -5,7 +5,7 @@
 // the settle state (signing → settled, with the transaction), "held for review" with the refund time, the "submit it
 // yourself" and refund fallbacks, and the verify link. The referee decides; this page only shows what it says.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Hex } from "viem";
+import type { Address, Hex } from "viem";
 import type { TagGame } from "../game/tagGame.ts";
 import { RADBROS, isRadbroId, charTag, type RadbroId } from "../game/radbros.ts";
 import { loadRadbros, useTag } from "../app/TagPage.tsx";
@@ -25,6 +25,7 @@ import { bpsText, clockText, dateText, relTime, roundText, shortAddress } from "
 import { keepParams } from "./site.ts";
 import { ConnectWallet } from "./WalletPanel.tsx";
 import { MutualPanel } from "./MutualPanel.tsx";
+import { PlayerList, playerName, usePlayerMutes } from '../net/PlayerList.tsx';
 
 const VOID_TEXT: Record<string, string> = {
   noshow: "a player didn't arrive before round 1, so the series is void: nobody pays, both stakes are back",
@@ -74,6 +75,8 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const [pick, setPick] = useState<RadbroPick>(() => ({ radbro: lastPick(), own: null }));
   const [readyRound, setReadyRound] = useState(0);
   const [settledAt, setSettledAt] = useState(0);
+  const [players, setPlayers] = useState(false);
+  const mutes = usePlayerMutes(s => s.ids);
   const clientRef = useRef<SeriesClient | null>(null);
   const startRef = useRef<WagerStartMsg | null>(null);
   const now = useNow(500);
@@ -147,7 +150,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     for (let slot = 0; slot < 2; slot++) {
       const side = sideOfSlot(slot, m.slotOfA);
       const p = st.players[side], pk = st.picks[side];
-      names[slot] = side === me ? "YOU" : pk?.own != null ? `#${pk.own}` : p.name;
+      names[slot] = side === me ? "YOU" : playerName(p.address, pk?.own != null ? `#${pk.own}` : p.name);
       const cos = p.holder ? p.cosmetic : null;
       looks[slot] = cos ? { web: WEB_COLORS[cos.web] ?? null, trail: cos.trail } : null;
     }
@@ -156,11 +159,11 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
       names, looks,
       series: {
         title: `ROUND ${st.round} · ${st.score[me]}-${st.score[other!]}`,
-        sub: conn === "reconnecting" ? "your connection dropped: reconnecting…" : dropped ? `opponent disconnected · ${dropped} s to come back` : !st.connected[other!] ? "opponent offline" : `vs ${st.players[other!].name}`,
+        sub: conn === "reconnecting" ? "your connection dropped: reconnecting…" : dropped ? `opponent disconnected · ${dropped} s to come back` : !st.connected[other!] ? "opponent offline" : `vs ${playerName(st.players[other!].address, st.players[other!].name)}`,
         warn: conn === "reconnecting" || !!dropped || !st.connected[other!],
       },
     });
-  }, [st, me, other, drop, conn, now, screen]);
+  }, [st, me, other, drop, conn, now, screen, mutes]);
 
   // Between rounds and at the end, the round panel replaces the HUD (the scene keeps orbiting the round's winner).
   useEffect(() => { if (screen === "results") useTag.setState({ screen: "host" }); }, [screen]);
@@ -209,6 +212,8 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   }, [pick, conn, st?.phase, st?.round, me]);
 
   if (screen === "match" || screen === "loading") return null;
+  if (players) return <PlayerList players={st && other !== null ? [{ id: st.players[other].address, name: st.players[other].name }] : []}
+    onReport={id => { app.lobby?.report(id as Address, matchId); }} onBack={() => setPlayers(false)} />;
   if (!info) return <Section testid="wager-series"><div>connecting…</div></Section>;
 
   const d = info.decimals, sym = info.symbol;
@@ -230,6 +235,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
   const header = (
     <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", marginBottom: 8 }}>
       <div style={{ font: "900 22px ui-monospace, monospace", letterSpacing: 2 }}>SERIES</div>
+      <button style={small(false)} onClick={() => setPlayers(true)}>PLAYERS · MUTE / REPORT</button>
       <div style={{ fontSize: 13, color: C.dim }}>
         <Amount v={stake} decimals={d} symbol={sym} /> each{secs ? ` · ${roundText(secs)}` : ""} · best of 3{fees ? ` · fee ${bpsText(fees.feeBps)}${fees.holderFeeBps < fees.feeBps ? ` (${bpsText(fees.holderFeeBps)} for a Radbro-holder winner)` : ""}` : ""}
       </div>
@@ -244,7 +250,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     const flags = outcome?.flags ?? [];
     const res = sett?.result;
     const pay = res && res.outcome === 1 ? payout(stake, res.feeBps) : null;
-    const wName = winSide === null ? "" : st ? (winSide === me ? "YOU" : st.players[winSide].name) : shortAddress(winSide === 0 ? onChain?.playerA ?? "" : onChain?.playerB ?? "");
+    const wName = winSide === null ? "" : st ? (winSide === me ? "YOU" : playerName(st.players[winSide].address, st.players[winSide].name)) : shortAddress(winSide === 0 ? onChain?.playerA ?? "" : onChain?.playerB ?? "");
     return (
       <Section testid="wager-series" style={{ maxWidth: 620, margin: "0 auto" }}>
         {header}
@@ -269,7 +275,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
         {flags.length > 0 && (
           <div style={{ fontSize: 12, marginBottom: 10 }}>
             <div style={label}>flags</div>
-            {flags.map((f, i) => <div key={i}>{st ? (f.side === me ? "you" : st.players[f.side].name) : `player ${f.side === 0 ? "A" : "B"}`}: {FLAG_TEXT[f.kind] ?? f.kind} (round {f.round})</div>)}
+            {flags.map((f, i) => <div key={i}>{st ? (f.side === me ? "you" : playerName(st.players[f.side].address, st.players[f.side].name)) : `player ${f.side === 0 ? "A" : "B"}`}: {FLAG_TEXT[f.kind] ?? f.kind} (round {f.round})</div>)}
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 14px", fontSize: 14 }}>
@@ -371,14 +377,14 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
     <Section testid="wager-series" style={{ maxWidth: 720, margin: "0 auto" }}>
       {header}
       {conn === "reconnecting" && <div style={{ marginBottom: 8 }}><Notice kind="error" text="your connection dropped: reconnecting…" /></div>}
-      {drop && drop.side === other && <div style={{ marginBottom: 8 }}><Notice kind="info" text={`${opp.name} disconnected: ${Math.max(0, Math.ceil((drop.until - Date.now()) / 1000))} s to come back, or they forfeit`} /></div>}
+      {drop && drop.side === other && <div style={{ marginBottom: 8 }}><Notice kind="info" text={`${playerName(opp.address, opp.name)} disconnected: ${Math.max(0, Math.ceil((drop.until - Date.now()) / 1000))} s to come back, or they forfeit`} /></div>}
       {!beforeRound1 && lastRound && (
         <div style={{ textAlign: "center", marginBottom: 12 }} data-testid="wager-round-result">
           <div style={{ font: "900 26px ui-monospace, monospace", color: lastRound.result.winner === me ? C.green : lastRound.result.winner === "draw" ? C.ice : C.gold }}>
-            ROUND {lastRound.round}: {lastRound.result.winner === "draw" ? "DRAW (replayed)" : lastRound.result.winner === me ? "YOU WIN IT" : `${opp.name} WINS IT`}
+            ROUND {lastRound.round}: {lastRound.result.winner === "draw" ? "DRAW (replayed)" : lastRound.result.winner === me ? "YOU WIN IT" : `${playerName(opp.address, opp.name)} WINS IT`}
           </div>
           <div style={{ fontSize: 13, marginTop: 4 }}>
-            bag time: you {(lastRound.result.bag[me] / 120).toFixed(1)} s · {opp.name} {(lastRound.result.bag[other!] / 120).toFixed(1)} s
+            bag time: you {(lastRound.result.bag[me] / 120).toFixed(1)} s · {playerName(opp.address, opp.name)} {(lastRound.result.bag[other!] / 120).toFixed(1)} s
             {" · "}series <b>{lastRound.score[me]}-{lastRound.score[other!]}</b>{lastRound.draws ? ` · ${lastRound.draws} draw${lastRound.draws > 1 ? "s" : ""}` : ""}
           </div>
           <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>the referee's replay of both players' inputs</div>

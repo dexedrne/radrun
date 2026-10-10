@@ -3,7 +3,7 @@
 // offer (listed, invite link or a named opponent; holders only; minimum series); your own offers (cancel, also on chain,
 // copy the link); the pairing status and the "lock it yourself" fallback. An invite link (?wager&join=<id>) opens JoinView.
 import { useEffect, useState } from "react";
-import type { Hex } from "viem";
+import type { Address, Hex } from "viem";
 import { gotoDistrict, PAGE_DISTRICT } from "../app/district.ts";
 import { DISTRICTS, isDistrictId } from "../world/districts.ts";
 import { useWager, type WagerApp } from "./app.ts";
@@ -11,6 +11,7 @@ import { DEFAULT_ROUND_SECONDS, ROUND_SECONDS, type MatchStatus, type Offer } fr
 import { keepParams } from "./site.ts";
 import { Amount, C, Card, Notice, Section, btn, input, label, small, useNow } from "./ui.tsx";
 import { bpsText, formatAmount, parseAddress, parseAmount, relTime, roundText, sameAddress } from "./units.ts";
+import { PlayerList } from '../net/PlayerList.tsx';
 
 const districtName = (d: string) => (isDistrictId(d) ? DISTRICTS[d].name : d);
 
@@ -162,12 +163,16 @@ export function PairingStatus({ app }: { app: WagerApp }) {
 export function LobbyView({ app }: { app: WagerApp }) {
   const s = useWager();
   const [creating, setCreating] = useState(false);
+  const [players, setPlayers] = useState(false);
+  if (players) return <PlayerList players={[...new Map(s.offers.filter(o => !sameAddress(o.creator.address, s.address)).map(o => [o.creator.address, { id: o.creator.address, name: o.creator.name }])).values()]}
+    onReport={id => { app.lobby?.report(id as Address); }} onBack={() => setPlayers(false)} />;
   if (!s.config || !s.info) return <Section testid="wager-lobby"><div>{s.fatal ? s.fatal.message : "connecting to the lobby…"}</div></Section>;
   const mine = s.offers.filter(o => sameAddress(o.creator.address, s.address));
   const open = s.offers.filter(o => !sameAddress(o.creator.address, s.address));
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <PairingStatus app={app} />
+      <button style={btn(false)} onClick={() => setPlayers(true)}>PLAYERS · MUTE / REPORT</button>
       <Section title="PLAY FOR TOKENS" testid="wager-lobby">
         <div style={{ fontSize: 13, color: C.dim, marginBottom: 8, lineHeight: 1.5 }}>
           1v1 TAG, best 2 of 3. Both players put up the same stake; the winner takes the pot minus the fee. The referee replays every input, so the result is the game's, not a client's.

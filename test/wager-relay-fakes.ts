@@ -425,7 +425,7 @@ export async function roomHarness(o: {
   room = mk();
   await room.init({ match: m, lockTx: null, cards: [card(a.address), card(b.address)], ips: pairedIps });
   const h = {
-    clock, fv, a, b, matchId, sim, settings, calls, referee, stake,
+    clock, fv, a, b, matchId, sim, settings, calls, referee, stake, sql, lobby,
     get room() { return room!; },
     /** Mark another match as paired by the lobby (A and B by default). */
     pair(id: Hex, players: [Address, Address] = [a.address, b.address]) { pairs.set(id.toLowerCase(), { players, ips: [[], []] }); },
