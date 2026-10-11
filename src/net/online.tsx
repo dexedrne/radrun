@@ -21,6 +21,7 @@ import { OnlineSession } from "./session.ts";
 import { SELFTEST_HASH, selfTestHash } from "./selftest.ts";
 import { Transport, createRoom, relayBase } from "./transport.ts";
 import { CODE_ALPHABET, CODE_LEN, NET_VERSION, cleanName, isRoomCode, type Compat, type PlayerInfo, type RoomConfig, type ServerMsg, type StartMsg } from "./wire.ts";
+import { PlayerList, playerName, usePlayerMutes } from './PlayerList.tsx';
 
 const DEV = import.meta.env.MODE !== "production";
 const params = new URLSearchParams(location.search);
@@ -70,6 +71,8 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   const [slot, setSlot] = useState(-1);
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [playerList, setPlayerList] = useState(false), [notice, setNotice] = useState('');
+  usePlayerMutes();
   const tRef = useRef<Transport | null>(null);
   const sRef = useRef<OnlineSession | null>(null);
   const slotRef = useRef(-1);
@@ -117,6 +120,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   const onMsg = useCallback((m: ServerMsg) => {
     switch (m.t) {
       case "welcome":
+        if (m.moderationToken) { try { sessionStorage.setItem('room-moderation:' + m.room, m.moderationToken); } catch { /* storage blocked */ } }
         slotRef.current = m.slot;
         setSlot(m.slot);
         setCode(m.room);
@@ -164,6 +168,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         useTag.setState({ agreed: m.ok });
         return;
       case "error":
+        if (['name-replaced', 'report-received', 'room-muted', 'chat-blocked'].includes(m.code)) { setNotice(m.message); return; }
         setErr(m.message);
         setPhase("error");
         return;
@@ -204,7 +209,9 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         useTag.setState({ netStatus: "waiting for the other player…" });
       };
       useTag.setState({ net: { rematch, leave } });
-      t.sendJson({ t: "hello", compat: compat(), name: cleanName(charFile(props.radbro)), radbro: props.radbro, touch: game.touch, easy: game.camera.easyGrab, district: props.district });
+      let moderationToken: string | undefined;
+      try { moderationToken = sessionStorage.getItem('room-moderation:' + c) ?? undefined; } catch { /* storage blocked */ }
+      t.sendJson({ t: "hello", compat: compat(), name: cleanName(charFile(props.radbro)), radbro: props.radbro, touch: game.touch, easy: game.camera.easyGrab, district: props.district, moderationToken });
     } catch (e) {
       setErr(String((e as Error).message ?? e));
       setPhase("error");
@@ -259,8 +266,9 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   }, [abandon, code, game, slot, phase, players.length]);
 
   const exit = () => { leave(); props.onExit(); };
-  if (screen === "match" || screen === "loading") return null;
-  if (screen === "results") return null;
+  if (screen === "match" || screen === "loading" || screen === "results") return null;
+  if (playerList) return <PlayerList players={players.filter(p => p.slot !== slot).map(p => ({ id: code + ':' + p.slot, name: p.name }))}
+    onReport={id => tRef.current?.sendJson({ t: 'report', slot: Number(id.split(':').at(-1)) })} onBack={() => setPlayerList(false)} notice={notice} />;
 
   const wrongDistrict = config && isDistrictId(config.district) && config.district !== props.district ? config.district : null;
   const link = code ? `${location.origin}/?tag&room=${code}${wrongDistrict || props.district !== "downtown" ? `&map=${config?.district ?? props.district}` : ""}` : "";
@@ -302,7 +310,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
                     {p ? (
                       <>
                         <img src={portraitPath(p.radbro)} alt="" width={64} height={64} style={{ borderRadius: 8, background: RADBRO_COLOR[p.radbro as RadbroId]?.body ?? "#333" }} />
-                        <div style={{ fontWeight: 800 }}>{p.slot === slot ? "YOU" : charTag(p.radbro)}</div>
+                        <div style={{ fontWeight: 800 }}>{p.slot === slot ? "YOU" : playerName(code + ':' + p.slot, p.name)}</div>
                         <div style={{ fontSize: 12, color: p.ready ? "#8dff8a" : "#ccc" }}>{p.ready ? "READY" : "picking…"}</div>
                       </>
                     ) : <div style={{ opacity: 0.6, padding: "30px 0" }}>waiting for a friend…</div>}
@@ -316,6 +324,8 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
               ))}
             </div>
             {err && <div style={{ marginTop: 8, color: "#ffd23f", fontSize: 12 }}>{err}</div>}
+            {notice && <p role="status">{notice}</p>}
+            <button style={{ ...btn(false), marginTop: 10 }} onClick={() => setPlayerList(true)} data-testid="online-player-list">PLAYERS · MUTE / REPORT</button>
             <button style={{ ...btn(!ready), marginTop: 14, fontSize: 18, padding: "10px 34px", opacity: players.length === 2 && !wrongDistrict ? 1 : 0.5 }} disabled={players.length < 2 || !!wrongDistrict} onClick={toggleReady} data-testid="online-ready" data-pad-default="" data-pad-btn="START">
               {ready ? "NOT READY" : "READY"}
             </button>

@@ -8,7 +8,7 @@ import {
   entryFromJson, entryTypedData, loginTypedData, newMatchId, random32, resultTypedData, sessionAuthTypedData, type EntryJson,
 } from "../src/wager/eip712.ts";
 import { WAGER_PROTOCOL, type LobbyClientMsg, type LobbyServerMsg } from "../src/wager/protocol.ts";
-import { WagerLobbyCore, elo, type LobbyConn, type RoomLink } from "../relay/wager/src/lobby.ts";
+import { WagerLobbyCore, elo, type LobbyConn, type LobbyDeps, type RoomLink } from "../relay/wager/src/lobby.ts";
 import { Relayer, TxError } from "../relay/wager/src/relayer.ts";
 import { MockRadbroSource, RadbroReader } from "../relay/wager/src/radbro.ts";
 import { parseSettings, originOk, regionBlocked, type Vars } from "../relay/wager/src/settings.ts";
@@ -16,6 +16,7 @@ import { gate, routeOf, type HttpReq } from "../relay/wager/src/http.ts";
 import { nodeSql } from "../relay/wager/src/node.ts";
 import { vaultCall } from "../relay/wager/src/chain.ts";
 import { FakeClock, FakeVault, SIMS, eventually, flush, newAccount } from "./wager-relay-fakes.ts";
+import { moderateText, type ModerationState } from '../relay/src/playerModeration.ts';
 
 const E18 = 10n ** 18n;
 const sim = (await SIMS.district("downtown"))!;
@@ -26,7 +27,7 @@ const sim = (await SIMS.district("downtown"))!;
  */
 type TConn = LobbyConn & { msgs: LobbyServerMsg[]; closed: string | null; signer?: LocalAccount; onSign?: (m: Extract<LobbyServerMsg, { t: "sign" }>) => Promise<Hex | string | null> };
 
-async function lobbyHarness(vars: Vars = {}) {
+async function lobbyHarness(vars: Vars = {}, moderationState?: ModerationState) {
   const clock = new FakeClock();
   const fv = new FakeVault(() => Math.floor(clock.now() / 1000));
   const referee = newAccount();
@@ -51,10 +52,12 @@ async function lobbyHarness(vars: Vars = {}) {
   };
   const holders = new Map<string, number[]>();
   const sql = nodeSql();
-  const lobby = new WagerLobbyCore({
+  const deps: LobbyDeps = {
     clock, sql, settings, chain: fv, sims: SIMS, referee: referee.address, radbro: new RadbroReader({ src: new MockRadbroSource(holders), now: () => clock.now(), cacheMs: 1, sql }),
     relayer, faucet, rooms, connections: () => [...conns],
-  });
+    moderationState, moderateName: (name: string) => moderateText(name, 'name'),
+  };
+  const lobby = new WagerLobbyCore(deps);
   let n = 1;
   const conn = (ip = "10.0.0.1"): TConn => {
     const c: TConn = {
@@ -102,10 +105,83 @@ async function lobbyHarness(vars: Vars = {}) {
     rules: sim.rulesHash, deadline: Math.floor(clock.now() / 1000) + 1800, ...o,
   });
   const sign = (by: LocalAccount, e: EntryJson) => by.signTypedData(entryTypedData(fv.chainId, fv.vault, entryFromJson(e)));
-  return { clock, fv, settings, lobby, relayer, relayerAcct, referee, conn, send, last, loginMsg, hello, player, entry, sign, inits, settled, holders, sql };
+  return { clock, fv, settings, lobby, deps, relayer, relayerAcct, referee, conn, send, last, loginMsg, hello, player, entry, sign, inits, settled, holders, sql };
 }
 
 const errOf = (c: TConn) => [...c.msgs].reverse().find(m => m.t === "error") as Extract<LobbyServerMsg, { t: "error" }> | undefined;
+
+test('player profile names replace violations, allow profanity and require distinct reports with evidence', async () => {
+  const state: ModerationState = {}, h = await lobbyHarness({}, state);
+  const a = await h.player(), b = await h.player(), c = await h.player();
+  await h.send(a.c, { t: 'profile', name: 'n1gg3r' });
+  assert.match(h.last(a.c, 'card')!.card.name, /^Player-/);
+  assert.match(errOf(a.c)!.message, /name was replaced/);
+  await h.send(b.c, { t: 'profile', name: 'fuckyeah' });
+  assert.equal(h.last(b.c, 'card')!.card.name, 'fuckyeah');
+  await h.send(b.c, { t: 'report', player: a.acct.address });
+  await h.send(b.c, { t: 'report', player: a.acct.address });
+  await h.send(a.c, { t: 'profile', name: 'friend' });
+  assert.equal(h.last(a.c, 'card')!.card.name, 'friend', 'duplicates do not mute');
+  await h.send(c.c, { t: 'report', player: a.acct.address });
+  await h.send(a.c, { t: 'profile', name: 'friend' });
+  assert.match(h.last(a.c, 'card')!.card.name, /^Player-/);
+  await h.send(a.c, { t: 'chat', text: 'n1gg3r' });
+  assert.equal(errOf(a.c)!.message, 'not sent');
+  assert.equal(JSON.stringify(state).includes('n1gg3r'), false);
+  assert.equal(JSON.stringify(state).includes(a.acct.address.toLowerCase()), false);
+  assert.equal(JSON.stringify(b.c.msgs).includes('n1gg3r'), false);
+});
+
+test('reports across many authorized matches keep moderation evidence bounded', async () => {
+  const state: ModerationState = {}, h = await lobbyHarness({}, state), a = await h.player(), b = await h.player();
+  await h.send(a.c, { t: 'profile', name: 'n1gg3r' });
+  for (let i = 1; i <= 80; i++) {
+    const id = ('0x' + i.toString(16).padStart(64, '0')) as Hex;
+    h.sql.exec('INSERT INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?)', id, 'settled', a.acct.address.toLowerCase(), b.acct.address.toLowerCase(), '0', '{}');
+    await h.send(b.c, { t: 'report', player: a.acct.address, matchId: id });
+    assert.ok(Object.keys(state).length <= 64);
+    h.clock.tick(2100);
+  }
+});
+
+test('unknown and historical public card reads cannot allocate or evict moderation evidence', async () => {
+  const state: ModerationState = {}, h = await lobbyHarness({}, state), a = await h.player();
+  await h.send(a.c, { t: 'profile', name: 'n1gg3r' });
+  const before = structuredClone(state);
+  for (let i = 1; i <= 80; i++) {
+    const address = ('0x' + i.toString(16).padStart(40, '0')) as Address;
+    await h.lobby.card(address);
+    h.sql.exec('INSERT INTO players (address, name, rating, wins, losses, forfeits, voids, held, first_seen, last_seen, cosmetic) VALUES (?, ?, 1200, 0, 0, 0, 0, 0, 0, 0, NULL)', address.toLowerCase(), 'friend' + i);
+    await h.lobby.card(address);
+  }
+  assert.deepEqual(state, before);
+});
+
+test('restored and refreshed offers publish moderated names without changing signed terms', async () => {
+  const state: ModerationState = {}, h = await lobbyHarness({}, state), a = await h.player(), b = await h.player(), c = await h.player();
+  await h.send(a.c, { t: 'profile', name: 'friend' });
+  const entry = h.entry({ player: a.acct.address }), sig = await h.sign(a.key, entry);
+  await h.send(a.c, { t: 'create', entry, sig, listed: true });
+  const stored = JSON.parse(String(h.sql.exec('SELECT match_id, json FROM offers')[0].json));
+  stored.offer.creator.name = 'n1gg3r';
+  h.sql.exec('INSERT OR REPLACE INTO offers (match_id, json, deadline) VALUES (?, ?, ?)', entry.matchId, JSON.stringify(stored), stored.offer.deadline);
+  h.sql.exec('UPDATE players SET name = ? WHERE address = ?', 'n1gg3r', a.acct.address.toLowerCase());
+  const restored = new WagerLobbyCore(h.deps), viewer = h.conn();
+  const send = (conn: TConn, m: LobbyClientMsg) => restored.message(conn, JSON.stringify(m));
+  await send(viewer, { t: 'hello', v: WAGER_PROTOCOL, net: 'local' });
+  assert.match(h.last(viewer, 'offers')!.offers[0].creator.name, /^Player-/);
+  const status = await restored.matchStatus(entry.matchId);
+  assert.match(status.offer!.creator.name, /^Player-/);
+  assert.deepEqual(status.offer!.entry, entry);
+  assert.equal(JSON.parse(String(h.sql.exec('SELECT match_id, json FROM offers')[0].json)).sig, sig);
+  await send(a.c, { t: 'profile', name: 'n1gg3r' });
+  await send(a.c, { t: 'profile', name: 'fuckyeah' });
+  assert.equal(h.last(viewer, 'offer')!.offer.creator.name, 'fuckyeah');
+  await send(b.c, { t: 'report', player: a.acct.address });
+  await send(c.c, { t: 'report', player: a.acct.address });
+  assert.match(h.last(viewer, 'offer')!.offer.creator.name, /^Player-/);
+  assert.equal(JSON.stringify(viewer.msgs).includes('n1gg3r'), false);
+});
 
 test("login: by wallet or session key; a replayed, expired or forged login is refused; hello again for a new challenge", async () => {
   const h = await lobbyHarness();

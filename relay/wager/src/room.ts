@@ -13,6 +13,7 @@
 import { hashTypedData, type Address, type Hex } from "viem";
 import { MSG_INPUT, MSG_PING, NET_VERSION, decodeInput, decodePing, encodeAck, encodeFill, encodeJson, encodePong, encodeRelayInput } from "../../../src/net/wire.ts";
 import { inputDelayFor } from "../../src/room.ts";
+import { plainCategory, neutralName } from '../../src/playerModeration.ts';
 import { isRadbroId, RADBROS } from "../../../src/game/radbros.ts";
 import {
   OUTCOME_VOID, OUTCOME_WIN, REVIEW_SETTLE, REVIEW_VOID, ZERO_HASH, random32, resultTypedData, reviewTypedData, type Result, type Rules,
@@ -163,6 +164,7 @@ export class WagerRoomCore {
   private p: Persist | null = null;
   private rounds: RoundLog[] = [];
   private sim: DistrictSim | null = null;
+  private displayNames: string[] | null = null;
   private initChain: Promise<unknown> = Promise.resolve();
   private notLockedAt: number | null = null;
   private readonly seats: [Conn | null, Conn | null] = [null, null];
@@ -273,6 +275,7 @@ export class WagerRoomCore {
     const sim = await this.d.sims.district(p.district);
     if (!sim) { p.error = `district ${p.district} is not refereed here any more`; this.save(); return false; }
     if (this.sim) return !p.error;
+    await this.refreshNames();
     this.sim = sim;
     if (p.phase === "playing") {
       // The round in flight is gone with the old instance: a relay fault never picks a winner (docs/WAGER.md §4.4.8).
@@ -319,6 +322,7 @@ export class WagerRoomCore {
       started: false, deadlineAt: null, metrics: [emptyMetrics(), emptyMetrics()], flags: [], outcome: null, held: false, logHash: null,
       settlement: null, settleTx: null, error: null, ips: ips ?? [[], []], seen: [[], []], sessionNewIp: [false, false],
     };
+    await this.refreshNames();
     this.save();
     this.update();
     this.schedule();
@@ -457,6 +461,8 @@ export class WagerRoomCore {
     c.player = player;
     c.side = side;
     this.seats[side] = c;
+    const displayed = this.displayCards()[side].name;
+    if (displayed !== p.cards[side].name && displayed.startsWith('Player-')) this.error(c, 'bad', 'Your name was replaced with ' + displayed + '.');
     const back = this.goneAt[side] !== null;
     this.goneAt[side] = null;
     if (this.seats[0] && this.seats[1]) this.restarted = false;
@@ -494,6 +500,21 @@ export class WagerRoomCore {
 
   // ---- series state -------------------------------------------------------------------------------------------------
 
+  private safeName(name: string, address: Address): string {
+    return plainCategory(name, 'name') || plainCategory(clampName(name), 'name') ? neutralName(address) : name;
+  }
+
+  private async refreshNames(): Promise<void> {
+    this.displayNames = await Promise.all(this.p!.cards.map(async card => {
+      const current = await this.d.lobby.card(card.address).catch(() => card);
+      return this.safeName(current.name, card.address);
+    }));
+  }
+
+  private displayCards(): [PlayerCard, PlayerCard] {
+    return this.p!.cards.map((card, i) => ({ ...card, name: this.safeName(this.displayNames?.[i] ?? card.name, card.address) })) as [PlayerCard, PlayerCard];
+  }
+
   private deadline(): number | null {
     const p = this.p!;
     const gone = this.goneAt.filter((g): g is number => g !== null).map(g => g + this.T.reconnectGraceMs);
@@ -507,7 +528,7 @@ export class WagerRoomCore {
     const p = this.p!;
     const sc = scoreRounds(p.winners);
     return {
-      matchId: this.matchId, phase: p.phase, players: p.cards, you, connected: [!!this.seats[0], !!this.seats[1]], ready: [this.ready[0], this.ready[1]],
+      matchId: this.matchId, phase: p.phase, players: this.displayCards(), you, connected: [!!this.seats[0], !!this.seats[1]], ready: [this.ready[0], this.ready[1]],
       picks: p.picks, stake: p.stake, roundSeconds: p.roundSeconds, district: p.district, feeBps: p.feeBps, holderFeeBps: p.holderFeeBps, round: p.round,
       score: sc.score, draws: sc.draws, seedCommit: p.seedCommit, deadlineAt: this.deadline(), settleBy: p.settleBy,
     };
@@ -649,7 +670,8 @@ export class WagerRoomCore {
       oneWay: [rtt[sideOfSlot(0)] / 2, rtt[sideOfSlot(1)] / 2],
     });
     this.liveRtt = rtt;
-    const name = (s: Side) => (picks[s].own !== null ? `#${picks[s].own}` : clampName(p.cards[s].name));
+    const displayed = this.displayCards();
+    const name = (s: Side) => (picks[s].own !== null ? `#${picks[s].own}` : clampName(displayed[s].name));
     this.startMsg = {
       t: "start", seed, startAtMs, round: r, inputDelay,
       slots: [0, 1].map(slot => ({ slot, name: name(sideOfSlot(slot)), radbro: bySlot[slot], touch: false, easy: false })),

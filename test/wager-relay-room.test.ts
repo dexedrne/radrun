@@ -33,6 +33,23 @@ const idleUntil = (c: RoomClient, cond: () => unknown, maxMs = 60_000) => c.unti
 const gunzipSync = (b: Uint8Array) => gunzipBuf(b).toString("utf8");
 const win = (side: 0 | 1) => (): RoundResult => ({ winner: side, bag: [0, 0], falls: [0, 0], tags: [0, 0], hash: 1 });
 
+test('retained series cards use moderated display names without changing persisted financial state', async () => {
+  const h = await roomHarness();
+  const saved = JSON.parse(String(h.sql.exec('SELECT json FROM series WHERE id = 1')[0].json));
+  saved.cards[0].name = 'n1gg3r'; saved.cards[1].name = 'fuckyeah';
+  const before = JSON.stringify(saved);
+  h.sql.exec('INSERT OR REPLACE INTO series (id, json) VALUES (1, ?)', before);
+  const room = h.restart();
+  assert.match(room.status()!.series.players[0].name, /^Player-/);
+  assert.equal(room.status()!.series.players[1].name, 'fuckyeah');
+  const get = h.lobby.card;
+  h.lobby.card = async address => ({ ...(await get(address)), name: address === h.a.address ? 'Player-abcdef' : 'fuckyeah' });
+  await room.ensure();
+  assert.equal(room.status()!.series.players[0].name, 'Player-abcdef');
+  assert.equal(room.status()!.series.players[1].name, 'fuckyeah');
+  assert.equal(String(h.sql.exec('SELECT json FROM series WHERE id = 1')[0].json), before);
+});
+
 test("seats: a stranger gets `full`; replayed, expired, forged and wrong-match logins are refused", async () => {
   const h = await roomHarness();
   const stranger = h.client();

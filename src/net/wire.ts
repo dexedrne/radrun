@@ -13,8 +13,8 @@
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
 import type { InputRec } from "../game/ghost.ts";
 
-/** Bumped on any change to the wire format or the online match rules (2: the web-slinger swing changed the sim). */
-export const NET_VERSION = 3;
+/** Transport revision (4: moderation messages; 2: the web-slinger swing changed the sim). */
+export const NET_VERSION = 4;
 
 const LO = 4294967296;
 /**
@@ -243,7 +243,8 @@ export type PlayerInfo = { slot: number; name: string; radbro: string; touch: bo
 export type RoomConfig = { district: string; mode: "tag"; seconds: number; maxPlayers: number };
 
 export type ClientMsg =
-  | { t: "hello"; compat: Compat; name: string; radbro: string; touch: boolean; easy: boolean; district: string; token?: string }
+  | { t: "hello"; compat: Compat; name: string; radbro: string; touch: boolean; easy: boolean; district: string; token?: string; moderationToken?: string }
+  | { t: 'report'; slot: number }
   | { t: "pick"; radbro: string }
   | { t: "config"; seconds?: number }
   | { t: "ready"; ready: boolean; rtt?: number }
@@ -262,12 +263,12 @@ export type StartMsg = {
 };
 
 export type ServerMsg =
-  | { t: "welcome"; slot: number; token: string; host: boolean; room: string; players: PlayerInfo[]; config: RoomConfig; lag: number }
+  | { t: "welcome"; slot: number; token: string; host: boolean; room: string; players: PlayerInfo[]; config: RoomConfig; lag: number; moderationToken?: string }
   | { t: "lobby"; players: PlayerInfo[]; config: RoomConfig }
   | StartMsg
   | { t: "drop"; slot: number }
   | { t: "result"; round: number; ok: boolean; hashes: (number | null)[] }
-  | { t: "error"; code: "full" | "version" | "room" | "bad" | "busy" | "rate"; message: string };
+  | { t: "error"; code: "full" | "version" | "room" | "bad" | "busy" | "rate" | 'name-replaced' | 'report-received' | 'room-muted' | 'chat-blocked'; message: string };
 
 export const encodeJson = (m: ClientMsg | ServerMsg): string => JSON.stringify(m);
 

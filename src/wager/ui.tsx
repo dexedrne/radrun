@@ -12,6 +12,7 @@ import type { PlayerCard, WebColor } from "./protocol.ts";
 import type { TxRow } from "./app.ts";
 import { formatAmount, shortAddress } from "./units.ts";
 import { txUrl } from "./wallet.ts";
+import { playerName, usePlayerMutes } from '../net/PlayerList.tsx';
 
 export { btn, panel };
 
@@ -91,6 +92,7 @@ export function Portrait({ id, size = 44 }: { id: string; size?: number }) {
 
 /** A player's card: name, holder badge, rating, record, forfeits, account age / NEW (the lobby's smurf protection). */
 export function Card({ p, newSeries, you, compact }: { p: PlayerCard; newSeries: number; you?: boolean; compact?: boolean }) {
+  usePlayerMutes();
   const settled = p.wins + p.losses;
   const isNew = settled < newSeries;
   const days = Math.max(0, Math.floor((Date.now() - p.firstSeen) / 86_400_000));
@@ -99,7 +101,7 @@ export function Card({ p, newSeries, you, compact }: { p: PlayerCard; newSeries:
       <Portrait id={p.radbros[0] !== undefined && isRadbroId(String(p.radbros[0])) ? String(p.radbros[0]) : "652"} size={compact ? 32 : 40} />
       <div style={{ minWidth: 0, lineHeight: 1.35 }}>
         <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {you ? "YOU" : p.name} {p.holder && <Holder />} {isNew && <span style={{ fontSize: 10, background: C.ice, color: "#111", borderRadius: 3, padding: "0 4px", marginLeft: 2 }} data-testid="new-tag">NEW</span>}
+          {you ? "YOU" : playerName(p.address, p.name)} {p.holder && <Holder />} {isNew && <span style={{ fontSize: 10, background: C.ice, color: "#111", borderRadius: 3, padding: "0 4px", marginLeft: 2 }} data-testid="new-tag">NEW</span>}
         </div>
         <div style={{ fontSize: 11, color: C.dim, whiteSpace: "nowrap" }}>
           ★ {Math.round(p.rating)} · {p.wins}-{p.losses}{p.forfeits ? ` · ${p.forfeits} forfeit${p.forfeits === 1 ? "" : "s"}` : ""}{p.held ? ` · ${p.held} held` : ""}{!compact ? ` · ${days ? `${days} d` : "today"}` : ""}

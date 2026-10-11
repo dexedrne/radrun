@@ -168,6 +168,10 @@ export class MenuNav {
   /** A pad button in the menus: Cross / A presses the focus, others press the control bound to them. True = used. */
   press(b: PadButton): boolean {
     if (b === "SOUTH") { this.activate(); return true; }
+    if (b === 'WEST') {
+      const report = this.cur?.closest('[data-player-row]')?.querySelector<HTMLButtonElement>('[data-player-report]');
+      if (report) { report.click(); return true; }
+    }
     const el = this.bound(b);
     if (!el) return false;
     el.click();

@@ -1,4 +1,5 @@
-# The SPIDERTAG online relay (Worker "radrun-relay", its old name kept): a Cloudflare Worker + one Durable Object per room (free plan; no secrets, no storage).
+# The SPIDERTAG online relay (Worker "radrun-relay", its old name kept): one Durable Object per room.
+# Player moderation uses TYPESAFE_API_KEY (Worker secret); hash evidence and the daily budget persist.
 # Local:  npm run relay:worker   (wrangler 4.141.0 via npx, pinned; or, with no Cloudflare tooling at all: npm run relay)
 # Deploy: PLAY.md "Deploying the relay" (the owner's own Cloudflare account; the same pinned wrangler version).
 name = "radrun-relay"
