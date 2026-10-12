@@ -38,8 +38,8 @@ test("index.html: canonical, og:url and the share image are on spidertag.vyvanse
   const html = read("index.html");
   assert.ok(!html.includes("radrun.vyvanse.beer"));
   assert.ok(html.includes(`<link rel="canonical" href="${SITE}/" />`));
-  assert.ok(html.includes(`content="${SITE}/og.jpg"`));
-  assert.ok(fs.existsSync(path.join(root, "public/og.jpg")) && fs.existsSync(path.join(root, "public/favicon.png")));
+  assert.ok(html.includes(`content="${SITE}/og4.jpg"`));
+  assert.ok(fs.existsSync(path.join(root, "public/og4.jpg")) && fs.existsSync(path.join(root, "public/favicon.png")));
 });
 
 test("relays: every deployed config allows spidertag.vyvanse.beer and, during the move, radrun.vyvanse.beer", () => {
