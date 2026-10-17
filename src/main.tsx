@@ -1,3 +1,5 @@
+// First: Draco decoding without gstatic (app/draco.ts), before react-three-game makes its loader.
+import "./app/draco.ts";
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import PlayPage from "./app/PlayPage.tsx";

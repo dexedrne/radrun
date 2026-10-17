@@ -1104,6 +1104,13 @@ The built-in defaults are `GEORGE` in `src/sidekick/george.ts`; the model switch
 
 ## Placeholder / known issues
 
+- **Draco decoding (fixed 2026-10-17, the play pass):** react-three-game loaded its Draco decoder from gstatic's
+  unversioned `draco/v1/decoders/`, and that decoder changed under three's loader: every Radbro, George and the clip
+  packs failed to load ("failed to load /models/radbro652.glb" on the loading screen; seen in headless Chromium 153, and
+  any browser fetching the new decoder is affected). The game now uses three's own glTF decoder from the build
+  (`src/app/draco.ts`, imported first in `src/main.tsx`; `tools/postbuild.ts` keeps its two files). Nothing is fetched
+  from gstatic any more.
+
 - **Before a public launch:** the react-three-game licence and permission to load Pockit Milady VRMs at
   runtime from prnth's repo are still pending.
 - Frame rate is only measured in headless software rendering (5-25 fps there); check the fps counter

@@ -25,7 +25,7 @@ procedural WebAudio music + SFX (no audio files).
 npm ci
 npm run dev          # http://localhost:4870/  (title -> PLAY)
 npm test             # node --test: sim, determinism, city lint, bake checks, runner + round rules
-npm run build        # production build (dev pages stripped) + draco cleanup
+npm run build        # production build (dev pages stripped) + draco cleanup (keeps three's glTF decoder: src/app/draco.ts)
 npm run build:test   # build keeping the dev pages and ?bot (preview deployments)
 npm run relay        # the TAG online relay, locally on :8787 (or the Worker emulator: npm run relay:worker)
 ```
