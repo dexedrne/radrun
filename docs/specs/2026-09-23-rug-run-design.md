@@ -449,8 +449,11 @@ Milady wave → skipped (idle only).
 - `clips.meta.json`: per clip hips range, takeoff time and root-motion data (measured after buying).
 - Render with `<GameCanvas flat>` — R3F forces ACES tone mapping and `rendererConfig.toneMapping`
   is overwritten; only `flat` disables it.
-- r3g's Draco decoder is fetched from gstatic at runtime; three's bundled decoder files are never
-  requested, so a post-build step deletes `dist/assets/draco_*` (and CI asserts nothing 404s).
+- ~~r3g's Draco decoder is fetched from gstatic at runtime; three's bundled decoder files are never
+  requested, so a post-build step deletes `dist/assets/draco_*` (and CI asserts nothing 404s).~~ Errata (2026-10-17):
+  gstatic's unversioned decoder changed under three's loader and every model failed to load; the game now decodes with
+  three's own glTF decoder shipped in the build (`src/app/draco.ts`), and the post-build step keeps that pair and deletes
+  the other `draco_*` files.
 - **Only the two Radbros in the round are loaded** (plus George); the third is not fetched.
 - Performance fallback: the ~30k-triangle simplified Radbros (already produced in prototyping).
 
@@ -797,7 +800,7 @@ band with flinch and panic budget, away-branching at junctions, Yoink, and fall 
 | Engine is 0.0.x from one author; licence unresolved | exact pins; ~70% pure TS; engine layer ≈ 14 files (≈ 2.5-day port); licence asked on M0 day 1, required before launch |
 | Milady files (blink only, PBR materials, metadata restrictions, third-party hosting) | body-clip reactions, unlit swap, runtime fetch only with prnth's OK, never blocks the game, verification gate, cuttable |
 | Engine singletons + StrictMode | Round outside React keyed by runId; never `gameEvents.clear()`; restart never remounts |
-| Draco decoder from gstatic | fine for a public link; quantised GLBs as fallback |
+| Draco decoder from gstatic | fine for a public link; quantised GLBs as fallback (2026-10-17: it broke; three's own decoder now ships in the build) |
 | Pointer-lock quirks (Safari, iframes, Esc) | pause on lock loss + click-to-resume overlay |
 | Privacy leak | handle-only everywhere; dexedrne commit identity; local paths only in the untracked plan; review before every push |
 
