@@ -36,7 +36,7 @@ const GLOW = "0 2px 8px #000, 0 0 14px #000";
 const BAR_OFF = "rgba(243,234,216,0.35)";
 const GLASS = "linear-gradient(90deg, rgba(5,7,17,0.66), rgba(5,7,17,0.16))";
 const clamp = (lo: number, v: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const inset = (side: "top" | "right" | "bottom" | "left", px: number) => `calc(${px}px + env(safe-area-inset-${side}, 0px))`;
+const inset = (side: "top" | "right" | "bottom" | "left", px: number) => `calc(${px}px + max(env(safe-area-inset-${side}, 0px), var(--sai-${side}, 0px)))`;
 
 /** The key art behind the title (and the boot screens), under the card's shading. */
 export const TITLE_ART = "url(/ui/key-art.webp)";
@@ -266,7 +266,7 @@ export function Title(props: TitleProps) {
   // the other games' chips: wordmarks only on phones and narrow windows (they stay beside the status line)
   const slim = !!L.phone || w < 1000;
   const rows = Math.ceil(entries.length / 2);
-  const pillH = L.phone ? 32 : Math.round(L.pill * 1.75);
+  const pillH = L.phone ? 44 : Math.round(L.pill * 1.75);
   const pill = (accent: string): React.CSSProperties => ({
     display: "inline-flex", alignItems: "center", gap: L.phone ? 6 : 8, height: pillH, boxSizing: "border-box", padding: L.phone ? "0 10px 0 8px" : "0 14px 0 11px", borderRadius: 999, textDecoration: "none",
     font: `400 ${L.pill}px/1 ${VT}`, letterSpacing: "0.04em", color: "#ece6f8", background: "rgba(14,9,26,0.66)", border: `1px solid ${accent}`, pointerEvents: "auto", whiteSpace: "nowrap",
@@ -279,9 +279,8 @@ export function Title(props: TitleProps) {
         padding: `${inset("top", L.top + pillsAbove)} ${inset("right", L.padX)} ${inset("bottom", L.bottom)} ${inset("left", L.padX)}` }}>
         <div ref={markRef} style={{ maxWidth: "100%" }}><Wordmark px={L.mark} /></div>
         <div style={{ marginTop: L.phone ? 2 : "0.6vh", font: `400 ${L.tag}px/1 ${VT}`, letterSpacing: "0.06em", color: "#f2e9e1", textShadow: GLOW }}>{S.tagline}</div>
-        {(touch && portrait) || props.ghost || props.ghostBusy || challenge.t !== null ? (
+        {props.ghost || props.ghostBusy || challenge.t !== null ? (
           <div style={{ marginTop: (L.phone ? 8 : 14) * fit, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6 * fit, maxWidth: "min(760px, 100%)" }}>
-            {touch && portrait && <div style={notice(GOLD, L.tag * 0.85)} data-testid="rotate-hint"><span style={{ color: GOLD }}>[ !! ]</span> rotate your phone: SPIDERTAG plays in landscape</div>}
             {(props.ghost || props.ghostBusy)
               ? <GhostLine ghost={props.ghost} active={props.ghostActive} busy={props.ghostBusy} px={L.tag * 0.82} />
               : challenge.t !== null && <div style={notice(GOLD, L.tag * 0.85)} data-testid="challenge"><span style={{ color: GOLD }}>[ CHALLENGE ]</span> beat {challenge.t.toFixed(1)} s{challenge.r ? ` vs ${charTag(challenge.r)}` : ""}</div>}
@@ -295,7 +294,7 @@ export function Title(props: TitleProps) {
             const on = i === cur;
             return (
               <button key={e.key} ref={el => { refs.current[i] = el; }} role="menuitem" data-testid={e.testid} data-st-item="" data-pad-cycle="" data-pad-default={e.key === home ? "" : undefined}
-                disabled={e.off} onClick={e.act} onMouseEnter={() => { setFocusKey(e.key); refs.current[i]?.focus({ preventScroll: true }); }} onFocus={() => setFocusKey(e.key)} style={itemStyle(on, e.off, L.item)}>
+                disabled={e.off} onClick={e.act} onMouseEnter={() => { setFocusKey(e.key); refs.current[i]?.focus({ preventScroll: true }); }} onFocus={() => setFocusKey(e.key)} style={{ ...itemStyle(on, e.off, L.item), minHeight: touch ? 44 : undefined }}>
                 {e.label(on)}
               </button>
             );
@@ -312,7 +311,7 @@ export function Title(props: TitleProps) {
             {OTHER_GAMES.map(g => (
               <a key={g.id} href={g.url} target={framed ? "_blank" : undefined} rel="noopener" className="st-f" data-pad-item="" data-pad-cycle="" data-testid={`game-${g.id}`}
                 onFocus={() => setFocusKey(`game-${g.id}`)} onMouseEnter={ev => { setFocusKey(`game-${g.id}`); ev.currentTarget.focus({ preventScroll: true }); }}
-                style={{ display: "block", padding: slim ? "6px 10px 5px" : "8px 14px 7px", textDecoration: "none", borderRadius: 3, border: "1.5px solid rgba(243,234,216,0.25)", background: "rgba(5,7,17,0.62)" }}>
+                style={{ display: "block", padding: L.phone ? "12px 10px" : slim ? "6px 10px 5px" : "8px 14px 7px", textDecoration: "none", borderRadius: 3, border: "1.5px solid rgba(243,234,216,0.25)", background: "rgba(5,7,17,0.62)" }}>
                 <div style={{ font: `400 ${L.phone ? 19 : slim ? 22 : 26}px/0.9 ${BEBAS}`, letterSpacing: "0.03em" }}>
                   <span style={{ color: g.colors[0] }}>{g.mark[0]}</span><span style={{ color: g.colors[1] }}>{g.mark[1]}</span>
                 </div>

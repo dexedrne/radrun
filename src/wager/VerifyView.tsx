@@ -88,7 +88,7 @@ export function VerifyView({ app, game, matchId, review, onBack }: { app: WagerA
 
   if (watching && (screen === "match" || screen === "loading")) {
     return (
-      <div style={{ position: "fixed", bottom: "calc(12px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 25, display: "flex", gap: 6, background: "rgba(14,16,30,0.82)", borderRadius: 10, padding: 6 }} data-testid="wager-watch-bar">
+      <div style={{ position: "fixed", bottom: "calc(12px + max(env(safe-area-inset-bottom, 0px), var(--sai-bottom, 0px)))", left: "50%", transform: "translateX(-50%)", zIndex: 25, display: "flex", gap: 6, background: "rgba(14,16,30,0.82)", borderRadius: 10, padding: 6 }} data-testid="wager-watch-bar">
         {[1, 2, 4].map(x => <button key={x} style={small(watching.speed === x)} onClick={() => { watching.speed = x; setWatching(watching); useTag.setState({}); }}>{x}×</button>)}
         <button style={small(false)} onClick={() => { game.toMenu(); useTag.setState({ screen: "host", hud: null, series: null }); setWatching(null); }} data-pad-btn="EAST">STOP</button>
       </div>

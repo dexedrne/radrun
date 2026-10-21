@@ -45,33 +45,22 @@ export function Wordmark({ px, style }: { px: number; style?: React.CSSPropertie
  * browser's toolbars showing, or a small phone).
  */
 export function useViewport(): { w: number; h: number; compact: boolean; tiny: boolean; narrow: boolean; portrait: boolean } {
-  const [vp, setVp] = useState(() => ({ w: innerWidth, h: innerHeight }));
+  const [vp, setVp] = useState(() => ({ w: visualViewport?.width ?? innerWidth, h: visualViewport?.height ?? innerHeight }));
   useEffect(() => {
-    const f = () => setVp(v => (v.w === innerWidth && v.h === innerHeight ? v : { w: innerWidth, h: innerHeight }));
+    const f = () => {
+      const w = visualViewport?.width ?? innerWidth, h = visualViewport?.height ?? innerHeight;
+      setVp(v => (v.w === w && v.h === h ? v : { w, h }));
+    };
     // iOS reports the rotated size a beat after orientationchange.
     const late = () => { f(); setTimeout(f, 250); };
     addEventListener("resize", f);
     addEventListener("orientationchange", late);
     visualViewport?.addEventListener("resize", f);
-    return () => { removeEventListener("resize", f); removeEventListener("orientationchange", late); visualViewport?.removeEventListener("resize", f); };
+    addEventListener("pageshow", f);
+    document.addEventListener("visibilitychange", f);
+    return () => { removeEventListener("resize", f); removeEventListener("orientationchange", late); visualViewport?.removeEventListener("resize", f); removeEventListener("pageshow", f); document.removeEventListener("visibilitychange", f); };
   }, []);
   return { ...vp, compact: vp.h < 520, tiny: vp.h < 400 && vp.w > vp.h, narrow: vp.w < 560, portrait: vp.h > vp.w };
-}
-
-/** Touch in portrait, in a round: ask for landscape (non-blocking; the game still runs; the title has its own line). */
-export function RotateHint() {
-  const touch = useUi(s => s.touch);
-  const { portrait } = useViewport();
-  if (!touch || !portrait) return null;
-  const pill: React.CSSProperties = {
-    background: "#ffd23f", color: "#1a1a1a", fontWeight: 800, padding: "8px 14px", borderRadius: 10, fontSize: 13,
-    boxShadow: "0 3px 12px rgba(0,0,0,0.35)", textAlign: "center",
-  };
-  return (
-    <div style={{ position: "fixed", left: "50%", top: safe("top", 96), transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none", width: "max-content", maxWidth: "86vw" }}>
-      <div style={pill} data-testid="rotate-hint">rotate your phone: landscape plays best</div>
-    </div>
-  );
 }
 
 // ---- mute button (title + HUD; M key too) ----------------------------------------------------------
@@ -81,7 +70,7 @@ export function MuteButton({ muted, onMute, style }: { muted: boolean; onMute: (
   return (
     <button onClick={onMute} title={label} aria-label={label} aria-pressed={muted} data-testid="mute"
       style={{
-        position: "fixed", zIndex: 14, width: 40, height: 40, borderRadius: 20, padding: 0, display: "grid", placeItems: "center", cursor: "pointer",
+        position: "fixed", zIndex: 14, width: 44, height: 44, borderRadius: 22, padding: 0, display: "grid", placeItems: "center", cursor: "pointer",
         background: muted ? "rgba(255,61,127,0.45)" : "rgba(14,16,30,0.55)", border: "1px solid rgba(255,255,255,0.4)", color: "#fff", pointerEvents: "auto",
         touchAction: "manipulation", ...style,
       }}>
@@ -131,7 +120,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
   const ghost = useUi(s => s.ghost);
   const tip = useUi(s => s.hint);
   const pad = useUi(s => s.pad);
-  const { narrow } = useViewport();
+  const { narrow, portrait } = useViewport();
   useEffect(() => {
     const t = setInterval(() => setNow(performance.now()), 100);
     const h = setTimeout(() => setHints(false), 10000);
@@ -244,7 +233,7 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
         <div style={{ width: 0, height: 0, borderTop: "14px solid transparent", borderBottom: "14px solid transparent", borderLeft: "26px solid #ff3355", filter: "drop-shadow(0 1px 2px #000)" }} />
       </div>
       {/* feed */}
-      <div style={{ ...box, left: safe("left", touch ? 62 : 12), ...(touch ? { top: safe("top", 12) } : { bottom: safe("bottom", 12) }), maxWidth: touch ? "min(36vw, calc(50vw - 125px - env(safe-area-inset-left, 0px)))" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ ...box, left: safe("left", touch ? 62 : 12), ...(touch ? { top: safe("top", portrait ? 108 : 12) } : { bottom: safe("bottom", 12) }), maxWidth: touch ? portrait ? "min(46vw, 220px)" : "min(36vw, calc(50vw - 125px - max(env(safe-area-inset-left, 0px), var(--sai-left, 0px))))" : undefined, display: "flex", flexDirection: "column", gap: 4 }}>
         {feed.filter(f => now - f.t < 5000).map(f => (
           <div key={f.id} style={{ background: "rgba(14,16,30,0.7)", padding: "3px 8px", borderRadius: 5 }}>{f.text}</div>
         ))}
@@ -268,7 +257,6 @@ export function RoundHud({ reducedMotion, easyGrab, practice = false, muted, onM
       {/* mute: top left on desktop (M key while the mouse is captured), under the II button on touch */}
       <MuteButton muted={muted} onMute={onMute} style={touch ? { left: safe("left", 12), top: safe("top", 62) } : { left: safe("left", 12), top: safe("top", 10) }} />
       <div style={{ ...box, ...(touch ? { left: "50%", transform: "translateX(-50%)" } : { right: safe("right", 12) }), bottom: safe("bottom", touch ? 4 : 8), fontSize: 11, opacity: 0.6 }}>{r.fps.toFixed(0)} fps</div>
-      <RotateHint />
     </>
   );
 }

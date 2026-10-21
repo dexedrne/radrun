@@ -4,7 +4,7 @@
 export type Side = "top" | "right" | "bottom" | "left";
 
 /** `px` plus the safe-area inset on that side, as a CSS length. */
-export const safe = (side: Side, px: number): string => `calc(${px}px + env(safe-area-inset-${side}, 0px))`;
+export const safe = (side: Side, px: number): string => `calc(${px}px + max(env(safe-area-inset-${side}, 0px), var(--sai-${side}, 0px)))`;
 
 /** Padding that keeps a full-screen layer's content inside the safe area. */
-export const safePad = "env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)";
+export const safePad = "max(env(safe-area-inset-top, 0px), var(--sai-top, 0px)) max(env(safe-area-inset-right, 0px), var(--sai-right, 0px)) max(env(safe-area-inset-bottom, 0px), var(--sai-bottom, 0px)) max(env(safe-area-inset-left, 0px), var(--sai-left, 0px))";

@@ -24,9 +24,9 @@ export function smallScreen(): boolean {
   }
 }
 
-/** Canvas dpr range: touch devices cap at 1.5 (1.25 on phones); desktop keeps r3g's [1, 1.5]. */
+/** Canvas DPR: 1.5 on recent iPhones, 1.25 on other small phones and 1.5 elsewhere. */
 export function canvasDpr(touch: boolean): [number, number] {
-  return [1, isPhone() || (touch && smallScreen()) ? 1.25 : 1.5];
+  return [1, isFastIPhone() ? 1.5 : isPhone() || (touch && smallScreen()) ? 1.25 : 1.5];
 }
 
 /** iPhone / iPod: no element fullscreen API in any browser there (all of them are WebKit). */
@@ -36,6 +36,11 @@ export function isIPhone(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Recent iPhones expose at least six CPU cores and a 3x panel; older or unknown phones stay on Low. */
+export function isFastIPhone(): boolean {
+  try { return isIPhone() && navigator.hardwareConcurrency >= 6 && devicePixelRatio >= 3; } catch { return false; }
 }
 
 /** Launched from the Home Screen (manifest display mode, or iOS's navigator.standalone): no browser UI. */
@@ -53,16 +58,13 @@ export function isStandalone(): boolean {
  */
 export const iphoneTab = (): boolean => isIPhone() && !isStandalone() && !isFramed();
 
-/** Fullscreen + landscape lock where the browser allows it (Android Chrome); silently ignored elsewhere. */
+/** Fullscreen where the browser allows it; iPhone Safari has no page fullscreen API. */
 export function enterFullscreen(): void {
   try {
     if (document.fullscreenElement) return;
     const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-    const req = el.requestFullscreen ? el.requestFullscreen({ navigationUI: "hide" }) : (el.webkitRequestFullscreen?.(), undefined);
-    const orient = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } }).orientation;
-    Promise.resolve(req)
-      .then(() => orient?.lock?.("landscape"))
-      .catch(() => {});
+    const req = el.requestFullscreen ? el.requestFullscreen({ navigationUI: "hide" }) : el.webkitRequestFullscreen?.();
+    if (req && typeof (req as Promise<void>).catch === "function") void (req as Promise<void>).catch(() => undefined);
   } catch {
     /* no fullscreen API: fine */
   }

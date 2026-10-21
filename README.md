@@ -118,6 +118,10 @@ shots).
 
 ## Use it
 
+### iPhone sizing and asset budget
+
+The game fills the changing viewport in portrait and landscape; safe-area insets protect controls from the Dynamic Island, rounded edges and home indicator. On recent iPhones (six or more reported CPU cores and a 3x panel), High quality is the default with canvas DPR capped at 1.5; other phones keep Low. A round loads only the selected two characters and the current district, with visible loading progress. Current shipped assets are about 15 MB of character models, 5.6 MB of level data and 432 KB of textures; those compressed transfer sizes are not decoded-memory measurements.
+
 SPIDERTAG is under the [Viral Public License](LICENSE), the same license as Milady, Remilio and
 react-three-game. Fork it, remix it, ship your own version, sell it; no credit needed. Anything made
 from it keeps the license. The four Radbros are also free to use on their own, as rigged and animated

@@ -21,7 +21,6 @@ import { unpackGhost, type GhostSpec } from "../game/ghost.ts";
 import { GhostView } from "./GhostView.tsx";
 import { S } from "../ui/strings.ts";
 import { TouchControls, PhoneTouchToggle } from "../ui/TouchControls.tsx";
-import { SwipeUp, useIphoneScrollRoom } from "../ui/iphoneFullscreen.tsx";
 import { enterFullscreen } from "../input/touch.ts";
 import { bootPlay } from "./boot.ts";
 import { SceneCanvas, playPrefab } from "./GameScene.tsx";
@@ -88,7 +87,7 @@ const autoQualityAllowed = (s: Settings) => !AUTOQ_OFF && s.quality === "high" &
 /** Touch play never uses pointer lock (spec §4 "Touch"); neither does a pad (its presses can't grant the lock, and it needs none). */
 const isTouch = () => useUi.getState().touch;
 const lockMouse = () => { if (!isTouch() && !padActive() && document.pointerLockElement !== canvasEl()) requestLock(canvasEl()); };
-/** PLAY / PRACTICE / a level: fullscreen on touch, else the mouse (not when the pad pressed it). */
+/** PLAY / PRACTICE / a level: request fullscreen on touch where supported, else lock the mouse. */
 const grabInput = () => { if (isTouch()) enterFullscreen(); else if (!padActive()) requestLock(canvasEl()); };
 
 /** idle: the title's opaque key art covers the city, so it stops rendering (power and heat on phones) until a round. */
@@ -164,11 +163,8 @@ export default function PlayPage() {
   /** Round 4: campaign progress (re-read on every title / campaign screen) and the free-play mutators. */
   const [progress, setProgress] = useState<Progress>(() => loadProgress());
   const [freeMut, setFreeMut] = useState<number>(() => challenge.mu || DISTRICT_MUTATORS[PAGE_DISTRICT]);
-  // iPhone browser tab: scroll room so a swipe up can minimise Safari's toolbars (ui/iphoneFullscreen.tsx).
-  useIphoneScrollRoom();
-
-  // Touch: switch on at the first touch anywhere; that tap (and PLAY) also asks for fullscreen +
-  // landscape. The game picks up the wider aim cone / Yoink bonus from the next round.
+  // Touch: switch on at the first touch anywhere; that gesture and PLAY request fullscreen where supported.
+  // The game picks up the wider aim cone / Yoink bonus from the next round.
   useEffect(() => {
     const onTouch = () => { if (!useUi.getState().touch) useUi.setState({ touch: true }); };
     const onEnd = () => { if (!BOT) enterFullscreen(); removeEventListener("touchend", onEnd); };
@@ -443,7 +439,6 @@ export default function PlayPage() {
       {touch && (phone ? phoneTouch : !pad) && inRound && !paused && !BOT && <TouchControls input={game.input} onPause={() => setPaused(true)} noRunner={practice} />}
       {screen === "results" && <ResultsScreen onRetry={retry} onMenu={toMenu} onNext={startLevel} onLevels={toLevels} />}
       <Toast />
-      {!BOT && <SwipeUp show={screen === "title" || screen === "campaign" || screen === "results" || (paused && inRound)} />}
       {paused && inRound && (
         <Pause
           settings={settings}

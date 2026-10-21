@@ -50,7 +50,7 @@ export function Banner({ dep, address, onWallet }: { dep: Deployment | null; add
   return (
     <div style={{
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 30, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
-      padding: `calc(6px + env(safe-area-inset-top, 0px)) ${safe("right", 12)} 6px ${safe("left", 12)}`, background: "rgb(12,14,32)",
+      padding: `calc(6px + max(env(safe-area-inset-top, 0px), var(--sai-top, 0px))) ${safe("right", 12)} 6px ${safe("left", 12)}`, background: "rgb(12,14,32)",
       borderBottom: `2px solid ${C.gold}`, font: "700 12px ui-monospace, monospace", color: "#fff", boxSizing: "border-box",
     }} data-testid="wager-banner">
       <span style={{ background: C.gold, color: "#1a1a1a", padding: "2px 8px", borderRadius: 4, fontWeight: 900, letterSpacing: 1 }} data-testid="wager-label">{dep?.label ?? "BETA"}</span>

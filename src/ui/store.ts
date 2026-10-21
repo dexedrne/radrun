@@ -2,7 +2,7 @@ import { isPhone } from "../phone.ts";
 // Small zustand UI store. The drivers push HUD numbers at 10 Hz so the canvas tree never re-renders.
 import { create } from "zustand";
 import type { RadbroId } from "../game/round.ts";
-import { detectTouch } from "../input/touch.ts";
+import { detectTouch, isFastIPhone } from "../input/touch.ts";
 import { loadQuality, type Quality } from "./prefs.ts";
 import type { PadKind } from "../input/gamepad.ts";
 
@@ -200,5 +200,5 @@ export function showBubble(text: string, delay = 0): void {
 
 if (typeof window !== "undefined") addEventListener("vyvanse:device", () => {
   const phone = isPhone();
-  useUi.setState({ phone, ...(phone ? { touch: true, quality: "low", touchRequested: false } : {}) });
+  useUi.setState({ phone, ...(phone ? { touch: true, quality: isFastIPhone() ? useUi.getState().quality : "low", touchRequested: false } : {}) });
 });

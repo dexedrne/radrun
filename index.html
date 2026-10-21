@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content" />
     <title>SPIDERTAG</title>
     <meta name="description" content="Web-slinger tag over the rooftops: chase down the Radbro who swiped your bag, or play tag 1v1 with a friend." />
     <meta name="theme-color" content="#141833" />
@@ -39,22 +39,21 @@
       /* the SPIDERTAG wordmark and the title's menu (Bebas Neue), its terminal lines (VT323); both SIL OFL */
       @font-face { font-family: "Bebas Neue"; src: url(/fonts/BebasNeue.woff2) format("woff2"); font-display: swap; }
       @font-face { font-family: "VT323"; src: url(/fonts/VT323.woff2) format("woff2"); font-display: swap; }
-      html, body { margin: 0; height: 100%; width: 100%; background: #090b16; overflow: hidden; overscroll-behavior: none; }
+      html, body { margin: 0; width: 100%; height: 100svh; height: 100dvh; background: #090b16; overflow: hidden; overscroll-behavior: none; }
       /* no double-tap zoom, no grey tap flash, no font boost on rotate */
       html { touch-action: manipulation; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
-      body { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; }
+      body { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
       /* the game is a fixed layer that always fills the visible viewport (it follows Safari's toolbars) */
-      #root { position: fixed; inset: 0; overflow: hidden; }
-      /* iPhone browser tab only (ui/iphoneFullscreen.tsx): scroll room behind the fixed game, so a swipe
-         up makes Safari minimise its toolbars */
-      html.rr-scroll, html.rr-scroll body { overflow: visible; }
-      html.rr-scroll body { height: auto; min-height: 100%; padding-bottom: 160px; }
+      #root { position: fixed; inset: 0; width: 100%; height: 100svh; height: 100dvh; overflow: hidden; }
+      #root canvas { display: block; width: 100%; height: 100%; }
       /* the title (ui/title.tsx): its cards, chips and pills ring the focus (mouse, keys, a pad); its menu
          items show the focus as their pink bar instead of the pad's ring */
       .st-f:hover, .st-f:focus-visible, .st-f[data-pad-focus] { outline: 2px solid #f3eada !important; outline-offset: 2px !important; box-shadow: 0 0 18px rgba(253,67,174,0.5) !important; }
       .st-f:focus:not(:focus-visible):not([data-pad-focus]):not(:hover) { outline: none; }
       button[data-st-item], button[data-st-item]:focus, button[data-st-item][data-pad-focus] { outline: none !important; box-shadow: none !important; }
-      @keyframes rr-swipe { 0%, 100% { transform: translateY(6px); opacity: 0.55; } 50% { transform: translateY(-6px); opacity: 1; } }
+      @media (horizontal-viewport-segments: 2) {
+        #root { max-width: 100vw; overflow-x: clip; }
+      }
     </style>
   </head>
   <body>

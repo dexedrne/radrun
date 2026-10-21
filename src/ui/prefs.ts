@@ -1,4 +1,5 @@
 import { isPhone } from "../phone.ts";
+import { isFastIPhone } from "../input/touch.ts";
 // Settings, personal bests and challenge links. localStorage is optional (every access try/catch).
 import { RADBROS, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
@@ -66,7 +67,7 @@ export function loadSettings(cam: CameraTuning): Settings {
     fov: s.fov ?? cam.fov,
     reducedMotion: s.reducedMotion ?? cam.reducedMotion,
     easyGrab: s.easyGrab ?? cam.easyGrab,
-    quality: isPhone() || s.quality === "low" ? "low" : "high",
+    quality: isPhone() && !isFastIPhone() || s.quality === "low" ? "low" : "high",
     // Round 1-3 had one "volume" (SFX only): it becomes the SFX volume.
     music: num(s.music, 0.6),
     sfx: num(s.sfx, num(s.volume, 0.8)),
@@ -87,14 +88,13 @@ const range = (v: unknown, lo: number, hi: number, d: number): number => (typeof
 /** The pad module's settings from the stored ones. */
 export const padSettingsOf = (s: Settings): PadSettings => ({ sens: s.padSens, invertY: s.padInvertY, dead: s.padDead, rumble: s.padRumble });
 
-/** The stored quality (read before the canvas exists). Default High; on touch devices High already
- * caps the pixel ratio (1.25 on phones, 1.5 on tablets; see input/touch.ts canvasDpr). */
+/** The stored quality (read before the canvas exists). Recent iPhones default High; other phones default Low. */
 export function loadQuality(): Quality {
-  return isPhone() || load().settings?.quality === "low" ? "low" : "high";
+  return isPhone() && !isFastIPhone() || load().settings?.quality === "low" ? "low" : "high";
 }
 export function saveSettings(settings: Settings): void {
   const s = load();
-  s.settings = isPhone() ? { ...settings, quality: s.settings?.quality ?? "high" } : settings;
+  s.settings = isPhone() && !isFastIPhone() ? { ...settings, quality: s.settings?.quality ?? "high" } : settings;
   save(s);
 }
 export function applySettings(cam: CameraTuning, s: Settings): void {

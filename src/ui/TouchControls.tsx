@@ -8,6 +8,7 @@ import type { InputLatch } from "../input/input.ts";
 import { TOUCH } from "../sim/tuning.ts";
 import { useUi } from "./store.ts";
 import { safe } from "./safe.ts";
+import { useViewport } from "./screens.tsx";
 
 const STICK_R = 56;
 /** The stick's resting spot and every button sit inside the safe area (notch side, home indicator). */
@@ -24,6 +25,7 @@ const round = (size: number, extra: React.CSSProperties = {}): React.CSSProperti
 
 export function TouchControls({ input, onPause, noRunner = false }: { input: InputLatch; onPause: () => void; noRunner?: boolean }) {
   const phone = useUi(s => s.phone);
+  const { portrait } = useViewport();
   const ring = useUi(s => s.round.ring);
   const zip = useUi(s => s.round.zip);
   const base = useRef<HTMLDivElement>(null);
@@ -141,7 +143,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
     >
       {/* floating stick (resting ghost bottom-left until a thumb lands) */}
       <div ref={base} style={{
-        position: "absolute", left: STICK_LEFT, bottom: STICK_BOTTOM, width: STICK_R * 2, height: STICK_R * 2, borderRadius: STICK_R, opacity: 0.35,
+        position: "absolute", left: portrait ? safe("left", 48) : STICK_LEFT, bottom: STICK_BOTTOM, width: STICK_R * 2, height: STICK_R * 2, borderRadius: STICK_R, opacity: 0.35,
         background: "rgba(14,16,30,0.35)", border: "2px solid rgba(255,255,255,0.5)", pointerEvents: "none",
       }}>
         <div ref={knob} style={{
@@ -152,7 +154,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
       {/* WEB (hold) */}
       <div ref={webBtn} data-testid="touch-web"
         onPointerDown={webDown} onPointerMove={webMove} onPointerUp={webUp} onPointerCancel={webUp}
-        style={round(104, { right: safe("right", 26), bottom: safe("bottom", 30), background: yoink ? "rgba(255,51,85,0.85)" : hooked ? "rgba(61,220,132,0.75)" : "rgba(255,61,127,0.62)" })}>
+        style={round(104, { right: safe("right", 22), bottom: safe("bottom", portrait ? 28 : 30), background: yoink ? "rgba(255,51,85,0.85)" : hooked ? "rgba(61,220,132,0.75)" : "rgba(255,61,127,0.62)" })}>
         {yoink ? "YOINK" : "WEB"}
       </div>
       {/* JUMP */}
@@ -160,7 +162,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); input.touchJump(); press(jumpBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); press(jumpBtn.current, false); }}
         onPointerCancel={() => press(jumpBtn.current, false)}
-        style={round(80, { right: safe("right", 146), bottom: safe("bottom", 22), background: "rgba(14,16,30,0.5)" })}>
+        style={round(80, { right: safe("right", portrait ? 30 : 146), bottom: safe("bottom", portrait ? 144 : 22), background: "rgba(14,16,30,0.5)" })}>
         JUMP
       </div>
       {/* SLIDE (round 9): a speed-keeping slide on a roof; in the air it buffers the landing slide. Round 12: held = the
@@ -169,14 +171,14 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); input.touchSlideDown(); press(slideBtn.current, true); if (slideBtn.current) slideBtn.current.style.outline = "3px solid #ffe14d"; }}
         onPointerUp={e => { e.stopPropagation(); input.touchSlideUp(); press(slideBtn.current, false); if (slideBtn.current) slideBtn.current.style.outline = ""; }}
         onPointerCancel={() => { input.touchSlideUp(); press(slideBtn.current, false); if (slideBtn.current) slideBtn.current.style.outline = ""; }}
-        style={round(56, { right: safe("right", 236), bottom: safe("bottom", 26), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
+        style={round(56, { right: safe("right", portrait ? 126 : 236), bottom: safe("bottom", portrait ? 244 : 26), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         SLIDE
       </div>
       <div ref={glideBtn} data-testid="touch-glide"
         onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchGlideDown(); press(glideBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); input.touchGlideUp(); press(glideBtn.current, false); }}
         onPointerCancel={() => { input.touchGlideUp(); press(glideBtn.current, false); }}
-        style={round(56, { right: safe("right", 236), bottom: safe("bottom", 96), background: "rgba(70,160,220,0.65)", fontSize: 11 })}>
+        style={round(56, { right: safe("right", portrait ? 124 : 236), bottom: safe("bottom", portrait ? 174 : 96), background: "rgba(70,160,220,0.65)", fontSize: 11 })}>
         GLIDE
       </div>
       {/* ZIP: web-zip to the ringed anchor / the roof ahead; dimmed while it recharges */}
@@ -184,7 +186,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); input.touchZip(); press(zipBtn.current, true); }}
         onPointerUp={e => { e.stopPropagation(); press(zipBtn.current, false); }}
         onPointerCancel={() => press(zipBtn.current, false)}
-        style={round(64, { right: safe("right", 148), bottom: safe("bottom", 114), background: zip > 0 ? "rgba(14,16,30,0.35)" : "rgba(40,150,190,0.62)", opacity: zip > 0 ? 0.5 : 1 })}>
+        style={round(64, { right: safe("right", portrait ? 40 : 148), bottom: safe("bottom", portrait ? 232 : 114), background: zip > 0 ? "rgba(14,16,30,0.35)" : "rgba(40,150,190,0.62)", opacity: zip > 0 ? 0.5 : 1 })}>
         ZIP
       </div>}
       {/* ease the camera toward him while held (Q / RMB on desktop); not in practice (no runner) */}
@@ -192,7 +194,7 @@ export function TouchControls({ input, onPause, noRunner = false }: { input: Inp
         onPointerDown={e => { stop(e); e.currentTarget.setPointerCapture?.(e.pointerId); input.touchFace = true; }}
         onPointerUp={e => { e.stopPropagation(); input.touchFace = false; }}
         onPointerCancel={() => { input.touchFace = false; }}
-        style={round(54, { right: safe("right", 52), bottom: safe("bottom", 150), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
+        style={round(54, { right: safe("right", portrait ? 126 : 52), bottom: safe("bottom", portrait ? 104 : 150), background: "rgba(14,16,30,0.45)", fontSize: 11 })}>
         HIM
       </div>}
       {/* pause */}

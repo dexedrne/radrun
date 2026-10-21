@@ -13,6 +13,17 @@ import { carryOldSaves } from "./ui/carry.ts";
 window.addEventListener("error", e => console.error("[window.error]", e.message));
 window.addEventListener("unhandledrejection", e => console.error("[unhandledrejection]", String(e.reason)));
 
+// WebKit changes the visual viewport without always resizing WebGL canvases (toolbars, rotation, app restore).
+let resizeFrame = 0;
+const refit = () => {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(() => dispatchEvent(new Event("resize")));
+};
+visualViewport?.addEventListener("resize", refit);
+addEventListener("orientationchange", () => setTimeout(refit, 250));
+addEventListener("pageshow", refit);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refit(); });
+
 // At spidertag.vyvanse.beer, once per browser: bring the saves over from the old address (ui/carry.ts).
 carryOldSaves();
 // Framed on radbro.fun: tell the portal what this is; the first click focuses the frame + unlocks the audio.

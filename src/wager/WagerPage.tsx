@@ -104,7 +104,7 @@ function WagerOverlay({ game }: { game: TagGame }) {
 
   const playing = screen === "match" || screen === "loading";
   const badge = (
-    <div style={{ position: "fixed", left: "calc(10px + env(safe-area-inset-left, 0px))", bottom: "calc(8px + env(safe-area-inset-bottom, 0px))", zIndex: 26, background: C.gold, color: "#1a1a1a", font: "900 11px ui-monospace, monospace", padding: "2px 8px", borderRadius: 4, letterSpacing: 1, pointerEvents: "none" }} data-testid="wager-badge">
+    <div style={{ position: "fixed", left: "calc(10px + max(env(safe-area-inset-left, 0px), var(--sai-left, 0px)))", bottom: "calc(8px + max(env(safe-area-inset-bottom, 0px), var(--sai-bottom, 0px)))", zIndex: 26, background: C.gold, color: "#1a1a1a", font: "900 11px ui-monospace, monospace", padding: "2px 8px", borderRadius: 4, letterSpacing: 1, pointerEvents: "none" }} data-testid="wager-badge">
       {choice.dep?.label ?? "BETA"}
     </div>
   );
@@ -158,7 +158,7 @@ function WagerOverlay({ game }: { game: TagGame }) {
   return (
     <>
       {playing ? badge : <Banner dep={choice.dep} address={s.address} onWallet={() => { if (route.kind !== "lobby") back(); setTab("wallet"); }} />}
-      <div style={playing ? { display: "contents" } : { ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.35), rgba(10,12,30,0.72))", paddingTop: "calc(48px + env(safe-area-inset-top, 0px))" }} data-testid={playing ? undefined : "wager-page"}>
+      <div style={playing ? { display: "contents" } : { ...scroller, background: "linear-gradient(180deg, rgba(10,12,30,0.35), rgba(10,12,30,0.72))", paddingTop: "calc(48px + max(env(safe-area-inset-top, 0px), var(--sai-top, 0px)))" }} data-testid={playing ? undefined : "wager-page"}>
         <div style={playing ? { display: "contents" } : { width: "100%", padding: "8px 16px 24px", boxSizing: "border-box" }}>
           {!playing && s.fatal && <div style={{ maxWidth: 760, margin: "0 auto 10px" }}><Notice kind="error" text={s.fatal.message} /></div>}
           {!playing && s.notice && Date.now() - s.notice.at < 12_000 && route.kind !== "match" && (

@@ -1,7 +1,7 @@
 import { isPhone } from "../phone.ts";
 // Graphics quality (pause -> Settings -> Quality, stored with the other settings).
-//  High: r3g's pixel ratio range (touch devices capped per input/touch.ts: 1.25 on phones, 1.5 on
-//        tablets), anti-aliasing, blob shadows, the runner trail, every rooftop prop.
+//  High: r3g's pixel ratio range (1.5 on recent iPhones; other small phones cap at 1.25), anti-aliasing,
+//        blob shadows, the runner trail, every rooftop prop.
 //  Low:  pixel ratio 1, anti-aliasing off (the renderer is created once, so that part applies after a
 //        reload), no blob shadows or runner trail, and decor.json's antennas hidden. Round 9: the rooftop
 //        obstacles you can touch are solid "prop" boxes in city.json - never hidden at any quality (what you
@@ -11,9 +11,9 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { Object3D } from "three";
 import { useUi } from "../ui/store.ts";
-import { canvasDpr, detectTouch } from "../input/touch.ts";
+import { canvasDpr, detectTouch, isFastIPhone } from "../input/touch.ts";
 
-export const lowQuality = (): boolean => isPhone() || useUi.getState().quality === "low";
+export const lowQuality = (): boolean => (isPhone() && !isFastIPhone()) || useUi.getState().quality === "low";
 
 /** Pixel-ratio range for High (the touch-step default). */
 export const HIGH_DPR = canvasDpr(detectTouch());
@@ -36,7 +36,7 @@ export function QualityView() {
   const st = useRef<{ group: Object3D | null; frame: number }>({ group: null, frame: 0 });
 
   useEffect(() => {
-    setDpr(phone || quality === "low" ? 1 : HIGH_DPR);
+    setDpr((phone && !isFastIPhone()) || quality === "low" ? 1 : HIGH_DPR);
   }, [phone, quality, setDpr]);
 
   // decor.json loads late and r3g may rebuild nodes, so re-check every 30 frames (cheap: the props
