@@ -7,7 +7,7 @@ import {
   type Address, type Hex, type PublicClient,
 } from "viem";
 import { ERC20_ABI, VAULT_ABI } from "./abi.ts";
-import { errMsg } from "./base.ts";
+import { eoaSignature, errMsg } from "./base.ts";
 
 export type VaultInfo = {
   token: Address;
@@ -154,8 +154,8 @@ export class ViemChain implements VaultChain, TxRpc {
   }
 
   async verifyHash(signer: Address, digest: Hex, sig: Hex): Promise<boolean> {
-    if (sig.length === 132) {
-      try { if (isAddressEqual(await recoverAddress({ hash: digest, signature: sig }), signer)) return true; } catch { /* not ECDSA */ }
+    if (sig.length === 130 || sig.length === 132) {
+      try { if (isAddressEqual(await recoverAddress({ hash: digest, signature: eoaSignature(sig) }), signer)) return true; } catch { /* not ECDSA */ }
     }
     try {
       return await this.client.verifyHash({ address: signer, hash: digest, signature: sig });

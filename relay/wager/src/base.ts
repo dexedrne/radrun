@@ -43,8 +43,8 @@ export function addr(v: unknown): Address | null {
   return typeof v === "string" && isAddress(v, { strict: false }) ? getAddress(v) : null;
 }
 export const sameAddr = (a: string | null | undefined, b: string | null | undefined): boolean => !!a && !!b && a.toLowerCase() === b.toLowerCase();
-/** Signature bytes: 65-byte ECDSA, or a longer ERC-1271 / ERC-6492 blob (bounded). */
-export const isSig = (v: unknown): v is Hex => typeof v === "string" && isHex(v) && v.length >= 132 && v.length <= 8_000;
+/** Signature bytes: 64/65-byte ECDSA, or a longer ERC-1271 / ERC-6492 blob (bounded). */
+export const isSig = (v: unknown): v is Hex => typeof v === "string" && isHex(v) && v.length >= 130 && v.length <= 8_000 && v.length % 2 === 0;
 
 export const ZERO: Address = "0x0000000000000000000000000000000000000000";
 
@@ -77,4 +77,14 @@ export const json = (v: unknown): string => JSON.stringify(v, (_k, x) => (typeof
 export function errMsg(e: unknown): string {
   const m = e instanceof Error ? ((e as { shortMessage?: string }).shortMessage ?? e.message) : String(e);
   return m.split("\n")[0].slice(0, 200);
+}
+
+/** Expand ERC-2098 only for local EOA recovery. Always send the original bytes to the vault or ERC-1271. */
+export function eoaSignature(sig: Hex): Hex {
+  if (sig.length !== 130) return sig;
+  const vs = BigInt(`0x${sig.slice(66)}`);
+  const s = vs & ((1n << 255n) - 1n);
+  if (s > 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n) throw new Error("invalid signature s");
+  const v = (vs >> 255n) === 0n ? "1b" : "1c";
+  return `0x${sig.slice(2, 66)}${s.toString(16).padStart(64, "0")}${v}`;
 }

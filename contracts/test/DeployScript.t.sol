@@ -126,4 +126,14 @@ contract DeployScriptTest is Test {
         vm.expectRevert(bytes("the test token is for test networks only"));
         d.deploy(c);
     }
+
+    function test_dryRun_refusesRemoteChainIdsBeforeReadingSettings() public {
+        Deploy d = new Deploy();
+        vm.chainId(46630);
+        vm.expectRevert(bytes("dry run requires a local chain id"));
+        d.runDryRun();
+        vm.chainId(4663);
+        vm.expectRevert(bytes("dry run requires a local chain id"));
+        d.runDryRun();
+    }
 }

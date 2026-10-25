@@ -200,10 +200,10 @@ contract SignaturesTest is VaultTestBase {
         IGameVault.Entry memory b = _entry(M1, bob, alice, 10e18);
         bytes memory good = _signEntry(aliceKeyPk, a);
         bytes memory sigB = _signEntry(bobKeyPk, b);
-        (bytes32 r, bytes32 vs) = vm.signCompact(aliceKeyPk, _hashEntry(a));
+
         bytes[4] memory bad = [
             bytes(""),
-            abi.encodePacked(r, vs), // ERC-2098 64-byte form: not accepted
+            new bytes(63), // wrong length; valid 64-byte ERC-2098 signatures are accepted
             abi.encodePacked(good, uint8(0)), // 66 bytes
             abi.encodePacked(bytes32(0), bytes32(0), uint8(27)) // recovers to address(0)
         ];

@@ -8,9 +8,11 @@ out = "out"
 cache_path = "cache"
 libs = ["lib", "../node_modules"]
 solc_version = "0.8.37"
-# Robinhood Chain (Arbitrum Nitro, ArbOS 61) runs Osaka opcodes today; prague keeps the bytecode portable.
+# Prague supports the transient guard without requiring newer opcodes.
 evm_version = "prague"
 optimizer = true
+# IR lowers the measured match/session execution cost.
+via_ir = true
 optimizer_runs = 200
 # Foundry's defaults plus 6335: OpenZeppelin 5.6.1's ECDSA names a variable `error`, which solc 0.8.37 flags.
 ignored_error_codes = [

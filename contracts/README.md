@@ -1,7 +1,7 @@
 # SPIDERTAG wager contracts
 
-The SPIDERTAG wager vault (1v1 TAG for tokens) and its test token. The game was called RadRun when these were deployed:
-the EIP-712 domain stays `"RadRun GameVault"`, version `"1"` (a deployed vault's signatures depend on it). The design, the trust model and the numbers are in
+The SPIDERTAG wager vault (1v1 TAG for tokens) and its test token. The EIP-712 domain retains the original name
+`"RadRun GameVault"`, version `"1"`; changing it invalidates signatures. The design, the trust model and the numbers are in
 [`docs/WAGER.md`](../docs/WAGER.md) §3; this file is how to build, test and deploy them.
 
 | Path | What |
@@ -106,3 +106,35 @@ balance. Source verification uses Blockscout on the testnet and Sourcify, then B
 forge verify-contract <vault> src/GameVault.sol:GameVault --chain <id> --constructor-args <hex> \
   --verifier blockscout --verifier-url https://explorer.testnet.chain.robinhood.com/api/
 ```
+
+## Local optimization review
+
+The vault now uses the IR optimizer, with proven bounded bucket transfers left unchecked. Account, session and match
+storage layouts remain unchanged. `Optimization.t.sol` tests transfers at the exact uint128 liability limit; the
+invariant handler mixes normal and ERC-2098 signatures. The interface, events and EIP-712 typehashes are unchanged.
+
+EOA signatures may be either 65 bytes or ERC-2098's 64 bytes. The latter saves 32 ABI calldata bytes per signature:
+`openSession` 356 → 324, `lock` 836 → 772, `settle` 324 → 292, `settleMutual` 484 → 420. Contract-wallet signatures
+always reach ERC-1271 unchanged. The relay accepts compact Entries and verifies them locally; existing client signers
+continue producing the compatible 65-byte form. Login signatures retain their existing format.
+
+`Gas.t.sol` measures all 48 external/public functions, including inherited views and the intentional renounce revert.
+Snapshots are not fee quotes: the gas harness includes Ethereum's calldata floor, while Nitro also prices compressed
+transaction data. Use the target chain's gas estimation for fees. Baselines from revision `17cb825`, measured with
+Foundry 1.7.1 and the same solc 0.8.37 settings apart from IR, are retained in `snapshots/baseline/`.
+
+```sh
+cd contracts
+forge snapshot
+FORGE_SNAPSHOT_CHECK=true forge test --match-contract GasTest
+```
+
+A keyless deploy rehearsal uses `runDryRun()` on a local Anvil node/fork with chain ID 31337. Set the same non-secret
+`VAULT_*` settings and `TEST_TOKEN_HOLDER` as usual, then run:
+
+```sh
+forge script script/Deploy.s.sol:Deploy --sig 'runDryRun()' --rpc-url http://127.0.0.1:18545
+```
+
+This entry point does not read `DEPLOYER_KEY`. It records simulated creations from a fixed local address and shares
+the creation path with the deploy script. Omit `--broadcast`; a successful rehearsal does not publish any contract.

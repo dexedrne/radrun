@@ -371,7 +371,7 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     function _checkEntry(Entry calldata e, bytes calldata sig) private returns (uint56) {
         address player = e.player;
         bytes32 digest = hashEntry(e);
-        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecoverCalldata(digest, sig);
+        (address signer, ECDSA.RecoverError err,) = _recover(digest, sig);
         if (err == ECDSA.RecoverError.NoError) {
             if (signer == player) return 0;
             SessionSlot storage s = _sessions[player];
@@ -392,7 +392,10 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     function _lockStake(address player, uint128 stake) private {
         Account memory acct = _accounts[player];
         if (acct.free < stake) revert InsufficientFree(player, acct.free, stake);
-        _accounts[player] = Account({free: acct.free - stake, locked: acct.locked + stake});
+        // This only moves an existing balance: free >= stake, and free + locked <= totalLiabilities <= uint128.max.
+        unchecked {
+            _accounts[player] = Account({free: acct.free - stake, locked: acct.locked + stake});
+        }
     }
 
     /// @inheritdoc IGameVault
@@ -509,11 +512,15 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
         // Both casts are safe: payout and fee are at most the pot, which both stakes (<= totalLiabilities, which a
         // deposit keeps within uint128) already cover.
         Account memory w = _accounts[winner];
-        // forge-lint: disable-next-line(unsafe-typecast)
-        _accounts[winner] = Account({free: w.free + uint128(payout), locked: w.locked - stake});
-        _accounts[loser].locked -= stake;
-        // forge-lint: disable-next-line(unsafe-typecast)
-        _houseAccrued += uint128(fee);
+        // A live match owns one stake in each distinct player's locked bucket. Its pot is already included in
+        // totalLiabilities; redistributing it cannot take any bucket (including accrued fees) above uint128.max.
+        unchecked {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            _accounts[winner] = Account({free: w.free + uint128(payout), locked: w.locked - stake});
+            _accounts[loser].locked -= stake;
+            // forge-lint: disable-next-line(unsafe-typecast)
+            _houseAccrued += uint128(fee);
+        }
     }
 
     /// Both stakes (those not reclaimed yet) go back to free, and back to the cap of the session that entered them.
@@ -534,7 +541,10 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     /// player's (same nonce: not replaced or revoked since), its used total drops by the stake again.
     function _release(address player, uint128 stake, uint56 session) private {
         Account memory acct = _accounts[player];
-        _accounts[player] = Account({free: acct.free + stake, locked: acct.locked - stake});
+        // Only an unreclaimed live stake reaches here. Moving it back preserves this account's bounded total.
+        unchecked {
+            _accounts[player] = Account({free: acct.free + stake, locked: acct.locked - stake});
+        }
         if (session == 0) return;
         SessionSlot storage s = _sessions[player];
         if (s.nonce != session) return;
@@ -773,9 +783,19 @@ contract GameVault is IGameVault, EIP712, Ownable2Step, Pausable, ReentrancyGuar
     // Internals
     // =================================================================================================================
 
+    /// ERC-2098 removes an entire ABI padding word per EOA signature. Both encodings use the same digest and
+    /// replay protection. Contract-wallet signatures are still passed to ERC-1271 byte-for-byte on ECDSA failure.
+    function _recover(bytes32 digest, bytes calldata sig) private pure returns (address, ECDSA.RecoverError, bytes32) {
+        if (sig.length == 64) {
+            (uint8 v, bytes32 r, bytes32 s) = ECDSA.parseCalldata(sig);
+            return ECDSA.tryRecover(digest, v, r, s);
+        }
+        return ECDSA.tryRecoverCalldata(digest, sig);
+    }
+
     /// A wallet signature: ECDSA by `signer` itself (EOAs, including EIP-7702 accounts) or ERC-1271 by a contract.
     function _isValidSig(address signer, bytes32 digest, bytes calldata sig) private view returns (bool) {
-        (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecoverCalldata(digest, sig);
+        (address recovered, ECDSA.RecoverError err,) = _recover(digest, sig);
         if (err == ECDSA.RecoverError.NoError && recovered == signer) return true;
         return signer.code.length != 0 && SignatureChecker.isValidERC1271SignatureNowCalldata(signer, digest, sig);
     }
