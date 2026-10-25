@@ -128,6 +128,11 @@ contract VaultHandler is CommonBase, StdCheats, StdUtils {
     }
 
     function _sign(uint256 pk, bytes32 digest) internal pure returns (bytes memory) {
+        // Mix both representations in every handler action, including rejected/replayed authorizations.
+        if (uint256(digest) & 1 == 0) {
+            (bytes32 r, bytes32 vs) = vm.signCompact(pk, digest);
+            return abi.encodePacked(r, vs);
+        }
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return abi.encodePacked(r, s, v);
     }

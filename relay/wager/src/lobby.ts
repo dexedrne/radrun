@@ -22,7 +22,7 @@ import {
 } from "../../../src/wager/protocol.ts";
 import { checkLogin, newChallenge, type Challenge } from "./auth.ts";
 import { MS_CANCELLED, MS_LOCKED, MS_NONE, MS_SETTLED, MS_VOIDED } from "./abi.ts";
-import { ZERO, addr, errMsg, idTag, isHex32, isSig, normId, sameAddr, shortAddr, spend, type Clock, type Logger, type Sql } from "./base.ts";
+import { ZERO, addr, eoaSignature, errMsg, idTag, isHex32, isSig, normId, sameAddr, shortAddr, spend, type Clock, type Logger, type Sql } from "./base.ts";
 import { erc20Transfer, vaultCall, type Call, type ChainMatch, type VaultChain } from "./chain.ts";
 import type { RadbroReader } from "./radbro.ts";
 import { RELAYER_GAS, type Relayer, type TxHandle } from "./relayer.ts";
@@ -527,9 +527,9 @@ export class WagerLobbyCore {
   private async entrySig(e: Entry, sig: Hex): Promise<"session" | "wallet"> {
     if (!isSig(sig)) fail("bad", "bad signature");
     const digest = entryDigest(this.d.chain.chainId, this.d.chain.vault, e);
-    if (sig.length === 132) {
+    if (sig.length === 130 || sig.length === 132) {
       let signer: Address | null = null;
-      try { signer = await recoverAddress({ hash: digest, signature: sig }); } catch { /* not ECDSA */ }
+      try { signer = await recoverAddress({ hash: digest, signature: eoaSignature(sig) }); } catch { /* not ECDSA */ }
       if (signer) {
         const s = await this.d.chain.sessionOf(e.player);
         if (s.key !== ZERO && sameAddr(s.key, signer)) {

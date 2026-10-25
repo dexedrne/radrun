@@ -7,7 +7,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { VAULT_ABI, ERC20_ABI } from "../relay/wager/src/abi.ts";
-import type { Clock } from "../relay/wager/src/base.ts";
+import { eoaSignature, type Clock } from "../relay/wager/src/base.ts";
 import type { Call, ChainMatch, ChainSession, Receipt, TxRpc, VaultChain, VaultInfo } from "../relay/wager/src/chain.ts";
 import { entryDigest, matchIdCreator, resultDigest, sessionAuthDigest, type Entry, type Result, type SessionAuth } from "../src/wager/eip712.ts";
 
@@ -169,7 +169,7 @@ export class FakeVault implements VaultChain, TxRpc {
   }
   /** viem's recoverAddress is async: pre-recover every signature a call carries. */
   private async prep(digest: Hex, sig: Hex): Promise<void> {
-    try { this.recoverSync.set(`${digest}${sig}`, k(await recoverAddress({ hash: digest, signature: sig }))); } catch { /* not ECDSA */ }
+    try { this.recoverSync.set(`${digest}${sig}`, k(await recoverAddress({ hash: digest, signature: eoaSignature(sig) }))); } catch { /* not ECDSA */ }
   }
   async simulate(from: Address, call: Call): Promise<string | null> {
     await this.prepCall(call);

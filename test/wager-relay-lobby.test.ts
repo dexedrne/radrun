@@ -3,7 +3,7 @@
 // room's start, records and ratings on confirmed settles, the relayer queue's nonces, the faucet and the gates.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { Address, Hex, LocalAccount } from "viem";
+import { parseSignature, type Address, type Hex, type LocalAccount } from "viem";
 import {
   entryFromJson, entryTypedData, loginTypedData, newMatchId, random32, resultTypedData, sessionAuthTypedData, type EntryJson,
 } from "../src/wager/eip712.ts";
@@ -753,4 +753,22 @@ test('match admission: per-wallet attempts survive reconnects; per-network attem
   await fresh.send(p.c, { t: 'create', entry: null, sig: '0x' }); assert.equal(errOf(p.c)?.code, 'bad', 'history gate passed to entry parsing');
   fresh.settings.testnet = false;
   for (const action of ['create', 'join']) { await fresh.send(p.c, { t: action, entry: null, sig: '0x' }); assert.equal(errOf(p.c)?.code, 'gone'); }
+});
+
+test("compact entries: lobby validates session limits and relays the original compact pair", async () => {
+  const h = await lobbyHarness();
+  const A = await h.player(), B = await h.player();
+  const compact = (sig: Hex): Hex => {
+    const { r, s, yParity } = parseSignature(sig);
+    return `${r}${(BigInt(s) | (BigInt(yParity) << 255n)).toString(16).padStart(64, "0")}`;
+  };
+  const entry = h.entry({ player: A.acct.address });
+  A.c.onSign = async m => compact(await h.sign(A.key, m.entry));
+  await h.send(A.c, { t: "create", entry, sig: compact(await h.sign(A.key, entry)), listed: true });
+  assert.ok(h.last(A.c, "offer"), "compact open offer accepted");
+  const b = h.entry({ player: B.acct.address, matchId: entry.matchId, opponent: entry.player });
+  await h.send(B.c, { t: "join", entry: b, sig: compact(await h.sign(B.key, b)) });
+  await eventually(() => h.last(B.c, "locked"));
+  assert.deepEqual(h.fv.sent, ["lock"]);
+  assert.equal((await h.fv.matchOf(entry.matchId)).state, 1);
 });

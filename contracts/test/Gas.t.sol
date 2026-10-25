@@ -38,6 +38,12 @@ contract GasTest is VaultTestBase {
     /// Whole-transaction gas of the last call to the vault, given its calldata.
     function _txGas(bytes memory data) internal returns (uint256 total) {
         Vm.Gas memory g = vm.lastCallGas();
+        vm.snapshotValue(
+            "Calldata",
+            string.concat(vm.toString(abi.encodePacked(bytes4(data))), "-", vm.toString(data.length)),
+            data.length
+        );
+
         uint256 zeros;
         for (uint256 i = 0; i < data.length; i++) {
             if (data[i] == 0) zeros++;
@@ -188,6 +194,275 @@ contract GasTest is VaultTestBase {
         _cool();
         vault.refundExpired(M1);
         vm.snapshotValue("GameVault", "refundExpired", _txGas(abi.encodeCall(vault.refundExpired, (M1))));
+    }
+
+    function _compactSig(uint256 pk, bytes32 digest) internal pure returns (bytes memory) {
+        (bytes32 r, bytes32 vs) = vm.signCompact(pk, digest);
+        return abi.encodePacked(r, vs);
+    }
+
+    function test_gas_compactOpenSession() public {
+        IGameVault.SessionAuth memory a = _auth(alice, aliceKey, 100e18, 1_000e18, uint64(block.timestamp + 3 days));
+        _measure(
+            "openSession (compact)",
+            abi.encodeCall(vault.openSession, (a, _compactSig(alicePk, _hashAuth(a)))),
+            relayer,
+            true
+        );
+    }
+
+    function test_gas_compactLock() public {
+        _ready(1_000e18);
+        IGameVault.Entry memory a = _entry(M1, alice, address(0), 100e18);
+        IGameVault.Entry memory b = _entry(M1, bob, alice, 100e18);
+        bytes memory sa = _compactSig(aliceKeyPk, _hashEntry(a));
+        bytes memory sb = _compactSig(bobKeyPk, _hashEntry(b));
+        _measure("lock (compact, first of session)", abi.encodeCall(vault.lock, (a, sa, b, sb)), relayer, true);
+    }
+
+    function test_gas_compactSettle() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, alice, FEE);
+        _measure(
+            "settle (compact, first house fee)",
+            abi.encodeCall(vault.settle, (r, _compactSig(refereePk, _hashResult(r)))),
+            relayer,
+            true
+        );
+    }
+
+    function test_gas_compactMutual() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, alice, FEE);
+        bytes memory sa = _compactSig(alicePk, _hashResult(r));
+        bytes memory sb = _compactSig(bobPk, _hashResult(r));
+        _measure("settleMutual (compact)", abi.encodeCall(vault.settleMutual, (r, sa, sb)), relayer, true);
+    }
+
+    /// Calldata length is an uncompressed L1-data upper-level comparison, not a Nitro fee quote.
+    function _measure(string memory name, bytes memory data, address caller, bool succeeds) internal {
+        _cool();
+        vm.prank(caller);
+        (bool ok,) = address(vault).call(data);
+        uint256 used = _txGas(data);
+        assertEq(ok, succeeds, name);
+        vm.snapshotValue("GameVault", name, used);
+        vm.snapshotValue("Calldata", name, data.length);
+    }
+
+    function test_gas_depositFor() public {
+        _fund(alice, 100e18);
+        _measure("depositFor", abi.encodeCall(vault.depositFor, (bob, 100e18)), alice, true);
+    }
+
+    function test_gas_withdrawTo() public {
+        _deposit(alice, 100e18);
+        _measure("withdrawTo", abi.encodeCall(vault.withdrawTo, (50e18, bob)), alice, true);
+    }
+
+    function test_gas_revokeSession() public {
+        _ready(1_000e18);
+        _measure("revokeSession", abi.encodeCall(vault.revokeSession, ()), alice, true);
+    }
+
+    function test_gas_cancel() public {
+        _measure("cancel", abi.encodeCall(vault.cancel, (M1)), alice, true);
+    }
+
+    function test_gas_reclaim() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        vm.warp(block.timestamp + WINDOW + 1);
+        _measure("reclaim", abi.encodeCall(vault.reclaim, (M1)), alice, true);
+    }
+
+    function test_gas_settleMutual() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        IGameVault.Result memory r = _result(M1, OUTCOME_WIN, alice, FEE);
+        bytes memory a = _signResult(alicePk, r);
+        bytes memory b = _signResult(bobPk, r);
+        _measure("settleMutual", abi.encodeCall(vault.settleMutual, (r, a, b)), relayer, true);
+    }
+
+    function test_gas_settleVoid() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        IGameVault.Result memory r = _result(M1, 2, address(0), 0);
+        bytes memory sig = _signResult(refereePk, r);
+        _measure("settleVoid", abi.encodeCall(vault.settle, (r, sig)), relayer, true);
+    }
+
+    function test_gas_withdrawHouse() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _settle(M1, alice, FEE);
+        _measure("withdrawHouse", abi.encodeCall(vault.withdrawHouse, ()), stranger, true);
+    }
+
+    function test_gas_withdrawHouseTo() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _settle(M1, alice, FEE);
+        _measure("withdrawHouseTo", abi.encodeCall(vault.withdrawHouseTo, (1e18, carol)), house, true);
+    }
+
+    function test_gas_setHouseFees() public {
+        _measure("setHouseFees", abi.encodeCall(vault.setHouseFees, (250, 100)), owner, true);
+    }
+
+    function test_gas_setCaps() public {
+        _measure("setCaps", abi.encodeCall(vault.setCaps, (2_000e18, 200_000e18)), owner, true);
+    }
+
+    function test_gas_setReferee() public {
+        _measure("setReferee", abi.encodeCall(vault.setReferee, (carol)), owner, true);
+    }
+
+    function test_gas_creditSurplus() public {
+        token.transfer(address(vault), 100e18);
+        _measure("creditSurplus", abi.encodeCall(vault.creditSurplus, (alice, 100e18)), owner, true);
+    }
+
+    function test_gas_pause() public {
+        _measure("pause", abi.encodeCall(vault.pause, ()), owner, true);
+    }
+
+    function test_gas_unpause() public {
+        vm.prank(owner);
+        vault.pause();
+        _measure("unpause", abi.encodeCall(vault.unpause, ()), owner, true);
+    }
+
+    function test_gas_ownershipTransfer() public {
+        _measure("ownershipTransfer", abi.encodeCall(vault.transferOwnership, (alice)), owner, true);
+    }
+
+    function test_gas_ownershipAccept() public {
+        vm.prank(owner);
+        vault.transferOwnership(alice);
+        _measure("ownershipAccept", abi.encodeCall(vault.acceptOwnership, ()), alice, true);
+    }
+
+    function test_gas_ownershipRenounce() public {
+        _measure("ownershipRenounce", abi.encodeCall(vault.renounceOwnership, ()), owner, false);
+    }
+
+    function test_gas_view_MAX_FEE_BPS() public {
+        _measure("MAX_FEE_BPS", abi.encodeWithSignature("MAX_FEE_BPS()"), stranger, true);
+    }
+
+    function test_gas_view_MAX_SESSION_TTL() public {
+        _measure("MAX_SESSION_TTL", abi.encodeWithSignature("MAX_SESSION_TTL()"), stranger, true);
+    }
+
+    function test_gas_view_house() public {
+        _measure("house", abi.encodeWithSignature("house()"), stranger, true);
+    }
+
+    function test_gas_view_settleWindow() public {
+        _measure("settleWindow", abi.encodeWithSignature("settleWindow()"), stranger, true);
+    }
+
+    function test_gas_view_maxStake() public {
+        _measure("maxStake", abi.encodeWithSignature("maxStake()"), stranger, true);
+    }
+
+    function test_gas_view_houseFeeBps() public {
+        _measure("houseFeeBps", abi.encodeWithSignature("houseFeeBps()"), stranger, true);
+    }
+
+    function test_gas_view_holderFeeBps() public {
+        _measure("holderFeeBps", abi.encodeWithSignature("holderFeeBps()"), stranger, true);
+    }
+
+    function test_gas_view_maxBalance() public {
+        _measure("maxBalance", abi.encodeWithSignature("maxBalance()"), stranger, true);
+    }
+
+    function test_gas_view_token() public {
+        _measure("token", abi.encodeWithSignature("token()"), stranger, true);
+    }
+
+    function test_gas_view_referee() public {
+        _measure("referee", abi.encodeWithSignature("referee()"), stranger, true);
+    }
+
+    function test_gas_view_houseAccrued() public {
+        _measure("houseAccrued", abi.encodeWithSignature("houseAccrued()"), stranger, true);
+    }
+
+    function test_gas_view_totalLiabilities() public {
+        _measure("totalLiabilities", abi.encodeWithSignature("totalLiabilities()"), stranger, true);
+    }
+
+    function test_gas_view_owner() public {
+        _measure("owner", abi.encodeWithSignature("owner()"), stranger, true);
+    }
+
+    function test_gas_view_pendingOwner() public {
+        _measure("pendingOwner", abi.encodeWithSignature("pendingOwner()"), stranger, true);
+    }
+
+    function test_gas_view_paused() public {
+        _measure("paused", abi.encodeWithSignature("paused()"), stranger, true);
+    }
+
+    function test_gas_view_eip712Domain() public {
+        _measure("eip712Domain", abi.encodeWithSignature("eip712Domain()"), stranger, true);
+    }
+
+    function test_gas_view_refereeOf() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("refereeOf", abi.encodeWithSignature("refereeOf(bytes32)", M1), stranger, true);
+    }
+
+    function test_gas_view_matchOf() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("matchOf", abi.encodeWithSignature("matchOf(bytes32)", M1), stranger, true);
+    }
+
+    function test_gas_view_freeOf() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("freeOf", abi.encodeWithSignature("freeOf(address)", alice), stranger, true);
+    }
+
+    function test_gas_view_lockedOf() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("lockedOf", abi.encodeWithSignature("lockedOf(address)", alice), stranger, true);
+    }
+
+    function test_gas_view_sessionOf() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("sessionOf", abi.encodeWithSignature("sessionOf(address)", alice), stranger, true);
+    }
+
+    function test_gas_view_sessionNonce() public {
+        _ready(1_000e18);
+        _lock(M1, 100e18);
+        _measure("sessionNonce", abi.encodeWithSignature("sessionNonce(address)", alice), stranger, true);
+    }
+
+    function test_gas_view_hashSessionAuth() public {
+        IGameVault.SessionAuth memory a = _auth(alice, aliceKey, 100e18, 1_000e18, uint64(block.timestamp + 3 days));
+        _measure("hashSessionAuth", abi.encodeCall(vault.hashSessionAuth, (a)), stranger, true);
+    }
+
+    function test_gas_view_hashEntry() public {
+        IGameVault.Entry memory a = _entry(M1, alice, bob, 100e18);
+        _measure("hashEntry", abi.encodeCall(vault.hashEntry, (a)), stranger, true);
+    }
+
+    function test_gas_view_hashResult() public {
+        IGameVault.Result memory a = _result(M1, OUTCOME_WIN, alice, FEE);
+        _measure("hashResult", abi.encodeCall(vault.hashResult, (a)), stranger, true);
     }
 }
 

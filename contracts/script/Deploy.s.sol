@@ -45,7 +45,21 @@ contract Deploy is Script {
     }
 
     function configFromEnv() public view returns (Config memory c) {
+        c = _settingsFromEnv();
         c.deployerKey = vm.envUint("DEPLOYER_KEY");
+    }
+
+    /// Keyless rehearsal on a local node/fork with chain id 31337. Invoke without --broadcast.
+    /// Uses the same creation path and settings as deploy(), and never reads DEPLOYER_KEY.
+    function runDryRun() external returns (address token, address vault) {
+        require(block.chainid == 31337, "dry run requires a local chain id");
+        Config memory c = _settingsFromEnv();
+        vm.startBroadcast(address(0xD00D));
+        (token, vault) = _create(c);
+        vm.stopBroadcast();
+    }
+
+    function _settingsFromEnv() internal view returns (Config memory c) {
         c.token = vm.envOr("VAULT_TOKEN", address(0));
         c.testTokenHolder = vm.envOr("TEST_TOKEN_HOLDER", address(0));
         c.house = vm.envAddress("VAULT_HOUSE");
@@ -70,10 +84,15 @@ contract Deploy is Script {
     function deploy(Config memory c) public returns (address token, address vault) {
         bool mainnet = isMainnet(block.chainid);
         if (mainnet) require(c.allowMainnet, "mainnet needs the owner's explicit go-ahead");
-        token = c.token;
         vm.startBroadcast(c.deployerKey);
+        (token, vault) = _create(c);
+        vm.stopBroadcast();
+    }
+
+    function _create(Config memory c) internal returns (address token, address vault) {
+        token = c.token;
         if (token == address(0)) {
-            require(!mainnet, "the test token is for test networks only");
+            require(!isMainnet(block.chainid), "the test token is for test networks only");
             token = address(new TestSpiderTag(c.testTokenHolder));
             console2.log("TestSpiderTag", token);
         }
@@ -90,7 +109,6 @@ contract Deploy is Script {
                 c.settleWindow
             )
         );
-        vm.stopBroadcast();
         console2.log("GameVault", vault);
     }
 }
