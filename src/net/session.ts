@@ -1,6 +1,6 @@
 // One online match (multiplayer design §3.4): the TagMatch + Rollback of this client, fed by the relay. Implements the play
 // page's NetLink: the relay clock decides how many steps to run each frame, the local word is queued inputDelay steps
-// ahead and sent at 30 Hz (4 steps per INPUT; never two INPUTs closer than SEND_GAP_MS unless one is full, so the
+// ahead and sent at 20 Hz (6 steps per INPUT; never two INPUTs closer than SEND_GAP_MS unless one is full, so the
 // catch-up after a hitch or a hidden tab goes out as a few big messages), the other player's words roll the match
 // back when they differ from the prediction, and every 60 confirmed steps a state hash rides along for the relay to
 // compare. At the horn, once every input is in, the final hash goes to the relay in `end`.
@@ -21,15 +21,15 @@ import type { Transport } from "./transport.ts";
 import { MAX_INPUT_COUNT, MSG_ACK, MSG_DESYNC, MSG_FILL, MSG_INPUT_OUT, decodeDesync, decodeFill, decodeRelayInput, encodeInput, type StartMsg } from "./wire.ts";
 
 const STEP_MS = 1000 / 120;
-/** Local words per INPUT message in steady play (30 Hz at 120 Hz). */
-export const SEND_EVERY = 4;
+/** Local words per INPUT message in steady play (20 Hz at 120 Hz). */
+export const SEND_EVERY = 6;
 /**
- * Never two INPUTs closer than this (ms), unless a full one (MAX_INPUT_COUNT words) is queued: at most 40 a second,
+ * Never two INPUTs closer than this (ms), unless a full one (MAX_INPUT_COUNT words) is queued: at most 25 a second,
  * whatever the frame rate, however far behind (the relay closes a socket past 90 messages a second).
  */
-export const SEND_GAP_MS = 25;
+export const SEND_GAP_MS = 40;
 /** Leftover words wait at most this long (ms) for the next INPUT. */
-const SEND_WAIT_MS = 40;
+const SEND_WAIT_MS = 50;
 /** Steps a frame may run while catching up with the relay clock. */
 export const MAX_STEPS_PER_FRAME = 30;
 /**

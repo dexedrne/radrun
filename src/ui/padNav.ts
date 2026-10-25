@@ -66,8 +66,8 @@ export function installPadCss(): void {
   if (cssDone || typeof document === "undefined") return;
   cssDone = true;
   const st = document.createElement("style");
-  st.textContent = `[data-pad-focus]{outline:3px solid #ffd23f !important;outline-offset:3px !important;box-shadow:0 0 0 6px rgba(255,210,63,0.25),0 0 22px rgba(255,210,63,0.55) !important;position:relative;z-index:1}
-input[type=range][data-pad-focus]{accent-color:#ffd23f}`;
+  st.textContent = `[data-pad-focus]{outline:3px solid #ffb12a !important;outline-offset:3px !important;box-shadow:0 0 0 6px rgba(255,177,42,0.25),0 0 22px rgba(255,177,42,0.55) !important;position:relative;z-index:1}
+input[type=range][data-pad-focus]{accent-color:#ffb12a}`;
   document.head.appendChild(st);
 }
 

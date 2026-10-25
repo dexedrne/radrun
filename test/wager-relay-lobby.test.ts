@@ -732,3 +732,25 @@ test("gates: origins for sockets and posts, the region block (off by default), p
   [r] = req("POST", "/dev/bench");
   assert.equal(r.kind, "none", "the bench is DEV only");
 });
+
+test('match admission: per-wallet attempts survive reconnects; per-network attempts span wallets; public play needs recorded history; real stakes closed', async () => {
+  const h = await lobbyHarness(), a = await h.player();
+  // Invalid entries still spend an admission attempt before parsing or RPC work.
+  for (let i = 0; i < 60; i++) { await h.send(a.c, { t: 'create', entry: null, sig: '0x' }); h.clock.tick(100); }
+  assert.equal(errOf(a.c)?.code, 'bad');
+  const reconnect = h.conn(a.c.state.ip); reconnect.state.player = a.acct.address; reconnect.state.hello = true;
+  await h.send(reconnect, { t: 'create', entry: null, sig: '0x' }); assert.equal(errOf(reconnect)?.code, 'rate');
+  const b = await h.player();
+  for (let i = 0; i < 60; i++) { await h.send(b.c, { t: 'create', entry: null, sig: '0x' }); h.clock.tick(100); }
+  const c = await h.player(); await h.send(c.c, { t: 'create', entry: null, sig: '0x' }); assert.equal(errOf(c.c)?.code, 'rate');
+  const fresh = await lobbyHarness(), p = await fresh.player(); fresh.settings.dev = false;
+  for (const action of ['create', 'join']) {
+    await fresh.send(p.c, { t: action, entry: null, sig: '0x' }); assert.equal(errOf(p.c)?.code, 'forbidden'); assert.match(errOf(p.c)!.message, /practice/);
+  }
+  // Only a confirmed server-recorded series unlocks the public practice-history gate.
+  fresh.sql.exec('INSERT INTO matches (match_id, state, a, b, stake, lock_tx, settle_tx, ended_at, json) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?)', '0x' + '9'.repeat(64), 'settled', p.acct.address.toLowerCase(), newAccount().address.toLowerCase(), '0', '{}');
+  fresh.sql.exec('UPDATE players SET wins = 1 WHERE address = ?', p.acct.address.toLowerCase());
+  await fresh.send(p.c, { t: 'create', entry: null, sig: '0x' }); assert.equal(errOf(p.c)?.code, 'bad', 'history gate passed to entry parsing');
+  fresh.settings.testnet = false;
+  for (const action of ['create', 'join']) { await fresh.send(p.c, { t: action, entry: null, sig: '0x' }); assert.equal(errOf(p.c)?.code, 'gone'); }
+});

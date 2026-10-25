@@ -68,3 +68,15 @@ test("room codes and names", () => {
   assert.equal(cleanName("x"), "radbrox");
   assert.equal(cleanName("a".repeat(40)).length, 16);
 });
+
+test('repeated inputs compress in both directions without changing steps, acks, hashes or edge buttons', () => {
+  const words = new Array(128).fill(packWord({ yaw: 99, fwd: 64, right: 0, bits: 127, pitch: -70 }));
+  const m = { firstStep: 400, words, ackStep: 350, hashStep: 300, hash: 123 };
+  const packet = encodeInput(m);
+  assert.equal(packet.length, 26); assert.deepEqual(decodeInput(packet), m);
+  const relay = encodeRelayInput(1, 400, words);
+  assert.equal(relay.length, 14); assert.deepEqual(decodeRelayInput(relay), { slot: 1, firstStep: 400, words });
+  const truncated = packet.slice(0, -1); assert.equal(decodeInput(truncated), null);
+  const invalid = packet.slice(); new DataView(invalid.buffer).setUint16(2, 0, true); assert.equal(decodeInput(invalid), null);
+  const reserved = packet.slice(); reserved[1] |= 128; assert.equal(decodeInput(reserved), null);
+});

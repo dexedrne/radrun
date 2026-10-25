@@ -8,7 +8,7 @@ export const S = {
   tokenUrl: "https://token.spidertag.vyvanse.beer",
   pitch: "He swiped your bag. 90 seconds. Tag him or YOINK him before the rug shows up.",
   /** The title's terminal-font line under the wordmark, and its "[ OK ]" status line. */
-  tagline: "web-slinger tag over the rooftops",
+  tagline: "swing · tag · get away",
   host: "spidertag.vyvanse.beer",
   /** vyvanse.beer's tip jar (SOL to vyvanse.sol or ETH), opened in a new tab like the shooters' titles. */
   tipUrl: "https://vyvanse.beer/#tip",

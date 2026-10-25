@@ -15,7 +15,7 @@ export function relayBase(): string | null {
 
 export async function createRoom(base: string, lag = 0): Promise<string> {
   const r = await fetch(`${base}/room${lag > 0 ? `?lag=${lag}` : ""}`, { method: "POST" });
-  if (!r.ok) throw new Error(r.status === 503 ? "the relay is busy, try again" : `the relay said ${r.status}`);
+  if (!r.ok) throw new Error(r.status === 429 ? "too many room requests; wait a moment and try again" : r.status === 503 ? "the relay is busy, try again" : `the relay said ${r.status}`);
   const j = (await r.json()) as { code?: string };
   if (!j.code) throw new Error("the relay gave no room code");
   return j.code;
@@ -34,6 +34,10 @@ export class Transport {
   rtt = 0;
   /** Lowest round trip since connecting (the input delay choice; a busy main thread only ever inflates a sample). */
   minRtt = Infinity;
+  /** Latest measured RTT and EWMA absolute sample variation (ms). */
+  latestRtt = 0;
+  jitter = 0;
+  private lastRtt: number | null = null;
   sentBytes = 0;
   recvBytes = 0;
 
@@ -68,6 +72,7 @@ export class Transport {
         }
         const b = new Uint8Array(e.data as ArrayBuffer);
         this.recvBytes += b.length;
+        if (b[0] === 6 && b.length === 5) { this.sendBinary(b); return; }
         if (b[0] === MSG_PONG) { this.pong(b); return; }
         this.onBinary(b);
       };
@@ -115,6 +120,9 @@ export class Transport {
     const sent = now - ((((Math.floor(now) >>> 0) - p.clientMs) >>> 0));
     const rtt = now - sent;
     if (rtt < 0 || rtt > 10_000) return;
+    this.latestRtt = rtt;
+    if (this.lastRtt !== null) this.jitter += (Math.abs(rtt - this.lastRtt) - this.jitter) / 8;
+    this.lastRtt = rtt;
     this.samples.push({ rtt, offset: p.relayMs - (sent + rtt / 2) });
     if (this.samples.length > 8) this.samples.shift();
     let best = this.samples[0];

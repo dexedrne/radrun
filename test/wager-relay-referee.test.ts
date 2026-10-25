@@ -71,8 +71,10 @@ test("bounds: words past the horn or far ahead of the relay clock are refused; r
   assert.equal(r.receive(0, r.endStep + 1, [1], 1e9).bad, 1);
   assert.equal(r.receive(0, 0, [1], 0).bad, 1);
   // Words are 41-bit.
-  r.receive(1, 3, [2 ** 45 + 5], 0);
-  assert.equal(r.words[1][3], 5);
+  assert.equal(r.receive(1, 3, [2 ** 45 + 5], 0).bad, 1);
+  assert.equal(r.words[1][3], 0, "invalid words never enter the canonical log");
+  assert.equal(r.receive(1, 3, [127 << 10], 0).bad, 1, "amplified movement refused");
+  assert.equal(r.receive(1, 3, [101 * 2 ** 32], 0).bad, 1, "impossible aim pitch refused");
 });
 
 test("a gap (a reconnecting client starting ahead) waits: its steps fill at their deadlines", () => {

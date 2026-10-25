@@ -162,7 +162,7 @@ export class InputLatch {
   sample(rec: InputRec, yaw: number, pitch = 0): InputRec {
     const webHeldNow = this.webHeldNow;
     // (Round 12: the camera pitch rides along as a sine, and C held.)
-    recFromInput(rec, yaw, this.fwd, this.right, this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge,
+    recFromInput(rec, yaw, Math.max(-1, Math.min(1, this.fwd)), Math.max(-1, Math.min(1, this.right)), this.jumpEdge, this.webEdge, webHeldNow || this.webEdge, this.zipEdge, this.slideEdge,
       this.slideHeldNow || this.slideEdge, Math.sin(pitch), this.keys.has("KeyG") || this.touchGlideHeld || this.padGlideHeld);
     this.jumpEdge = false;
     this.webEdge = false;

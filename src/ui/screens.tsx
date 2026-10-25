@@ -14,10 +14,10 @@ import { PAD_DEAD, PAD_SENS } from "../input/gamepad.ts";
 import { MUSIC_STYLES } from "../audio/catalog.ts";
 import { backToVyvanse, vyvanseFramed } from "./vyvanse.ts";
 
-export const panel: React.CSSProperties = { background: "rgba(14,16,30,0.82)", borderRadius: 12, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
+export const panel: React.CSSProperties = { background: "radial-gradient(ellipse at top left, rgba(23,34,56,.9), rgba(7,9,15,.9))", border: "1px solid rgba(243,234,218,.35)", color: "#f3eada", borderRadius: 3, padding: "14px 18px", boxShadow: "0 6px 30px rgba(0,0,0,0.35)" };
 export const btn = (primary = false): React.CSSProperties => ({
-  font: "700 15px ui-monospace, monospace", padding: "10px 18px", borderRadius: 8, cursor: "pointer", letterSpacing: 1,
-  border: primary ? "none" : "1px solid rgba(255,255,255,0.35)", background: primary ? "#ff3d7f" : "rgba(255,255,255,0.08)", color: "#fff",
+  font: "400 20px VT323, monospace", padding: "10px 18px", borderRadius: 3, cursor: "pointer", letterSpacing: 1,
+  border: primary ? "1px solid #ffb12a" : "1px solid rgba(243,234,218,0.35)", background: primary ? "#ffb12a" : "radial-gradient(ellipse at top left, rgba(23,34,56,.9), rgba(7,9,15,.9))", color: primary ? "#07090f" : "#f3eada",
 });
 export const layer: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 20 };
 /** A full-screen layer that centres its child and scrolls (from the top) when the child is taller; its content stays inside the safe area. */
@@ -34,7 +34,7 @@ export function Wordmark({ px, style }: { px: number; style?: React.CSSPropertie
   return (
     <div role="heading" aria-level={1} aria-label={S.title} data-testid="wordmark"
       style={{ font: `400 ${px}px/0.92 "Bebas Neue", Impact, "Arial Narrow", sans-serif`, letterSpacing: Math.max(1, Math.round(px / 80)), whiteSpace: "nowrap", filter: "drop-shadow(0 3px 2px #090b16) drop-shadow(0 0 12px rgba(9,11,22,0.8))", ...style }}>
-      <span style={{ color: "#f3eada" }}>SPIDER</span><span style={{ color: "#fd43ae" }}>TAG</span>
+      <span style={{ color: "#f3eada" }}>SPIDER</span><span style={{ color: "#f3eada" }}>TAG</span>
     </div>
   );
 }

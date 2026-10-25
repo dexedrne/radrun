@@ -106,7 +106,9 @@ test("hash compare: equal hashes pass, a mismatch sends DESYNC; end hashes decid
   assert.ok(a.bin.some(x => x[0] === MSG_DESYNC) && b.bin.some(x => x[0] === MSG_DESYNC));
   send(a, { t: "end", step: 999, hash: 5, bag: [] });
   send(b, { t: "end", step: 999, hash: 5, bag: [] });
-  assert.equal(last(a, "result")?.ok, true);
+  assert.equal(last(a, "result"), undefined, "matching forged early results never pass");
+  assert.equal(a.closed, "premature result");
+  // The first offender leaves; the peer receives a drop.
   // A leaver mid-match: the other gets `drop`.
   send(a, { t: "ready", ready: true }); send(b, { t: "ready", ready: true });
   a.h.close();

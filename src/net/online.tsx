@@ -12,7 +12,7 @@ import { Fnv1a } from "../sim/math.ts";
 import type { Tuning } from "../sim/tuning.ts";
 import { DISTRICTS, isDistrictId, type DistrictId } from "../world/districts.ts";
 import { LINK_VERSION } from "../ui/prefs.ts";
-import { btn, panel, scroller } from "../ui/screens.tsx";
+import { btn, panel, scroller, useViewport } from "../ui/screens.tsx";
 import { RADBRO_COLOR } from "../ui/strings.ts";
 import { gotoDistrict } from "../app/district.ts";
 import { loadRadbros, useTag } from "../app/TagPage.tsx";
@@ -53,7 +53,7 @@ type Phase = "home" | "connecting" | "lobby" | "loading" | "match" | "error";
 declare global {
   interface Window {
     __room?: {
-      code: string; slot: number; phase: string; players: number; desyncs: number; rtt: number; inputDelay: number; stalls: number; rollbacks: number; p99: number; sent: number; recv: number;
+      code: string; slot: number; phase: string; players: number; desyncs: number; rtt: number; jitter: number; inputDelay: number; stalls: number; rollbacks: number; p99: number; sent: number; recv: number;
       inputs: number; waitMs: number; maxWaitMs: number; behind: number; maxBehind: number; status: string;
     };
   }
@@ -61,6 +61,7 @@ declare global {
 
 export default function Online(props: { game: TagGame; radbro: RadbroId; setRadbro: (r: RadbroId) => void; room: string | null; district: DistrictId; onExit: () => void }) {
   const { game } = props;
+  const { compact } = useViewport();
   const base = useMemo(() => relayBase(), []);
   const [phase, setPhase] = useState<Phase>("home");
   const [err, setErr] = useState("");
@@ -70,6 +71,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   const [config, setConfig] = useState<RoomConfig | null>(null);
   const [slot, setSlot] = useState(-1);
   const [ready, setReady] = useState(false);
+  const [assetsReady, setAssetsReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [playerList, setPlayerList] = useState(false), [notice, setNotice] = useState('');
   usePlayerMutes();
@@ -120,6 +122,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   const onMsg = useCallback((m: ServerMsg) => {
     switch (m.t) {
       case "welcome":
+        setReady(false); readyRef.current = false;
         if (m.moderationToken) { try { sessionStorage.setItem('room-moderation:' + m.room, m.moderationToken); } catch { /* storage blocked */ } }
         slotRef.current = m.slot;
         setSlot(m.slot);
@@ -134,8 +137,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         setPlayers(m.players);
         playersRef.current = m.players;
         setConfig(m.config);
-        // Preload everyone's Radbro while waiting (the start then only builds the match).
-        void loadRadbros(m.players.map(p => p.radbro).filter(isRadbroId));
+
         // At the results: say what the other player did.
         if (useTag.getState().screen === "results") {
           const other = m.players.find(p => p.slot !== slotRef.current);
@@ -228,22 +230,32 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
   }, [code, connect]);
   useEffect(() => () => { tRef.current?.close(); }, []);
 
+  // Keep READY gated until the canvas and the current roster are loaded. A stale preload cannot unlock it.
+  const rosterKey = players.map(p => p.radbro).join(',');
+  useEffect(() => {
+    if (phase !== 'lobby') return;
+    let current = true;
+    setAssetsReady(false);
+    void loadRadbros(rosterKey.split(',').filter(isRadbroId)).then(ok => { if (current) { setAssetsReady(ok); if (!ok) setErr("Characters could not load. Rejoin the room to retry."); } });
+    return () => { current = false; };
+  }, [phase, rosterKey]);
+
   // Your pick follows the menu's.
   useEffect(() => { if (phase === "lobby") tRef.current?.sendJson({ t: "pick", radbro: props.radbro }); }, [props.radbro, phase]);
 
   const toggleReady = useCallback(() => {
     const t = tRef.current;
-    if (!t) return;
+    if (!t || !assetsReady) return;
     t.sendJson({ t: "ready", ready: !ready, rtt: rttOf(t) });
     setReady(!ready);
     readyRef.current = !ready;
-  }, [ready]);
+  }, [ready, assetsReady]);
   useEffect(() => {
-    if (AUTOREADY && phase === "lobby" && players.length === 2 && !ready && screen !== "results") {
+    if (AUTOREADY && phase === "lobby" && players.length === 2 && assetsReady && !ready && screen !== "results") {
       const iv = setTimeout(toggleReady, 1500);
       return () => clearTimeout(iv);
     }
-  }, [phase, players.length, ready, screen, toggleReady]);
+  }, [phase, players.length, assetsReady, ready, screen, toggleReady]);
 
   // The match watchdog (a broken session or a long wait on the other player ends it) and the probe for the headless checks.
   const worst = useRef({ wait: 0, behind: 0 });
@@ -257,7 +269,7 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
         worst.current.behind = Math.max(worst.current.behind, s.behind);
       }
       window.__room = {
-        code, slot, phase, players: players.length, desyncs: s?.desyncs ?? 0, rtt: t?.rtt ?? 0, inputDelay: s?.rb.inputDelay ?? 0, stalls: s?.rb.stalls ?? 0,
+        code, slot, phase, players: players.length, desyncs: s?.desyncs ?? 0, rtt: t?.rtt ?? 0, jitter: t?.jitter ?? 0, inputDelay: s?.rb.inputDelay ?? 0, stalls: s?.rb.stalls ?? 0,
         rollbacks: s?.rb.rollbacks ?? 0, p99: s?.rb.depthQuantile(0.99) ?? 0, sent: t?.sentBytes ?? 0, recv: t?.recvBytes ?? 0,
         inputs: s?.inputsSent ?? 0, waitMs: s?.waitMs ?? 0, maxWaitMs: Math.round(worst.current.wait), behind: s?.behind ?? 0, maxBehind: worst.current.behind, status: useTag.getState().netStatus,
       };
@@ -272,11 +284,11 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
 
   const wrongDistrict = config && isDistrictId(config.district) && config.district !== props.district ? config.district : null;
   const link = code ? `${location.origin}/?tag&room=${code}${wrongDistrict || props.district !== "downtown" ? `&map=${config?.district ?? props.district}` : ""}` : "";
-  const box: React.CSSProperties = { ...panel, maxWidth: 560, margin: "auto", textAlign: "center" };
+  const box: React.CSSProperties = { ...panel, maxWidth: 560, width: "100%", boxSizing: "border-box", margin: "auto", textAlign: "center", padding: compact ? "8px 14px" : panel.padding, font: `400 ${compact ? 18 : 20}px/1.2 VT323, monospace` };
   return (
     <div style={{ ...scroller, background: "rgba(10,12,30,0.45)" }} data-testid="online">
       <div style={box}>
-        <div style={{ font: "900 28px ui-monospace, monospace", letterSpacing: 4, textShadow: "3px 3px 0 #ff3d7f" }}>ONLINE</div>
+        <div style={{ font: "400 34px/1 Bebas Neue, sans-serif", letterSpacing: 4, color: "#f3eada" }}>ONLINE</div>
         {!base && <div style={{ marginTop: 10 }}>Online play isn't switched on for this build yet (no relay address).</div>}
         {base && phase === "home" && (
           <>
@@ -284,34 +296,34 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
             <button style={{ ...btn(true), fontSize: 18, padding: "10px 30px" }} onClick={() => void connect(null)} data-testid="online-create" data-pad-default="">CREATE ROOM</button>
             <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}>
               <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))} placeholder="CODE" maxLength={CODE_LEN} data-pad-chars={CODE_ALPHABET}
-                style={{ width: 110, font: "700 20px ui-monospace, monospace", letterSpacing: 4, textAlign: "center", padding: "8px", borderRadius: 8, border: "2px solid #9fe6ff", background: "rgba(0,0,0,0.3)", color: "#fff" }} data-testid="online-code" />
+                style={{ width: 110, font: "700 20px ui-monospace, monospace", letterSpacing: 4, textAlign: "center", padding: "8px", borderRadius: 8, border: "1px solid #ffb12a", background: "rgba(0,0,0,0.3)", color: "#fff" }} data-testid="online-code" />
               <button style={{ ...btn(false), opacity: isRoomCode(joinCode) ? 1 : 0.5 }} disabled={!isRoomCode(joinCode)} onClick={() => { setCode(joinCode); void connect(joinCode); }} data-testid="online-join" data-pad-btn="START">JOIN</button>
             </div>
           </>
         )}
         {phase === "connecting" && <div style={{ margin: 16 }}>connecting to the relay…</div>}
-        {phase === "error" && <div style={{ margin: 16, color: "#ff9d9d" }} data-testid="online-error">{err}</div>}
+        {phase === "error" && <div style={{ margin: 16, color: "#ff9d9d" }} data-testid="online-error">{err}{base && isRoomCode(code) && <div style={{ marginTop: 12 }}><button style={btn(true)} onClick={() => void connect(code)} data-testid="online-rejoin" data-pad-default="">REJOIN ROOM</button><p style={{ fontSize: 18 }}>The interrupted round is cancelled. Ready up for a fresh round.</p></div>}</div>}
         {phase === "lobby" && config && (
           <>
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>room code</div>
-            <div style={{ font: "900 44px ui-monospace, monospace", letterSpacing: 10, color: "#ffd23f" }} data-testid="online-room">{code}</div>
+            <div style={{ marginTop: 10, fontSize: 18, opacity: 0.9 }}>room code</div>
+            <div style={{ font: `900 ${compact ? 34 : 44}px ui-monospace, monospace`, letterSpacing: 10, color: "#ffd23f" }} data-testid="online-room">{code}</div>
             <button style={{ ...btn(false), fontSize: 12, padding: "5px 12px" }} onClick={() => { void navigator.clipboard?.writeText(link).then(() => setCopied(true), () => undefined); }}>{copied ? "link copied" : "copy invite link"}</button>
             {wrongDistrict && (
               <div style={{ marginTop: 10, color: "#ffd23f" }}>
                 this room plays in {DISTRICTS[wrongDistrict].name}. <button style={{ ...btn(false), fontSize: 12, padding: "4px 10px" }} onClick={() => gotoDistrict(wrongDistrict, { tag: "1", room: code })}>go there</button>
               </div>
             )}
-            <div style={{ margin: "12px 0 6px", fontSize: 12, opacity: 0.8 }}>{DISTRICTS[(isDistrictId(config.district) ? config.district : "downtown") as DistrictId].name} · {Math.round(config.seconds / 60 * 10) / 10} min · lowest bag time wins</div>
+            <div style={{ margin: "12px 0 6px", fontSize: 18, opacity: 0.9 }}>{DISTRICTS[(isDistrictId(config.district) ? config.district : "downtown") as DistrictId].name} · {config.seconds} s · lowest bag time wins</div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }} data-testid="online-players">
               {[0, 1].map(i => {
                 const p = players.find(q => q.slot === i);
                 return (
-                  <div key={i} style={{ width: 150, padding: 8, borderRadius: 10, border: `2px solid ${p?.ready ? "#8dff8a" : "rgba(255,255,255,0.25)"}`, background: "rgba(255,255,255,0.05)" }}>
+                  <div key={i} style={{ width: 150, minWidth: 0, overflowWrap: "anywhere", padding: 8, borderRadius: 3, border: `2px solid ${p?.ready ? "#ffb12a" : "rgba(255,255,255,0.25)"}`, background: "rgba(255,255,255,0.05)" }}>
                     {p ? (
                       <>
-                        <img src={portraitPath(p.radbro)} alt="" width={64} height={64} style={{ borderRadius: 8, background: RADBRO_COLOR[p.radbro as RadbroId]?.body ?? "#333" }} />
-                        <div style={{ fontWeight: 800 }}>{p.slot === slot ? "YOU" : playerName(code + ':' + p.slot, p.name)}</div>
-                        <div style={{ fontSize: 12, color: p.ready ? "#8dff8a" : "#ccc" }}>{p.ready ? "READY" : "picking…"}</div>
+                        <img src={portraitPath(p.radbro)} alt="" width={compact ? 44 : 64} height={compact ? 44 : 64} style={{ borderRadius: 8, background: RADBRO_COLOR[p.radbro as RadbroId]?.body ?? "#333" }} />
+                        <div style={{ fontWeight: 400 }}>{p.slot === slot ? "YOU" : playerName(code + ':' + p.slot, p.name)}</div>
+                        <div style={{ fontSize: 18, color: p.ready ? "#ffb12a" : "#ccc" }}>{p.ready ? "READY" : "picking…"}</div>
                       </>
                     ) : <div style={{ opacity: 0.6, padding: "30px 0" }}>waiting for a friend…</div>}
                   </div>
@@ -320,18 +332,18 @@ export default function Online(props: { game: TagGame; radbro: RadbroId; setRadb
             </div>
             <div style={{ marginTop: 12, display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
               {RADBROS.map(id => (
-                <button key={id} onClick={() => props.setRadbro(id)} style={{ ...btn(false), padding: "4px 8px", fontSize: 12, borderColor: id === props.radbro ? "#ff3d7f" : "rgba(255,255,255,0.3)", background: id === props.radbro ? "rgba(255,61,127,0.3)" : "rgba(255,255,255,0.05)" }}>{charTag(id)}</button>
+                <button key={id} onClick={() => props.setRadbro(id)} style={{ ...btn(false), padding: compact ? "4px 7px" : "6px 10px", minHeight: compact ? 32 : 36, fontSize: compact ? 16 : 18, borderColor: id === props.radbro ? "#ffb12a" : "rgba(255,255,255,0.3)", background: id === props.radbro ? "rgba(255,177,42,0.2)" : "rgba(255,255,255,0.05)" }}>{charTag(id)}</button>
               ))}
             </div>
             {err && <div style={{ marginTop: 8, color: "#ffd23f", fontSize: 12 }}>{err}</div>}
             {notice && <p role="status">{notice}</p>}
             <button style={{ ...btn(false), marginTop: 10 }} onClick={() => setPlayerList(true)} data-testid="online-player-list">PLAYERS · MUTE / REPORT</button>
-            <button style={{ ...btn(!ready), marginTop: 14, fontSize: 18, padding: "10px 34px", opacity: players.length === 2 && !wrongDistrict ? 1 : 0.5 }} disabled={players.length < 2 || !!wrongDistrict} onClick={toggleReady} data-testid="online-ready" data-pad-default="" data-pad-btn="START">
-              {ready ? "NOT READY" : "READY"}
+            <button style={{ ...btn(!ready), marginTop: 14, fontSize: 18, padding: "10px 34px", opacity: players.length === 2 && assetsReady && !wrongDistrict ? 1 : 0.5 }} disabled={players.length < 2 || !assetsReady || !!wrongDistrict} onClick={toggleReady} data-testid="online-ready" data-pad-default="" data-pad-btn="START">
+              {!assetsReady ? "LOADING CHARACTERS…" : ready ? "NOT READY" : "READY"}
             </button>
           </>
         )}
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: compact ? 8 : 16 }}>
           <button style={{ ...btn(false), fontSize: 12, padding: "6px 14px" }} onClick={exit} data-testid="online-back" data-pad-btn="EAST">← back</button>
         </div>
       </div>
@@ -347,6 +359,6 @@ function keepDevParams(): string {
   const phone = isPhone() ? "&device=phone" : "";
   if (!DEV) return phone;
   const q = new URLSearchParams(location.search), out: string[] = [];
-  for (const k of ["bot", "secs", "relay", "autoready", "lag"]) if (q.has(k)) out.push(`&${k}${q.get(k) ? `=${q.get(k)}` : ""}`);
+  for (const k of ["bot", "secs", "relay", "autoready", "lag", "webgl2"]) if (q.has(k)) out.push(`&${k}${q.get(k) ? `=${q.get(k)}` : ""}`);
   return phone + out.join("");
 }

@@ -15,6 +15,7 @@
 //    sampled the word, not the canonical state: the relay knows which opponent steps it had released to that client by
 //    then, so it rebuilds the client's predicted view from a snapshot (a few steps of re-simulation per sample). An
 //    aimbot aims exactly at its own view; over a network the canonical error would hide it.
+import { validInputWord } from "../../src/guard.ts";
 import { PH_PLAY, TAG_KIND_YOINK, TV_TAG, type TagMatch, type TagSnap } from "../../../src/game/tagMatch.ts";
 import { RING_RUNNER, chaseDist } from "../../../src/sim/player.ts";
 import { quantYaw } from "../../../src/game/ghost.ts";
@@ -24,8 +25,6 @@ import { wordsToBase64, type RoundLog, type RoundResult } from "../../../src/wag
 import { FLAG_LIMITS, type SideMetrics } from "./flags.ts";
 
 export const STEP_MS = 1000 / 120;
-/** Words are 41-bit (net/wire.ts); anything above is dropped so the log stays canonical. */
-const WORD_MOD = 2 ** 41;
 const LO = 4294967296;
 const B_WEB_PRESSED = 2;
 
@@ -162,7 +161,8 @@ export class RoundReferee {
       if (k === W_FILL) { late++; continue; }
       if (k === W_RECV) continue; // a repeat (or the empty steps inside the input delay)
       const w = words[i];
-      W[s] = Number.isInteger(w) && w >= 0 ? w % WORD_MOD : 0;
+      if (!validInputWord(w)) { bad++; continue; }
+      W[s] = w;
       K[s] = W_RECV;
       this.arrived[slot][s] = now;
       ev.slackMs.push(this.deadline(slot, s) - now);

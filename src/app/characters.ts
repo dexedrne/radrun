@@ -50,6 +50,9 @@ export function AssetsBridge() {
  * Resolves to null when everything loaded, else the first failed path.
  */
 export async function loadManifest(paths: string[], onProgress: (f: number) => void): Promise<string | null> {
+  // Menus can render before the canvas commits its asset bridge on a cold load.
+  const deadline = performance.now() + 15000;
+  while (!assetsRef.current && performance.now() < deadline) await new Promise(r => setTimeout(r, 50));
   const assets = assetsRef.current;
   if (!assets) return "asset runtime not ready";
   let done = 0;

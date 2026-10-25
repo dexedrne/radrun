@@ -26,3 +26,12 @@ test("touch stick + WEB + JUMP produce the same InputFrame as W + LMB + Space", 
   const c = frame(t2);
   assert.ok(c.moveX === 0 && c.moveZ === 0);
 });
+
+test('simultaneous keyboard, touch and pad inputs stay inside the network movement domain', async () => {
+  const { emptyRec } = await import('../src/game/ghost.ts');
+  const { validInputWord } = await import('../relay/src/guard.ts');
+  const { packWord } = await import('../src/net/wire.ts');
+  const latch = new InputLatch(); latch.press('KeyW'); latch.press('KeyD'); latch.padX = latch.padY = 1; latch.setStick(1, 1);
+  const rec = latch.sample(emptyRec(), 0);
+  assert.equal(rec.fwd, 64); assert.equal(rec.right, 64); assert.ok(validInputWord(packWord(rec)));
+});

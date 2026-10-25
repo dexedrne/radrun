@@ -29,12 +29,12 @@ import { backToVyvanse, vyvanseFramed } from "./vyvanse.ts";
 import { isFramed } from "../radbro/bridge.ts";
 import { MuteButton, Wordmark, useViewport } from "./screens.tsx";
 
-const CREAM = "#f3eada", PINK = "#fd43ae", INK = "#05060c", GOLD = "#ffd23f", CYAN = "#9fe6ff", MINT = "#a0ffd2", SAND = "#d9cdb4";
+const CREAM = "#f3eada", PINK = "#ffb12a", INK = "#05060c", GOLD = "#ffb12a", CYAN = "#f3eada", MINT = "#f3eada", SAND = "#d9cdb4";
 const BEBAS = `"Bebas Neue", Impact, "Arial Narrow", sans-serif`;
 const VT = `VT323, ui-monospace, monospace`;
 const GLOW = "0 2px 8px #000, 0 0 14px #000";
 const BAR_OFF = "rgba(243,234,216,0.35)";
-const GLASS = "linear-gradient(90deg, rgba(5,7,17,0.66), rgba(5,7,17,0.16))";
+const GLASS = "radial-gradient(ellipse at top left, rgba(23,34,56,.9), rgba(7,9,15,.9))";
 const clamp = (lo: number, v: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const inset = (side: "top" | "right" | "bottom" | "left", px: number) => `calc(${px}px + max(env(safe-area-inset-${side}, 0px), var(--sai-${side}, 0px)))`;
 
@@ -81,7 +81,7 @@ function useFit(ref: React.RefObject<HTMLElement | null>, key: string, min = 0.7
 function itemStyle(on: boolean, off: boolean | undefined, px: number): React.CSSProperties {
   return {
     font: `400 ${px}px/1 ${BEBAS}`, letterSpacing: "0.06em", textAlign: "left", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.35em",
-    minWidth: "6.4em", boxSizing: "border-box", padding: "0.24em 1.1em 0.16em 0.55em", cursor: off ? "default" : "pointer", border: 0,
+    minWidth: "6.4em", boxSizing: "border-box", padding: "0.24em 1.1em 0.16em 0.55em", cursor: off ? "default" : "pointer", border: "1px solid rgba(243,234,218,.35)",
     borderLeft: `4px solid ${on ? PINK : BAR_OFF}`, borderRadius: 2, color: on ? INK : CREAM, background: on ? PINK : GLASS,
     textShadow: on ? "none" : "0 2px 6px #000", opacity: off ? 0.6 : 1, touchAction: "manipulation",
   };
@@ -90,7 +90,7 @@ function itemStyle(on: boolean, off: boolean | undefined, px: number): React.CSS
 /** A small Bebas choice (difficulty, district, mutator): pink when picked. */
 function chipStyle(sel: boolean, open: boolean, px: number): React.CSSProperties {
   return {
-    font: `400 ${px}px/1 ${BEBAS}`, letterSpacing: "0.06em", padding: "0.32em 0.75em 0.22em 0.6em", borderRadius: 2, cursor: open ? "pointer" : "default", border: 0,
+    font: `400 ${px}px/1 ${BEBAS}`, letterSpacing: "0.06em", padding: "0.32em 0.75em 0.22em 0.6em", borderRadius: 2, cursor: open ? "pointer" : "default", border: "1px solid rgba(243,234,218,.35)",
     borderLeft: `3px solid ${sel ? PINK : BAR_OFF}`, background: sel ? PINK : "rgba(5,7,17,0.66)", color: sel ? INK : CREAM, opacity: open ? 1 : 0.45,
     textShadow: sel ? "none" : "0 1px 4px #000", whiteSpace: "nowrap", touchAction: "manipulation",
   };

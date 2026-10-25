@@ -466,6 +466,17 @@ export class WagerLobbyCore {
     return true;
   }
 
+  /** Charge attempts before any RPC work. Identity is the authenticated wallet plus the relay-supplied network. */
+  private admission(c: LobbyConn, action: 'create' | 'join'): void {
+    const me = c.state.player ?? fail('auth', 'log in first');
+    // Real stakes remain closed. Development simulations are test networks only.
+    if (!this.d.settings.testnet) fail('gone', 'real-stake matches are closed');
+    if (!this.ipCount(me.toLowerCase(), 'wallet-' + action, 60)) fail('rate', 'daily match limit reached for this wallet');
+    if (!this.ipCount(c.state.ip, 'match-' + action, 120)) fail('rate', 'daily match limit reached from this network');
+    // A signature proves wallet control, not play. Public staked play requires server-recorded completed history.
+    if (!this.d.settings.dev && this.settledCount(me) < 1) fail('forbidden', 'complete a supervised practice series before staked play');
+  }
+
   // ---- offers -------------------------------------------------------------------------------------------------------
 
   /** Listed offers, plus the player's own and the named invites to them. */
@@ -558,6 +569,7 @@ export class WagerLobbyCore {
   }
 
   private async create(c: LobbyConn, m: Extract<LobbyClientMsg, { t: "create" }>): Promise<void> {
+    this.admission(c, "create");
     const me = c.state.player ?? fail("auth", "log in first");
     const s = this.d.settings;
     if (!s.vault) fail("gone", "the vault is not deployed yet");
@@ -605,6 +617,7 @@ export class WagerLobbyCore {
   // ---- joining and the lock -----------------------------------------------------------------------------------------
 
   private async join(c: LobbyConn, entryJ: EntryJson, sig: Hex): Promise<void> {
+    this.admission(c, "join");
     const me = c.state.player ?? fail("auth", "log in first");
     const b = parseEntry(entryJ) ?? fail("bad", "bad entry");
     if (!sameAddr(b.player, me)) fail("terms", "the entry is for another player");

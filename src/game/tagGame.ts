@@ -208,7 +208,9 @@ export class TagGame {
     const a = m.over ? 1 : link ? link.alpha : this.stepper.alpha;
     for (let i = 0; i < m.n; i++) {
       const p = m.bodies[i].p, q = m.prev[i].p, r = this.renderPs[i];
-      r.x = q.x + (p.x - q.x) * a; r.y = q.y + (p.y - q.y) * a; r.z = q.z + (p.z - q.z) * a;
+      // A respawn is a discontinuity, not a frame to interpolate through the city.
+      const blend = (this.slotEvents[i] & EV_FALL) !== 0 ? 1 : a;
+      r.x = q.x + (p.x - q.x) * blend; r.y = q.y + (p.y - q.y) * blend; r.z = q.z + (p.z - q.z) * blend;
     }
     const l = this.renderPs[this.local];
     this.renderP.x = l.x; this.renderP.y = l.y; this.renderP.z = l.z;

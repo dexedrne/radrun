@@ -13,8 +13,8 @@
 // Binary messages are little-endian, one WebSocket frame each; control messages are JSON text frames.
 import type { InputRec } from "../game/ghost.ts";
 
-/** Transport revision (4: moderation messages; 2: the web-slinger swing changed the sim). */
-export const NET_VERSION = 4;
+/** Transport revision (5: repeated-word packets; simulation and saved replays are unchanged). */
+export const NET_VERSION = 5;
 
 const LO = 4294967296;
 /**
@@ -81,19 +81,20 @@ export type InputMsg = {
   hash?: number;
 };
 
-/** INPUT client -> relay: u8 type · u8 flags (1 hash, 2 ack) · u16 count · u32 firstStep · count × 5 B · [u32 ack] · [u32 step · u32 hash]. */
+/** INPUT client -> relay: u8 type · u8 flags (1 hash, 2 ack, 4 repeated word) · u16 count · u32 firstStep · count × 6 B (one word when repeated) · [u32 ack] · [u32 step · u32 hash]. */
 export function encodeInput(m: InputMsg): Uint8Array {
   const n = m.words.length;
   if (n > MAX_INPUT_COUNT) throw new Error(`INPUT count ${n} > ${MAX_INPUT_COUNT}`);
+  const repeat = n > 1 && m.words.every(w => w === m.words[0]);
   const ack = m.ackStep !== undefined, hash = m.hashStep !== undefined && m.hash !== undefined;
-  const buf = new Uint8Array(8 + n * WORD_BYTES + (ack ? 4 : 0) + (hash ? 8 : 0));
+  const buf = new Uint8Array(8 + (repeat ? 1 : n) * WORD_BYTES + (ack ? 4 : 0) + (hash ? 8 : 0));
   const v = new DataView(buf.buffer);
   v.setUint8(0, MSG_INPUT);
-  v.setUint8(1, (hash ? 1 : 0) | (ack ? 2 : 0));
+  v.setUint8(1, (hash ? 1 : 0) | (ack ? 2 : 0) | (repeat ? 4 : 0));
   v.setUint16(2, n, true);
   v.setUint32(4, m.firstStep, true);
   let o = 8;
-  for (const w of m.words) { putWord(v, o, w); o += WORD_BYTES; }
+  for (const w of repeat ? [m.words[0]] : m.words) { putWord(v, o, w); o += WORD_BYTES; }
   if (ack) { v.setUint32(o, m.ackStep!, true); o += 4; }
   if (hash) { v.setUint32(o, m.hashStep!, true); v.setUint32(o + 4, m.hash! >>> 0, true); }
   return buf;
@@ -103,11 +104,13 @@ export function decodeInput(buf: Uint8Array): InputMsg | null {
   if (buf.length < 8 || buf[0] !== MSG_INPUT) return null;
   const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const flags = v.getUint8(1), n = v.getUint16(2, true);
-  const need = 8 + n * WORD_BYTES + (flags & 2 ? 4 : 0) + (flags & 1 ? 8 : 0);
-  if (n > MAX_INPUT_COUNT || buf.length !== need) return null;
+  const repeat = (flags & 4) !== 0;
+  const need = 8 + (repeat ? 1 : n) * WORD_BYTES + (flags & 2 ? 4 : 0) + (flags & 1 ? 8 : 0);
+  if ((flags & ~7) !== 0 || (repeat && n < 2) || n > MAX_INPUT_COUNT || buf.length !== need) return null;
   const m: InputMsg = { firstStep: v.getUint32(4, true), words: [] };
   let o = 8;
-  for (let i = 0; i < n; i++) { m.words.push(getWord(v, o)); o += WORD_BYTES; }
+  if (repeat) { m.words = new Array(n).fill(getWord(v, o)); o += WORD_BYTES; }
+  else for (let i = 0; i < n; i++) { m.words.push(getWord(v, o)); o += WORD_BYTES; }
   if (flags & 2) { m.ackStep = v.getUint32(o, true); o += 4; }
   if (flags & 1) { m.hashStep = v.getUint32(o, true); m.hash = v.getUint32(o + 4, true); }
   return m;
@@ -115,26 +118,27 @@ export function decodeInput(buf: Uint8Array): InputMsg | null {
 
 export type RelayInput = { slot: number; firstStep: number; words: number[] };
 
-/** INPUT relay -> client: u8 type · u8 slot (stamped by the relay from the socket) · u16 count · u32 firstStep · count × 5 B. */
+/** INPUT relay -> client: u8 type · u8 slot (stamped by the relay from the socket) · u16 count (high bit = repeated word) · u32 firstStep · count × 6 B (one word when repeated). */
 export function encodeRelayInput(slot: number, firstStep: number, words: ArrayLike<number>): Uint8Array {
   const n = words.length;
-  const buf = new Uint8Array(8 + n * WORD_BYTES);
+  const repeat = n > 1 && Array.from(words).every(w => w === words[0]);
+  const buf = new Uint8Array(8 + (repeat ? 1 : n) * WORD_BYTES);
   const v = new DataView(buf.buffer);
   v.setUint8(0, MSG_INPUT_OUT);
   v.setUint8(1, slot);
-  v.setUint16(2, n, true);
+  v.setUint16(2, n | (repeat ? 0x8000 : 0), true);
   v.setUint32(4, firstStep, true);
-  for (let i = 0; i < n; i++) putWord(v, 8 + i * WORD_BYTES, words[i]);
+  for (let i = 0; i < (repeat ? 1 : n); i++) putWord(v, 8 + i * WORD_BYTES, words[i]);
   return buf;
 }
 
 export function decodeRelayInput(buf: Uint8Array): RelayInput | null {
   if (buf.length < 8 || buf[0] !== MSG_INPUT_OUT) return null;
   const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  const n = v.getUint16(2, true);
-  if (buf.length !== 8 + n * WORD_BYTES) return null;
+  const count = v.getUint16(2, true), repeat = (count & 0x8000) !== 0, n = count & 0x7fff;
+  if (n > MAX_INPUT_COUNT || (repeat && n < 2) || buf.length !== 8 + (repeat ? 1 : n) * WORD_BYTES) return null;
   const words: number[] = [];
-  for (let i = 0; i < n; i++) words.push(getWord(v, 8 + i * WORD_BYTES));
+  for (let i = 0; i < n; i++) words.push(getWord(v, 8 + (repeat ? 0 : i) * WORD_BYTES));
   return { slot: v.getUint8(1), firstStep: v.getUint32(4, true), words };
 }
 
@@ -267,7 +271,7 @@ export type ServerMsg =
   | { t: "lobby"; players: PlayerInfo[]; config: RoomConfig }
   | StartMsg
   | { t: "drop"; slot: number }
-  | { t: "result"; round: number; ok: boolean; hashes: (number | null)[] }
+  | { t: "result"; round: number; ok: boolean; hashes: (number | null)[]; receipt?: { payload: string; signature: string } }
   | { t: "error"; code: "full" | "version" | "room" | "bad" | "busy" | "rate" | 'name-replaced' | 'report-received' | 'room-muted' | 'chat-blocked'; message: string };
 
 export const encodeJson = (m: ClientMsg | ServerMsg): string => JSON.stringify(m);
