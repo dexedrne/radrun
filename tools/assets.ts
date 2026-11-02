@@ -18,12 +18,13 @@
 // game-clips/radbro<id>.clips.glb, e.g. round 7's Free_Fall / Big_Land) and merges their entries into
 // clips.meta.json; the character GLBs are not touched.
 //
-// Retardios (Retardio Cousin #555, Retardio Classic #85; ids retardio555 / retardio85): `--retardios <dir>` is their
-// delivery folder (source/retardio<n>_character.glb + source/retardio<n>.clips.glb, built on the Radbro rig with
-// #723's clips), e.g. `npm run assets -- --radbros <dir> --retardios <dir> --only retardio555,retardio85`. Their
-// clips are #723's retargeted, so their clip times come from #723's manifest entry; the heights that depend on the
-// body (the rope-hang and ledge-hang hand heights) are measured on their own clips. Without --retardios their files
-// and meta entries are left alone.
+// Retardios (Retardio Cousin #555, Retardio Classic #85, Retardio Cousin Classic #2214; ids retardio555 / retardio85 /
+// retardio2214): `--retardios <dir>` is his delivery folder (source/retardio<n>_character.glb +
+// source/retardio<n>.clips.glb, built on the Radbro rig with #723's clips), e.g.
+// `npm run assets -- --radbros <dir> --retardios <dir> --only retardio2214`. Their pack clips are #723's retargeted, so
+// their clip times come from #723's manifest entry (<radbros>/game-clips/manifest.json is required); the heights that
+// depend on the body (the rope-hang and ledge-hang hand heights) are measured on their own clips. Without --retardios
+// their files and meta entries are left alone.
 //
 // `npm run assets -- --meta-only` re-measures the jump timings (Regular_Jump takeoff / apex / land,
 // forward kinematics of the feet) from the committed public/models GLBs and updates only those fields

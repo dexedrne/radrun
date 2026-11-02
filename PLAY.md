@@ -711,15 +711,19 @@ round is the same with any pair, so ghost links replay the same whoever you pick
 | **#723** | easygoing (brown hat, the wink, "HOT TOPIC BRO" plate carrier) | "heh heh", "oh, man", "nah", "nice day for it", "you good back there?" | "fair enough" / "see ya" |
 | **Retardio #555** | cheeky (long brown hair, "BRITISH FOOD" tee) | "hehe", "oi", "cheers for the bag", "too slow, mate" | "fair cop" / "cheers, mate" |
 | **Retardio #85** | saving up (long black hair, "NEED MONEY FOR PORSCHE" tee) | "heh", "tch", "porsche fund, sorry", "i need it more" | "there goes the porsche" / "porsche fund +1" |
+| **Retardio #2214** | slippery (long straight red hair, black "TUNA" tank top) | "heh", "hmph", "slipped right through", "need a bigger net" | "netted." / "off the hook" |
 
-**The Retardios** (since 2026-10-02) are dexedrne's Retardio Cousin #555 and Retardio Classic #85, both boys with
-long hair, built on the Radbro rig with #723's clips. Their ids are `retardio555` / `retardio85` (never a bare
-number, which would be a Radbro token): links say `c=retardio555`, files are `public/models/retardio555.glb`,
-`retardio555.clips.glb`, `public/ui/retardio555.webp`; the UI calls them "Retardio #555" / "#555"
-(`charName` / `charTag` in `src/game/radbros.ts`). Their GLBs and meta come from
-`npm run assets -- --radbros <folder> --retardios <their folder> --only retardio555,retardio85` (clip times from #723's
-manifest entry, rope / ledge hand heights measured on their own clips). In the game their locomotion loops play a
-little slower to match their stride (`STRIDE`) and the rope arm swings out of their hair while they hang
+**The Retardios** are dexedrne's Retardio Cousin #555 and Retardio Classic #85 (since 2026-10-02) and Retardio
+Cousin Classic #2214 (since 2026-11-02), all boys with long hair, built on the Radbro rig with #723's clips. Their ids
+are `retardio555` / `retardio85` / `retardio2214` (never a bare number, which would be a Radbro token: Radbro #2214 is
+a different token): links say `c=retardio555`, files are `public/models/retardio555.glb`, `retardio555.clips.glb`,
+`public/ui/retardio555.webp`; the UI calls them "Retardio #555" / "#555" (`charName` / `charTag` in
+`src/game/radbros.ts`). Their GLBs and meta come from
+`npm run assets -- --radbros <folder> --retardios <their folder> --only <id>` (the folder holds
+`source/<id>_character.glb` + `source/<id>.clips.glb`; clip times from #723's manifest entry in
+`<folder>/game-clips/manifest.json`, rope / ledge hand heights measured on their own clips). In the game their
+locomotion loops play slower to match their stride against #723's (`STRIDE`; #2214's walk / run / sprint are his own
+body-fitted loops, so his ratios are the largest) and the rope arm swings out of their hair while they hang
 (`HAIR_ARM`, both in `src/app/ActorsView.tsx`). No recorded voice yet (chatter + bubbles, like #3171).
 
 Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
@@ -729,14 +733,15 @@ stays up 1.8 s, longer for long lines (about 60 ms a character).
 Adding a Radbro (how #723 went in):
 1. In the owner's Radbro folder: `game-clips/radbro<id>_character.glb` (mesh + locomotion clips),
    `game-clips/radbro<id>.clips.glb` (the other clips on the same rig) and the `manifest.json` entry.
-2. Add the id to `RadbroId` / `RADBROS` (`src/game/round.ts`) and `IDS` (`tools/assets.ts`), then fill
-   the per-Radbro tables (`npm run typecheck` lists what is missing).
+2. Add the id to `RadbroId` / `RADBROS` (`src/game/radbros.ts`; `IDS` in `tools/assets.ts` and both relays follow
+   it), then fill the per-Radbro tables (`npm run typecheck` lists what is missing).
 3. `npm run assets -- --radbros <folder> --only <id>` builds that Radbro's web GLB + clip pack and its
-   `clips.meta.json` entry (the other Radbros' files stay untouched); `npm run assets -- --meta-only`
-   measures the Regular_Jump takeoff / apex / feet-down times (#723: 0.467 / 0.8 / 1.1 s).
+   `clips.meta.json` entry (the other Radbros' files stay untouched; a Retardio also takes
+   `--retardios <his folder>`, see above); `npm run assets -- --meta-only` measures the Regular_Jump takeoff /
+   apex / feet-down times (#723: 0.467 / 0.8 / 1.1 s) for every id, so keep only the new id's change.
 4. Dev server up, `RUGRUN_CHROME_PROFILE` set: `npm run portraits -- --only <id>` (title card),
    `npm run og-image -- --bg <saved frame>` (the alternative card `og-frame.jpg`, one bust per Radbro); the
-   card that ships, `og.jpg`, is key art: its busts are composited by the art script (untracked).
+   card that ships, `og4.jpg`, is key art: its busts are composited by the art script (untracked).
 5. `npm test` (`test/roster.test.ts` checks the files, clip meta, lines and links for every Radbro).
 
 **In the air (round 7).** A jump is Regular_Jump frozen on its upright apex; a long drop (falling faster
@@ -958,8 +963,8 @@ unlock thresholds: `src/game/campaign.ts`. A level in another district reloads t
   taglines were lettered over; no money or earning lines on the boards). To change a board, replace its
   `.webp` (same name) or point the `ad_<name>` material in `decor.json` at another texture.
 - **Key art**: `public/ui/key-art.webp` (1600x900 webp, ~210 KB, preloaded by `index.html`), full-bleed behind the
-  title, its overlays and the boot screens: #4764, #652, #3704 and #3710 lead the rooftop chase, with #555 and #85 supporting, the SPIDERTAG share
-  card's art. The title's terminal font is VT323 (`public/fonts/VT323.woff2`, SIL OFL, `public/fonts/OFL-VT323.txt`).
+  title, its overlays and the boot screens: #4764, #652, #3704 and #3710 swinging over the rooftops with #723 down on
+  the street (since 2026-10-11 the art shows only the Radbros), the SPIDERTAG share card's art. The title's terminal font is VT323 (`public/fonts/VT323.woff2`, SIL OFL, `public/fonts/OFL-VT323.txt`).
 
 ## Dev pages (dev server and `npm run build:test` only; stripped from `npm run build`)
 
@@ -1160,9 +1165,11 @@ https://spidertag.vyvanse.beer (the canonical address; `vercel.json` permanently
 rugrun.vyvanse.beer and vercel.app hosts there, path and query kept, and sends `/token` to
 https://token.spidertag.vyvanse.beer), so change them if the game moves. Share, challenge, ghost, room and wager links
 are built from the address the game was opened on.
-`public/og.jpg` (1200x630) is the key-art card: the main four over the rooftops, the SPIDERTAG wordmark (Bebas
-Neue) and a VT323 `[ OK ] spidertag.vyvanse.beer` line, an HTML page rendered with headless Chromium outside the repo.
-`og2.jpg` / `og3.jpg` carry the same current cast for previews cached at those URLs. `ui/cartridge.webp` is a square, textless key-art thumbnail. Replaced art is preserved beside each file as `*.prev.*`. The favicon and the install
+`public/og4.jpg` (1200x630) is the share card `index.html` points og:image / twitter:image at (and
+`test/hosts.test.ts` checks): the key art with the main four and #723, the SPIDERTAG wordmark (Bebas Neue) and a
+VT323 `[ OK ] spidertag.vyvanse.beer` line, an HTML page rendered with headless Chromium outside the repo. A new card
+takes a new filename so X and Telegram fetch it. `og.jpg` is the same image for previews cached at that URL;
+`og2.jpg` / `og3.jpg` keep the 2026-10-07 card. `ui/cartridge.webp` is a square, textless key-art thumbnail. Replaced art is preserved beside each file as `*.prev.*`. The favicon and the install
 icons are the $SPIDERTAG coin's ST mark: `node tools/icons.ts <the 1024 px logo png>` writes `favicon.png`,
 `icons/*.png` and `apple-touch-icon.png`. `npm run og-image` (dev server up, `RUGRUN_CHROME_PROFILE` set) renders the
 older style of card, a mid-swing frame with the wordmark, the pitch and the portraits, into `og-frame.jpg` (never over

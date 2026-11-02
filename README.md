@@ -14,7 +14,7 @@ included, so old challenge / ghost / room / wager links keep working). Formerly 
 `radrun-wager-relay`), the radbro.fun slug `radrun` and the wager contracts' EIP-712 domains keep those names, so saves,
 scores, links and signatures carry over; a browser's saves come over from the old address once (`src/ui/carry.ts`).
 
-Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #2564, #723 (the cowboy) or #3171, or Retardio #555 or #85, chase
+Status: M0-M5 — the playable chase with the real characters: pick Radbro #652, #4764, #3704, #3710, #2564, #723 (the cowboy) or #3171, or Retardio #555, #85 or #2214, chase
 the runner for 90 s (tag or YOINK him), with George the cat trailing you, the Pockit Milady running the
 balloon stand, rope hangs, the bag, lasso, runner trail, flying-rug escape, catch slow-mo, and
 procedural WebAudio music + SFX (no audio files).
@@ -58,7 +58,8 @@ or a link) over a tiny relay (`relay/`: a Cloudflare Worker + one Durable Object
 locally) with rollback netcode on the same deterministic sim. PLAY.md "TAG" has the rules, how to run the
 relay locally and the steps to deploy it.
 
-Challenge links: `?c=<652|4764|2564|723>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title.
+Challenge links: `?c=<id>&r=<runner>&d=<chill|normal|degen>&t=<seconds>` preselect the title (ids: a Radbro's token
+number such as `652` or `4764`, or `retardio555` / `retardio85` / `retardio2214`).
 Ghost links add `&s=<seed>&g=<packed run>`: that exact round with the challenger's run replayed as a
 translucent ghost, checked on the title ("verified replay" / "unverified"); Share after a catch makes one,
 and your personal best's run is kept for "race your best" (`src/game/ghost.ts`, PLAY.md "Ghost links").
@@ -132,5 +133,5 @@ she loads at runtime from his repo, and she is not part of this one. Ask him bef
 own thing.
 
 Credits: Radbros #652, #4764, #2564 and #723 are dexedrne's own, used with permission from the Radbro
-Webring dev · Retardio #555 and #85 are dexedrne's own · the wordmark is set in Bebas Neue and the title's terminal lines in VT323 (both SIL Open Font License) · the Pockit Milady is by prnth, used with his permission · built on
+Webring dev · Retardio #555, #85 and #2214 are dexedrne's own · the wordmark is set in Bebas Neue and the title's terminal lines in VT323 (both SIL Open Font License) · the Pockit Milady is by prnth, used with his permission · built on
 [react-three-game](https://prnth.com/react-three-game/) by prnth.
