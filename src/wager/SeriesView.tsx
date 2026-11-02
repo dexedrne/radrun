@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
 import type { TagGame } from "../game/tagGame.ts";
-import { RADBROS, isRadbroId, charTag, type RadbroId } from "../game/radbros.ts";
+import { RADBROS, isRadbroId, isRetardio, charName, charTag, type RadbroId } from "../game/radbros.ts";
 import { loadRadbros, useTag } from "../app/TagPage.tsx";
 import { requestLock } from "../radbro/bridge.ts";
 import { useUi } from "../ui/store.ts";
@@ -409,7 +409,7 @@ export function SeriesView({ app, game, matchId, onExit }: { app: WagerApp; game
                   <button key={n} onClick={() => setPick({ radbro: isRadbroId(String(n)) ? String(n) : pick.radbro, own: n })} style={small(pick.own === n)} data-testid={`wager-own-${n}`}>#{n}</button>
                 ))}
               </div>
-              {pick.own != null && !isRadbroId(String(pick.own)) && <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>#{pick.own} plays on the {charTag(pick.radbro)} body with its number and your badge</div>}
+              {pick.own != null && !isRadbroId(String(pick.own)) && <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>#{pick.own} plays on the {isRetardio(pick.radbro) ? charName(pick.radbro) : charTag(pick.radbro)} body with its number and your badge</div>}
             </div>
           )}
         </div>
