@@ -27,7 +27,7 @@ export const S = {
   practice: "PRACTICE",
   ghost: "GHOST",
   autoLow: "switched to Low quality for smoother play — change in Settings",
-  credits: "Radbro #4764, #652, #3704, #3710, #723, #3171 and #2564 · Retardio #555 and #85 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
+  credits: "Radbro #4764, #652, #3704, #3710, #723, #3171 and #2564 · Retardio #555, #85 and #2214 · dexedrne · George the cat · built on react-three-game by prnth · Pockit Milady by prnth",
 } as const;
 
 /** The title's links to the other vyvanse.beer games, bottom right (their wordmarks in their own colours). */
@@ -48,17 +48,19 @@ export const TAUNTS: Record<RadbroId, string[]> = {
   "3171": ["heh", "oop", "ha", "yeah?", "don't mind the halo", "almost had me"],
   retardio555: ["hehe", "oi", "ha", "mm", "cheers for the bag", "too slow, mate"],
   retardio85: ["heh", "tch", "ha", "hm", "porsche fund, sorry", "i need it more"],
+  retardio2214: ["heh", "hmph", "ha", "mm", "slipped right through", "need a bigger net"],
 };
 
 /**
  * Per-character bubbles for the panic / cornered / catch / escape lines, as he says them (#652 earnest,
- * #4764 deadpan, #2564 quiet, #723 easygoing, #3171 impish; Retardio #555 cheeky, Retardio #85 saving up).
+ * #4764 deadpan, #2564 quiet, #723 easygoing, #3171 impish; Retardio #555 cheeky, Retardio #85 saving up,
+ * Retardio #2214 slippery).
  */
 export const LINES: Record<"panic" | "cornered" | "caught" | "escaped", Record<RadbroId, string>> = {
-  panic: { "652": "!", "4764": "!", "3704": "!", "3710": "hey!", "2564": "!", "723": "oh, hey", "3171": "!", retardio555: "oi!", retardio85: "!" },
-  cornered: { "652": "nope, sorry", "4764": "nope", "3704": "one more roof", "3710": "wrong turn", "2564": "nope", "723": "oh, nope", "3171": "wasn't me", retardio555: "oh no", retardio85: "nah" },
-  caught: { "652": "okay. you got me.", "4764": "bro.", "3704": "nice catch, bro", "3710": "okay, your bag", "2564": "oh. hello.", "723": "fair enough", "3171": "worth a shot", retardio555: "fair cop", retardio85: "there goes the porsche" },
-  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "3704": "yellow wins", "3710": "green light, bro", "2564": "thank you", "723": "see ya", "3171": "later", retardio555: "cheers, mate", retardio85: "porsche fund +1" },
+  panic: { "652": "!", "4764": "!", "3704": "!", "3710": "hey!", "2564": "!", "723": "oh, hey", "3171": "!", retardio555: "oi!", retardio85: "!", retardio2214: "!" },
+  cornered: { "652": "nope, sorry", "4764": "nope", "3704": "one more roof", "3710": "wrong turn", "2564": "nope", "723": "oh, nope", "3171": "wasn't me", retardio555: "oh no", retardio85: "nah", retardio2214: "hm. nope" },
+  caught: { "652": "okay. you got me.", "4764": "bro.", "3704": "nice catch, bro", "3710": "okay, your bag", "2564": "oh. hello.", "723": "fair enough", "3171": "worth a shot", retardio555: "fair cop", retardio85: "there goes the porsche", retardio2214: "netted." },
+  escaped: { "652": "sorry! good bag though", "4764": "mine now.", "3704": "yellow wins", "3710": "green light, bro", "2564": "thank you", "723": "see ya", "3171": "later", retardio555: "cheers, mate", retardio85: "porsche fund +1", retardio2214: "off the hook" },
 };
 
 export const DIFF_LABEL: Record<Difficulty, string> = { chill: "Chill", normal: "Normal", degen: "Degen" };
@@ -78,6 +80,7 @@ export const PERSONA: Record<RadbroId, string> = {
   "3171": "impish",
   retardio555: "cheeky",
   retardio85: "saving up",
+  retardio2214: "slippery",
 };
 
 export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = {
@@ -90,6 +93,7 @@ export const RADBRO_COLOR: Record<RadbroId, { body: string; accent: string }> = 
   "3171": { body: "#ffb020", accent: "#1a1a1a" },
   retardio555: { body: "#ff7aa8", accent: "#4a3426" },
   retardio85: { body: "#5aa8ff", accent: "#121218" },
+  retardio2214: { body: "#ef2b2d", accent: "#141414" },
 };
 
 export function heat(d: number): { label: string; color: string; fill: number } {

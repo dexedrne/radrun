@@ -55,7 +55,8 @@ test("sampled audio: every catalogued file ships, nothing unused ships, lines ma
   // #3171 (added 2026-09-25) has no recorded voice yet (each Radbro's voice is designed by hand, one at a time).
   // He plays fine off the VOICE[] chatter-pitch fallback in PlayViews.tsx (voice.say returning "missing" is the
   // designed path) until then; drop his voice/ lines from the completeness check until then.
-  // The Retardios (added 2026-10-02) are in the same spot: chatter until their voices are designed.
+  // The Retardios (#555 and #85 added 2026-10-02, #2214 2026-11-02) are in the same spot: chatter until their voices
+  // are designed.
   // #3704 and #3710 use the same procedural chatter until recorded lines exist.
   const want = allAudioFiles(RADBROS).filter(f => !/^voice\/(3171|3704|3710|retardio)/.test(f));
   for (const f of want) assert.ok(fs.existsSync(path.join(root, f)), `missing public/audio/${f}`);

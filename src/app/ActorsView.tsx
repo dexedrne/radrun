@@ -494,12 +494,15 @@ export function ActorsView({ game }: { game: PlayGame }) {
 }
 
 /**
- * Stride against #723's (whose clips the Retardios wear, retargeted): at the same speed their feet cover this much more
+ * Stride against #723's (whose clips #555 and #85 wear, retargeted): at the same speed their feet cover this much more
  * ground per cycle, so their locomotion loops play this much slower (no foot sliding). Measured with their clips.
+ * #2214's walk / run / sprint are his own body-fitted loops (shorter cycles), so his ratios are larger: the planted
+ * foot's backward speed under the pinned hips, his loop's against #723's.
  */
 const STRIDE: Partial<Record<RadbroId, Record<string, number>>> = {
   retardio555: { Casual_Walk: 1.12, Run_02: 1.22, Lean_Forward_Sprint: 1.17 },
   retardio85: { Casual_Walk: 1.08, Run_02: 1.11, Lean_Forward_Sprint: 1.08 },
+  retardio2214: { Casual_Walk: 1.44, Run_02: 1.09, Lean_Forward_Sprint: 1.68 },
 };
 
 /**
@@ -508,7 +511,7 @@ const STRIDE: Partial<Record<RadbroId, Record<string, number>>> = {
  * right by this much (radians about his forward axis). Call it before the hand correction so the hand still lands on
  * the web.
  */
-const HAIR_ARM: Partial<Record<RadbroId, number>> = { retardio555: 0.9, retardio85: 0.9 };
+const HAIR_ARM: Partial<Record<RadbroId, number>> = { retardio555: 0.9, retardio85: 0.9, retardio2214: 0.9 };
 const hairQ = new Quaternion(), hairFwd = new Vector3();
 export function hairClear(rig: ActorRig, tmp: { pq: Quaternion; wq: Quaternion; axis: Vector3 }): void {
   const a = HAIR_ARM[rig.id];

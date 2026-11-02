@@ -1,5 +1,5 @@
-// The roster (Radbros #652, #4764, #2564, #723 the cowboy, since 2026-09-25 #3171 the halo, and since 2026-10-02 the
-// owner's two Retardios, ids retardio555 / retardio85): every
+// The roster (Radbros #652, #4764, #2564, #723 the cowboy, since 2026-09-25 #3171 the halo, since 2026-10-02 the
+// owner's Retardios #555 and #85, and since 2026-11-02 Retardio #2214; ids retardio555 / retardio85 / retardio2214): every
 // Radbro ships a web GLB, a clip pack, clip meta with every clip the game commands and a title portrait;
 // every per-character table covers him; links carry him by id (and older links still decode); the runner
 // is drawn from the others; and which Radbro you play never changes the round (ghost links stay exact).
@@ -24,8 +24,8 @@ const pub = (f: string) => new URL(`../public/${f}`, import.meta.url);
 const USED = ["Idle", "Casual_Walk", "Run_02", "Lean_Forward_Sprint", "Regular_Jump", "Grab_Bar_and_Swing_Forward", "Rope_Hang_Idle",
   "Big_Wave_Hello", "Victory_Cheer", "Falling_Down", "Fishing_Cast", "Waltz"];
 
-test("roster: the main four lead the seven Radbros and two Retardios", () => {
-  assert.deepEqual([...RADBROS], ["4764", "652", "3704", "3710", "723", "3171", "retardio555", "retardio85", "2564"]);
+test("roster: the main four lead the seven Radbros and three Retardios", () => {
+  assert.deepEqual([...RADBROS], ["4764", "652", "3704", "3710", "723", "3171", "retardio555", "retardio85", "retardio2214", "2564"]);
 });
 
 test("roster: Retardio ids, files and names stay apart from the Radbro token numbers", () => {
@@ -36,8 +36,12 @@ test("roster: Retardio ids, files and names stay apart from the Radbro token num
   assert.equal(charTag("retardio85"), "#85");
   assert.equal(charName("723"), "Radbro #723");
   assert.equal(charName("retardio555"), "Retardio #555");
-  assert.ok(isRadbroId("retardio555") && isRadbroId("retardio85"));
-  assert.ok(!isRadbroId("555") && !isRadbroId("85"), "a bare number is a Radbro token, never a Retardio");
+  assert.equal(charFile("retardio2214"), "retardio2214");
+  assert.equal(portraitPath("retardio2214"), "/ui/retardio2214.webp");
+  assert.equal(charTag("retardio2214"), "#2214");
+  assert.equal(charName("retardio2214"), "Retardio #2214");
+  assert.ok(isRadbroId("retardio555") && isRadbroId("retardio85") && isRadbroId("retardio2214"));
+  assert.ok(!isRadbroId("555") && !isRadbroId("85") && !isRadbroId("2214"), "a bare number is a Radbro token, never a Retardio");
 });
 
 test("roster: every Radbro has its GLB, clip pack, portrait and full clip meta", () => {
@@ -79,6 +83,11 @@ test("links: #723 round-trips as chaser and runner; older three-Radbro links sti
   assert.deepEqual([rt.c, rt.r], ["retardio555", "retardio85"]);
   const mix = readChallenge(new URL(challengeUrl("652", "retardio85", "degen", 20)).search);
   assert.deepEqual([mix.c, mix.r], ["652", "retardio85"]);
+  const r2214 = readChallenge(new URL(ghostUrl("retardio2214", "retardio555", "normal", 28.4, 11, "abcdEFGH_-12")).search);
+  assert.deepEqual([r2214.c, r2214.r, r2214.g], ["retardio2214", "retardio555", "abcdEFGH_-12"]);
+  const back = readChallenge(new URL(challengeUrl("4764", "retardio2214", "chill", 40)).search);
+  assert.deepEqual([back.c, back.r], ["4764", "retardio2214"]);
+  assert.equal(readChallenge("?c=2214&r=652").c, null, "a bare 2214 is the Radbro token, not the Retardio");
 });
 
 test("runner pool: the link's runner if valid, else one of the other three at random", () => {
@@ -109,4 +118,6 @@ test("the Radbro you pick never changes the round (same seed -> same hash and ca
   assert.equal(run("2564", "723"), base);
   assert.equal(run("retardio555", "retardio85"), base);
   assert.equal(run("retardio85", "652"), base);
+  assert.equal(run("retardio2214", "retardio555"), base);
+  assert.equal(run("723", "retardio2214"), base);
 });

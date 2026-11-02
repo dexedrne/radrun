@@ -147,6 +147,13 @@ test("Radbro ids are checked: an unknown one in hello is refused, in pick ignore
   assert.equal(last(b, "lobby")?.players[0].radbro, "retardio555");
   send(b, { t: "pick", radbro: "555" });
   assert.equal(last(b, "lobby")?.players[0].radbro, "retardio555", "a bare 555 is not a Retardio id");
+  send(b, { t: "pick", radbro: "retardio2214" });
+  assert.equal(last(b, "lobby")?.players[0].radbro, "retardio2214");
+  send(b, { t: "pick", radbro: "2214" });
+  assert.equal(last(b, "lobby")?.players[0].radbro, "retardio2214", "a bare 2214 is not a Retardio id");
   const c = sock(); c.h.message(hello("retardio85"));
   assert.equal(last(c, "error"), undefined);
+  const d = setup().sock(); d.h.message(hello("retardio2214"));
+  assert.equal(last(d, "error"), undefined);
+  assert.equal(last(d, "lobby")?.players[0].radbro, "retardio2214");
 });
