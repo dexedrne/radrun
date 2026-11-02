@@ -496,8 +496,8 @@ export function ActorsView({ game }: { game: PlayGame }) {
 /**
  * Stride against #723's (whose clips #555 and #85 wear, retargeted): at the same speed their feet cover this much more
  * ground per cycle, so their locomotion loops play this much slower (no foot sliding). Measured with their clips.
- * #2214's walk / run / sprint are his own body-fitted loops (shorter cycles), so his ratios are larger: the planted
- * foot's backward speed under the pinned hips, his loop's against #723's.
+ * #2214's walk / run / sprint are his own body-fitted loops (shorter cycles), measured the same way: the planted foot's
+ * backward speed under the pinned hips, his loop's against #723's; his walk and sprint ratios are the largest.
  */
 const STRIDE: Partial<Record<RadbroId, Record<string, number>>> = {
   retardio555: { Casual_Walk: 1.12, Run_02: 1.22, Lean_Forward_Sprint: 1.17 },

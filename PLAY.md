@@ -723,8 +723,8 @@ a different token): links say `c=retardio555`, files are `public/models/retardio
 `source/<id>_character.glb` + `source/<id>.clips.glb`; clip times from #723's manifest entry in
 `<folder>/game-clips/manifest.json`, rope / ledge hand heights measured on their own clips). In the game their
 locomotion loops play slower to match their stride against #723's (`STRIDE`; #2214's walk / run / sprint are his own
-body-fitted loops, so his ratios are the largest) and the rope arm swings out of their hair while they hang
-(`HAIR_ARM`, both in `src/app/ActorsView.tsx`). No recorded voice yet (chatter + bubbles, like #3171).
+body-fitted loops, measured on those loops; his walk and sprint ratios are the largest) and the rope arm swings out of
+their hair while they hang (`HAIR_ARM`, both in `src/app/ActorsView.tsx`). No recorded voice yet (chatter + bubbles, like #3171).
 
 Lines, personas and card colours are in `src/ui/strings.ts` (`TAUNTS`, `LINES`, `PERSONA`, `RADBRO_COLOR`);
 the chatter pitch per Radbro is `VOICE` in `src/app/PlayViews.tsx` (#723 has the lowest). A speech bubble
