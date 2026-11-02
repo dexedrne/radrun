@@ -11,7 +11,7 @@ import type { Vector3 } from "three";
 import { TagGame } from "../game/tagGame.ts";
 import { TAG, type TagSlot } from "../game/tagMatch.ts";
 import { BOT_LEVELS, type BotLevel } from "../game/tagBot.ts";
-import { RADBROS, charTag, portraitPath, type RadbroId } from "../game/round.ts";
+import { RADBROS, charTag, isRadbroId, portraitPath, type RadbroId } from "../game/round.ts";
 import { randomSeed } from "../game/play.ts";
 import { Rand } from "../sim/math.ts";
 import {
@@ -521,7 +521,7 @@ export default function TagPage({ host }: { host?: TagHost } = {}) {
   const pad = useUi(s => s.pad);
   const phone = useUi(s => s.phone);
   const phoneTouch = useUi(s => !s.padConnected || s.touchRequested);
-  const [radbro, setRadbro] = useState<RadbroId>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").radbro as RadbroId) || "652"; } catch { return "652"; } });
+  const [radbro, setRadbro] = useState<RadbroId>(() => { try { const r = JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").radbro; return isRadbroId(r) ? r : "652"; } catch { return "652"; } });
   const [bots, setBots] = useState(() => { try { return Number(JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").bots) || 1; } catch { return 1; } });
   const [level, setLevel] = useState<BotLevel>(() => { try { return (JSON.parse(localStorage.getItem("rugrun.tag") ?? "{}").level as BotLevel) || "normal"; } catch { return "normal"; } });
   const [paused, setPaused] = useState(false);

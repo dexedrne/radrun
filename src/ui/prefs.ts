@@ -1,7 +1,7 @@
 import { isPhone } from "../phone.ts";
 import { isFastIPhone } from "../input/touch.ts";
 // Settings, personal bests and challenge links. localStorage is optional (every access try/catch).
-import { RADBROS, type RadbroId } from "../game/round.ts";
+import { RADBROS, isRadbroId, type RadbroId } from "../game/round.ts";
 import { DIFFICULTIES, type CameraTuning, type Difficulty } from "../sim/tuning.ts";
 import { PAGE_DISTRICT } from "../app/district.ts";
 import { PAD_DEAD, PAD_DEFAULTS, PAD_SENS, type PadSettings } from "../input/gamepad.ts";
@@ -153,7 +153,8 @@ export function recordBest(chaser: string, d: string, t: number, mu = 0): number
 export function lastPicks(): { chaser: RadbroId; difficulty: Difficulty; firstVisit: boolean } {
   const s = load();
   const d = s.difficulty && (DIFFICULTIES as readonly string[]).includes(s.difficulty) ? s.difficulty : "chill";
-  return { chaser: s.chaser ?? "652", difficulty: s.visited ? d : "chill", firstVisit: !s.visited };
+  // a pick the roster no longer has (a rollback past a character's add) falls back instead of crashing the title
+  return { chaser: isRadbroId(s.chaser) ? s.chaser : "652", difficulty: s.visited ? d : "chill", firstVisit: !s.visited };
 }
 export function rememberPicks(chaser: RadbroId, difficulty: Difficulty): void {
   const s = load();

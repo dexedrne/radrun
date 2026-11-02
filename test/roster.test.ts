@@ -17,7 +17,7 @@ import CLIP_META from "../src/generated/clips.meta.json" with { type: "json" };
 
 // prefs.ts reads the page's district from location at import time.
 (globalThis as { location?: unknown }).location = { href: "https://rugrun.test/", search: "" };
-const { readChallenge, challengeUrl, ghostUrl, pickRunner } = await import("../src/ui/prefs.ts");
+const { readChallenge, challengeUrl, ghostUrl, pickRunner, lastPicks } = await import("../src/ui/prefs.ts");
 
 const pub = (f: string) => new URL(`../public/${f}`, import.meta.url);
 /** Every clip the animation machine commands (the dive clips are cut-list fallbacks only). */
@@ -42,6 +42,20 @@ test("roster: Retardio ids, files and names stay apart from the Radbro token num
   assert.equal(charName("retardio2214"), "Retardio #2214");
   assert.ok(isRadbroId("retardio555") && isRadbroId("retardio85") && isRadbroId("retardio2214"));
   assert.ok(!isRadbroId("555") && !isRadbroId("85") && !isRadbroId("2214"), "a bare number is a Radbro token, never a Retardio");
+});
+
+test("roster: a saved pick the roster doesn't have falls back to #652 (a rollback past a character's add)", () => {
+  const stored = new Map<string, string>();
+  const g = globalThis as { localStorage?: unknown };
+  g.localStorage = { getItem: (k: string) => stored.get(k) ?? null, setItem: (k: string, v: string) => { stored.set(k, v); } };
+  try {
+    stored.set("rugrun.v1", JSON.stringify({ chaser: "retardio2214", difficulty: "normal", visited: true }));
+    assert.equal(lastPicks().chaser, "retardio2214");
+    stored.set("rugrun.v1", JSON.stringify({ chaser: "retardio9999", difficulty: "normal", visited: true }));
+    assert.equal(lastPicks().chaser, "652");
+  } finally {
+    delete g.localStorage;
+  }
 });
 
 test("roster: every Radbro has its GLB, clip pack, portrait and full clip meta", () => {
